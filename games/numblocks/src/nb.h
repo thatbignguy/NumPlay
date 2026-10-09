@@ -286,7 +286,7 @@ void break_block_at(int x, int y, int z, bool drops);
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO };
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU };
 extern int gui;            /* the screen open */
 void gui_open(int screen, int x, int y, int z);
 void gui_close(void);
@@ -317,6 +317,7 @@ typedef struct {
   uint8_t keys[25];     /* the key of each action (A_*): the calculator's number for it, 255 none */
   uint8_t debug;        /* F3 debug overlay on */
   uint8_t distance;     /* render distance, 1..2 chunks (2 is what the game had); global, in numblocks.cfg */
+  uint8_t sprint_toggle;   /* Sprint: 0 hold the key while walking, 1 a tap switches it on and off (1.15) */
 } Options;
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,

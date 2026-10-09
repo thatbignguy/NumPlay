@@ -1111,7 +1111,7 @@ enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCE
        B_DODELETE, B_DIFF, B_GFX, B_LOOK, B_CLOUDS, B_BOB, B_DONE, B_BACK_GAME, B_SAVEQUIT, B_RESPAWN, B_TITLE,
        B_CONTROLS, B_CONTROLS_DONE, B_NAME, B_RENAME, B_DORENAME, B_RECREATE, B_CHEATS, B_LAN, B_LAN_MODE,
        B_LAN_CHEATS, B_LAN_START, B_TYPE, B_CUSTOMIZE, B_FLAT_FIELD, B_FLAT_USE, B_FLAT_DONE, B_FLAT_RESET,
-       B_FLAT_CANCEL, B_DIST, B_VIDEO, B_VIDEO_DONE };
+       B_FLAT_CANCEL, B_DIST, B_VIDEO, B_VIDEO_DONE, B_CTRL_SHEET, B_CTRL_SPRINT, B_CTRL_KEYS, B_CTRL_DONE };
 int menu_choice;            /* an action for main.c (ACT_*) */
 int create_mode;            /* the new world's game mode */
 bool create_cheats;         /* and whether it allows cheats */
@@ -1480,6 +1480,15 @@ static void menu(int screen) {
       add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_VIDEO_DONE, "Done");
       break;
     }
+    case GUI_CTRLMENU: {
+      /* GuiControls: the key sheet wide above, the sprint toggle and the key bindings under it */
+      add_button(w / 2 - 155, h / 6 - 12, 310, 1, B_CTRL_SHEET, "Key Sheet");   /* two options wide */
+      cat(t, "Sprint: ", opt.sprint_toggle ? "Toggle" : "Hold");
+      add_button(w / 2 - 155, h / 6 + 12, 150, 1, B_CTRL_SPRINT, t);
+      add_button(w / 2 + 5, h / 6 + 12, 150, 1, B_CTRL_KEYS, "Keybinds...");
+      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_CTRL_DONE, "Done");
+      break;
+    }
     case GUI_CONTROLS:
       add_button(w / 2 - 100, h - 22, 200, 1, B_CONTROLS_DONE, "Done");
       break;
@@ -1714,7 +1723,14 @@ static void press(int id) {
       save_options();
       gui_menu(options_from);
       break;
-    case B_CONTROLS: gui_menu(GUI_KEYS); break;
+    case B_CONTROLS: gui_menu(GUI_CTRLMENU); break;
+    case B_CTRL_SHEET: gui_menu(GUI_CONTROLS); break;
+    case B_CTRL_SPRINT: opt.sprint_toggle = !opt.sprint_toggle; break;
+    case B_CTRL_KEYS: gui_menu(GUI_KEYS); break;
+    case B_CTRL_DONE:
+      save_options();
+      gui_menu(GUI_OPTIONS);
+      break;
     case B_CONTROLS_DONE:
       if (opt.keys_seen != KEY_SHEET) opt.keys_seen = KEY_SHEET, save_options();
       gui_menu(controls_from);
@@ -1777,6 +1793,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     if (gui == GUI_PAUSE) gui = GUI_NONE;
     else if (gui == GUI_OPTIONS) press(B_DONE);
     else if (gui == GUI_VIDEO) press(B_VIDEO_DONE);
+    else if (gui == GUI_CTRLMENU) press(B_CTRL_DONE);
     else if (gui == GUI_CONTROLS) press(B_CONTROLS_DONE);
     else if (gui == GUI_FLAT) press(B_FLAT_CANCEL);
     else if (gui == GUI_WORLDS || gui == GUI_CREATE || gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LAN)
@@ -2091,11 +2108,11 @@ static void keys_input(uint32_t pressed) {
     else if (kcol == 1) keys_reset();
     else {
       save_options();
-      gui_menu(GUI_OPTIONS);
+      gui_menu(GUI_CTRLMENU);   /* (the key bindings live under Controls) */
     }
   } else if (pressed & K_BACK) {
     save_options();
-    gui_menu(GUI_OPTIONS);
+    gui_menu(GUI_CTRLMENU);
   }
 }
 
@@ -2206,6 +2223,7 @@ static void menu_screen(void) {
       break;
     }
     case GUI_OPTIONS: text_center("Options", w / 2, 15, 0xFFFF); break;
+    case GUI_CTRLMENU: text_center("Controls", w / 2, 15, 0xFFFF); break;
     case GUI_VIDEO: text_center("Video Settings", w / 2, 15, 0xFFFF); break;
     case GUI_CONTROLS: key_sheet(); break;
     case GUI_PAUSE: text_center("Game menu", w / 2, 40, 0xFFFF); break;
@@ -2482,7 +2500,7 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
     tint_rect(0, y0, SCREEN_W, rows, 0x0841, a > 30 ? 30 : a);
   }
   if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_DEATH || gui == GUI_LAN ||
-      ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_KEYS) && options_from == GUI_PAUSE))
+      ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CTRLMENU || gui == GUI_KEYS) && options_from == GUI_PAUSE))
     hud();
   if (gui == GUI_NONE || gui == GUI_CHAT) chat_lines();
   if (pl.hurt_time > 0 && gui == GUI_NONE) {
@@ -2499,7 +2517,7 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
       menu_screen();
       break;
     case GUI_CHAT: chat_screen(); break;
-    case GUI_OPTIONS: case GUI_VIDEO: case GUI_CONTROLS: case GUI_KEYS:
+    case GUI_OPTIONS: case GUI_VIDEO: case GUI_CTRLMENU: case GUI_CONTROLS: case GUI_KEYS:
       if (options_from == GUI_PAUSE) dark_background();
       else dirt_background();
       if (gui == GUI_KEYS) keys_screen();

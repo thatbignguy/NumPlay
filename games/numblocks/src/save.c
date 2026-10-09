@@ -368,6 +368,7 @@ void load_options(void) {
   keys_update(opt.keys_seen);
   /* (older records end in padding where distance now lives: 0 means "never set") */
   if (opt.distance < 1 || opt.distance > 2) opt.distance = 2;
+  if (opt.sprint_toggle) opt.sprint_toggle = 1;
 }
 void save_options(void) {
   plat_save(OPTIONS_REC, &opt, sizeof opt);

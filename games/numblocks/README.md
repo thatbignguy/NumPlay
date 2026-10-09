@@ -35,7 +35,7 @@ Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1
 | ans | Pause |
 | Home | Save and quit |
 
-You can change these keys in Options, then Controls. In the inventory, the arrows move between slots, OK picks up or puts down, EXE takes or leaves one, and shift with OK moves a whole stack. To spread a stack, hold OK and move over the slots: it splits evenly when you let go (hold EXE to drop one in each). In Creative, the Search Items tab finds blocks as you type, and shift with up or down jumps to the top or bottom of a tab. The game shows these keys the first time you open it, and again from Options, then Controls.
+You can change these keys in Options, then Controls, where Sprint chooses between holding the i key and switching sprinting on with a tap. In the inventory, the arrows move between slots, OK picks up or puts down, EXE takes or leaves one, and shift with OK moves a whole stack. To spread a stack, hold OK and move over the slots: it splits evenly when you let go (hold EXE to drop one in each). In Creative, the Search Items tab finds blocks as you type, and shift with up or down jumps to the top or bottom of a tab. The game shows these keys the first time you open it, and again from Options, then Controls.
 
 ## Get it
 

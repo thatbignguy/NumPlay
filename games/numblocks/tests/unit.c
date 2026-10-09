@@ -381,7 +381,47 @@ int main(void) {
     for (int t = 0; t < 30; t++) player_tick(K_FWD, 0);
     CHECK(!pl.sprinting);
     CHECK(ran > (pl.z - z0) * 1.2f && ran < (pl.z - z0) * 1.4f);   /* (1.3 times as quick) */
+    /* Sprint: Toggle (Options, Controls): a tap of the key switches it on and off, forward may
+     * be let go, and sneaking or getting hungry still end it */
+    opt.sprint_toggle = 1;
+    pl.sprinting = false;
+    player_tick(K_FWD | K_SPRINT, K_SPRINT);   /* a tap */
+    CHECK(pl.sprinting);
+    for (int t = 0; t < 5; t++) player_tick(0, 0);
+    CHECK(pl.sprinting);                       /* forward let go: it holds */
+    player_tick(K_FWD | K_SPRINT, K_SPRINT);
+    CHECK(!pl.sprinting);                       /* another tap: off */
+    player_tick(K_FWD | K_SPRINT, K_SPRINT);
+    CHECK(pl.sprinting);
+    player_tick(K_FWD, 0), player_tick(0, 0), player_tick(K_FWD, K_FWD);   /* forward twice */
+    CHECK(!pl.sprinting);                       /* that switches it off too */
+    player_tick(K_FWD | K_SPRINT, K_SPRINT);
+    CHECK(pl.sprinting);
+    player_tick(K_FWD | K_SNEAK, K_SNEAK);
+    CHECK(!pl.sprinting);                       /* sneaking ends it */
+    pl.food = 6;
+    player_tick(K_SPRINT, K_SPRINT);
+    CHECK(!pl.sprinting);                       /* hungry: it cannot start */
+    opt.sprint_toggle = 0;
     plat_remove_prefix("ut8");
+  }
+  {
+    /* Sprint: Toggle is kept with the options; a record an older version wrote (a byte shorter,
+     * where the new option does not live yet) reads as Hold */
+    remove("build/unit-saves/numblocks.cfg");
+    opt.sprint_toggle = 1;
+    save_options();
+    opt.sprint_toggle = 0;
+    load_options();
+    CHECK(opt.sprint_toggle == 1);
+    /* the record as the older version wrote it: its last byte is not there */
+    remove("build/unit-saves/numblocks.cfg");
+    plat_save("numblocks.cfg", &opt, sizeof opt - 1);
+    opt.sprint_toggle = 0;
+    load_options();
+    CHECK(opt.sprint_toggle == 0);   /* (Hold, as the options fresh from boot have it) */
+    opt.sprint_toggle = 0;
+    remove("build/unit-saves/numblocks.cfg");
   }
   {
     /* the cache moving up a step at a time (new rows above the terrain are not generated, only

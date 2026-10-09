@@ -2156,7 +2156,8 @@ static uint32_t strip_hash(void) {
   return h;
 }
 static bool still_screen(void) {
-  return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_WORLDS || gui == GUI_CREATE ||
+  return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CTRLMENU || gui == GUI_CONTROLS ||
+         gui == GUI_WORLDS || gui == GUI_CREATE ||
          gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS ||
          gui == GUI_FLAT;
 }

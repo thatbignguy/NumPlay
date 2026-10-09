@@ -1,3 +1,13 @@
+## 1.3.3
+- Options, Controls is a menu of its own now, not the key bindings opened at once:
+  the key sheet wide across the top, with Sprint and Keybinds side by side under
+  it. The key sheet also opens from the key bindings' first row as before, and Done
+  on either screen goes one step back out.
+- Sprint can be toggled instead of held. Options, Controls, Sprint switches between
+  Hold (the i key held while walking, as it was) and Toggle, where a tap switches
+  sprinting on, forward may be let go, and another tap switches it off - the way
+  1.15's sprint toggle works. Sneaking, walking into a wall, eating or getting
+  hungry still end it either way.
 ## 1.3.2
 - Sprint is on the i key, next to forward, where it can be held while walking with the
   other hand. It was on backspace, which is also the key that deletes while you type a
