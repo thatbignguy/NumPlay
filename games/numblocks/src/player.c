@@ -26,19 +26,27 @@ static void move(float dx, float dy, float dz) {
   float a[6];
   box_of(pl.x, pl.y, pl.z, a);
   float ody = dy, odx = dx, odz = dz;
-  /* sneaking on the ground: no walking off edges */
+  /* sneaking on the ground: no walking off edges (Entity.moveEntity: the box moved down 1 must still
+   * touch a block, the one under the feet included, so sneaking along a one-block bridge works) */
   if (pl.on_ground && pl.sneaking) {
     float t[6];
-    for (; dx != 0; dx = fabsf(dx) < 0.05f ? 0 : dx - (dx > 0 ? 0.05f : -0.05f)) {
+#define STEP(v) (fabsf(v) < 0.05f ? 0 : (v) - ((v) > 0 ? 0.05f : -0.05f))
+    for (; dx != 0; dx = STEP(dx)) {
       memcpy(t, a, sizeof t);
-      t[0] += dx, t[3] += dx, t[1] -= 1, t[4] = t[1] + 1;
-      if (phys_clip(t, 1, -0.01f) > -0.01f) break;   /* something under */
+      t[0] += dx, t[3] += dx, t[1] -= 1, t[4] -= 1;
+      if (!phys_free(t)) break;   /* something under */
     }
-    for (; dz != 0; dz = fabsf(dz) < 0.05f ? 0 : dz - (dz > 0 ? 0.05f : -0.05f)) {
+    for (; dz != 0; dz = STEP(dz)) {
       memcpy(t, a, sizeof t);
-      t[2] += dz, t[5] += dz, t[1] -= 1, t[4] = t[1] + 1;
-      if (phys_clip(t, 1, -0.01f) > -0.01f) break;
+      t[2] += dz, t[5] += dz, t[1] -= 1, t[4] -= 1;
+      if (!phys_free(t)) break;
     }
+    for (; dx != 0 && dz != 0; dx = STEP(dx), dz = STEP(dz)) {   /* (both at once: a corner) */
+      memcpy(t, a, sizeof t);
+      t[0] += dx, t[3] += dx, t[2] += dz, t[5] += dz, t[1] -= 1, t[4] -= 1;
+      if (!phys_free(t)) break;
+    }
+#undef STEP
     odx = dx, odz = dz;
   }
   float mdy = phys_clip(a, 1, dy);
@@ -492,6 +500,7 @@ static bool place(int b) {
     world_set(hx, y, hz, B_BED_HEAD);
   }
   set_block(x, y, z, b);
+  if (b == B_MOB_SPAWNER) spawners_note(x, y, z);   /* (its egg shows at once) */
   return true;
 }
 
@@ -598,6 +607,15 @@ static void use(uint32_t pressed) {
       sleep_in(x, y, z);
       return;
     }
+    if (k == IK_SPAWN_EGG && b == B_MOB_SPAWNER) {
+      /* ItemMonsterPlacer.onItemUse on a monster spawner: it is set to that mob (MobSpawner),
+       * and keeps it from now on */
+      int mob = mob_of_egg(h->id);
+      spawners_set(x, y, z, mob);
+      if (pl.mode == 0) use_up();
+      player_swing();
+      return;
+    }
   }
   switch (k) {
     case IK_BLOCK:
@@ -680,6 +698,22 @@ static void use(uint32_t pressed) {
       throw_item(h->id, 1.5f, true);
       use_up();
       player_swing();
+      return;
+    case IK_SPAWN_EGG:
+      /* ItemMonsterPlacer.onItemUse: the mob against the face looked at, at (x + 0.5,
+       * y + d0, z + 0.5) where d0 is 0.5 on top of a fence (1.5 high) and 0 elsewhere.
+       * Minecraft checks nothing else: on any block, on any face, even in mid-air so
+       * the mob falls, and even inside the player. */
+      if (on_block) {
+        int f = pl.hit_face, sx = x + NX[f], sy = y + NY[f], sz = z + NZ[f];
+        int t = mob_of_egg(h->id);
+        if (sy >= 0 && sy < WORLD_H) {
+          float dy = (f == 1 && blk_model[b] == M_FENCE) ? 0.5f : 0.0f;
+          mob_summon(t, sx + 0.5f, (float)sy + dy, sz + 0.5f);
+          use_up();
+          player_swing();
+        }
+      }
       return;
     case IK_FISHING_ROD: {
       /* ItemFishingRod.onItemRightClick: cast, or reel in (which wears it: 1 for a catch,

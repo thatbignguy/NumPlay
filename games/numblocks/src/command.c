@@ -205,7 +205,7 @@ static const char *const diffs[4] = {"peaceful", "easy", "normal", "hard"};
 static const char *const diff_name[4] = {"Peaceful", "Easy", "Normal", "Hard"};
 static const char *const rule_name[8] = {"keepInventory", "doDaylightCycle", "doMobSpawning", "mobGriefing",
                                          "naturalRegeneration", "doTileDrops", "doMobLoot", "doFireTick"};
-static const char *const mob_name[8] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig", "Cow", "Sheep", "Chicken"};
+static const char *const bolt_name[] = {"LightningBolt"};
 /* the effects NumBlocks has: Potion's ids and names */
 static const uint8_t eff_id[3] = {19, 17, 10};
 static const char *const eff_key[3] = {"poison", "hunger", "regeneration"};

@@ -11,6 +11,8 @@ Entity ents[N_ENT];
 
 /* ---------------------------------------------------------------- particles (EntityDiggingFX, EntityRainFX) */
 Particle parts[N_PART];
+#define SMOKE 0xB5B6  /* a monster spawner's puffs of smoke: vanilla's light grey */
+#define FLAME 0xFDA0  /* the flames about one making a mob: vanilla's bright yellow */
 
 /* breaking a block: its bits, coloured like its texture, fly out and fall (EffectRenderer.addBlockDestroyEffects) */
 void particles_break(int x, int y, int z, int b) {
@@ -42,6 +44,17 @@ static Particle *part_slot(void) {
 void particle_add(float x, float y, float z, float vx, float vy, float vz, uint16_t c, int life) {
   Particle *p = part_slot();
   *p = (Particle){x, y, z, vx, vy, vz, c, 0, (uint8_t)life};
+}
+
+/* a monster spawner making a mob: puffs of smoke where the mob appears, and more flames about
+ * the spawner itself (MobSpawner: both, when it spawns) */
+void particles_spawner(float mx, float my, float mz, float bx, float by, float bz) {
+  for (int k = 0; k < 5; k++)
+    particle_add(mx + (rndf() - 0.5f) * 0.8f, my + 0.2f + rndf() * 1.6f, mz + (rndf() - 0.5f) * 0.8f,
+                 (rndf() - 0.5f) * 0.03f, 0.06f + rndf() * 0.05f, (rndf() - 0.5f) * 0.03f, SMOKE, 14 + rnd(8));
+  for (int k = 0; k < 3; k++)
+    particle_add(bx + 0.3f + rndf() * 0.4f, by + 0.9f + rndf() * 0.25f, bz + 0.3f + rndf() * 0.4f,
+                 (rndf() - 0.5f) * 0.02f, 0.04f + rndf() * 0.04f, (rndf() - 0.5f) * 0.02f, FLAME, P_FLOAT | (10 + rnd(6)));
 }
 
 /* EntityRenderer.addRainParticles: drops splash on whatever the rain falls on
@@ -378,5 +391,6 @@ void ents_tick(void) {
   if (++spawn_wait >= 20) {
     spawn_wait = 0;
     if (rule(GR_MOB_SPAWNING)) mobs_spawn();
+    spawners_spawn();
   }
 }

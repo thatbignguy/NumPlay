@@ -278,27 +278,27 @@ extern const uint16_t blk_icon[B_COUNT];   /* sprite of its icon */
 #define SP_MOON_5 26
 #define SP_MOON_6 27
 #define SP_MOON_7 28
-#define SP_FLAME 409
-#define SP_ARROW 410
-#define SP_ARMOR_FULL 411
-#define SP_ARMOR_HALF 412
-#define SP_BUBBLE_POP 413
-#define SP_HEART_HIT 414
-#define SP_TAB_TOP 415
-#define SP_TAB_TOP_SEL 416
-#define SP_TAB_BOTTOM 417
-#define SP_TAB_BOTTOM_SEL 418
-#define SP_SCROLLER 419
-#define SP_BUTTON 420
-#define SP_BUTTON_HOVER 421
-#define SP_BUTTON_OFF 422
-#define SP_SLOT_HELMET 423
-#define SP_SLOT_CHESTPLATE 424
-#define SP_SLOT_LEGGINGS 425
-#define SP_SLOT_BOOTS 426
-#define SP_STEVE 427
-#define SP_ARM 428
-#define SP_DIRT_BG 429
+#define SP_FLAME 419
+#define SP_ARROW 420
+#define SP_ARMOR_FULL 421
+#define SP_ARMOR_HALF 422
+#define SP_BUBBLE_POP 423
+#define SP_HEART_HIT 424
+#define SP_TAB_TOP 425
+#define SP_TAB_TOP_SEL 426
+#define SP_TAB_BOTTOM 427
+#define SP_TAB_BOTTOM_SEL 428
+#define SP_SCROLLER 429
+#define SP_BUTTON 430
+#define SP_BUTTON_HOVER 431
+#define SP_BUTTON_OFF 432
+#define SP_SLOT_HELMET 433
+#define SP_SLOT_CHESTPLATE 434
+#define SP_SLOT_LEGGINGS 435
+#define SP_SLOT_BOOTS 436
+#define SP_STEVE 437
+#define SP_ARM 438
+#define SP_DIRT_BG 439
 
 #include "items.h"
 extern const uint16_t blk_item[B_COUNT];   /* the item a block state counts as (0xFFFF: none) */
@@ -321,8 +321,8 @@ extern const uint8_t skin_px[][1024];   /* mob skins, 64 x 32 */
 extern const uint16_t skin_pal[][16];
 enum { SKIN_ZOMBIE, SKIN_SKELETON, SKIN_CREEPER, SKIN_SPIDER, SKIN_PIG, SKIN_COW, SKIN_SHEEP, SKIN_SHEEP_FUR, SKIN_CHICKEN };
 extern const uint8_t cracks[10][32];   /* destroy stages, 1 bit a texel */
-extern const uint16_t tab_items[], tab_start[13];   /* the creative tabs' items */
-extern const char *const tab_name[12];
+extern const uint16_t tab_items[], tab_start[14];   /* the creative tabs' items */
+extern const char *const tab_name[13];
 extern const uint8_t font_bits[96 * 8], font_w[96];   /* characters 32-127 */
 extern const uint8_t img_rle[], img_w[], img_h[];
 extern const uint32_t img_rows[];
@@ -332,5 +332,6 @@ extern const uint16_t img_row0[], img_pal[][16];
 #define IMG_FURNACE 2
 #define IMG_CHEST 3
 #define IMG_CREATIVE 4
+#define IMG_TAB_INVENTORY 5
 
 #endif

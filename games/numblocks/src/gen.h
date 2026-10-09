@@ -13,6 +13,15 @@ void gen_init(int64_t seed);
  * "2;7,2x3,2;1": bedrock, two dirt, grass, all plains, nothing else). Kept across gen_init. */
 void gen_set_flat(int flat);
 
+/* Superflat with a preset: either a simple "block,block,..." list (one layer per
+ * block, bottom to top, e.g. "bedrock,dirt,dirt,grass") or a 1.8 FlatGeneratorInfo
+ * "version;layers;biome;structures" (e.g. "2;7,2x3,2;1", kept for older saves):
+ * version ignored, layers comma list of [count 'x'] block, biome decimal id
+ * (default 1 plains), structures ignored. A block is a decimal blk_id[:meta] or a
+ * simple name like bedrock/dirt/grass/stone/sand/glass. Invalid/NULL falls back
+ * to the default preset. Max 16 layer entries, max height 128. */
+void gen_set_flat_preset(const char *preset);
+
 /* Blocks of chunk (cx, cz) for y in [y0, y0 + h), after terrain, caves, ravines
  * and the decoration (population) that Minecraft would put in this chunk:
  * out[(y - y0) * 256 + z * 16 + x], x and z in 0..15, values from blocks.h (B_*).

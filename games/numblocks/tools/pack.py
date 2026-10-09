@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
-"""Packs Minecraft 1.8.8's textures for NumBlocks into src/data.c and src/data.h.
+"""Packs Minecraft textures for NumBlocks into src/data.c and src/data.h.
 
     python3 tools/pack.py CLIENT_JAR
+    python3 tools/pack.py --modern MODERN_TEX_DIR CLIENT_JAR
+    python3 tools/pack.py [--modern MODERN_TEX_DIR] CLIENT_JAR --eggs EGG_TEX_DIR
 
 CLIENT_JAR is the official 1.8.8 client (client.jar, from Mojang's launcher
-servers); only its pictures are read. Every texture is 16 x 16 with its own
+servers); only its pictures are read. With --modern, block/item/entity/font/
+environment/colormap pictures come from an extracted modern client instead
+(tools/modern_map.py names them), and CLIENT_JAR is only the fallback for
+what has no modern equivalent (bed block textures, most GUI/HUD sprites).
+With --eggs, an extra modern root is looked in for what the modern set has
+none of neither: the per-mob spawn eggs (1.21.5's <mob>_spawn_egg.png, which
+a 1.20.1 client has none of).
+Every texture is 16 x 16 with its own
 palette of up to 16 colours (4 bits a texel): tinted ones (grass, leaves,
 water) keep their grey levels, and the game multiplies them by the biome's
 colour. Index 0 is transparent in textures that have see-through texels.
@@ -34,12 +43,25 @@ def rgb565(r, g, b):
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
 
 
+def extra_image(roots, name):
+    """a picture from one of the extra modern texture roots (the 1.21.5 per-mob spawn
+    eggs, which 1.8.8's jar has none of), as RGBA, or None if no root has it."""
+    if not roots:
+        return None
+    import modern_map
+    return modern_map.extra_image(roots, name)
+
+
 class Jar:
-    def __init__(self, path):
+    def __init__(self, path, extra=()):
         self.z = zipfile.ZipFile(path)
+        self.extra = tuple(extra)   # modern roots for what 1.8.8 has none of (the spawn eggs)
 
     def image(self, name):
-        return Image.open(io.BytesIO(self.z.read(TEX + name + '.png'))).convert('RGBA')
+        im = extra_image(self.extra, name) if self.extra else None
+        if im is None:
+            im = Image.open(io.BytesIO(self.z.read(TEX + name + '.png'))).convert('RGBA')
+        return im
 
 
 def quantize(im, colors, keep_grey=False):
@@ -72,14 +94,41 @@ def first_frame(im):
 
 
 def custom_texture(jar, n):
-    """textures made from an entity's: the chest's faces (ModelChest: a 14 x 14 x 14 box)"""
+    """textures made from an entity's: the chest's faces (ModelChest: a 14 x 14 x 14 box)
+
+    1.15 changed the chest texture's layout (MC-161338): the front moved to
+    the far right (x 42) and the lid's top to x 28, the sides flipped
+    vertically and the top/bottom rotated 180. Detect the layout from the
+    pixels (modern wood at (35, 7), old dark there) so both 1.8.8's client.jar
+    and a modern extracted client give a closed chest, not an open-looking
+    dark hole."""
+    from PIL import ImageOps
     ch = jar.image('entity/chest/normal')
     out = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    # modern: wood at the middle of (28, 0, 42, 14); 1.8.8: dark there (the inside)
+    try:
+        r, g, b, a = ch.getpixel((35, 7))
+        modern = r > 100
+    except Exception:
+        modern = False
     if n == '@chest_top':
-        out.paste(ch.crop((14, 0, 28, 14)), (1, 1))
+        box = (28, 0, 42, 14) if modern else (14, 0, 28, 14)
+        top = ch.crop(box)
+        if modern:
+            top = top.rotate(180)
+        out.paste(top, (1, 1))
     elif n in ('@chest_front', '@chest_side'):
-        lid = ch.crop((14, 14, 28, 19) if n == '@chest_front' else (0, 14, 14, 19))
-        base = ch.crop((14, 34, 28, 43) if n == '@chest_front' else (0, 34, 14, 43))
+        if modern:
+            lid_box = (42, 14, 56, 19) if n == '@chest_front' else (0, 14, 14, 19)
+            base_box = (42, 34, 56, 43) if n == '@chest_front' else (0, 34, 14, 43)
+            lid = ImageOps.flip(ch.crop(lid_box))
+            base = ImageOps.flip(ch.crop(base_box))
+            # flip back the latch notch: the flip moves it to the wrong end for the
+            # composite (lid 5 + base 9); flipping the whole 14-high face keeps the
+            # junction aligned, so flip each part then paste (wood is horizontal anyway)
+        else:
+            lid = ch.crop((14, 14, 28, 19) if n == '@chest_front' else (0, 14, 14, 19))
+            base = ch.crop((14, 34, 28, 43) if n == '@chest_front' else (0, 34, 14, 43))
         out.paste(lid, (1, 2))
         out.paste(base, (1, 7))
         if n == '@chest_front':
@@ -88,6 +137,8 @@ def custom_texture(jar, n):
 
 
 def tex_image(jar, n):
+    # bed block faces: use the old blocks/bed_* (1.8.8) – the modern entity is
+    # 3D and too much for NumBlocks' low 9-high box (user asked for the old one)
     return custom_texture(jar, n) if n.startswith('@') else first_frame(jar.image('blocks/' + n))
 
 
@@ -115,7 +166,7 @@ def pack_textures(jar):
     tinted.discard('grass_side_snowed')
     px, pals, flags = [], [], []
     for n in names:
-        im = custom_texture(jar, n) if n.startswith('@') else first_frame(jar.image('blocks/' + n))
+        im = tex_image(jar, n)
         if n == 'grass_side':
             # the dirt side keeps its colours; the fringe (the overlay's texels)
             # becomes grey levels tinted by the biome: palette indices from 8
@@ -211,6 +262,13 @@ BIOMES = {0: (0.5, 0.5), 1: (0.8, 0.4), 2: (2.0, 0.0), 3: (0.2, 0.3), 4: (0.7, 0
 def biome_colors(jar):
     grass = jar.image('colormap/grass').convert('RGB')
     foliage = jar.image('colormap/foliage').convert('RGB')
+    # 1.8.8 water textures are already blue (white tint keeps them);
+    # modern (1.13+) ones are grey and need the biome's water colour.
+    try:
+        _wr, _wg, _wb, _wa = first_frame(jar.image('blocks/water_still')).getpixel((8, 8))
+        modern_water = max(abs(_wr - _wg), abs(_wg - _wb), abs(_wr - _wb)) < 12
+    except Exception:
+        modern_water = True
 
     def look(img, t, r):
         t = min(max(t, 0.0), 1.0)
@@ -232,7 +290,20 @@ def biome_colors(jar):
             c = (gc[0] << 16) | (gc[1] << 8) | gc[2]
             c = ((c & 0xFEFEFE) + 0x28340A) >> 1
             gc = ((c >> 16) & 255, (c >> 8) & 255, c & 255)
-        wc = (0xE0, 0xFF, 0xAE) if base == 6 else (0xFF, 0xFF, 0xFF)
+        # modern (1.13+) water textures are grey; the biome's water colour
+        # provides the blue (Java water_color): default #3F76E4, swamp #617B64,
+        # frozen ocean/river #3938C9, cold water (snowy beach, snowy taiga) #3D57D6.
+        # 1.8.8 water is already blue: white tint (swamp #E0FFAE) keeps it.
+        if not modern_water:
+            wc = (0xE0, 0xFF, 0xAE) if base == 6 else (0xFF, 0xFF, 0xFF)
+        elif base == 6:   # swamp
+            wc = (0x61, 0x7B, 0x64)
+        elif base in (10, 11):   # frozen ocean, frozen river
+            wc = (0x39, 0x38, 0xC9)
+        elif base in (26, 30, 31):   # snowy beach, snowy taiga (+ hills)
+            wc = (0x3D, 0x57, 0xD6)
+        else:
+            wc = (0x3F, 0x76, 0xE4)
         g.append(gc)
         f.append(fc)
         w.append(wc)
@@ -267,9 +338,10 @@ SPRITES = [
 
 
 # what the inventory tints its icons with: plains grass and foliage, and the fixed colours
-# (ColorizerFoliage.getFoliageColorPine and getFoliageColorBirch, BlockLilyPad)
+# (ColorizerFoliage.getFoliageColorPine and getFoliageColorBirch, BlockLilyPad,
+# and the default water colour: modern water textures are grey)
 ICON_TINT = {'grass': (0x91, 0xBD, 0x59), 'foliage': (0x91, 0xBD, 0x59), 'spruce': (0x61, 0x99, 0x61),
-             'birch': (0x80, 0xA7, 0x55), 'lily': (0x20, 0x80, 0x30)}
+             'birch': (0x80, 0xA7, 0x55), 'lily': (0x20, 0x80, 0x30), 'water': (0x3F, 0x76, 0xE4)}
 
 
 def iso_icon(jar, s, names_px):
@@ -283,11 +355,24 @@ def iso_icon(jar, s, names_px):
             im = im.convert('RGBA').copy()
             im.putdata([(r * k[0] // 255, g * k[1] // 255, b * k[2] // 255, a) for r, g, b, a in pixels(im)])
         return im
+    # stairs and fences have their own shapes, not a cube (below)
+    if s['model'] == 'stairs':
+        return iso_stairs(jar, s, k)
+    if s['model'] == 'fence':
+        return iso_fence(jar, s, k)
     top = t if isinstance(t, str) else t['top']
     left = t if isinstance(t, str) else t.get('front', t['side']) if s['meta'] in (0,) else t['side']
     right = t if isinstance(t, str) else t['side']
     out = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
     timg = tex_image(jar, top)
+    if s['tint'] == 'water':
+        # 1.8.8 water is already blue; only modern grey water needs the tint
+        try:
+            _wr, _wg, _wb, _wa = timg.getpixel((8, 8))
+            if max(abs(_wr - _wg), abs(_wg - _wb), abs(_wr - _wb)) >= 12:
+                k = None
+        except Exception:
+            pass
     limg = tex_image(jar, (t.get('front', t['side']) if isinstance(t, dict) and 'front' in t else left))
     rimg = tex_image(jar, right)
     tint = s['tint']
@@ -303,7 +388,15 @@ def iso_icon(jar, s, names_px):
     timg = tinted(timg, 1.0, k is not None)
     limg = tinted(limg, 0.8, k is not None and tint != 'grass')
     rimg = tinted(rimg, 0.6, k is not None and tint != 'grass')
-    h = 0.5 if s['model'] == 'slab' else 0.5625 if s['model'] == 'bed' else 1.0
+    # chest and cactus faces keep a 1-texel see-through border (the box is
+    # smaller: chest 14 x 14 x 14, cactus 14 x 16 x 14): sample the opaque
+    # middle so the icon is solid (no splits/holes), drawn full-size.
+    # Their outer columns are dark edge trim: sample asymmetrically so the
+    # trim stays on the icon's outer silhouette and plain wood meets at the
+    # middle seam (trim-against-trim there reads as a black split/hole).
+    h = 0.5 if s['model'] == 'slab' else 0.5625 if s['model'] == 'bed' else (14 / 16) if s['model'] == 'chest' else 1.0
+    inset_tex = s['model'] in ('chest', 'cactus')
+    is_chest = s['model'] == 'chest'
     for y in range(16):
         for x in range(16):
             px, py = x + 0.5, y + 0.5
@@ -312,24 +405,210 @@ def iso_icon(jar, s, names_px):
             a = ((px - 8) / 8 + (py - oy) / 4) / 2
             b = (-(px - 8) / 8 + (py - oy) / 4) / 2
             if 0 <= a < 1 and 0 <= b < 1:
-                c = timg.getpixel((min(15, int(a * 16)), min(15, int(b * 16))))
+                if inset_tex:
+                    tu, tv = 1 + min(13, int(a * 14)), 1 + min(13, int(b * 14))
+                    c = timg.getpixel((tu, tv))
+                else:
+                    c = timg.getpixel((min(15, int(a * 16)), min(15, int(b * 16))))
                 if c[3] >= 128:
                     out.putpixel((x, y), c)
                 continue
             # left face: (0,4) (8,8) down 8: u = x/8, v = (y - 4 - x/2) / 8
             if px < 8:
-                u, v = px / 8, (py - 4 - oy - px / 2) / (8 * h)
+                u = px / 8
+                v = (py - 4 - oy - px / 2) / (8 * h)
                 if 0 <= u < 1 and 0 <= v < 1:
-                    c = limg.getpixel((min(15, int(u * 16)), min(15, int(((1 - h) + v * h) * 16))))
+                    if inset_tex:
+                        # trim on the outer edge (tu=1), plain wood at the seam
+                        tu = 1 + min(12, int(u * 13))
+                        if is_chest:
+                            tv = 2 + min(13, int(((1 - h) + v * h) * 14))
+                        else:
+                            tv = 1 + min(13, int(((1 - h) + v * h) * 14))
+                        # v maps 0..1 to 2..15 (chest 14 high: lid 5 + base 9)
+                        # or 1..14 (cactus 14 opaque rows)
+                        c = limg.getpixel((tu, tv))
+                    else:
+                        c = limg.getpixel((min(15, int(u * 16)), min(15, int(((1 - h) + v * h) * 16))))
                     if c[3] >= 128:
                         out.putpixel((x, y), c)
             else:
-                u, v = (px - 8) / 8, (py - 8 - oy + (px - 8) / 2) / (8 * h)
+                u = (px - 8) / 8
+                v = (py - 8 - oy + (px - 8) / 2) / (8 * h)
                 if 0 <= u < 1 and 0 <= v < 1:
-                    c = rimg.getpixel((min(15, int(u * 16)), min(15, int(((1 - h) + v * h) * 16))))
+                    if inset_tex:
+                        # plain wood at the seam (tu=2), trim on the outer edge
+                        tu = 2 + min(12, int(u * 13))
+                        if is_chest:
+                            tv = 2 + min(13, int(((1 - h) + v * h) * 14))
+                        else:
+                            tv = 1 + min(13, int(((1 - h) + v * h) * 14))
+                        c = rimg.getpixel((tu, tv))
+                    else:
+                        c = rimg.getpixel((min(15, int(u * 16)), min(15, int(((1 - h) + v * h) * 16))))
                     if c[3] >= 128:
                         out.putpixel((x, y), c)
     return out
+
+
+def iso_stairs(jar, s, k):
+    """Stairs as the inventory shows them: the bottom slab plus the raised step."""
+    import blocks as _blocks
+    t = s['tex']
+    tex = t if isinstance(t, str) else t.get('side', t.get('top'))
+    base_img = tex_image(jar, tex)
+    top_img = tex_image(jar, t['top'] if isinstance(t, dict) else t)
+
+    def tinted(im, shade):
+        if k is None:
+            px = [(int(r * shade), int(g * shade), int(b * shade), a) for r, g, b, a in pixels(im)]
+        else:
+            px = [(int(r * k[0] // 255 * shade), int(g * k[1] // 255 * shade), int(b * k[2] // 255 * shade), a)
+                  for r, g, b, a in pixels(im)]
+        o = Image.new('RGBA', im.size)
+        o.putdata(px)
+        return o
+
+    # bottom slab (0,0,0,16,8,16) and the east step (8,8,0,16,16,16): reuse the
+    # cube renderer by faking two slab/bed-like states (avoids duplicating it)
+    out = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    # draw the full bottom half first, then the step on top of it
+    for part, y0, y1, x0, x1 in (('base', 0, 8, 0, 16), ('step', 8, 16, 8, 16)):
+        img = base_img if part == 'base' else top_img
+        # shade like the cube faces: top 1.0, left 0.8, right 0.6
+        for shade, getter in ((1.0, lambda a, b: (a, b)), (0.8, None), (0.6, None)):
+            pass
+        # simplest: draw each part as its own small iso cube via the generic path
+        # by temporarily shifting it: bottom slab h=0.5 at y0, step h=0.5 at y=8
+        # with x range x0..x1. Reuse the math inline (kept small on purpose).
+        h = 0.5
+        oy_base = (1 - h) * 8 if part == 'base' else 0  # step sits on the slab
+        # step's top is at full height (y=16), its diamond is the full one cut to x 8..16
+        for y in range(16):
+            for x in range(16):
+                px, py = x + 0.5, y + 0.5
+                if part == 'base':
+                    oy = 4.0
+                    a = ((px - 8) / 8 + (py - oy) / 4) / 2
+                    b = (-(px - 8) / 8 + (py - oy) / 4) / 2
+                    if 0 <= a < 1 and 0 <= b < 1:
+                        c = tinted(img, 1.0).getpixel((min(15, int(a * 16)), min(15, int(b * 16))))
+                        if c[3] >= 128:
+                            # only where the step does not cover (handled by order)
+                            if out.getpixel((x, y))[3] < 128:
+                                out.putpixel((x, y), c)
+                        continue
+                    if px < 8:
+                        u, v = px / 8, (py - 4 - oy - px / 2) / (8 * h)
+                        if 0 <= u < 1 and 0 <= v < 1:
+                            c = tinted(img, 0.8).getpixel((min(15, int(u * 16)), min(15, int(v * 16 + 8))))
+                            if c[3] >= 128 and out.getpixel((x, y))[3] < 128:
+                                out.putpixel((x, y), c)
+                    else:
+                        u, v = (px - 8) / 8, (py - 8 - oy + (px - 8) / 2) / (8 * h)
+                        if 0 <= u < 1 and 0 <= v < 1:
+                            c = tinted(img, 0.6).getpixel((min(15, int(u * 16)), min(15, int(v * 16 + 8))))
+                            if c[3] >= 128 and out.getpixel((x, y))[3] < 128:
+                                out.putpixel((x, y), c)
+                else:
+                    # step: top diamond cut to its x half (east half: a in [0.5, 1))
+                    oy = 0.0
+                    a = ((px - 8) / 8 + (py - oy) / 4) / 2
+                    b = (-(px - 8) / 8 + (py - oy) / 4) / 2
+                    if 0.5 <= a < 1 and 0 <= b < 1:
+                        c = tinted(img, 1.0).getpixel((min(15, int(a * 16)), min(15, int(b * 16))))
+                        if c[3] >= 128:
+                            out.putpixel((x, y), c)
+                        continue
+                    # step sides: left face only where x in the step's half
+                    if px < 8:
+                        # step's west face (at x=8) shows as a small square mid-icon;
+                        # the south/north faces show on the left/right halves
+                        u, v = px / 8, (py - 4 - oy - px / 2) / 4
+                        # only the east half's south face is visible on the left side
+                        if 0.5 <= u < 1 and 0 <= v < 1:
+                            c = tinted(img, 0.8).getpixel((min(15, int(u * 16)), min(15, int(v * 8))))
+                            if c[3] >= 128:
+                                out.putpixel((x, y), c)
+                    else:
+                        u, v = (px - 8) / 8, (py - 8 - oy + (px - 8) / 2) / 4
+                        if 0 <= u < 1 and 0 <= v < 1:
+                            # step's east face (full) on the right, plus its top edge
+                            c = tinted(img, 0.6).getpixel((min(15, int(u * 16)), min(15, int(8 + v * 8))))
+                            if c[3] >= 128:
+                                # draw over the base (the step is in front/on top)
+                                out.putpixel((x, y), c)
+    return out
+
+
+def iso_boxes(jar, tex, boxes, k):
+    """Iso icon of arbitrary boxes (x0,y0,z0,x1,y1,z1 in sixteenths), e.g. the
+    fence inventory model (two posts plus two full-length bars). One texture
+    for every face (full-face UVs, like the other iso icons); faces shaded
+    top 1.0, south/left 0.8, east/right 0.6. Per-pixel nearest-face wins, so
+    interpenetrating boxes (bars through posts) come out connected."""
+    img = tex_image(jar, tex)
+
+    def tinted(im, shade):
+        if k is None:
+            px = [(int(r * shade), int(g * shade), int(b * shade), a) for r, g, b, a in pixels(im)]
+        else:
+            px = [(int(r * k[0] // 255 * shade), int(g * k[1] // 255 * shade), int(b * k[2] // 255 * shade), a)
+                  for r, g, b, a in pixels(im)]
+        o = Image.new('RGBA', im.size)
+        o.putdata(px)
+        return o
+
+    top, left, right = tinted(img, 1.0), tinted(img, 0.8), tinted(img, 0.6)
+    out = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+    for y in range(16):
+        for x in range(16):
+            px, py = x + 0.5, y + 0.5
+            best, bc = -1e9, None
+            for (x0, y0, z0, x1, y1, z1) in boxes:
+                oy = (16 - y1) / 2
+                # top face (y=y1): a along +x, b along +z
+                a = ((px - 8) / 8 + (py - oy) / 4) / 2
+                b = (-(px - 8) / 8 + (py - oy) / 4) / 2
+                if x0 / 16 <= a < x1 / 16 and z0 / 16 <= b < z1 / 16:
+                    wx, wz = a * 16, b * 16
+                    c = top.getpixel((min(15, int((a - x0 / 16) / ((x1 - x0) / 16) * 16)),
+                                          min(15, int((b - z0 / 16) / ((z1 - z0) / 16) * 16))))
+                    if c[3] >= 128 and wx + y1 + wz > best:
+                        best, bc = wx + y1 + wz, c
+                # south face (z=z1): u along +x, v down from the top (y1)
+                if y0 < y1:
+                    # px = x/2 + 8 - z1/2  ->  x = 2*(px-8) + z1
+                    sx = 2 * (px - 8) + z1
+                    # py = 4 + oy + px/2 + (y1-y)/2  ->  y = y1 - 2*(py-4-oy-px/2)
+                    sy = y1 - 2 * (py - 4 - oy - px / 2)
+                    if x0 <= sx < x1 and y0 <= sy < y1:
+                        c = left.getpixel((min(15, int((sx - x0) / (x1 - x0) * 16)),
+                                                min(15, int((y1 - sy) / (y1 - y0) * 16))))
+                        if c[3] >= 128 and sx + sy + z1 > best:
+                            best, bc = sx + sy + z1, c
+                # east face (x=x1): u mirrored along -z, v down from the top
+                if y0 < y1:
+                    # px = 8 + (x1-z)/2  ->  z = x1 - 2*(px-8)
+                    sz = x1 - 2 * (px - 8)
+                    sy = y1 - 2 * (py - 8 - oy + (px - 8) / 2)
+                    if z0 <= sz < z1 and y0 <= sy < y1:
+                        c = right.getpixel((min(15, int((1 - (sz - z0) / (z1 - z0)) * 16)),
+                                            min(15, int((y1 - sy) / (y1 - y0) * 16))))
+                        if c[3] >= 128 and x1 + sy + sz > best:
+                            best, bc = x1 + sy + sz, c
+            if bc is not None:
+                out.putpixel((x, y), bc)
+    return out
+
+
+def iso_fence(jar, s, k):
+    """A fence as the inventory shows it: vanilla's fence_inventory model (two
+    full-height posts plus a top and a lower full-length bar), not a cube."""
+    t = s['tex']
+    tex = t if isinstance(t, str) else t.get('side', t.get('top'))
+    return iso_boxes(jar, tex, [(6, 0, 0, 10, 16, 4), (6, 0, 12, 10, 16, 16),
+                                (7, 12, 0, 9, 15, 16), (7, 6, 0, 9, 9, 16)], k)
 
 
 def pack_sprite(im):
@@ -346,6 +625,29 @@ def pack_sprite(im):
         row = idx[y * w:(y + 1) * w] + [0]
         bs += [row[i] | (row[i + 1] << 4) for i in range(0, w, 2)]
     return bs, pal, alpha
+
+
+def skin_sheet(jar, name):
+    """A mob's picture folded into the 64 x 32 the renderer indexes: mob.h's
+    Part uv is 1.8's — the head at (0,0), the body at (16,16), the right arm at
+    (40,16), the right leg at (0,16) — and the left arm and leg are boxes of
+    their own with mirror set, drawn off the right limb's box instead of boxes
+    of their own. Modern clients draw these mobs the same way, and their sheets
+    keep 1.8's uv, so a 64 x 32 sheet folds straight across.
+
+    A sheet taller than 32 rows is the zombie's (entity/zombie/zombie.png,
+    64 x 64). Its rows past 32 are where a 64 x 64 player-style sheet would
+    put the left arm and the left leg, and a modern zombie's model does not
+    read them (it has no outer layer and mirrors its right limbs, as mob.c
+    does): the top half is the whole mob, so that is all the fold keeps.
+
+    A mob may no longer be drawn with 1.8's pictures, so a skin that fell back
+    to the jar is an error rather than a silent mix of old and new art.
+    """
+    im = jar.image('entity/' + name)
+    if 'entity/' + name in getattr(jar, 'used_fallback', ()):
+        sys.exit(f'entity/{name} has no modern texture and fell back to the 1.8.8 jar')
+    return im.crop((0, 0, 64, 32))
 
 
 import items  # noqa: E402
@@ -401,6 +703,8 @@ def item_icon(jar, it):
     for part in ('helmet', 'chestplate', 'leggings', 'boots'):
         if t == 'leather_' + part:
             return leather(jar, part)
+    # bed stays flat (items/bed.png, 1.8.8 fallback when modern has none) –
+    # the 3D entity is too much for an item icon (user asked for the old one)
     return first_frame(jar.image('items/' + t))
 
 
@@ -455,8 +759,9 @@ def gui_images(jar):
     chest.paste(g54.crop((0, 126, 176, 222)), (0, 71))
     w = jar.image('gui/widgets')
     tab = jar.image('gui/container/creative_inventory/tab_items').crop((0, 0, 195, 136))
-    return [('inventory', inv), ('crafting_table', craft), ('furnace', furn), ('chest', chest), ('creative', tab)
-]
+    surv = jar.image('gui/container/creative_inventory/tab_inventory').crop((0, 0, 195, 136))
+    return [('inventory', inv), ('crafting_table', craft), ('furnace', furn), ('chest', chest), ('creative', tab),
+            ('tab_inventory', surv)]
 
 
 GUI_SPRITES = [
@@ -478,7 +783,20 @@ GUI_SPRITES = [
 
 
 def main():
-    jar = Jar(sys.argv[1])
+    args = sys.argv[1:]
+    extra = []
+    if '--eggs' in args:
+        i = args.index('--eggs')
+        if i + 1 >= len(args):
+            sys.exit('--eggs needs a directory')
+        extra.append(args[i + 1])
+        args = args[:i] + args[i + 2:]
+    if args[:1] == ['--modern']:
+        import modern_map
+        root, fb = args[1], args[2] if len(args) > 2 else None
+        jar = modern_map.ModernSource(root, fb, extra=extra)
+    else:
+        jar = Jar(args[0], extra=extra)
     names, px, pals, flags = pack_textures(jar)
     out = ['/* Generated by tools/pack.py from Minecraft 1.8.8\'s client.jar: textures and block tables. */',
            '#include "data.h"', '']
@@ -534,6 +852,11 @@ def main():
                         for s in blocks.S) + '};')
     out.append('const uint8_t blk_id[B_COUNT] = {' + ','.join(str(s['id']) for s in blocks.S) + '};')
     out.append('const uint8_t blk_meta[B_COUNT] = {' + ','.join(str(s['meta']) for s in blocks.S) + '};')
+    # NOTE for the superflat customizer (gen.c flat_parse_block): a preset layer may name any
+    # block by these same Minecraft numeric ids, as id or id:meta (e.g. 1 stone, 2 grass, 3 dirt,
+    # 7 bedrock, 12 sand, 20 glass, 44 stone slab, 159:14 red stained clay, 172 hardened clay).
+    # Every id:meta pair listed in blocks.py (i.e. with a B_* state) is legal; anything else is
+    # rejected with a message, never placed.
     # GUI sprites and block icons: 4 bits a pixel, a palette each; index 0 see-through
     sprites = [(n, jar.image(f).crop((x, y, x + w, y + h))) for n, f, x, y, w, h in SPRITES]
     # the moon's faintest halo left out: cut to its middle, it would show as a square
@@ -632,7 +955,7 @@ def main():
     out.append(f'const uint8_t skin_px[{len(SKINS)}][1024] = {{')
     spal = []
     for n in SKINS:
-        im = jar.image('entity/' + n).crop((0, 0, 64, 32))
+        im = skin_sheet(jar, n)
         bs, pal, alpha = pack_sprite(im)
         out.append('  {' + ','.join(str(v) for v in bs) + '},')
         spal.append(pal)
@@ -654,10 +977,13 @@ def main():
     # the creative inventory: each tab's items, in id order (blocks, then items)
     tab_lists = [[] for _ in items.TABS]
     for iid in list(range(len(blocks.S))) + [256 + k for k in range(len(items.I))]:
-        t = items.tab_of(iid)
-        if t is not None:
-            tab_lists[t].append(iid)
-            tab_lists[5].append(iid)   # Search Items: everything
+        tabs = items.tab_of(iid)
+        if tabs:
+            for t in tabs:
+                tab_lists[t].append(iid)
+            tab_lists[items.T_SEARCH].append(iid)   # Search Items: everything, once
+    for t in range(len(items.TABS)):
+        tab_lists[t] = items.tab_order(t, tab_lists[t])
     flat, starts = [], []
     for L in tab_lists:
         starts.append(len(flat))
@@ -665,7 +991,7 @@ def main():
     starts.append(len(flat))
     out.append(f'const uint16_t tab_items[{len(flat)}] = {{' + ','.join(str(v) for v in flat) + '};')
     out.append(f'const uint16_t tab_start[{len(starts)}] = {{' + ','.join(str(v) for v in starts) + '};')
-    out.append('const char *const tab_name[12] = {' + ','.join('"' + t + '"' for t in items.TABS) + '};')
+    out.append(f'const char *const tab_name[{len(items.TABS)}] = {{' + ','.join('"' + t + '"' for t in items.TABS) + '};')
     # the font
     fb, fw = font_bits(jar)
     out.append('const uint8_t font_bits[96 * 8] = {' + ','.join(str(v) for v in fb) + '};')
@@ -782,8 +1108,8 @@ def main():
           'enum { SKIN_ZOMBIE, SKIN_SKELETON, SKIN_CREEPER, SKIN_SPIDER, SKIN_PIG, SKIN_COW, SKIN_SHEEP, SKIN_SHEEP_FUR,'
           ' SKIN_CHICKEN };',
           'extern const uint8_t cracks[10][32];   /* destroy stages, 1 bit a texel */']
-    h += ['extern const uint16_t tab_items[], tab_start[13];   /* the creative tabs\' items */',
-          'extern const char *const tab_name[12];']
+    h += [f'extern const uint16_t tab_items[], tab_start[{len(items.TABS) + 1}];   /* the creative tabs\' items */',
+          f'extern const char *const tab_name[{len(items.TABS)}];']
     h += ['extern const uint8_t font_bits[96 * 8], font_w[96];   /* characters 32-127 */',
           'extern const uint8_t img_rle[], img_w[], img_h[];', 'extern const uint32_t img_rows[];',
           'extern const uint16_t img_row0[], img_pal[][16];']
@@ -793,6 +1119,11 @@ def main():
     open(os.path.join(ROOT, 'src', 'data.h'), 'w').write('\n'.join(h))
     print(f'{len(names)} textures, {len(blocks.S)} block states, {len(items.I)} items, {len(items.R)} recipes, '
           f'{len(sprites)} sprites ({spr_bytes} bytes), GUI runs {len(allrle)} bytes')
+    if hasattr(jar, 'report'):
+        n, fb = jar.report()
+        print(f'modern textures: {n} from the modern set, {len(fb)} kinds from the 1.8.8 fallback:')
+        for f in fb:
+            print(f'  fallback {f}')
 
 
 BF_OPAQUE = 8

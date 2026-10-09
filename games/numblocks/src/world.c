@@ -11,7 +11,7 @@ uint8_t vc[VCY * VCZ * VCX];
 uint8_t vl[VCY * VCZ * VCX];
 uint8_t vbiome[VCZ * VCX];
 uint8_t vtop[VCZ * VCX];
-uint8_t vmac[MCY * MCZ * MCX];      /* per column: 1 + the highest block that stops sky light, 0 if none */
+uint8_t vmac[(MCY * MCZ * MCX + 3) / 4];   /* 4 x 4 x 4 regions: 0 all air, 2 water+air only, 1 other */
 static uint8_t vgtop[VCZ * VCX];    /* per column: the generator's highest block (not air) */
 int vc_x0, vc_y0, vc_z0;
 static bool vc_valid;
@@ -145,7 +145,7 @@ static void mac_box(int x0, int y0, int z0, int x1, int y1, int z1) {
             any |= (uint8_t)(r[0] | r[1] | r[2] | r[3]);
             for (int k = 0; k < 4; k++) water = water && (r[k] == B_AIR || is_water(r[k]));
           }
-        vmac[(my * MCZ + mz) * MCX + mx] = !any ? 0 : water ? 2 : 1;
+        vmac_set((my * MCZ + mz) * MCX + mx, !any ? 0 : water ? 2 : 1);
       }
 }
 
@@ -193,9 +193,13 @@ static uint8_t kept[VCZ * VCX / 8];   /* columns the old cache covered (moved, n
 /* Chunks still to generate after a move: the one under the player is made
  * at once, the others one a frame (world_follow), nearest first. Until then
  * their columns are air to look at and solid to everything that moves. */
-static uint8_t vpend[VCZ * VCX];
+static uint8_t vpend[(VCZ * VCX + 7) / 8];   /* a bit a column (1600 cols -> 200 B) */
+static inline int vpend_get(int col) { return (vpend[col >> 3] >> (col & 7)) & 1; }
+static inline void vpend_set(int col) { vpend[col >> 3] |= (uint8_t)(1u << (col & 7)); }
+static inline void vpend_clear(int col) { vpend[col >> 3] &= (uint8_t)~(1u << (col & 7)); }
 typedef struct { int16_t cx, cz; int8_t ylo, yhi; } PendChunk;
-static PendChunk pend[16];
+#define NPEND 32
+static PendChunk pend[NPEND];
 static int npend, pend_oy;
 static bool pend_any;
 
@@ -205,7 +209,7 @@ static void fill_pending(int k) {
   fill_chunk(p.cx, p.cz, pend_any ? kept : NULL, pend_oy, p.ylo, p.yhi, false);
   int x0 = p.cx * 16 - vc_x0, z0 = p.cz * 16 - vc_z0;
   for (int z = z0 < 0 ? 0 : z0; z < z0 + 16 && z < VCZ; z++)
-    for (int x = x0 < 0 ? 0 : x0; x < x0 + 16 && x < VCX; x++) vpend[z * VCX + x] = 0;
+    for (int x = x0 < 0 ? 0 : x0; x < x0 + 16 && x < VCX; x++) vpend_clear(z * VCX + x);
 }
 
 /* The chunks waiting to be made, meanwhile: the blocks about them carried on, not holes the sky shows
@@ -216,7 +220,7 @@ static void fill_pending(int k) {
 static void stand_in(bool any, int oy, int px, int pz) {
   int lo = any ? oy - vc_y0 : VCY, hi = any ? lo + VCY : VCY;   /* (the rows the old cache had) */
   for (int col = 0; col < VCX * VCZ; col++) {
-    if (!vpend[col] || !any || !BIT(kept, col)) continue;
+    if (!vpend_get(col) || !any || !BIT(kept, col)) continue;
     int lx = col % VCX, lz = col / VCX;
     if (lo > 0 && lo < VCY) {
       int b = vc[VC_I(lx, lo, lz)];
@@ -231,12 +235,12 @@ static void stand_in(bool any, int oy, int px, int pz) {
   }
   int mx = px - vc_x0, mz = pz - vc_z0;   /* (the player's column: always made at once) */
   for (int col = 0; col < VCX * VCZ; col++) {
-    if (!vpend[col] || (any && BIT(kept, col))) continue;
+    if (!vpend_get(col) || (any && BIT(kept, col))) continue;
     /* towards the player until a column that is there */
     int lx = col % VCX, lz = col / VCX, sx = lx, sz = lz;
     for (int k = 0; k < VCX + VCZ; k++) {
       int s = sz * VCX + sx;
-      if (!vpend[s] || (any && BIT(kept, s))) break;
+      if (!vpend_get(s) || (any && BIT(kept, s))) break;
       if (sx != mx && abs(sx - mx) >= abs(sz - mz)) sx += sx < mx ? 1 : -1;
       else if (sz != mz) sz += sz < mz ? 1 : -1;
       else break;
@@ -253,18 +257,19 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
   while (npend) fill_pending(0);   /* (a move before the last one finished: finish it first) */
   int dx = nx0 - vc_x0, dy = ny0 - vc_y0, dz = nz0 - vc_z0;
   bool any = vc_valid && dx > -VCX && dx < VCX && dz > -VCZ && dz < VCZ && dy > -VCY && dy < VCY;
-  /* move what stays: in an order that never overwrites a cell before it is read */
+  /* move what stays: memmove handles overlap within a row; rows go in an order
+   * that never overwrites a cell before it is read */
   if (any) {
     int ys = dy >= 0 ? 0 : VCY - 1, ye = dy >= 0 ? VCY : -1, yi = dy >= 0 ? 1 : -1;
     int zs = dz >= 0 ? 0 : VCZ - 1, ze = dz >= 0 ? VCZ : -1, zi = dz >= 0 ? 1 : -1;
     int xs = dx >= 0 ? 0 : VCX - 1, xe = dx >= 0 ? VCX : -1, xi = dx >= 0 ? 1 : -1;
     for (int y = ys; y != ye; y += yi)
-      for (int z = zs; z != ze; z += zi)
-        for (int x = xs; x != xe; x += xi) {
-          int sx = x + dx, sy = y + dy, sz = z + dz;
-          if (sx < 0 || sx >= VCX || sy < 0 || sy >= VCY || sz < 0 || sz >= VCZ) continue;
-          vc[VC_I(x, y, z)] = vc[VC_I(sx, sy, sz)];
-        }
+      for (int z = zs; z != ze; z += zi) {
+        int sy = y + dy, sz = z + dz;
+        if (sy < 0 || sy >= VCY || sz < 0 || sz >= VCZ) continue;
+        int x0 = dx >= 0 ? 0 : -dx, x1 = dx >= 0 ? VCX - dx : VCX;
+        if (x0 < x1) memmove(&vc[VC_I(x0, y, z)], &vc[VC_I(x0 + dx, sy, sz)], (size_t)(x1 - x0));
+      }
     for (int z = zs; z != ze; z += zi)
       for (int x = xs; x != xe; x += xi) {
         int sx = x + dx, sz = z + dz;
@@ -314,7 +319,7 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
       }
       /* the player's chunk (and any within 3 blocks of the player), or a first fill: now */
       bool near = px >= cx * 16 - 3 && px < cx * 16 + 19 && pz >= cz * 16 - 3 && pz < cz * 16 + 19;
-      if (!was_valid || near || air || npend >= 16) {
+      if (!was_valid || near || air || npend >= 24) {
         fill_chunk(cx, cz, any ? kept : NULL, pend_oy, ylo, yhi, air);
         continue;
       }
@@ -323,7 +328,7 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
         for (int x = 0; x < 16; x++) {
           int lx = cx * 16 + x - vc_x0, lz = cz * 16 + z - vc_z0;
           if (lx < 0 || lx >= VCX || lz < 0 || lz >= VCZ) continue;
-          vpend[lz * VCX + lx] = 1;
+          vpend_set(lz * VCX + lx);
         }
     }
   stand_in(any, oy, px, pz);
@@ -334,7 +339,8 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
 }
 
 void world_new(int64_t seed, const char *name) {
-  gen_set_flat(world_type == WT_FLAT);
+  if (world_type == WT_FLAT) gen_set_flat_preset(world_preset);
+  else gen_set_flat(0);
   gen_init(seed);
   edits_setup(name, slab32, sizeof slab32 / 4);
   edits_clear();
@@ -345,9 +351,11 @@ void world_new(int64_t seed, const char *name) {
 
 /* Near a side of the cache the next move is coming: the chunks it will make there (one row of
  * them, 8 blocks in) need the terrain of the chunks around them, which takes most of making a
- * chunk. Made ahead, one chunk's a frame, the move's frames making the chunks are shorter. */
-static void prepare_ahead(int lx, int lz) {
-  int dx = lx >= 22 ? 1 : lx < 18 ? -1 : 0, dz = lz >= 22 ? 1 : lz < 18 ? -1 : 0;
+ * chunk. Made ahead, one chunk's a frame, the move's frames making the chunks are shorter.
+ * (mx, mz: where the camera is headed, so only that side warms; still: the nearer side.) */
+static void prepare_ahead(int lx, int lz, int mx, int mz) {
+  int dx = mx > 0 ? (lx >= 18 ? 1 : 0) : mx < 0 ? (lx < 22 ? -1 : 0) : (lx >= 21 ? 1 : lx < 19 ? -1 : 0);
+  int dz = mz > 0 ? (lz >= 18 ? 1 : 0) : mz < 0 ? (lz < 22 ? -1 : 0) : (lz >= 21 ? 1 : lz < 19 ? -1 : 0);
   if (dx && dz) {   /* (one side at a time: the nearer) */
     if ((dx > 0 ? VCX - lx : lx) < (dz > 0 ? VCZ - lz : lz)) dz = 0;
     else dx = 0;
@@ -365,7 +373,14 @@ static void prepare_ahead(int lx, int lz) {
 
 void world_follow(float x, float y, float z) {
   int px = ifloor(x), py = ifloor(y), pz = ifloor(z);
+  static int wfx, wfz;
+  static bool wfgot;
   int lx = px - vc_x0, ly = py - vc_y0, lz = pz - vc_z0;
+  /* how many of the cache's blocks the camera keeps to each side. The slides are 8 blocks,
+   * so the camera ends up 8 blocks either side of the middle of that band after one: 16 is
+   * the farthest from both sides a 40 x 40 cache can keep it. The fog closes at the
+   * cache's edge (view_reach), so the ground fills the view out to the render distance. */
+  static const int M = VCX / 2 - 4;
   /* High above the ground (flying, falling) the cache goes down as far as it can with room above the
    * player to build: what is in sight below shows, and falling makes nothing for the air it passes */
   static bool high;
@@ -374,8 +389,9 @@ void world_follow(float x, float y, float z) {
   if (py - ground < 6) high = false;
   int ny_high = (py + 8 - VCY) & ~3;
   bool ok = high ? ly >= 4 && ly < VCY - 4 && !(vc_y0 > ground - 4 && ny_high < vc_y0) : ly >= 8 && ly < VCY - 8;
-  if (!(vc_valid && lx >= 12 && lx < VCX - 12 && lz >= 12 && lz < VCZ - 12 && ok)) {
-    int nx0 = (px - VCX / 2) & ~7, nz0 = (pz - VCZ / 2) & ~7;
+  if (!(vc_valid && lx >= M && lx < VCX - M && lz >= M && lz < VCZ - M && ok)) {
+    /* (the slide lands the camera M blocks in, and M or M+7 out: never on a side) */
+    int nx0 = (px - M) & ~7, nz0 = (pz - M) & ~7;
     int ny0 = high ? ny_high : (py - VCY / 2 + 2) & ~3;
     if (ny0 < 0) ny0 = 0;
     if (ny0 > WORLD_H - VCY) ny0 = WORLD_H - VCY;
@@ -395,7 +411,8 @@ void world_follow(float x, float y, float z) {
     fill_pending(best);
     light_mark(x0 - 4, 0, z0 - 4, x0 + 20, VCY, z0 + 20);
     mac_box(x0 < 0 ? 0 : x0, 0, z0 < 0 ? 0 : z0, x0 + 16 > VCX ? VCX : x0 + 16, VCY, z0 + 16 > VCZ ? VCZ : z0 + 16);
-  } else prepare_ahead(lx, lz);
+  } else prepare_ahead(lx, lz, wfgot ? px - wfx : 0, wfgot ? pz - wfz : 0);
+  wfx = px, wfz = pz, wfgot = true;
   world_light_flush();
 }
 
@@ -408,13 +425,13 @@ bool world_loaded(int x, int y, int z) {
 int world_get(int x, int y, int z) {
   if (y < 0) return B_BEDROCK;
   if (!world_loaded(x, y, z)) return B_AIR;
-  if (vpend[(z - vc_z0) * VCX + x - vc_x0]) return B_STONE;   /* not made yet: nothing goes in */
+  if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return B_STONE;   /* not made yet: nothing goes in */
   return vc[VC_I(x - vc_x0, y - vc_y0, z - vc_z0)];
 }
 
 void world_set(int x, int y, int z, int b) {
   if (!world_loaded(x, y, z) || y < 0 || y >= WORLD_H) return;
-  if (vpend[(z - vc_z0) * VCX + x - vc_x0]) return;
+  if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return;
   int lx = x - vc_x0, ly = y - vc_y0, lz = z - vc_z0;
   vc[VC_I(lx, ly, lz)] = (uint8_t)b;
   edits_put(x, y, z, b);
@@ -443,7 +460,7 @@ int world_rain_top(int x, int z) {
   int lx = x - vc_x0, lz = z - vc_z0;
   if ((unsigned)lx >= VCX || (unsigned)lz >= VCZ) return 255;
   int col = lz * VCX + lx, t = vtop[col];
-  if (vpend[col]) return 255;
+  if (vpend_get(col)) return 255;
   if (t > vc_y0 + VCY) return t;
   for (int y = VCY - 1; y >= 0 && y + vc_y0 >= t; y--)
     if (stops_rain(vc[VC_I(lx, y, lz)])) return y + vc_y0 + 1;

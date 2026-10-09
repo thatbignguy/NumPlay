@@ -57,11 +57,27 @@ build/play_ref: $(GAME) src/plat_host.c tests/play.c $(HEADERS)
 	$(Q) mkdir -p build
 	$(Q) cc $(HOST_FLAGS) -DFULL_TRACE $(GAME) src/plat_host.c tests/play.c -lm -o $@
 	@echo "HOST    $@"
+# interactive desktop player (X11): ./build/desktop (saves in build/desktop-saves/)
+desktop: build/desktop
+build/desktop: $(GAME) src/plat_host.c tests/desktop.c $(HEADERS)
+	$(Q) mkdir -p build
+	$(Q) cc $(HOST_FLAGS) $(GAME) src/plat_host.c tests/desktop.c -lm -lX11 -o $@
+	@echo "HOST    $@"
 
 data:
 	python3 tools/blocks.py --header > src/blocks.h
 	python3 tools/items.py --header > src/items.h
-	python3 tools/pack.py $(CLIENT_JAR)
+	python3 tools/pack.py $(CLIENT_JAR) --eggs $(EGG_TEX)
+
+# block/item/entity/font/environment pictures from an extracted modern client
+# (minecraft-textures/), falling back to 1.8.8's client.jar for the GUI/HUD, and to
+# the 1.21.5 spawn eggs (minecraft-spawneggs/) for what neither has
+MODERN_TEX ?= ../../minecraft-textures
+EGG_TEX ?= ../../minecraft-spawneggs
+data-modern:
+	python3 tools/blocks.py --header > src/blocks.h
+	python3 tools/items.py --header > src/items.h
+	python3 tools/pack.py --modern $(MODERN_TEX) $(CLIENT_JAR) --eggs $(EGG_TEX)
 
 clean:
 	$(Q) rm -rf $(BUILD_DIR) build

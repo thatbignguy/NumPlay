@@ -206,6 +206,8 @@ int block_drops(int b, int held, Stack *out) {
       DROP(B_DIRT, 1);
       return n;
     case B_COAL_ORE: DROP(I_COAL, 1); return n;
+    case B_IRON_ORE: DROP(I_RAW_IRON, 1); return n;
+    case B_GOLD_ORE: DROP(I_RAW_GOLD, 1); return n;
     case B_DIAMOND_ORE: DROP(I_DIAMOND, 1); return n;
     case B_EMERALD_ORE: DROP(I_EMERALD, 1); return n;
     case B_LAPIS_ORE: DROP(I_DYE_BLUE, 4 + rnd(5)); return n;

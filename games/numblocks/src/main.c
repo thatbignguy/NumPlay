@@ -33,6 +33,7 @@ static void title(void) {
   in_world = false;
   if (!opt.last_world || !load_world(opt.last_world)) {
     world_type = WT_DEFAULT;
+    memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
     world_new(0, "nbt");
     player_spawn();
   }
@@ -98,7 +99,7 @@ void game_init(void) {
 #endif
   last = plat_millis();
   if (start_in_world) {
-    new_world(1, start_seed, 0, false, start_type, "New World");
+    new_world(1, start_seed, 0, false, start_type, "New World", start_type == WT_FLAT ? FLAT_DEFAULT : FLAT_DEFAULT);
     game_time = 1000;
 #ifdef BENCH_FALL
     pl.mode = 1, pl.y += BENCH_FALL;   /* (timing a fall from that high, in Creative: no harm) */
@@ -117,13 +118,26 @@ bool game_frame(void) {
   last = now;
   if (in_world && gui == GUI_NONE && dt > perf_max) perf_max = dt;
   if (dt > 250) dt = 250;
+  if (dt > 0) {
+    float inst = 1000.0f / (float)dt;
+    if (dbg_fps <= 0) dbg_fps = inst;
+    else dbg_fps += (inst - dbg_fps) * 0.05f;
+  }
   uint32_t k = plat_keys();
   uint32_t pressed = k & ~keys_held;
   keys_held = k;
-  static bool pick_held;
-  bool pick = opt.keys[A_PICK] < 64 && (plat_scan() >> opt.keys[A_PICK] & 1);
+  static bool pick_held, debug_held;
+  /* one scan a frame for both (each scan is a call into the calculator) */
+  uint64_t raw = plat_scan();
+  bool pick = opt.keys[A_PICK] < 64 && (raw >> opt.keys[A_PICK] & 1);
   if (pick && !pick_held && in_world && gui == GUI_NONE && !pl.dead) player_pick_block();
   pick_held = pick;
+  bool dbg = opt.keys[A_DEBUG] < 64 && (raw >> opt.keys[A_DEBUG] & 1);
+  if (dbg && !debug_held && in_world && gui == GUI_NONE) {
+    opt.debug = (uint8_t)!opt.debug;
+    save_options();
+  }
+  debug_held = dbg;
   if (k & K_HOME) {
     /* Home: save and quit, from anywhere */
     if (in_world) {
@@ -151,7 +165,7 @@ bool game_frame(void) {
         while (b > a && name_text[b - 1] == ' ') b--;
         name_text[b] = 0;
         world_unique_name(name_text + a, name);
-        new_world(slot, parse_seed(), create_mode, create_cheats, create_type, name);
+        new_world(slot, parse_seed(), create_mode, create_cheats, create_type, name, create_preset);
         game_time = 0;
         loading();
         save_world();
@@ -198,7 +212,7 @@ bool game_frame(void) {
     if (pl.pitch > 90) pl.pitch = 90;
     if (pl.pitch < -90) pl.pitch = -90;
   }
-  bool paused = gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS;
+  bool paused = gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS;
   if (!paused) acc += dt;
   /* a key pressed on a frame between ticks waits for the next tick (else that press is lost) */
   static uint32_t game_pressed;

@@ -58,7 +58,10 @@ int main(void) {
   CHECK(inv_add(inv, 36, B_DIRT, 30, 0) == 0 && inv[1].aux == 64 && inv[3].aux == 2);
   CHECK(inv_add(inv, 36, I_EGG, 20, 0) == 0 && inv[4].aux == 16 && inv[5].aux == 4);
   /* smelting */
-  CHECK(smelt_of(B_IRON_ORE) == I_IRON_INGOT);
+  CHECK(smelt_of(I_RAW_IRON) == I_IRON_INGOT);
+  CHECK(smelt_of(I_RAW_GOLD) == I_GOLD_INGOT);
+  CHECK(smelt_of(B_IRON_ORE) == 0);
+  CHECK(smelt_of(B_GOLD_ORE) == 0);
   CHECK(smelt_of(B_LOG_ACACIA) == I_CHARCOAL);
   CHECK(smelt_of(B_DIRT) == 0);
   CHECK(item_fuel(I_COAL) == 1600 && item_fuel(B_PLANKS_OAK) == 300 && item_fuel(I_STICK) == 100);
@@ -72,6 +75,8 @@ int main(void) {
   CHECK(block_drops(B_GRASS, 0, out) == 1 && out[0].id == B_DIRT);
   CHECK(block_drops(B_LOG_OAK_X, 0, out) == 1 && out[0].id == B_LOG_OAK);
   CHECK(block_drops(B_COAL_ORE, I_GOLDEN_PICKAXE, out) == 1 && out[0].id == I_COAL);
+  CHECK(block_drops(B_IRON_ORE, I_STONE_PICKAXE, out) == 1 && out[0].id == I_RAW_IRON);
+  CHECK(block_drops(B_GOLD_ORE, I_IRON_PICKAXE, out) == 1 && out[0].id == I_RAW_GOLD);
   CHECK(block_drops(B_TORCH_E, 0, out) == 1 && out[0].id == B_TORCH);
   /* changes survive: through the journal, into storage, back after a reload */
   {
@@ -172,6 +177,58 @@ int main(void) {
     for (int t = 0; t < 100; t++) ticks_run++, ents_tick(), game_time++;
     CHECK(zb->type == E_ZOMBIE && zb->y >= y + 1 && zb->x > 10);
     plat_remove_prefix("ut3z");
+  }
+  {
+    /* a mob near the player looks at them for a short while, then looks away and idles: the
+     * head is not held on the player (EntityAIWatchClosest's maxRandomLookTime), and its pitch
+     * comes level again. The hall has walls and no floor outside, so the mobs stay in it. */
+    world_new(0, "ut13");
+    world_follow(8, 70, 8);
+    int y = 70;
+    for (int z = 3; z <= 15; z++)
+      for (int x = 3; x <= 15; x++) {
+        for (int k = 0; k < 6; k++) world_set(x, y + k, z, B_AIR);
+        if (x > 3 && x < 15 && z > 3 && z < 15) world_set(x, y - 1, z, B_STONE);
+        else world_set(x, y - 1, z, B_STONE), world_set(x, y, z, B_STONE), world_set(x, y + 1, z, B_STONE);
+      }
+    memset(ents, 0, sizeof ents);
+    memset(&pl, 0, sizeof pl);
+    opt.difficulty = 2;
+    pl.x = 8.5f, pl.y = (float)y, pl.z = 6.5f, pl.health = 20, pl.dead = false, pl.mode = 0, pl.slot = 0;
+    /* a cow with its food in hand, standing two blocks away (EntityAITempt brings it that close) */
+    pl.inv[0] = (Stack){I_WHEAT, 2};
+    Entity *cow = ent_new(E_COW, 8.5f, (float)y, 8.5f);
+    cow->health = 10, cow->tx = 8, cow->tz = 8;
+    int run = 0, longest = 0, level = 0;
+    for (int t = 0; t < 1000; t++) {
+      pl.health = 20, pl.dead = false;
+      ents_tick();
+      if (cow->look > 0 && cow->look < 80) run++;
+      else {
+        if (run > longest) longest = run;
+        run = 0;
+      }
+      if (fabsf(cow->pitch) < 1) level++;
+    }
+    CHECK(cow->type == E_COW && longest <= 80 && longest >= 40);   /* a watch is 40 to 80 ticks */
+    CHECK(level > 200);                    /* its head is level for most of the time */
+    /* in creative nothing a monster does involves the player: it only looks about */
+    extern uint32_t game_time;
+    memset(ents, 0, sizeof ents);
+    memset(&pl, 0, sizeof pl);
+    pl.x = 8.5f, pl.y = (float)y, pl.z = 6.5f, pl.health = 20, pl.dead = false, pl.mode = 1;
+    game_time = 18000;                     /* (midnight: no burning) */
+    Entity *zb = ent_new(E_ZOMBIE, 8.5f, (float)y, 8.5f);
+    zb->health = 20, zb->tx = 8, zb->tz = 8;
+    int watched = 0, idle = 0;
+    for (int t = 0; t < 600; t++) {
+      pl.health = 20, pl.dead = false;
+      ents_tick();
+      if (zb->look >= 80) idle++;
+      else if (zb->look > 0) watched++;
+    }
+    CHECK(zb->type == E_ZOMBIE && !watched && idle > 20);
+    plat_remove_prefix("ut13");
   }
   {
     /* weather: the clock, the strength, the light, and where rain falls */
@@ -312,6 +369,18 @@ int main(void) {
     pl.food = 6;
     player_tick(K_FWD | K_SPRINT, K_SPRINT);
     CHECK(!pl.sprinting);
+    /* and it is quicker than walking: the same forward key, the same ticks, the flat field
+     * (vanilla walks 4.317 blocks a second and sprints 5.612; over 30 ticks here, 6.5 and 8.3) */
+    pl.food = 20;   /* (fed again: a hungry player cannot sprint) */
+    float z0 = pl.z;
+    for (int t = 0; t < 30; t++) player_tick(K_FWD | K_SPRINT, t == 0 ? K_SPRINT : 0);
+    CHECK(pl.sprinting);
+    float ran = pl.z - z0;
+    z0 = pl.z;
+    pl.sprinting = false;
+    for (int t = 0; t < 30; t++) player_tick(K_FWD, 0);
+    CHECK(!pl.sprinting);
+    CHECK(ran > (pl.z - z0) * 1.2f && ran < (pl.z - z0) * 1.4f);   /* (1.3 times as quick) */
     plat_remove_prefix("ut8");
   }
   {
@@ -362,12 +431,12 @@ int main(void) {
     WorldInfo w;
     world_unique_name("New World", n);
     CHECK(!strcmp(n, "New World"));
-    new_world(world_free_slot(), 5, 0, false, WT_DEFAULT, n);
+    new_world(world_free_slot(), 5, 0, false, WT_DEFAULT, n, NULL);
     save_world();
     world_unique_name("New World", n);
     CHECK(!strcmp(n, "New World (2)"));
     int s2 = world_free_slot();
-    new_world(s2, 6, 1, true, WT_DEFAULT, n);
+    new_world(s2, 6, 1, true, WT_DEFAULT, n, NULL);
     save_world();
     CHECK(s2 == 2 && world_info(1, &w) && !strcmp(w.name, "New World") && w.mode == 0 && w.seed == 5);
     CHECK(world_info(2, &w) && !strcmp(w.name, "New World (2)") && w.mode == 1 && w.seed == 6);
@@ -418,7 +487,7 @@ int main(void) {
   {
     /* commands: what they do; most need cheats */
     extern uint32_t game_time;
-    new_world(1, 9, 0, false, WT_DEFAULT, "Commands");
+    new_world(1, 9, 0, false, WT_DEFAULT, "Commands", NULL);
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     command_run("/gamemode 1");
@@ -530,7 +599,7 @@ int main(void) {
   }
   {
     /* superflat: bedrock, two dirt, grass; the player on it; kept as superflat */
-    new_world(2, 77, 0, false, WT_FLAT, "Flat");
+    new_world(2, 77, 0, false, WT_FLAT, "Flat", NULL);
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     int x = (int)floorf(pl.x) + 7, z = (int)floorf(pl.z) - 5;
@@ -547,9 +616,36 @@ int main(void) {
     world_type = WT_DEFAULT;
   }
   {
+    /* superflat presets: plain block lists, one layer each; legacy version;layers;biome still loads */
+    char e[48], simple[FLAT_MAX + 1];
+    CHECK(flat_validate("bedrock,dirt,dirt,grass", e, sizeof e));
+    CHECK(flat_validate("bedrock,stone,stone,dirt,dirt,grass", e, sizeof e));
+    CHECK(flat_validate("7,3,3,2", e, sizeof e));
+    CHECK(flat_validate("bedrock,159:14,glass", e, sizeof e));
+    CHECK(!flat_validate("bedrock,2xdirt,grass", e, sizeof e) && e[0]);   /* no counts */
+    CHECK(!flat_validate("bedrock,nosuchblock", e, sizeof e) && e[0]);
+    CHECK(!flat_validate("2;7,9999;1", e, sizeof e) && e[0]);
+    CHECK(flat_validate("2;7,2x3,2;1", e, sizeof e));
+    CHECK(flat_simplify("2;7,2x3,2;1", simple, sizeof simple) && !strcmp(simple, "bedrock,dirt,dirt,grass"));
+    CHECK(flat_simplify("bedrock,stone,stone,dirt,dirt,grass", simple, sizeof simple) &&
+          !strcmp(simple, "bedrock,stone,stone,dirt,dirt,grass"));
+    new_world(2, 78, 0, false, WT_FLAT, "Simple", "bedrock,stone,stone,dirt,dirt,grass");
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int x = (int)floorf(pl.x), z = (int)floorf(pl.z);
+    CHECK(pl.y == 6 && gen_top(x, z) == 5 && world_get(x, 0, z) == B_BEDROCK && world_get(x, 1, z) == B_STONE &&
+          world_get(x, 3, z) == B_DIRT && world_get(x, 5, z) == B_GRASS && world_get(x, 6, z) == B_AIR);
+    save_world();
+    WorldInfo wi;
+    CHECK(load_world(2) && !strcmp(world_preset, "bedrock,stone,stone,dirt,dirt,grass") && world_info(2, &wi) &&
+          !strcmp(wi.preset, "bedrock,stone,stone,dirt,dirt,grass"));
+    delete_world(2);
+    world_type = WT_DEFAULT;
+  }
+  {
     /* the copy in numblocks_saves.py: every save, and after an install (only scripts left) they come back */
     for (int s = 1; s <= MAX_WORLDS; s++) delete_world(s);
-    new_world(3, 42, 0, false, WT_DEFAULT, "Kept");
+    new_world(3, 42, 0, false, WT_DEFAULT, "Kept", NULL);
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     for (int k = 0; k < 40; k++) world_set((int)pl.x + k, 70, (int)pl.z + 200, B_GOLD_BLOCK);   /* (another region too) */
@@ -588,6 +684,257 @@ int main(void) {
     delete_world(3);
     plat_remove_prefix("numblocks_saves.py");
   }
+  /* sneaking along a one-block bridge over the void: it walks to the end and stops there (bridging);
+   * not sneaking, it walks off */
+  for (int sneak = 1; sneak >= 0; sneak--) {
+    world_new(0, "ut4");
+    world_follow(8, 70, 8);
+    int y = 70;
+    for (int z = 0; z <= 20; z++)
+      for (int x = 0; x <= 16; x++)
+        for (int k = -6; k < 4; k++) world_set(x, y + k, z, B_AIR);
+    for (int z = 8; z <= 12; z++) world_set(8, y - 1, z, B_COBBLESTONE);
+    memset(ents, 0, sizeof ents);
+    pl.mode = 0, pl.dead = false, pl.health = 20, pl.flying = false;
+    pl.x = 8.5f, pl.y = (float)y, pl.z = 8.5f, pl.vx = pl.vy = pl.vz = 0, pl.yaw = 0, pl.pitch = 0;
+    pl.on_ground = true;
+    uint32_t k = K_FWD | (sneak ? K_SNEAK : 0);
+    for (int t = 0; t < 100; t++) player_tick(k, t ? 0 : k);
+    if (sneak) CHECK(pl.y == (float)y && pl.z > 12.9f && pl.z < 13.31f);
+    else CHECK(pl.y < (float)y - 1);
+    plat_remove_prefix("ut4");
+  }
+  /* a spawn egg makes its mob against the block looked at (ItemMonsterPlacer.onItemUse) */
+  {
+    world_new(0, "ut5");
+    world_follow(8, 70, 8);
+    int y = 70;
+    for (int z = 0; z <= 16; z++)
+      for (int x = 0; x <= 16; x++) {
+        world_set(x, y - 1, z, B_STONE);
+        for (int k = 0; k < 4; k++) world_set(x, y + k, z, B_AIR);
+      }
+    memset(ents, 0, sizeof ents);
+    opt.difficulty = 0, pl.mode = 0, pl.dead = false, pl.health = 20;
+    pl.x = 8.5f, pl.y = (float)y, pl.z = 8.5f, pl.vx = pl.vy = pl.vz = 0, pl.slot = 0;
+    static const int eggs[8] = {I_ZOMBIE_SPAWN_EGG, I_SKELETON_SPAWN_EGG, I_CREEPER_SPAWN_EGG,
+                               I_SPIDER_SPAWN_EGG, I_PIG_SPAWN_EGG, I_COW_SPAWN_EGG, I_SHEEP_SPAWN_EGG,
+                               I_CHICKEN_SPAWN_EGG};
+    static const int mobs[8] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN};
+    for (int i = 0; i < 8; i++) {
+      CHECK(mob_of_egg(eggs[i]) == mobs[i]);
+      CHECK(item_label(eggs[i])[0] && item_kind(eggs[i]) == IK_SPAWN_EGG);
+      CHECK(item_max(eggs[i]) == 64 && item_dur(eggs[i]) == 0 && item_icon(eggs[i]) >= 0);
+      /* used on the ground two blocks ahead, in survival: the egg is spent, the mob is there */
+      pl.inv[0].id = (uint16_t)eggs[i], pl.inv[0].aux = 3;
+      player_look(pl.x, pl.y + 1.62f, pl.z, 0, 60);
+      CHECK(pl.hit_face == 1);
+      player_tick(K_USE, K_USE);
+      int n = 0;
+      for (int e = 0; e < N_ENT; e++)
+        if (ents[e].type == mobs[i]) n++;
+      CHECK(n == 1 && pl.inv[0].aux == 2);
+      memset(ents, 0, sizeof ents);
+      pl.inv[0].id = 0, pl.inv[0].aux = 0;
+    }
+    CHECK(mob_of_egg(B_DIRT) == 0 && mob_of_egg(0) == 0 && mob_of_egg(I_END) == 0);
+    /* nothing to look at: nothing spawns (creative: the egg stays) */
+    pl.mode = 1;
+    pl.inv[0].id = I_CREEPER_SPAWN_EGG, pl.inv[0].aux = 1;
+    player_look(pl.x, pl.y + 1.62f, pl.z, 0, -80);   /* the sky */
+    player_tick(K_USE, K_USE);
+    CHECK(pl.inv[0].id == I_CREEPER_SPAWN_EGG);
+    plat_remove_prefix("ut5");
+  }
+  /* the world's caps: N_ENT entity slots, shared by mobs, items, arrows and TNT, and
+   * N_PART particles. Every slot a mob: nothing more may be made. Full of items, one
+   * more gives way to the oldest item's slot (a big dig never locks the world out) */
+  {
+    new_world(2, 5, 0, false, WT_DEFAULT, "Caps", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int px = (int)floorf(pl.x), py = (int)floorf(pl.y), pz = (int)floorf(pl.z);
+    memset(ents, 0, sizeof ents);
+    /* every slot a mob: the next is turned away (and there is no item to give way) */
+    for (int i = 0; i < N_ENT; i++)
+      CHECK(ent_new(E_ZOMBIE, px + 0.5f + i * 0.1f, (float)py, pz + 0.5f) != NULL);
+    CHECK(ent_new(E_SKELETON, px + 0.5f, (float)py, pz + 0.5f) == NULL);
+    /* full of items, aged: the oldest one's slot is the one that gives way */
+    memset(ents, 0, sizeof ents);
+    for (int i = 0; i < N_ENT; i++) CHECK(ent_drop(B_DIRT, 1, 0, px + 0.5f, py + 0.5f, pz + 0.5f, false) != NULL);
+    for (int i = 0; i < N_ENT; i++) ents[i].age = (int16_t)(N_ENT - i);   /* (the first made is the oldest) */
+    int oldest = 0;
+    for (int i = 1; i < N_ENT; i++)
+      if (ents[i].age > ents[oldest].age) oldest = i;
+    CHECK(ent_drop(B_STONE, 1, 0, px + 0.5f, py + 0.5f, pz + 0.5f, false) != NULL);
+    CHECK(ents[oldest].item.id == B_STONE && ents[oldest].age == 0);   /* (its slot, reset) */
+    int items = 0;
+    for (int i = 0; i < N_ENT; i++) items += ents[i].type == E_ITEM;
+    CHECK(items == N_ENT);
+    /* a mob takes an item's slot too: the drops never keep the mobs out for good */
+    int pigs = 0;
+    for (int i = 0; i < N_ENT; i++) pigs += ents[i].type == E_PIG;
+    CHECK(pigs == 0);
+    CHECK(ent_new(E_PIG, px + 0.5f, (float)py, pz + 0.5f) != NULL);
+    for (int i = 0; i < N_ENT; i++) pigs += ents[i].type == E_PIG;
+    CHECK(pigs == 1);
+    /* particles: N_PART at a time (a free one, or else any) */
+    memset(ents, 0, sizeof ents);
+    memset(parts, 0, sizeof parts);
+    for (int i = 0; i < N_PART * 2; i++) {
+      particle_add(px + 0.5f, py + 1.0f, pz + 0.5f, 0, 0.1f, 0, 0xFFFF, 20);
+      int live = 0;
+      for (int k = 0; k < N_PART; k++) live += parts[k].age < (parts[k].life & P_LIFE);
+      CHECK(live == (i < N_PART ? i + 1 : N_PART));
+    }
+    plat_remove_prefix("ut5");
+    delete_world(2);
+  }
+  /* a spawn egg used on a monster spawner sets it, and it makes that mob (MobSpawner) */
+  {
+    extern uint32_t game_time;
+    new_world(2, 5, 0, false, WT_DEFAULT, "Spawners", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int y = (int)floorf(pl.y), px = (int)floorf(pl.x), pz = (int)floorf(pl.z);
+    /* a grass patch, one spawner on it, and the player standing on it looking at it */
+    for (int z = pz - 4; z <= pz + 8; z++)
+      for (int x = px - 4; x <= px + 8; x++) {
+        bool grass = x >= px - 2 && x <= px + 2 && z >= pz - 2 && z <= pz + 3;
+        world_set(x, y - 1, z, grass ? B_GRASS : B_STONE);
+        for (int k = 0; k < 3; k++) world_set(x, y + k, z, B_AIR);
+      }
+    world_set(px, y, pz + 1, B_MOB_SPAWNER);
+    memset(ents, 0, sizeof ents);
+    pl.x = px + 0.5f, pl.y = (float)y, pl.z = pz + 0.5f, pl.mode = 0, pl.dead = false, pl.slot = 0;
+    /* the cow egg on the spawner: it is set to cows (and the egg is spent) */
+    pl.inv[0] = (Stack){I_COW_SPAWN_EGG, 5};
+    spawners_clear();
+    player_look(pl.x, pl.y + 1.62f, pl.z, 0, 70);
+    CHECK(pl.hit_face >= 0 && world_get(pl.hit_x, pl.hit_y, pl.hit_z) == B_MOB_SPAWNER);
+    player_tick(K_USE, K_USE);
+    CHECK(pl.inv[0].aux == 4 && spawners_save(NULL) == 10 * 1 + 1);
+    /* the table saves and loads: a count, then each as x, z, y and its mob */
+    uint8_t buf[512];
+    int len = spawners_save(buf);
+    spawners_clear();
+    spawners_load(buf, len);
+    CHECK(spawners_save(NULL) == len);
+    CHECK(spawners_count() == 1);
+    int gx, gy, gz;
+    CHECK(spawners_get(0, &gx, &gy, &gz) == E_COW && spawners_get(1, &gx, &gy, &gz) == -1);
+    /* an unset spawner is empty: no egg, and nothing out of it until an egg is used on it */
+    CHECK(spawner_mob_at(px + 40, y, pz + 40) == 0);
+    CHECK(spawner_mob_at(px, y, pz + 1) == E_COW);   /* (the set one: what it is set to) */
+    /* noting a fresh spawner does not overwrite a set one */
+    spawners_note(px, y, pz + 1);
+    CHECK(spawner_mob_at(px, y, pz + 1) == E_COW && spawners_count() == 1);
+    spawners_note(px + 60, y, pz);
+    CHECK(spawners_count() == 2 && spawner_mob_at(px + 60, y, pz) == 0);
+    /* full: an unset one gives way first, so a set one keeps its mob */
+    spawners_clear();
+    for (int i = 0; i < 30; i++) spawners_note(1000 + i, 10, 1000);
+    CHECK(spawners_count() == 24);
+    spawners_set(2000, 10, 2000, E_ZOMBIE);
+    CHECK(spawners_count() == 24 && spawner_mob_at(2000, 10, 2000) == E_ZOMBIE);
+    spawners_set(2001, 10, 2000, E_SKELETON);
+    CHECK(spawner_mob_at(2000, 10, 2000) == E_ZOMBIE && spawner_mob_at(2001, 10, 2000) == E_SKELETON);
+    /* every mob survives the save and load: the last two are the ones the old record
+     * read back as unset (E_SHEEP and E_CHICKEN are past the old "under 8" bound) */
+    {
+      uint8_t b2[512];
+      spawners_clear();
+      for (int i = 0; i < 8; i++) spawners_set(3000 + i * 2, 10, 3000, E_ZOMBIE + i);
+      int l2 = spawners_save(b2);
+      spawners_clear();
+      spawners_load(b2, l2);
+      for (int i = 0; i < 8; i++) CHECK(spawner_mob_at(3000 + i * 2, 10, 3000) == E_ZOMBIE + i);
+      CHECK(spawners_count() == 8 && spawners_save(NULL) == l2);
+    }
+    spawners_load(buf, len);             /* (and a load puts the saved ones back) */
+    CHECK(spawners_save(NULL) == len && spawners_count() == 1);
+    /* it survives the world's record: the count is in the bytes after the tiles */
+    save_world();
+    spawners_clear();
+    CHECK(load_world(2));
+    CHECK(spawners_save(NULL) == len);
+    /* by night it makes nothing more of them (an animal's light rules) */
+    memset(ents, 0, sizeof ents);
+    game_time = 18000;   /* (midnight) */
+    for (int t = 0; t < 600; t++) pl.health = 20, pl.dead = false, ents_tick(), game_time++;
+    int night = 0;
+    for (int i = 0; i < N_ENT; i++)
+      if (ents[i].type == E_COW) night++;
+    CHECK(night <= 8);
+    /* set again with the creeper egg, and by night it makes creepers (eight of each kind at most) */
+    memset(ents, 0, sizeof ents);
+    opt.difficulty = 2;   /* (spawners make monsters only on a world with monsters: an earlier test made it peaceful) */
+    pl.inv[0] = (Stack){I_CREEPER_SPAWN_EGG, 5};
+    player_look(pl.x, pl.y + 1.62f, pl.z, 0, 70);
+    CHECK(pl.hit_face >= 0 && world_get(pl.hit_x, pl.hit_y, pl.hit_z) == B_MOB_SPAWNER);
+    player_tick(K_USE, K_USE);
+    CHECK(pl.inv[0].aux == 4 && spawners_save(NULL) == len);   /* (the same one, set to another mob) */
+    game_time = 18000;
+    /* (they wander off as the ticks go, so the most there have been is what counts) */
+    int near = 0, mobs = 0;
+    for (int t = 0; t < 4000; t++) {
+      pl.health = 20, pl.dead = false, ents_tick(), game_time++;
+      if (t % 20) continue;
+      int c = 0, m = 0;
+      for (int i = 0; i < N_ENT; i++) {
+        if (ents[i].type >= E_ZOMBIE && ents[i].type <= E_CHICKEN) m++;
+        if (ents[i].type == E_CREEPER && fabsf(ents[i].x - pl.x) < 7 && fabsf(ents[i].z - pl.z) < 7) c++;
+      }
+      if (c > near) near = c;
+      if (m > mobs) mobs = m;
+    }
+    CHECK(near >= 1 && mobs <= 32);
+    /* an unset spawner makes nothing, and a set one's mobs appear in the air about it and drop,
+     * whatever the light (natural spawning keeps 14 blocks off the player and puts a mob on the
+     * ground, and wants darkness for a monster; a zombie up in the air beside the spawner, in the
+     * middle of the day, can only be a spawner's) */
+    memset(ents, 0, sizeof ents);
+    int sx = px + 3, sy = y + 4, sz = pz + 3;
+    world_set(sx, sy, sz, B_MOB_SPAWNER);
+    spawners_note(sx, sy, sz);
+    game_time = 6000;   /* (the middle of the day: a lit spawner still makes its monsters) */
+    int airborne = 0, alive = 0;
+    for (int t = 0; t < 1200; t++) {
+      pl.health = 20, pl.dead = false, ents_tick(), game_time++;
+      for (int i = 0; i < N_PART; i++)
+        if (parts[i].age < (parts[i].life & P_LIFE)) alive++;
+      for (int i = 0; i < N_ENT; i++) {
+        const Entity *e = &ents[i];
+        if (e->type == E_ZOMBIE && e->y > (float)y && fabsf(e->x - (sx + 0.5f)) < 3.5f && fabsf(e->z - (sz + 0.5f)) < 3.5f)
+          airborne++;
+      }
+    }
+    CHECK(airborne == 0);   /* (nothing comes out of it while it is empty) */
+    spawners_set(sx, sy, sz, E_ZOMBIE);
+    airborne = alive = 0;
+    for (int t = 0; t < 1200; t++) {
+      pl.health = 20, pl.dead = false, ents_tick(), game_time++;
+      for (int i = 0; i < N_PART; i++)
+        if (parts[i].age < (parts[i].life & P_LIFE)) alive++;
+      for (int i = 0; i < N_ENT; i++) {
+        const Entity *e = &ents[i];
+        if (e->type == E_ZOMBIE && e->y > (float)y && fabsf(e->x - (sx + 0.5f)) < 3.5f && fabsf(e->z - (sz + 0.5f)) < 3.5f)
+          airborne++;
+      }
+    }
+    CHECK(airborne > 0);   /* (they drop out of the air onto the grass below) */
+    CHECK(alive > 4);      /* (and the puff that goes with each: smoke about the mob, flames about the spawner) */
+    /* and no mob spawning at all with the rule off */
+    game_rules &= ~(uint8_t)GR_MOB_SPAWNING;
+    memset(ents, 0, sizeof ents);
+    for (int t = 0; t < 600; t++) pl.health = 20, pl.dead = false, ents_tick(), game_time++;
+    int any = 0;
+    for (int i = 0; i < N_ENT; i++)
+      if (ents[i].type != E_NONE) any++;
+    CHECK(any == 0);
+    game_rules = GR_DEFAULT;
+    delete_world(2);
+  }
   {
     /* keys saved as they first were (Back mining, OK placing) become OK mining, Back placing; set ones stay */
     keys_reset();
@@ -601,6 +948,21 @@ int main(void) {
     opt.keys[A_ATTACK] = 5, opt.keys[A_USE] = 4;
     keys_update(KEY_SHEET);   /* (chosen with this version: kept) */
     CHECK(opt.keys[A_ATTACK] == 5 && opt.keys[A_USE] == 4);
+    keys_reset();
+  }
+  {
+    /* the sprint key: i, next to forward; backspace (which deletes while typing) no longer sprints,
+     * and a key set by someone on backspace moves over */
+    keys_reset();
+    CHECK(opt.keys[A_SPRINT] == 21);
+    CHECK(keys_of(1ull << 21) == K_SPRINT);       /* (i pressed: sprint, and nothing else) */
+    CHECK(keys_of(1ull << 17) == 0);
+    opt.keys[A_SPRINT] = 17;
+    keys_update(5);
+    CHECK(opt.keys[A_SPRINT] == 21);              /* (backspace: it moves to i) */
+    opt.keys[A_SPRINT] = 12;                      /* (set to shift: it stays) */
+    keys_update(5);
+    CHECK(opt.keys[A_SPRINT] == 12);
     keys_reset();
   }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);

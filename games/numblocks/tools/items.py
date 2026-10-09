@@ -14,7 +14,7 @@ import blocks  # noqa: E402
 
 KINDS = ['none', 'block', 'pickaxe', 'axe', 'shovel', 'hoe', 'sword', 'shears', 'helmet', 'chestplate', 'leggings',
          'boots', 'food', 'stew', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'placer', 'flint_and_steel',
-         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod']
+         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod', 'spawn_egg']
 # tool materials: harvest level, uses, efficiency, attack bonus (Item.EnumToolMaterial)
 TOOL_MAT = {'wood': (0, 59, 2, 0), 'stone': (1, 131, 4, 1), 'iron': (2, 250, 6, 2), 'diamond': (3, 1561, 8, 3),
             'gold': (0, 32, 12, 0)}
@@ -136,6 +136,17 @@ food('CLOWNFISH', 'Clownfish', 'fish_clownfish_raw', 1, 0.1)
 food('PUFFERFISH', 'Pufferfish', 'fish_pufferfish_raw', 1, 0.1)
 food('COOKED_FISH', 'Cooked Fish', 'fish_cod_cooked', 5, 0.6)
 food('COOKED_SALMON', 'Cooked Salmon', 'fish_salmon_cooked', 6, 0.8)
+item('RAW_IRON', 'Raw Iron', 'raw_iron')
+item('RAW_GOLD', 'Raw Gold', 'raw_gold')
+# --- spawn eggs (ItemMonsterPlacer): one per mob, with the modern per-mob item pictures
+# (1.21.5's <mob>_spawn_egg.png, which 1.8.8's jar has none of: it only has the grey
+# spawn_egg and spawn_egg_overlay). The last tuple item is Minecraft's numeric id for the
+# mob (EntityList), the data value /give names a spawn egg by.
+MOBS = (('zombie', 'Zombie', 54), ('skeleton', 'Skeleton', 51), ('creeper', 'Creeper', 50),
+        ('spider', 'Spider', 52), ('pig', 'Pig', 90), ('cow', 'Cow', 92), ('sheep', 'Sheep', 91),
+        ('chicken', 'Chicken', 93))
+for m, lab, _mc_id in MOBS:
+    item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64)
 
 INAMES = [x['name'] for x in I]
 assert len(set(INAMES)) == len(INAMES)
@@ -376,7 +387,7 @@ shaped('COMPASS', 1, [' # ', '#X#', ' # '], {'#': 'IRON_INGOT', 'X': 'REDSTONE'}
 shaped('BED', 1, ['###', 'XXX'], {'#': 'G_WOOL', 'X': 'G_PLANKS'})
 
 # --- smelting (RecipesFurnace): input, output
-SMELT = [('IRON_ORE', 'IRON_INGOT'), ('GOLD_ORE', 'GOLD_INGOT'), ('DIAMOND_ORE', 'DIAMOND'), ('SAND', 'GLASS'),
+SMELT = [('RAW_IRON', 'IRON_INGOT'), ('RAW_GOLD', 'GOLD_INGOT'), ('DIAMOND_ORE', 'DIAMOND'), ('SAND', 'GLASS'),
          ('RED_SAND', 'GLASS'), ('PORKCHOP', 'COOKED_PORKCHOP'), ('BEEF', 'COOKED_BEEF'),
          ('CHICKEN', 'COOKED_CHICKEN'), ('MUTTON', 'COOKED_MUTTON'), ('COBBLESTONE', 'STONE'),
          ('STONE_BRICKS', 'CRACKED_STONE_BRICKS'), ('CLAY_BALL', 'BRICK'), ('CLAY', 'HARDENED_CLAY'),
@@ -403,51 +414,99 @@ def fuel_of(iid):
     return 0
 
 
-# the creative inventory's tabs (CreativeModeTab), in Minecraft's order; what NumBlocks puts in each
-TABS = ['Building Blocks', 'Decoration Blocks', 'Redstone', 'Transportation', 'Miscellaneous', 'Search Items',
-        'Foodstuffs', 'Tools', 'Combat', 'Brewing', 'Materials', 'Survival Inventory']
-DECO = ('SAPLING_', 'LEAVES_', 'COBWEB', 'DEAD_SHRUB', 'TALL_GRASS', 'FERN', 'DEAD_BUSH', 'DANDELION', 'POPPY',
-        'BLUE_ORCHID', 'ALLIUM', 'AZURE_BLUET', '_TULIP', 'OXEYE_DAISY', 'BROWN_MUSHROOM', 'RED_MUSHROOM', 'TORCH',
-        'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'SNOW_LAYER', 'CACTUS', 'FENCE_OAK', 'GLASS_PANE', 'VINE',
-        'LILY_PAD', 'SUNFLOWER_LOWER', 'LILAC_LOWER', 'DOUBLE_GRASS_LOWER', 'LARGE_FERN_LOWER', 'ROSE_BUSH_LOWER',
-        'PEONY_LOWER', 'MONSTER_EGG_STONE')
+# the creative inventory's tabs, in the order they are shown: what the world is made of, what you build
+# with, what decorates it, what does something, then what you use. The Spawn Eggs tab is on the bottom
+# row, right of Materials. (Brewing is only there for the numbering, NumBlocks brews nothing; Survival
+# Inventory is a way out to the survival inventory.)
+T_NATURAL, T_BLOCK, T_DECO, T_FUNC, T_MISC, T_SEARCH, T_FOOD, T_TOOL, T_COMBAT, T_BREW, T_MAT, T_MOBS, T_SURV = range(13)
+TABS = ['Natural Blocks', 'Building Blocks', 'Decorative Items', 'Functional', 'Miscellaneous', 'Search Items',
+        'Foodstuffs', 'Tools', 'Combat', 'Brewing', 'Materials', 'Spawn Eggs', 'Survival Inventory']
+# what the world is made of: soil, stone, ores, ice; a natural block is a building block too, so it is
+# in both tabs (Minecraft keeps it in Building Blocks only)
+NATURAL = ('GRASS', 'DIRT', 'COARSE_DIRT', 'PODZOL', 'MYCELIUM', 'STONE', 'GRANITE', 'DIORITE', 'ANDESITE',
+           'SAND', 'RED_SAND', 'GRAVEL', 'CLAY', 'SNOW', 'ICE', 'PACKED_ICE', 'BEDROCK', 'OBSIDIAN',
+           'COAL_ORE', 'IRON_ORE', 'GOLD_ORE', 'DIAMOND_ORE', 'REDSTONE_ORE', 'LAPIS_ORE', 'EMERALD_ORE')
+NATURAL_ONLY = ('SNOW_LAYER',)   # natural, but not a full cube, and "Snow" is already in Building Blocks
+# blocks that do something rather than just sit there (Minecraft's decoration tab, most of it)
+FUNC = ('TNT', 'TORCH', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'RAIL')
+# of those, the ones that fill a whole cube, so they go first in their tab
+FUNC_FULL = ('TNT', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE')
+# what is left of Minecraft's decoration tab: plants, bushes and leaves
+DECO = ('SAPLING_', 'LEAVES_', 'DEAD_SHRUB', 'TALL_GRASS', 'FERN', 'DEAD_BUSH', 'DANDELION', 'POPPY',
+        'BLUE_ORCHID', 'ALLIUM', 'AZURE_BLUET', '_TULIP', 'OXEYE_DAISY', 'BROWN_MUSHROOM', 'RED_MUSHROOM',
+        'CACTUS', 'VINE', 'LILY_PAD', 'SUNFLOWER_LOWER', 'LILAC_LOWER', 'DOUBLE_GRASS_LOWER', 'LARGE_FERN_LOWER',
+        'ROSE_BUSH_LOWER', 'PEONY_LOWER')
 
 
 def tab_of(iid):
+    """the tabs an item is in: a natural block is in Natural Blocks and in Building Blocks"""
     if iid < 256:
         n = BNAMES[iid]
         if ITEM_OF.get(n, n) != n or n not in LABELS:
             return None   # not in the creative inventory
-        if n in ('TNT',):
-            return 2
-        if n == 'RAIL':
-            return 3
+        if n in FUNC:
+            return (T_FUNC,)
+        if n in NATURAL_ONLY:
+            return (T_NATURAL,)
+        if n in NATURAL:
+            return (T_NATURAL, T_BLOCK)
         if n in ('BROWN_MUSHROOM_CAP', 'RED_MUSHROOM_CAP'):
             return None
+        if n in ('COBBLESTONE_WALL',):
+            return (T_BLOCK,)   # a building block, not decoration
         if any(n.startswith(d) or n.endswith(d) or n == d for d in DECO):
-            if n in ('COBBLESTONE_WALL',):
-                return 0
-            return 1
-        if n == 'COBBLESTONE_WALL':
-            return 0
-        return 0
+            return (T_DECO,)
+        return (T_BLOCK,)
     it = I[iid - 256]
     k = it['kind']
+    if k == 'spawn_egg':
+        return (T_MOBS,)
     if k in ('sword', 'bow', 'helmet', 'chestplate', 'leggings', 'boots') or it['name'] == 'ARROW':
-        return 8
+        return (T_COMBAT,)
     if k in ('pickaxe', 'axe', 'shovel', 'hoe', 'shears', 'flint_and_steel', 'fishing_rod') or \
             it['name'] in ('COMPASS', 'CLOCK'):
-        return 7
+        return (T_TOOL,)
     if k in ('food', 'stew'):
-        return 6
+        return (T_FOOD,)
     if k in ('bucket', 'water_bucket', 'lava_bucket', 'milk_bucket') or it['name'] in ('PAPER', 'BOOK', 'SNOWBALL',
-                                                                                         'SLIME_BALL'):
-        return 4
-    if it['name'] == 'WOODEN_DOOR':
-        return 2
-    if it['name'] == 'BED':
-        return 1
-    return 10
+                                                                                     'SLIME_BALL'):
+        return (T_MISC,)
+    if it['name'] in ('WOODEN_DOOR', 'BED'):
+        return (T_FUNC,)   # you do something with a door or a bed; they are not decoration
+    return (T_MAT,)
+
+
+# a tab's order inside itself: the definition order (blocks first, then items), except the ores
+# together at the end of Natural Blocks, the blocks that fill a whole cube first in Functional, and
+# the armour before the swords in Combat. A few items read better after another (the raw iron and
+# gold after the stick, the compass after the fishing rod): moving them here keeps the item ids, and
+# so the saves, the same as moving them in the table above would not.
+AFTER = {'I:RAW_IRON': 'I:STICK', 'I:RAW_GOLD': 'I:RAW_IRON', 'I:COMPASS': 'I:FISHING_ROD'}
+ARMOR_KINDS = ('helmet', 'chestplate', 'leggings', 'boots')
+
+
+def tab_group(tab, iid):
+    """which group of its tab an item goes in"""
+    if tab == T_NATURAL:
+        return 1 if iid < 256 and BNAMES[iid].endswith('_ORE') else 0
+    if tab == T_FUNC:
+        return 0 if iid < 256 and BNAMES[iid] in FUNC_FULL else 1
+    if tab == T_COMBAT and iid >= 256:
+        if I[iid - 256]['kind'] in ARMOR_KINDS: return 0
+        if I[iid - 256]['kind'] == 'sword': return 1
+        return 2   # the bow and the arrow
+    return 0
+
+
+def tab_order(tab, ids):
+    """a tab's ids in the order they are shown"""
+    out = sorted(ids, key=lambda i: (tab_group(tab, i), i))
+    for name, after in AFTER.items():
+        iid, anchor = 256 + INAMES.index(name[2:]), 256 + INAMES.index(after[2:])
+        if iid in out and anchor in out:
+            out.remove(iid)
+            out.insert(out.index(anchor) + 1, iid)
+    return out
 
 
 def header():

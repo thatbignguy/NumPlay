@@ -15,7 +15,7 @@ typedef struct {
   uint32_t e;   /* the entry, as in the records */
 } Journal;
 
-#define J_MAX 256
+#define J_MAX 128   /* 128 x 8 B = 1 KB; flushed to storage when full */
 static Journal jn[J_MAX];
 static int nj;
 static char prefix[8] = "nb1";

@@ -389,6 +389,7 @@ void hand_strip(uint16_t *buf, int y0, int rows) {
     float yc = y + 0.5f;
     if (nbox > 1)
       for (int x = 0; x < SCREEN_W; x++) zrow[x] = 1e30f;
+    float r[3] = {dx0[0] + ddy[0] * y, dx0[1] + ddy[1] * y, dx0[2] + ddy[2] * y};
     for (int n = 0; n < nfaces; n++) {
       const Face *fc = &faces[n];
       int xa, xb;
@@ -396,7 +397,6 @@ void hand_strip(uint16_t *buf, int y0, int rows) {
       int f = fc->f, k = f >> 1, i = (k + 1) % 3, j = (k + 2) % 3;
       const float *bx = box[fc->b];
       float c = bx[k + ((f & 1) ? 3 : 0)], ck = c - org[k];
-      float r[3] = {dx0[0] + ddy[0] * y, dx0[1] + ddy[1] * y, dx0[2] + ddy[2] * y};
       if (kind != H_ITEM && nbox == 1 && !fc->near) {
         /* Along the row the point on the face's plane is (A + B x) / (C + E x) on each axis
          * across it: its texel, and whether it is on the face, change only where it crosses a

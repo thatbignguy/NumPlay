@@ -22,7 +22,7 @@ enum {
   K_JUMP = 1 << 8, K_USE = 1 << 9, K_ATTACK = 1 << 10, K_INV = 1 << 11,   /* shift, OK, Back, var */
   K_HOME = 1 << 12, K_SNEAK = 1 << 13, K_PAUSE = 1 << 14, K_DROP = 1 << 15,   /* Home, alpha, Toolbox, x,n,t */
   K_SLOT1 = 1 << 16,   /* K_SLOT1 << n: digit n + 1 */
-  K_SPRINT = 1 << 25,    /* backspace (also deletes, typing a seed) */
+  K_SPRINT = 1 << 25,    /* i, next to forward (the key sheet's key) */
   K_EXE = 1 << 26,       /* EXE alone (OK and EXE both give K_USE): right click in screens */
   K_SHIFT = 1 << 27,     /* shift (also K_JUMP): shift click in screens */
   K_BACK = 1 << 28,      /* Back alone: closes screens */
@@ -65,6 +65,13 @@ static inline bool is_lava(int b) { return b == B_LAVA || b == B_FLOWING_LAVA ||
 /* ---------------------------------------------------------------- the generator (gen.c) */
 void gen_init(int64_t seed);
 void gen_set_flat(int flat);   /* superflat (kept across gen_init) */
+void gen_set_flat_preset(const char *preset);   /* superflat with preset FlatGeneratorInfo, NULL/default */
+#define FLAT_DEFAULT "2;7,2x3,2;1"   /* bedrock, 2x dirt, grass, plains */
+#define FLAT_MAX 63                  /* longest preset string (without 0) */
+bool flat_validate(const char *preset, char *err, int errmax);   /* NULL preset = default; err red message */
+bool flat_simplify(const char *preset, char *out, int outmax);   /* either shape as "block,..."; false if too long */
+int flat_height(void);             /* total layers high (default 4) */
+int flat_biome_id(void);           /* biome of the flat preset (default 1 plains) */
 void gen_slab(int cx, int cz, int y0, int h, uint8_t *out);   /* out[(y - y0) * 256 + z * 16 + x] */
 int gen_prepare(int cx, int cz);   /* a slice of the work for gen_slab(cx, cz) ahead; 0: nothing left */
 int gen_biome(int x, int z);
@@ -87,8 +94,14 @@ extern int vc_x0, vc_y0, vc_z0;          /* world position of vc[0] */
 #define MCX (VCX / 4)
 #define MCY (VCY / 4)
 #define MCZ (VCZ / 4)
-extern uint8_t vmac[MCY * MCZ * MCX];
+extern uint8_t vmac[(MCY * MCZ * MCX + 3) / 4];   /* 2 bits a region (600 regions -> 150 B) */
 #define MC_I(x, y, z) ((((y) >> 2) * MCZ + ((z) >> 2)) * MCX + ((x) >> 2))
+static inline int vmac_get(int mi) { return (vmac[mi >> 2] >> ((mi & 3) * 2)) & 3; }
+static inline void vmac_set(int mi, int v) {
+  uint8_t *p = &vmac[mi >> 2];
+  int s = (mi & 3) * 2;
+  *p = (uint8_t)((*p & ~(3 << s)) | ((v & 3) << s));
+}
 static inline int light_at(int i) { return vl[i] & 15; }          /* sky light */
 static inline int block_light_at(int i) { return vl[i] >> 4; }   /* torches, lava, glowstone... */
 
@@ -185,12 +198,16 @@ typedef struct {
   int16_t panic, fire;
   int16_t love, growth;   /* animals: in love (ticks), a baby's growing up (negative: ticks left) */
   uint8_t invuln, sheared;
+  /* the head's two look AIs, in the two bytes Entity had padding at the end anyway:
+   * look 1..79 the ticks left of looking at the player (EntityAIWatchClosest), 80..119
+   * the ticks left of looking about (EntityAILookIdle, at the yaw in look_yaw), 0 neither */
+  uint8_t look, look_yaw;
   union {
     Stack item;                  /* an item, an arrow, TNT: what it is */
     struct { int16_t tx, tz; };  /* a mob: where it is going in the end (a block) */
   };
 } Entity;
-#define N_ENT 24
+#define N_ENT 56
 extern Entity ents[N_ENT];
 Entity *ent_new(int type, float x, float y, float z);
 Entity *mob_summon(int type, float x, float y, float z);   /* a mob as one spawns */
@@ -199,19 +216,33 @@ void ents_tick(void);
 /* particles: a block's bits when it breaks; drops (a texel or two, falling
  * faster) and floating bits (wakes, bubbles): life (ticks, up to 63) + kind */
 typedef struct { float x, y, z, vx, vy, vz; uint16_t c; uint8_t age, life; } Particle;
-#define N_PART 32
+#define N_PART 64
 #define RAIN_DROP 128
 #define P_FLOAT 64
 #define P_LIFE 63
 extern Particle parts[N_PART];
 void particles_break(int x, int y, int z, int b);
 void particle_add(float x, float y, float z, float vx, float vy, float vz, uint16_t c, int life);
+void particles_spawner(float mx, float my, float mz, float bx, float by, float bz);   /* a spawner's mob appearing */
 /* fishing (EntityFishHook) */
 Entity *bobber(void);       /* the player's hook, if out */
 void fish_cast(void);
 int fish_reel(Entity *e);   /* how much it wears the rod */
 void mob_tick(Entity *e);
 void mobs_spawn(void);
+int mob_of_egg(int id);                /* the mob a spawn egg makes (0: not one) */
+bool mob_can_stand(int x, int y, int z);   /* room for a mob to stand there */
+extern const char *const mob_name[8];   /* the mobs' names (Zombie .. Chicken) */
+void spawners_set(int x, int y, int z, int mob);   /* a spawn egg used on a monster spawner */
+void spawners_note(int x, int y, int z);           /* one fresh from the inventory (unset) */
+void spawners_clear(void);                     /* a new world (or one loaded without any) */
+void spawners_spawn(void);                     /* the monster spawners near the player make their mob */
+int spawner_mob_at(int x, int y, int z);       /* what one shows and makes (0: nobody set it) */
+int spawners_count(void);                      /* how many the table knows */
+int spawners_get(int i, int *x, int *y, int *z);   /* the i-th's place and set mob (0 unset, -1 past) */
+int spawners_save(uint8_t *b);                 /* their bytes for the world's record; NULL: how many */
+void spawners_load(const uint8_t *b, int len); /* (len 0: none saved) */
+#define SPAWNERS_MAX 24                       /* the monster spawners the world remembers */
 void explode(float x, float y, float z, float power, bool blocks);
 void tnt_light(int x, int y, int z, int fuse);
 void throw_item(int id, float speed, bool from_player);   /* arrows, snowballs, eggs */
@@ -255,7 +286,7 @@ void break_block_at(int x, int y, int z, bool drops);
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS };
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO };
 extern int gui;            /* the screen open */
 void gui_open(int screen, int x, int y, int z);
 void gui_close(void);
@@ -272,6 +303,7 @@ extern int create_mode;
 extern bool create_cheats;
 extern int create_type;
 extern char seed_text[21];
+extern char create_preset[FLAT_MAX + 1];   /* the new world's superflat preset, as typed */
 
 /* ---------------------------------------------------------------- saves and options (save.c) */
 typedef struct {
@@ -282,19 +314,22 @@ typedef struct {
   uint8_t keys_seen;    /* the key sheet's version last shown (it opens when the keys change) */
   uint8_t last_world;   /* the world played last (its slot, 0: none): the title's backdrop */
   uint32_t plays;       /* worlds opened so far: each world keeps the count when it was last played */
-  uint8_t keys[24];     /* the key of each action (A_*): the calculator's number for it, 255 none */
+  uint8_t keys[25];     /* the key of each action (A_*): the calculator's number for it, 255 none */
+  uint8_t debug;        /* F3 debug overlay on */
+  uint8_t distance;     /* render distance, 1..2 chunks (2 is what the game had); global, in numblocks.cfg */
 } Options;
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,
-       A_LEFT, A_RIGHT, A_BACK, A_FORWARD, A_CHAT, A_COMMAND, N_ACTIONS };
+       A_LEFT, A_RIGHT, A_BACK, A_FORWARD, A_CHAT, A_COMMAND, A_DEBUG, N_ACTIONS };
 uint32_t keys_of(uint64_t raw);   /* the K_ bits of the keys held (the calculator's keys, as bound) */
 void keys_reset(void);            /* the keys as they start */
 void keys_update(int seen);       /* keys saved by an older version (seen: its key sheet) brought up to date */
-#define KEY_SHEET 4       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places) */
+#define KEY_SHEET 6       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places; 5: debug overlay; 6: sprint on i) */
 extern Options opt;
 extern int64_t world_seed;
 enum { WT_DEFAULT, WT_FLAT };
 extern uint8_t world_type;   /* the world type (WT_*): Default, or Superflat */
+extern char world_preset[FLAT_MAX + 1];   /* the world's flat preset (default when Default type) */
 /* Worlds: up to MAX_WORLDS, each in a slot (1..MAX_WORLDS) whose records start "nb<slot>" */
 #define MAX_WORLDS 9
 #define WORLD_NAME 24   /* the longest name */
@@ -305,13 +340,14 @@ typedef struct {
   int type;          /* WT_* */
   int64_t seed;
   uint32_t played;   /* opt.plays when it was last played (the latest first in the list) */
+  char preset[FLAT_MAX + 1];   /* superflat preset (default when not flat) */
 } WorldInfo;
 bool world_info(int slot, WorldInfo *w);   /* false: no world there */
 int world_free_slot(void);                 /* 0: all taken */
 void world_unique_name(const char *base, char *out);   /* base, or "base (2)"... if taken */
 bool save_world(void);
 bool load_world(int slot);
-void new_world(int slot, int64_t seed, int mode, bool cheats, int type, const char *name);
+void new_world(int slot, int64_t seed, int mode, bool cheats, int type, const char *name, const char *preset);
 bool rename_world(int slot, const char *name);
 void delete_world(int slot);
 void load_options(void);
@@ -348,4 +384,5 @@ void render_frame(const Camera *c, uint32_t time_of_day);
 void hud_strip(uint16_t *buf, int y0, int rows);
 void camera_reset(void);
 extern uint32_t ticks_run;   /* the player moved at once: the camera with them (main.c) */
+extern float dbg_fps;        /* frames a second, EMA of the frame time (main.c) */
 #endif

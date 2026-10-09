@@ -190,7 +190,9 @@ static int light_there(int x, int y, int z) {
   sky -= sky_sub();
   return sky > blk ? sky : blk;
 }
-static bool can_stand(int x, int y, int z) {
+/* where a mob of NumBlocks' can stand: the box a zombie needs, a mob of any of them
+ * (SpawnerAnimals.canSpawnEntityType, and where a spawn egg may put one) */
+bool mob_can_stand(int x, int y, int z) {
   int below = world_get(x, y - 1, z), feet = world_get(x, y, z), head = world_get(x, y + 1, z);
   return (blk_flags[below] & BF_OPAQUE) && !(blk_flags[feet] & BF_SOLID) && blk_model[feet] != M_LIQUID &&
          !(blk_flags[head] & BF_SOLID) && blk_model[head] != M_LIQUID;
@@ -214,6 +216,172 @@ static Entity *spawn(int type, float x, float y, float z) {
 }
 Entity *mob_summon(int type, float x, float y, float z) { return spawn(type, x, y, z); }
 
+/* the mob a spawn egg makes (ItemMonsterPlacer), in the order of items.h's I_*_SPAWN_EGG */
+static const uint8_t egg_mob[8] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN};
+int mob_of_egg(int id) {
+  return id >= I_ZOMBIE_SPAWN_EGG && id < I_END ? egg_mob[id - I_ZOMBIE_SPAWN_EGG] : 0;
+}
+
+/* the mobs' names, for /summon and what the spawner says when it is set */
+const char *const mob_name[8] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig", "Cow", "Sheep", "Chicken"};
+
+/* ---------------------------------------------------------------- monster spawners (MobSpawner) */
+/* Which mob a monster spawner makes: a spawn egg used on one sets it (ItemMonsterPlacer.onItemUse),
+ * and the world remembers the ones set. Minecraft keeps that in the spawner's tile entity; here it
+ * is a small table by position, which the world's record saves. A farm has two or three of them,
+ * so twenty-four is plenty and costs 240 bytes of RAM. The table also notes the spawners nobody
+ * has set (the dungeons', and ones fresh from the inventory) with mob 0, so the once-a-second scan
+ * and the picture find them again without looking the blocks over every frame. A spawner nobody
+ * has set is empty, as Minecraft's are until an egg is used on one: no egg turning inside it and
+ * no mobs out of it, whichever mob the place would otherwise be given. */
+typedef struct { int32_t x, z; uint8_t y, mob; } Spawner;
+static Spawner spawners[SPAWNERS_MAX];
+static int n_spawners;
+
+/* what it shows and makes: what it is set to, or 0 for one nobody has set (an empty one) */
+int spawner_mob_at(int x, int y, int z) {
+  for (int i = 0; i < n_spawners; i++)
+    if (spawners[i].x == x && spawners[i].y == y && spawners[i].z == z) return spawners[i].mob;
+  return 0;
+}
+
+/* the table knows this spawner (mob -1: as the scan and the inventory leave it, unset) */
+static void note(int x, int y, int z, int mob) {
+  int worst = -1, worst_unset = -1;
+  float wd = -1, wd_unset = -1;
+  for (int i = 0; i < n_spawners; i++) {
+    if (spawners[i].x == x && spawners[i].y == y && spawners[i].z == z) {
+      if (mob >= 0) spawners[i].mob = (uint8_t)mob;   /* (set again: the same one) */
+      return;
+    }
+    /* full later: the furthest unset one gives way first (a set one keeps its mob), else the furthest */
+    float dx = (float)(spawners[i].x - x), dz = (float)(spawners[i].z - z), d2 = dx * dx + dz * dz;
+    if (d2 > wd) wd = d2, worst = i;
+    if (!spawners[i].mob && d2 > wd_unset) wd_unset = d2, worst_unset = i;
+  }
+  if (y < 0 || y > 255) return;
+  if (n_spawners >= SPAWNERS_MAX) {
+    int v = worst_unset >= 0 ? worst_unset : worst;
+    spawners[v] = (Spawner){x, z, (uint8_t)y, (uint8_t)(mob < 0 ? 0 : mob)};
+  } else spawners[n_spawners++] = (Spawner){x, z, (uint8_t)y, (uint8_t)(mob < 0 ? 0 : mob)};
+}
+
+void spawners_set(int x, int y, int z, int mob) { note(x, y, z, mob); }
+void spawners_note(int x, int y, int z) { note(x, y, z, -1); }   /* fresh from the inventory */
+
+void spawners_clear(void) { n_spawners = 0; }
+
+int spawners_count(void) { return n_spawners; }
+
+/* the i-th one the table knows: its place, and what it is set to (0: nobody has set it) */
+int spawners_get(int i, int *x, int *y, int *z) {
+  if (i < 0 || i >= n_spawners) return -1;
+  *x = spawners[i].x, *y = spawners[i].y, *z = spawners[i].z;
+  return spawners[i].mob;
+}
+
+/* how many of a mob the world can hold: its 56 entity slots are shared with dropped items and
+ * arrows, so the mobs keep to thirty-two of them */
+static bool room_for_a_mob(void) {
+  int n = 0;
+  for (int i = 0; i < N_ENT; i++)
+    if (ents[i].type >= E_ZOMBIE && ents[i].type <= E_CHICKEN && ents[i].state != 255) n++;
+  return n < 32;
+}
+
+/* MobSpawner.maxNearbyEntities: how many of its own kind may already be about it (six in
+ * Minecraft; six here, as the world now has the slots for it) */
+static bool too_many_near(int x, int y, int z, int type) {
+  int n = 0;
+  for (int i = 0; i < N_ENT; i++) {
+    const Entity *e = &ents[i];
+    if (e->type != type || e->state == 255) continue;
+    if (fabsf(e->x - x) > 8 || fabsf(e->z - z) > 8 || fabsf(e->y - y) > 4) continue;
+    n++;
+  }
+  return n >= 6;
+}
+
+/* where a spawner's mob may appear (MobSpawner.findSuitableSpawnableBlock is where findChunksForSpawning's
+ * is not): somewhere within three blocks of it, where the mob's own box fits, in the air as much as
+ * on the ground (Minecraft's spawners drop their mobs from where they appear; no floor is needed,
+ * and a mob that falls takes no hurt here) and not on top of the player */
+static bool spawner_spot(int x, int y, int z, int type) {
+  int feet = world_get(x, y, z), head = world_get(x, y + 1, z);
+  if ((blk_flags[feet] & BF_SOLID) || blk_model[feet] == M_LIQUID) return false;
+  if ((blk_flags[head] & BF_SOLID) || blk_model[head] == M_LIQUID) return false;
+  if (ifl(pl.x) == x && ifl(pl.z) == z && (int)pl.y <= y + 1 && y < (int)pl.y + 2) return false;
+  if (hostile(type)) return opt.difficulty > 0;   /* whatever the light: torches do not switch it off */
+  return light_there(x, y, z) > 8 && world_get(x, y - 1, z) == B_GRASS;   /* (an animal's rules) */
+}
+
+/* the spawners near the player do their work: once a second, about one try in 16 for each
+ * (MobSpawner's 200 to 800 ticks between, short here: there are few of them, and the world
+ * keeps at most six of a kind about one anyway). The blocks are all of them: 40 x 40 x 24 = 38 400
+ * bytes looked over in one pass, a fraction of a frame, once a second. The same pass notes
+ * the spawners nobody has set, so the picture finds them without its own pass every frame */
+void spawners_spawn(void) {
+  if (pl.dead || !rule(GR_MOB_SPAWNING)) return;
+  int px = ifl(pl.x), pz = ifl(pl.z);
+  /* one that is gone makes nothing any more */
+  for (int i = 0; i < n_spawners; ) {
+    if (world_get(spawners[i].x, spawners[i].y, spawners[i].z) == B_MOB_SPAWNER) i++;
+    else spawners[i] = spawners[--n_spawners];
+  }
+  for (int i = 0; i < VCY * VCZ * VCX; i++) {
+    if (vc[i] != B_MOB_SPAWNER) continue;
+    int x = vc_x0 + i % VCX, t = i / VCX, z = vc_z0 + t % VCZ, y = vc_y0 + t / VCZ;
+    note(x, y, z, -1);   /* (ones nobody has set: noted for the picture) */
+    if (rnd(16)) continue;
+    int dx = x - px, dz = z - pz;
+    if (dx * dx + dz * dz > 256) continue;   /* (no player near it) */
+    int mob = spawner_mob_at(x, y, z);
+    if (!mob) continue;   /* nobody has set it: it makes nothing until an egg is used on it */
+    if (!room_for_a_mob() || too_many_near(x, y, z, mob)) continue;
+    for (int k = 0; k < 4; k++) {
+      int sx = x + rnd(7) - 3, sy = y + rnd(3) - 1, sz = z + rnd(7) - 3;
+      if (!spawner_spot(sx, sy, sz, mob)) continue;
+      spawn(mob, sx + 0.5f, (float)sy, sz + 0.5f);
+      particles_spawner(sx + 0.5f, (float)sy, sz + 0.5f, x + 0.5f, (float)y, z + 0.5f);
+      break;
+    }
+  }
+}
+
+/* the spawners in the world's record: a count, then each as x, z, y and its mob */
+int spawners_save(uint8_t *b) {
+  int n = 0;
+  if (b) b[0] = (uint8_t)n_spawners;
+  n++;
+  for (int i = 0; i < n_spawners; i++) {
+    if (b) {
+      b[n] = (uint8_t)spawners[i].x, b[n + 1] = (uint8_t)((uint32_t)spawners[i].x >> 8);
+      b[n + 2] = (uint8_t)((uint32_t)spawners[i].x >> 16), b[n + 3] = (uint8_t)((uint32_t)spawners[i].x >> 24);
+      b[n + 4] = (uint8_t)spawners[i].z, b[n + 5] = (uint8_t)((uint32_t)spawners[i].z >> 8);
+      b[n + 6] = (uint8_t)((uint32_t)spawners[i].z >> 16), b[n + 7] = (uint8_t)((uint32_t)spawners[i].z >> 24);
+      b[n + 8] = spawners[i].y, b[n + 9] = spawners[i].mob;
+    }
+    n += 10;
+  }
+  return n;
+}
+
+void spawners_load(const uint8_t *b, int len) {
+  int n = 0;
+  if (len >= 1)
+    for (int i = 0; i < b[0] && n < SPAWNERS_MAX; i++) {
+      const uint8_t *e = b + 1 + 10 * i;
+      if (len < 10 * (i + 1) + 1) break;
+      spawners[n].x = (int32_t)((uint32_t)e[0] | (uint32_t)e[1] << 8 | (uint32_t)e[2] << 16 | (uint32_t)e[3] << 24);
+      spawners[n].z = (int32_t)((uint32_t)e[4] | (uint32_t)e[5] << 8 | (uint32_t)e[6] << 16 | (uint32_t)e[7] << 24);
+      spawners[n].y = e[8];
+      /* the mobs are E_ZOMBIE .. E_CHICKEN (2 .. 9): anything else in an old record is unset */
+      spawners[n].mob = e[9] >= E_ZOMBIE && e[9] <= E_CHICKEN ? e[9] : 0;
+      n++;
+    }
+  n_spawners = n;
+}
+
 /* SpawnerAnimals, made small: a try every second */
 void mobs_spawn(void) {
   if (pl.dead) return;
@@ -224,7 +392,7 @@ void mobs_spawn(void) {
     int y0 = ifl(pl.y) + 8;
     for (int y = y0; y > y0 - 20; y--) {
       if (!world_loaded(x, y + 1, z) || !world_loaded(x, y - 1, z)) continue;
-      if (!can_stand(x, y, z)) continue;
+      if (!mob_can_stand(x, y, z)) continue;
       int below = world_get(x, y - 1, z);
       int light = light_there(x, y, z);
       /* EntityMob.isValidLightLevel: in a storm, the sky counts as night's */
@@ -232,14 +400,14 @@ void mobs_spawn(void) {
         int i = VC_I(x - vc_x0, y - vc_y0, z - vc_z0), sky = light_at(i) - 10, blk = block_light_at(i);
         light = sky > blk ? sky : blk;
       }
-      if (opt.difficulty > 0 && count(true) < 4 && light <= rnd(8) && below != B_BEDROCK) {
+      if (opt.difficulty > 0 && count(true) < 8 && light <= rnd(8) && below != B_BEDROCK) {
         static const uint8_t kinds[4] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER};
         int t = kinds[rnd(4)];
-        if (t == E_SPIDER && !(can_stand(x + 1, y, z) && can_stand(x, y, z + 1))) t = E_ZOMBIE;
+        if (t == E_SPIDER && !(mob_can_stand(x + 1, y, z) && mob_can_stand(x, y, z + 1))) t = E_ZOMBIE;
         spawn(t, x + 0.5f, (float)y, z + 0.5f);
         return;
       }
-      if (below == B_GRASS && light > 8 && count(false) < 4 && rnd(4) == 0) {
+      if (below == B_GRASS && light > 8 && count(false) < 8 && rnd(4) == 0) {
         /* sheep 12, pig 10, chicken 10, cow 8 */
         int r = rnd(40);
         int t = r < 12 ? E_SHEEP : r < 22 ? E_PIG : r < 32 ? E_CHICKEN : E_COW;
@@ -811,16 +979,18 @@ void mob_tick(Entity *e) {
       go = true;   /* (to its mate: set above) */
       e->tx = (int16_t)ifl(e->gx), e->tz = (int16_t)ifl(e->gz);
     } else if (food && held()->id == food && dist < 10 && !pl.dead) {
-      /* EntityAITempt: after the player holding its food, up to 2.5 blocks away, looking at them */
+      /* EntityAITempt: after the player holding its food, up to 2.5 blocks away. It looks at
+       * them on its way in, and beside them it watches them for a while like any other watch
+       * (vanilla holds that look for as long as the food is out; here it is timed) */
       e->tx = (int16_t)ifl(pl.x), e->tz = (int16_t)ifl(pl.z);
-      go = dist > 2.5f, look = true;
+      go = dist > 2.5f, look = go;
     } else {
       /* EntityAIWander: one in 120 ticks somewhere within 10 blocks (RandomPositionGenerator: of ten
-       * tries, for an animal grass, for a monster the darkest); EntityAIWatchClosest: the player near */
+       * tries, for an animal grass, for a monster the darkest); standing still, the two look tasks
+       * below take its place */
       if (rnd(120) == 0) wander_to(e);
       int tx = e->tx - ifl(e->x), tz = e->tz - ifl(e->z);
       go = tx * tx + tz * tz > 0;
-      look = !go && dist < 6 && !pl.dead;
     }
   }
   if (go) {
@@ -846,19 +1016,42 @@ void mob_tick(Entity *e) {
       if ((!ground && !in_water) || is_lava(ahead) || ahead == B_FIRE) go = false, e->gx = e->x, e->gz = e->z;
     }
   }
-  if (look && !chase) {
-    /* EntityLookHelper: turned towards the player, the head up or down to their eyes */
-    float turn = wrap(atan2f(-dx, dz) * 57.29578f - e->yaw);
-    e->yaw += turn > 10 ? 10 : turn < -10 ? -10 : turn;
-    e->pitch = -atan2f(dy + 1.62f - mi->h * 0.85f, dist) * 57.29578f;
-  }
   if (chase) {
     float want = atan2f(-dx, dz) * 57.29578f;
     float turn = wrap(want - e->yaw);
     if (fabsf(turn) < 60) e->yaw += turn * 0.5f;
     e->pitch = -atan2f(dy + 1.0f - mi->h * 0.85f, dist) * 57.29578f;
-  } else if (!look)
-    e->pitch *= 0.8f;
+  } else {
+    /* EntityLookHelper, and the two look tasks that drive it. They cannot run while another task
+     * moves the mob (their mutex): walking, panicking, going to a mate or chasing, the head goes
+     * where the mob goes. Standing still, EntityAIWatchClosest looks at the player near for a
+     * random while (maxRandomLookTime, 40 to 80 ticks), then EntityAILookIdle takes over looking
+     * about in a random direction (20 to 40 ticks), each with one chance in fifty a tick. */
+    if (go) e->look = 0;
+    if (e->look == 0) {
+      /* neither is running: roll one (each has one chance in fifty a tick of starting) */
+      bool watched = !hostile(e->type) || pl.mode == 0;   /* in creative a monster has no target */
+      if (watched && !go && e->state != 255 && !pl.dead && dist < 6 && sees(e) && rnd(50) == 0)
+        e->look = 40 + rnd(40);
+      else if (!go && e->state != 255 && !pl.dead && rnd(50) == 0)
+        e->look = 100 + rnd(20), e->look_yaw = (uint8_t)rnd(256);
+    } else if (e->look == 80) e->look = 0;
+    else e->look--;
+    if (look || (e->look > 0 && e->look < 80)) {
+      /* EntityLookHelper: turned towards the player, the head up or down to their eyes */
+      float turn = wrap(atan2f(-dx, dz) * 57.29578f - e->yaw);
+      e->yaw += turn > 10 ? 10 : turn < -10 ? -10 : turn;
+      e->pitch = -atan2f(dy + 1.62f - mi->h * 0.85f, dist) * 57.29578f;
+    } else {
+      if (e->look >= 80) {
+        /* looking about: towards the direction it picked, head level */
+        float want = (float)e->look_yaw * (360.0f / 256.0f);
+        float turn = wrap(want - e->yaw);
+        e->yaw += turn > 10 ? 10 : turn < -10 ? -10 : turn;
+      }
+      e->pitch *= 0.8f;   /* the head comes level again */
+    }
+  }
   /* moving: EntityLivingBase.moveEntityWithHeading, the AI's speed twice (as forward and as friction) */
   float fwd = go && e->state != 255 ? speed : 0;
   float yr = e->yaw * 0.017453292f;

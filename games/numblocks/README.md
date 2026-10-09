@@ -23,7 +23,7 @@ Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1
 | , π √ x² | Walk forward, left, back, right (like W, A, S, D) |
 | shift | Jump (twice in Creative: fly) |
 | alpha | Sneak |
-| ⌫ | Sprint (or press forward twice) |
+| i | Sprint (or press forward twice) |
 | OK | Mine, attack (like the left mouse button) |
 | Back | Place, use, eat (like the right mouse button) |
 | var | Inventory |

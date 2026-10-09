@@ -10,10 +10,16 @@
  * see-through texels. The sky has its gradient, the sun or the moon, and
  * Minecraft's flat clouds at y = 128. */
 #include <math.h>
+#ifdef HOST
+#include <stdio.h>
+#endif
 #include "nb.h"
 
 #define SR 4                       /* picture rows per strip (8 screen rows) */
-static uint16_t strip[SCREEN_W * SR * 2] __attribute__((aligned(4)));
+#define STRIP_N (SCREEN_W * SR * 2)
+/* the strip sent to the screen: on render_frame's stack (the calculator gives apps 32 KB of it, the
+ * game uses a few), not in the RAM that calculator software since 23.2 gives apps (148928 bytes) */
+static uint16_t *strip;
 static uint16_t cbuf[SR][RW];      /* a strip of the picture */
 static float zbuf[SR][RW];         /* and how far each pixel's ray went (entities are hidden behind) */
 
@@ -22,7 +28,7 @@ static float ox, oy, oz;           /* camera, cache coordinates */
 static float fwx, fwy, fwz, rgx, rgz, upx, upy, upz;
 static float fog0, fog1;           /* fog start and end (blocks) */
 static int fog_r, fog_g, fog_b, sky_r, sky_g, sky_b;   /* 0..255 */
-static uint32_t sky_grad[129];   /* the horizon to the sky, by elevation 0..0.4 (r << 20 | g << 10 | b) */
+static uint8_t sky_grad[129][3];   /* the horizon to the sky, by elevation 0..0.4 (r, g, b) */
 static int sky_top;               /* the cache is empty from this row up: rays going up end there */
 static int trace_top = -1;        /* (>= 0) rays going down start on this plane (y): see render_frame */
 static int shade[4][16];           /* face shade x sky light level -> 0..32 */
@@ -31,6 +37,8 @@ static float sun_x, sun_y, sun_z;  /* towards the sun */
 static float sun_tx, sun_ty;       /* the way the sun moves */
 static float cos_c, sin_c;         /* the sky's turn (the celestial angle) */
 static int moon_phase, star_k;     /* the moon's phase (0 full), how bright the stars are (0..255) */
+static int bed_east = 0;   /* the bed head top's pillow east (1.8.8 blocks/, u = 15 white)
+                             * vs north (modern entity, v = 0 white) */
 static int ss_r, ss_g, ss_b;       /* the sunrise or sunset colour (0..255) */
 static float ss_a, ss_side;        /* how strong it is, and on which side (+1 east, -1 west) */
 static float cloud_off;
@@ -44,7 +52,31 @@ static float cam_fr[3][2];       /* from the eye to its cell's sides: [axis][0 l
 
 static const float TAN_V = 0.70020754f;   /* 70 degree vertical field of view */
 #define TAN_H (TAN_V * (float)RW / (float)RH)
-#define MAX_T 19.0f
+/* Render distance, 1..2 chunks (2 is what the game had: ~19 blocks of rays over the
+ * 40 x 40 x 24 block view cache). A chunk here is 8 blocks, the cache's slide step:
+ * 1 -> 11, 2 -> 19 blocks. The whole world in sight is the cache: the camera keeps
+ * 16 of its blocks to each side (world_follow, sliding by 8 when it comes nearer),
+ * so the fog closes at the cache's edge (view_reach) rather than past it into the
+ * sky. Global, saved in numblocks.cfg, default 2. */
+static float cur_max_t = 19.0f;   /* this frame's ray length (render_frame sets it) */
+static inline float view_dist(void) {
+  int d = opt.distance >= 1 && opt.distance <= 2 ? opt.distance : 2;
+  return (float)d * 8.0f + 3.0f;
+}
+/* How far there is a world to look at: the camera's own margin to the nearest side of
+ * the cache. The fog has to close here - no further, and no nearer than it has to.
+ * Past the cache's sides there are no blocks, and a ray that walks out of them comes
+ * back with the sky, which is not something the fog has turned into the fog colour:
+ * ground cut off against the sky, in the open, which is what a fog left closing
+ * beyond the world's edge looks like. The setting is how far the rays may run; the
+ * fog closes where the ground does. */
+static inline float view_reach(void) {
+  float rx = ox < VCX - ox ? ox : (float)VCX - ox;
+  float rz = oz < VCZ - oz ? oz : (float)VCZ - oz;
+  float r = rx < rz ? rx : rz;
+  return r > 1.0f ? r : 1.0f;   /* (the camera outside: there is nothing there) */
+}
+#define MAX_T cur_max_t
 
 static inline int r5(uint16_t c) { return (c >> 11) << 3 | (c >> 13); }
 static inline int g6(uint16_t c) { return ((c >> 5) & 63) << 2 | ((c >> 9) & 3); }
@@ -53,6 +85,11 @@ static inline uint16_t pack(int r, int g, int b) {
   if (r > 255) r = 255;
   if (g > 255) g = 255;
   if (b > 255) b = 255;
+  return (uint16_t)((r & 0xF8) << 8 | (g & 0xFC) << 3 | b >> 3);
+}
+/* pack without clamps: identical when inputs are already 0..255 (tinted texels max 254,
+ * water blends max 255, lit() inputs 0..255) */
+static inline uint16_t pack_nc(int r, int g, int b) {
   return (uint16_t)((r & 0xF8) << 8 | (g & 0xFC) << 3 | b >> 3);
 }
 
@@ -91,7 +128,7 @@ static inline __attribute__((always_inline)) int texel565(int b, int tex, int u,
   uint16_t c = tex_pal[tex][t];
   if (t >= (fl & 0x1F)) {
     uint16_t k = tint_of(b, col);
-    c = pack(r5(c) * r5(k) >> 8, g6(c) * g6(k) >> 8, b5(c) * b5(k) >> 8);
+    c = pack_nc(r5(c) * r5(k) >> 8, g6(c) * g6(k) >> 8, b5(c) * b5(k) >> 8);
   }
   return c;
 }
@@ -108,8 +145,8 @@ static inline int texel_rgb(int b, int tex, int u, int v, int col, int *r, int *
 static __attribute__((noinline)) uint16_t sky(float dx, float dy, float dz, float len) {
   float e = dy / len;   /* elevation, -1..1 */
   /* horizon (fog colour) to the sky's colour above; below the horizon, fog */
-  uint32_t gc = sky_grad[e <= 0 ? 0 : e >= 0.4f ? 128 : (int)(e * 320)];
-  int r = (int)(gc >> 20), g = (int)(gc >> 10) & 1023, b = (int)gc & 1023;
+  int gi = e <= 0 ? 0 : e >= 0.4f ? 128 : (int)(e * 320);
+  int r = sky_grad[gi][0], g = sky_grad[gi][1], b = sky_grad[gi][2];
   if (under_water) return pack(r / 4, g / 3, b / 2 + 40);
   /* the sunrise and sunset glow (RenderGlobal's fan): towards the sun, on the horizon, fading above
    * it and below it alike (the fan straddles it: cut there, it hung over a line in the air) */
@@ -193,8 +230,7 @@ static inline __attribute__((always_inline)) uint16_t sky_px(const SkyRow *k, fl
   int gi = 128;
   if (dy <= 0) gi = 0;
   else if (dy * dy < 0.16f * l2) len = sqrtf(l2), gi = (int)(dy / len * 320);
-  uint32_t gc = sky_grad[gi];
-  int r = (int)(gc >> 20), g = (int)(gc >> 10) & 1023, b = (int)gc & 1023;
+  int r = sky_grad[gi][0], g = sky_grad[gi][1], b = sky_grad[gi][2];
   if (under_water) return pack(r / 4, g / 3, b / 2 + 40);
   if (sun_a > 0) {
     float sd = k->sd0 + k->sds * su, tx = k->tx0 + k->txs * su, s2 = sd * sd;
@@ -350,8 +386,12 @@ static inline uint16_t lit565(uint16_t c, int face, int light, float dist) {
   }
   return c;
 }
+static inline float unfogged(float t, float d2) {
+  /* t * |d|, but 0 when no fog applies (lit565 only looks past fog0): same pixels, no root */
+  return t * t * d2 > fog0 * fog0 ? t * sqrtf(d2) : 0;
+}
 static inline uint16_t lit(int r, int g, int b, int face, int light, float dist) {
-  return lit565(pack(r, g, b), face, light, dist);
+  return lit565(pack_nc(r, g, b), face, light, dist);
 }
 
 /* what the last trace met: 1 a face (hit_f, of plane hit_p) of a whole block
@@ -422,7 +462,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
       int lt = vl[came_from(i, face, x, y, z)];
       uint16_t c = lit565((uint16_t)tc, f, lt, t * R->len);
       if (R->wa) {
-        c = pack((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
+        c = pack_nc((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
                  (b5(c) * (256 - R->wa) + R->wb * R->wa) >> 8);
         if (face >= 0 && hit_w >= 0) hit_kind = 4, hit_f = f;
       } else if (face >= 0) hit_kind = 1, hit_f = f, hit_i = i, hit_l = lt;
@@ -436,7 +476,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
       int tc = texel565(b, blk_tex[b][3], h.u, h.v, col);   /* (hit_cross met a texel that is there) */
       last_t = t + h.t;
       uint16_t c = lit565((uint16_t)tc, 1, vl[i], (t + h.t) * R->len);
-      if (R->wa) c = pack((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
+      if (R->wa) c = pack_nc((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
                        (b5(c) * (256 - R->wa) + R->wb * R->wa) >> 8);
       else hit_kind = 3, hit_i = i;
       return c;
@@ -464,11 +504,18 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
     if (h.t < 1e9f) {
       int tex = face_tex(b, h.face, x, y, z);
       if (m == M_BED && h.face == 1) {
-        /* the bed's top turned so the pillow is at its head */
+        /* the bed's top turned so the pillow is at its head: modern entity top
+         * has it north (v = 0), 1.8.8 blocks/bed_head_top east (u = 15) */
         int w = bed_way(b, x, y, z), u = h.u, v = h.v;
-        if (w == 3) h.u = 15 - u, h.v = 15 - v;
-        else if (w == 5) h.u = v, h.v = 15 - u;
-        else if (w == 4) h.u = 15 - v, h.v = u;
+        if (bed_east) {
+          if (w == 2) h.u = 15 - v, h.v = u;
+          else if (w == 3) h.u = v, h.v = 15 - u;
+          else if (w == 4) h.u = 15 - u, h.v = 15 - v;
+        } else {
+          if (w == 3) h.u = 15 - u, h.v = 15 - v;
+          else if (w == 5) h.u = v, h.v = 15 - u;
+          else if (w == 4) h.u = 15 - v, h.v = u;
+        }
       }
       int tc = texel565(b, tex, h.u, h.v, col);
       if (tc >= 0) {
@@ -490,7 +537,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
             return -1;
           }
         }
-        if (R->wa) c = pack((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
+        if (R->wa) c = pack_nc((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
                          (b5(c) * (256 - R->wa) + R->wb * R->wa) >> 8);
         last_t = t + h.t;
         return c;
@@ -514,6 +561,17 @@ static void shape_tops(void) {
         if (blk_box[b][k][4] > top) top = blk_box[b][k][4];
     }
     shape_top[b] = (uint8_t)top;
+  }
+  /* pillow east (white at u = 15, v = 8) in 1.8.8's bed_head_top, north
+   * (white at u = 8, v = 0) from the modern bed entity: sample the east middle */
+  {
+    int tex = blk_tex[B_BED_HEAD][1];   /* top */
+    uint8_t p = tex_px[tex][(8 * 16 + 15) >> 1];
+    int idx = (15 & 1) ? p >> 4 : p & 15;
+    uint16_t c = tex_pal[tex][idx];
+    /* tinted red tops keep grey levels; white pillow still brighter green */
+    int g = (c >> 5) & 63;
+    bed_east = g > 40;
   }
 }
 
@@ -548,6 +606,8 @@ static uint16_t trace(float dx, float dy, float dz) {
   const int fx = 5 - bx, fy = 1 - by, fz = 3 - bz;
   const int iy = sy * VCX * VCZ, iz = sz * VCX, my = sy * MCZ * MCX, mz = sz * MCX;
   int mi = cam_mi;
+  /* region strides (loop-invariant): 4*|iv| */
+  float sx4 = 4 * idx, sy4 = 4 * idy, sz4 = 4 * idz;
   /* the face a cell was entered through is the axis crossed last (the latest of the sides
    * behind), except where the ray starts (-1) or comes out of a jump (jf, at t = tj) */
   float tj = 0;
@@ -568,7 +628,8 @@ static uint16_t trace(float dx, float dy, float dz) {
         goto out;
     }
   }
-  if (!vmac[mi] || (vmac[mi] == 2 && in_liq == 1)) goto jump;
+  int cam_reg = vmac_get(mi);
+  if (!cam_reg || (cam_reg == 2 && in_liq == 1)) goto jump;
   for (;;) {
     ST(st_steps++);
     int b = vc[i];
@@ -584,14 +645,24 @@ static uint16_t trace(float dx, float dy, float dz) {
       }
     }
     /* the next cell */
-    if (tx < ty && tx < tz) {
-      t = tx;
-      tx += idx;
-      x += sx;
-      if ((unsigned)x >= VCX) break;
-      i += sx;
-      if ((x & 3) != ex0) goto next;
-      mi += sx;
+    if (tx < ty) {
+      if (tx < tz) {
+        t = tx;
+        tx += idx;
+        x += sx;
+        if ((unsigned)x >= VCX) break;
+        i += sx;
+        if ((x & 3) != ex0) goto next;
+        mi += sx;
+      } else {
+        t = tz;
+        tz += idz;
+        z += sz;
+        if ((unsigned)z >= VCZ) break;
+        i += iz;
+        if ((z & 3) != ez0) goto next;
+        mi += mz;
+      }
     } else if (ty < tz) {
       t = ty;
       ty += idy;
@@ -609,7 +680,8 @@ static uint16_t trace(float dx, float dy, float dz) {
       if ((z & 3) != ez0) goto next;
       mi += mz;
     }
-    if (!vmac[mi] || (vmac[mi] == 2 && in_liq == 1)) {
+    int rv = vmac_get(mi);
+    if (!rv || (rv == 2 && in_liq == 1)) {
     jump:;
       /* an empty 4 x 4 x 4 region (or all water, seen from in the water): on from region to
        * region (the times the ray crosses their sides) while they are empty */
@@ -619,17 +691,17 @@ static uint16_t trace(float dx, float dy, float dz) {
       for (;;) {
         ST(st_jumps++);
         if (ex < ey && ex < ez) {
-          te = ex, ax = 0, ex += 4 * idx, rx += sx, mi += sx;
+          te = ex, ax = 0, ex += sx4, rx += sx, mi += sx;
           if ((unsigned)rx >= MCX) goto out;
         } else if (ey < ez) {
-          te = ey, ax = 1, ey += 4 * idy, ry += sy, mi += my;
+          te = ey, ax = 1, ey += sy4, ry += sy, mi += my;
           if ((unsigned)ry >= MCY || (sy > 0 && ry * 4 >= sky_top)) goto out;
         } else {
-          te = ez, ax = 2, ez += 4 * idz, rz += sz, mi += mz;
+          te = ez, ax = 2, ez += sz4, rz += sz, mi += mz;
           if ((unsigned)rz >= MCZ) goto out;
         }
         if (te > tmax) goto out;
-        reg = vmac[mi];
+        reg = vmac_get(mi);
         if (reg && !(reg == 2 && wet)) break;
       }
       t = tj = te;
@@ -653,7 +725,7 @@ out:;
   uint16_t c = sky(dx, dy, dz, len);
   int wa = R.wa;
   if (!wa) hit_kind = 2;
-  if (wa) c = pack((r5(c) * (256 - wa) + R.wr * wa) >> 8, (g6(c) * (256 - wa) + R.wg * wa) >> 8, (b5(c) * (256 - wa) + R.wb * wa) >> 8);
+  if (wa) c = pack_nc((r5(c) * (256 - wa) + R.wr * wa) >> 8, (g6(c) * (256 - wa) + R.wg * wa) >> 8, (b5(c) * (256 - wa) + R.wb * wa) >> 8);
   return c;
 }
 
@@ -806,7 +878,7 @@ static int face_cell(float dx, float dy, float dz, const Sample *s) {
     c = tex_pal[tex][tx];
     if (tx >= (fl & 0x1F)) {
       uint16_t k = s->tint;
-      c = pack(r5(c) * r5(k) >> 8, g6(c) * g6(k) >> 8, b5(c) * b5(k) >> 8);
+      c = pack_nc(r5(c) * r5(k) >> 8, g6(c) * g6(k) >> 8, b5(c) * b5(k) >> 8);
     }
     if (s->flags & 2) c = (uint16_t)cracked(c, s->cell, u, v);
   }
@@ -832,7 +904,7 @@ static __attribute__((unused)) void face_fill(uint16_t (*cb)[RW], float (*zb)[RW
     k_tex = (uint16_t)tex, k_tint = s->tint, k_shade = s->shade;
     for (int n = 0; n < 16; n++) {
       uint16_t c = tex_pal[tex][n];
-      if (n >= (fl & 0x1F)) c = pack(r5(c) * r5(k_tint) >> 8, g6(c) * g6(k_tint) >> 8, b5(c) * b5(k_tint) >> 8);
+      if (n >= (fl & 0x1F)) c = pack_nc(r5(c) * r5(k_tint) >> 8, g6(c) * g6(k_tint) >> 8, b5(c) * b5(k_tint) >> 8);
       pal[n] = shade565(c, k_shade);
     }
   }
@@ -944,7 +1016,7 @@ static __attribute__((unused)) void plane_fill(uint16_t (*cb)[RW], float (*zb)[R
         col = 0;
       } else {
         col = tex_pal[tex][tx];
-        if (tx >= (fl & 0x1F)) col = pack(r5(col) * r5(tint) >> 8, g6(col) * g6(tint) >> 8, b5(col) * b5(tint) >> 8);
+        if (tx >= (fl & 0x1F)) col = pack_nc(r5(col) * r5(tint) >> 8, g6(col) * g6(tint) >> 8, b5(col) * b5(tint) >> 8);
       }
       if (crack) col = (uint16_t)cracked(col, i, u, v);
       col = shade565(col, shd);
@@ -977,10 +1049,10 @@ static int water_pixel(float dx, float dy, float dz, int wplane, int plane, int 
   int u = (int)((hx - x) * 16), v = (int)((hz - z) * 16), r, g, bb;
   u = u < 0 ? 0 : u > 15 ? 15 : u, v = v < 0 ? 0 : v > 15 ? 15 : v;
   if (texel_rgb(b, face_tex(b, 1, x, y, z), u, v, z * VCX + x, &r, &g, &bb) < 0) return -1;
-  uint16_t w = lit(r, g, bb, 1, vl[i], t * sqrtf(dx * dx + dy * dy + dz * dz));
+  uint16_t w = lit(r, g, bb, 1, vl[i], unfogged(t, dx * dx + dy * dy + dz * dz));
   int c = face_pixel(dx, dy, dz, plane, f, true);
   if (c < 0) return -1;
-  return pack((r5((uint16_t)c) * 106 + r5(w) * 150) >> 8, (g6((uint16_t)c) * 106 + g6(w) * 150) >> 8,
+  return pack_nc((r5((uint16_t)c) * 106 + r5(w) * 150) >> 8, (g6((uint16_t)c) * 106 + g6(w) * 150) >> 8,
               (b5((uint16_t)c) * 106 + b5(w) * 150) >> 8);
 }
 
@@ -1051,7 +1123,16 @@ static uint16_t agreed(float dx, float dy, float dz, const Sample *a, bool one) 
     }
   }
   last_t = 1e9f;
-  if (a->kind == 2) return ST(st_sky++), sky(dx, dy, dz, sqrtf(dx * dx + dy * dy + dz * dz));
+  if (a->kind == 2) {
+    /* below the horizon with no sunrise glow: the fog colour (what sky() gives: no sun,
+     * moon, stars or clouds down there), without the root */
+    ST(st_sky++);
+    if (dy <= 0 && ss_a <= 0) {
+      int r = sky_grad[0][0], g = sky_grad[0][1], b = sky_grad[0][2];
+      return under_water ? pack(r / 4, g / 3, b / 2 + 40) : pack(r, g, b);
+    }
+    return sky(dx, dy, dz, sqrtf(dx * dx + dy * dy + dz * dz));
+  }
   return trace(dx, dy, dz);
 }
 
@@ -1085,7 +1166,7 @@ static void quad(uint16_t (*cb)[RW], float (*zb)[RW], float (*rb)[3], int r, int
 #include "mob.h"
 
 float tick_frac;   /* how far between the last two ticks this frame is (main.c) */
-#define N_DRAW 12
+#define N_DRAW 56
 typedef struct {
   const Entity *e;
   int x0, y0, x1, y1;          /* its rectangle on the picture (internal pixels) */
@@ -1096,11 +1177,13 @@ typedef struct {
 static Draw draws[N_DRAW];
 static int ndraws;
 
-static inline void ray_dir(int px, int py, float *d) {
-  float sv = (1 - 2 * (py + 0.5f) / RH) * TAN_V, su = (2 * (px + 0.5f) / RW - 1) * TAN_H;
-  d[0] = fwx + upx * sv + rgx * su;
-  d[1] = fwy + upy * sv;
-  d[2] = fwz + upz * sv + rgz * su;
+/* the ray of picture pixel (px, py): the row's base (as render_frame's rb) plus the
+ * column's sideways part (col_su, same expression): no division per pixel */
+static inline void ray_dir2(float rb0, float rb1, float rb2, int px, float *d) {
+  float su = col_su[px];
+  d[0] = rb0 + rgx * su;
+  d[1] = rb1;
+  d[2] = rb2 + rgz * su;
 }
 
 /* a point (cache coordinates) on the picture; false if behind the camera */
@@ -1171,8 +1254,11 @@ static void ents_frame(void) {
     float ex = e->px + (e->x - e->px) * t - vc_x0, ey = e->py + (e->y - e->py) * t - vc_y0,
           ez = e->pz + (e->z - e->pz) * t - vc_z0;
     float dx = ex - ox, dy = ey - oy, dz = ez - oz;
-    float dist = sqrtf(dx * dx + dy * dy + dz * dz);
-    if (dist > MAX_T + 1) continue;
+    float d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 > (MAX_T + 1) * (MAX_T + 1)) continue;
+    /* fully behind the camera: skip the 8-corner rect (max half-diagonal ~2.9) */
+    float cz = dx * fwx + dy * fwy + dz * fwz;
+    if (cz < -3.0f) continue;
     float w, h;
     if (e->type == E_ITEM) w = 0.5f, h = 0.6f;
     else if (e->type == E_TNT) w = 1.2f, h = 1.1f;
@@ -1184,11 +1270,12 @@ static void ents_frame(void) {
       c[k][0] = ex + ((k & 1) ? w : -w) / 2, c[k][1] = ey + ((k & 2) ? h : 0), c[k][2] = ez + ((k & 4) ? w : -w) / 2;
     Draw *d = &draws[ndraws];
     int r[4];
+
     if (!rect_of(c, r)) continue;
     d->x0 = r[0], d->y0 = r[1], d->x1 = r[2], d->y1 = r[3];
-    d->e = e, d->ex = ex, d->ey = ey, d->ez = ez, d->dist = dist;
-    int cx = (int)floorf(ex), cy = (int)floorf(ey + 0.2f), cz = (int)floorf(ez);
-    d->light = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz < VCZ ? vl[VC_I(cx, cy, cz)] : 15;
+    d->e = e, d->ex = ex, d->ey = ey, d->ez = ez, d->dist = sqrtf(d2);
+    int cx = (int)floorf(ex), cy = (int)floorf(ey + 0.2f), cz2 = (int)floorf(ez);
+    d->light = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz2 < VCZ ? vl[VC_I(cx, cy, cz2)] : 15;
     ndraws++;
   }
 }
@@ -1197,6 +1284,7 @@ static void ents_frame(void) {
 typedef struct {
   float A[9], o[3];      /* box-frame ray: origin o, direction A d */
   float x0, y0, z0, x1, y1, z1;
+  float sx, sy, sz;      /* (x1-x0)/w etc (quotients, for identical rounding) */
   uint8_t u, v, w, h, d, mirror, skin;
   uint8_t shade[6];      /* each face's shade (0..32) */
   int16_t r[4];          /* its rectangle on the picture (x0 y0 x1 y1; empty: not seen, or the camera in it) */
@@ -1259,6 +1347,7 @@ static int make_boxes(const Draw *dr, Box *bx) {
     b->x0 = pt->x - pt->grow, b->y0 = pt->y - pt->grow, b->z0 = pt->z - pt->grow;
     b->x1 = pt->x + pt->w + pt->grow, b->y1 = pt->y + pt->h + pt->grow, b->z1 = pt->z + pt->d + pt->grow;
     b->u = pt->u, b->v = pt->v, b->w = pt->w, b->h = pt->h, b->d = pt->d, b->mirror = pt->mirror, b->skin = pt->skin;
+    b->sx = (b->x1 - b->x0) / b->w, b->sy = (b->y1 - b->y0) / b->h, b->sz = (b->z1 - b->z0) / b->d;
     /* where it is on the picture: none of it with the camera inside (its faces turn away: culled) */
     b->r[0] = b->r[2] = 0;
     if (!(b->o[0] > b->x0 && b->o[0] < b->x1 && b->o[1] > b->y0 && b->o[1] < b->y1 && b->o[2] > b->z0 && b->o[2] < b->z1)) {
@@ -1293,9 +1382,19 @@ static int box_texel(const Box *b, int face, float x, float y, float z) {
     x = b->x0 + b->x1 - x;
     if (face < 2) face ^= 1;
   }
-  /* pixel coordinates inside the box (the inflation of wool keeps the layout) */
-  float sx = (b->x1 - b->x0) / b->w, sy = (b->y1 - b->y0) / b->h, sz = (b->z1 - b->z0) / b->d;
-  int lx = (int)((x - b->x0) / sx), ly = (int)((y - b->y0) / sy), lz = (int)((z - b->z0) / sz);
+  /* pixel coordinates inside the box (the inflation of wool keeps the layout);
+   * each face uses only two of them */
+  int lx = 0, ly = 0, lz = 0;
+  if (face < 2) {
+    ly = (int)((y - b->y0) / b->sy);
+    lz = (int)((z - b->z0) / b->sz);
+  } else if (face < 4) {
+    lx = (int)((x - b->x0) / b->sx);
+    lz = (int)((z - b->z0) / b->sz);
+  } else {
+    lx = (int)((x - b->x0) / b->sx);
+    ly = (int)((y - b->y0) / b->sy);
+  }
   if (lx >= b->w) lx = b->w - 1;
   if (ly >= b->h) ly = b->h - 1;
   if (lz >= b->d) lz = b->d - 1;
@@ -1359,32 +1458,64 @@ static bool boxes_hit(const Box *bx, int n, const float *d, float *best_t, uint1
   return any;
 }
 
-/* a dropped item: a small cube of its block, or its picture */
-static bool item_hit(const Draw *dr, const float *d, float *best_t, uint16_t *col) {
+/* a dropped item: a small cube of its block, or its picture. What depends only on
+ * the draw (not the pixel's ray) is set up once a frame (item_prep: the bob's
+ * sine, the spin's cosine/sine); item_hit then tests one ray. */
+typedef struct {
+  const Entity *e;
+  const Draw *dr;
+  int id, ic;
+  float hs, cx, cy, cz, ca, sa, k4, rfw;
+  float rel[3], o[3];
+  bool tnt, cube, ok, spin;
+} ItemCache;
+static void item_prep(const Draw *dr, ItemCache *h) {
   const Entity *e = dr->e;
-  int id = e->item.id;
+  h->e = e;
+  h->dr = dr;
+  h->id = e->item.id;
+  h->tnt = e->type == E_TNT;
   float age = e->age + tick_frac;
-  bool tnt = e->type == E_TNT;
-  float bob = tnt ? 0 : sinf(age / 10.0f + e->yaw) * 0.1f + 0.1f;
-  bool cube = id < 256 && (blk_model[id] == M_CUBE || blk_model[id] == M_LEAVES || blk_model[id] == M_GLASS ||
-                           blk_model[id] == M_SLAB);
-  float hs = tnt ? 0.49f : 0.125f;
-  float cx = dr->ex, cy = dr->ey + bob + hs, cz = dr->ez;
-  if (e->type == E_BOBBER) cy = dr->ey + 0.3f - 0.125f, cube = false;   /* RenderFish: centred where it is */
+  float bob = h->tnt ? 0 : sinf(age / 10.0f + e->yaw) * 0.1f + 0.1f;
+  bool cube = h->id < 256 && (blk_model[h->id] == M_CUBE || blk_model[h->id] == M_LEAVES ||
+                              blk_model[h->id] == M_GLASS || blk_model[h->id] == M_SLAB);
+  h->hs = h->tnt ? 0.49f : 0.125f;
+  h->cx = dr->ex, h->cy = dr->ey + bob + h->hs, h->cz = dr->ez;
+  if (e->type == E_BOBBER) h->cy = dr->ey + 0.3f - 0.125f, cube = false;   /* centred where it is */
+  h->cube = cube;
+  h->ok = true;
   if (cube) {
     /* EntityItem render: a quarter block, turning (lit TNT: a whole block, still) */
-    float a = tnt ? 0 : age / 20.0f + e->yaw, ca = cosf(a), sa = sinf(a);
-    float rel[3] = {ox - cx, oy - cy, oz - cz};
-    float o[3] = {ca * rel[0] + sa * rel[2], rel[1], -sa * rel[0] + ca * rel[2]};
-    float dl[3] = {ca * d[0] + sa * d[2], d[1], -sa * d[0] + ca * d[2]};
+    float a = h->tnt ? 0 : age / 20.0f + e->yaw;
+    h->ca = cosf(a), h->sa = sinf(a);
+    h->rel[0] = ox - h->cx, h->rel[1] = oy - h->cy, h->rel[2] = oz - h->cz;
+    h->o[0] = h->ca * h->rel[0] + h->sa * h->rel[2], h->o[1] = h->rel[1],
+    h->o[2] = -h->sa * h->rel[0] + h->ca * h->rel[2];
+    h->k4 = 16 / (2 * h->hs);
+  } else {
+    h->ic = e->type == E_BOBBER ? SP_BOBBER : item_icon(h->id);
+    if (h->ic < 0) {
+      h->ok = false;
+      return;
+    }
+    h->rel[0] = h->cx - ox, h->rel[1] = h->cy + 0.125f - oy, h->rel[2] = h->cz - oz;
+    h->rfw = h->rel[0] * fwx + h->rel[1] * fwy + h->rel[2] * fwz;
+  }
+}
+static bool item_hit(const ItemCache *h, const float *d, float *best_t, uint16_t *col) {
+  if (!h->ok) return false;
+  const Entity *e = h->e;
+  const Draw *dr = h->dr;
+  if (h->cube) {
+    float dl[3] = {h->ca * d[0] + h->sa * d[2], d[1], -h->sa * d[0] + h->ca * d[2]};
     float t0 = 0, t1 = *best_t;
     int f0 = -1;
     for (int k = 0; k < 3; k++) {
       if (fabsf(dl[k]) < 1e-9f) {
-        if (fabsf(o[k]) > hs) return false;
+        if (fabsf(h->o[k]) > h->hs) return false;
         continue;
       }
-      float ta = (-hs - o[k]) / dl[k], tb = (hs - o[k]) / dl[k];
+      float ta = (-h->hs - h->o[k]) / dl[k], tb = (h->hs - h->o[k]) / dl[k];
       static const int8_t lowf[3] = {4, 0, 2};   /* block faces: -x 4, -y 0, -z 2 */
       int fa = lowf[k], fb = lowf[k] + 1;
       if (ta > tb) {
@@ -1398,38 +1529,50 @@ static bool item_hit(const Draw *dr, const float *d, float *best_t, uint16_t *co
       if (t0 > t1) return false;
     }
     if (f0 < 0) return false;
-    float hx = o[0] + dl[0] * t0 + hs, hy = o[1] + dl[1] * t0 + hs, hz = o[2] + dl[2] * t0 + hs;
+    float hx = h->o[0] + dl[0] * t0 + h->hs, hy = h->o[1] + dl[1] * t0 + h->hs, hz = h->o[2] + dl[2] * t0 + h->hs;
     int u, v;
-    float k4 = 16 / (2 * hs);
     switch (f0) {
-      case 0: case 1: u = (int)(hx * k4); v = (int)(hz * k4); break;
-      case 2: case 3: u = (int)(hx * k4); v = 15 - (int)(hy * k4); break;
-      default: u = (int)(hz * k4); v = 15 - (int)(hy * k4); break;
+      case 0: case 1: u = (int)(hx * h->k4); v = (int)(hz * h->k4); break;
+      case 2: case 3: u = (int)(hx * h->k4); v = 15 - (int)(hy * h->k4); break;
+      default: u = (int)(hz * h->k4); v = 15 - (int)(hy * h->k4); break;
     }
     u &= 15, v &= 15;
-    int tc = texel565(id, blk_tex[id][f0], u, v, 0);
-    if (tc < 0) tc = 0;
+    int tc;
+    if (h->id >= 256) {
+      /* a monster spawner's egg: its sprite on every face of the little turning cube */
+      int stride = (spr_w[h->ic] + 1) / 2;
+      const uint8_t *px = spr_px + spr_off[h->ic] + v * stride;
+      int i = (u & 1) ? px[u >> 1] >> 4 : px[u >> 1] & 15;
+      if (!i && spr_alpha[h->ic]) return false;   /* (see-through: the cage shows through) */
+      tc = spr_pal[h->ic][i];
+    } else {
+      tc = texel565(h->id, blk_tex[h->id][f0], u, v, 0);
+      if (tc < 0) tc = 0;
+    }
     *best_t = t0;
-    *col = lit565((uint16_t)tc, f0, dr->light, t0 * sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]));
-    if (tnt && (e->delay / 5) % 2 == 0) *col = mix565(*col, 0xFFFF, 16);   /* RenderTNTPrimed: flashing */
+    *col = lit565((uint16_t)tc, f0, dr->light, unfogged(t0, d[0] * d[0] + d[1] * d[1] + d[2] * d[2]));
+    if (h->tnt && (e->delay / 5) % 2 == 0) *col = mix565(*col, 0xFFFF, 16);   /* flashing while lit */
     return true;
   }
   /* a flat picture half a block wide, facing the camera */
-  int ic = e->type == E_BOBBER ? SP_BOBBER : item_icon(id);
-  if (ic < 0) return false;
-  float rel[3] = {cx - ox, cy + 0.125f - oy, cz - oz};
   float den = d[0] * fwx + d[1] * fwy + d[2] * fwz;
-  float t = (rel[0] * fwx + rel[1] * fwy + rel[2] * fwz) / den;
+  float t = h->rfw / den;
   if (!(t > 0) || t >= *best_t) return false;
-  float hx = d[0] * t - rel[0], hy = d[1] * t - rel[1], hz = d[2] * t - rel[2];
+  float hx = d[0] * t - h->rel[0], hy = d[1] * t - h->rel[1], hz = d[2] * t - h->rel[2];
   float u = (hx * rgx + hz * rgz) / 0.5f + 0.5f, v = 0.5f - (hx * upx + hy * upy + hz * upz) / 0.5f;
+  if (h->spin) {
+    /* turning in place about the picture's centre (the spawner's egg) */
+    float du = u - 0.5f, dv = v - 0.5f;
+    u = 0.5f + du * h->ca - dv * h->sa;
+    v = 0.5f + du * h->sa + dv * h->ca;
+  }
   if (u < 0 || u >= 1 || v < 0 || v >= 1) return false;
-  int w = spr_w[ic], hh = spr_h[ic], pxu = (int)(u * w), pyv = (int)(v * hh);
-  const uint8_t *px = spr_px + spr_off[ic] + pyv * ((w + 1) / 2);
+  int w = spr_w[h->ic], hh = spr_h[h->ic], pxu = (int)(u * w), pyv = (int)(v * hh);
+  const uint8_t *px = spr_px + spr_off[h->ic] + pyv * ((w + 1) / 2);
   int i = (pxu & 1) ? px[pxu >> 1] >> 4 : px[pxu >> 1] & 15;
   if (!i) return false;
   *best_t = t;
-  *col = lit565(spr_pal[ic][i], 1, dr->light, t * sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]));
+  *col = lit565(spr_pal[h->ic][i], 1, dr->light, unfogged(t, d[0] * d[0] + d[1] * d[1] + d[2] * d[2]));
   return true;
 }
 
@@ -1569,36 +1712,41 @@ static void rain_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
   for (int n = 0; n < nsheets; n++) {
     const Sheet *s = &sheets[n];
     if (s->sy1 < py0 || s->sy0 >= py0 + rows) continue;
+    /* copy to locals (cb may alias sheets' scratch, forcing reloads) */
+    float scx = s->cx, scz = s->cz, shx = s->hx, shz = s->hz, sv = s->v, su = s->u;
+    int sy0 = s->y0, sy1 = s->y1, salpha = s->alpha;
+    uint16_t scol = s->col;
     const uint8_t(*run)[4] = s->snow ? snow_run : rain_run;
     const uint8_t *idx = s->snow ? snow_idx : rain_idx;
     /* the heights this strip shows, at both edges of the sheet */
     float ylo = 1e9f, yhi = -1e9f;
     for (int e = -1; e <= 1; e += 2)
       for (int k = 0; k <= 1; k++) {
-        float y = row_height(s->cx + e * s->hx, s->cz + e * s->hz, (float)(py0 + k * rows));
+        float y = row_height(scx + e * shx, scz + e * shz, (float)(py0 + k * rows));
         if (y < ylo) ylo = y;
         if (y > yhi) yhi = y;
       }
-    if (ylo < s->y0) ylo = s->y0;
-    if (yhi > s->y1) yhi = s->y1;
+    if (ylo < sy0) ylo = (float)sy0;
+    if (yhi > sy1) yhi = (float)sy1;
     if (ylo >= yhi) continue;
     /* far away the streaks are much thinner than a pixel: every other one, twice as strong */
-    float tc = (s->cx - ox) * fwx + (s->cz - oz) * fwz + ((ylo + yhi) / 2 - oy) * fwy;
+    float tc = (scx - ox) * fwx + (scz - oz) * fwz + ((ylo + yhi) / 2 - oy) * fwy;
     int step = tc * 64 > KX * 3.5f ? 2 : 1;
     /* texture rows: row = y * 64 + v; runs are at most 16 rows long */
-    int r0 = (int)floorf(ylo * 64 + s->v) - 16, r1 = (int)ceilf(yhi * 64 + s->v);
-    for (int base = (int)floorf(r0 / 256.0f) * 256; base <= r1; base += 256) {
+    int r0 = (int)floorf(ylo * 64 + sv) - 16, r1 = (int)ceilf(yhi * 64 + sv);
+    int q = r0 >= 0 ? r0 >> 8 : -((255 - r0) >> 8);
+    for (int base = q * 256; base <= r1; base += 256) {
       int lo = r0 - base < 0 ? 0 : r0 - base, hi = r1 - base > 255 ? 255 : r1 - base;
       for (int i = idx[lo]; i < idx[hi + 1]; i += step) {
-        int a = run[i][3] * s->alpha;
+        int a = run[i][3] * salpha;
         if (a <= 25 * 255) continue;   /* 1.8's alpha test */
-        float ya = (base + run[i][0] - s->v) * (1 / 64.0f), yb = ya + run[i][2] * (1 / 64.0f);
-        if (ya < s->y0) ya = s->y0;
-        if (yb > s->y1) yb = s->y1;
+        float ya = (base + run[i][0] - sv) * (1 / 64.0f), yb = ya + run[i][2] * (1 / 64.0f);
+        if (ya < sy0) ya = (float)sy0;
+        if (yb > sy1) yb = (float)sy1;
         if (yb <= ya) continue;
-        float u = (run[i][1] + 0.5f) * (1 / 64.0f) + s->u;
+        float u = (run[i][1] + 0.5f) * (1 / 64.0f) + su;
         u = (u >= 1 ? u - 1 : u) * 2 - 1;
-        float x = s->cx + s->hx * u - ox, z = s->cz + s->hz * u - oz;
+        float x = scx + shx * u - ox, z = scz + shz * u - oz;
         float bz = x * fwx + z * fwz;
         float za = bz + (ya - oy) * fwy, zb2 = bz + (yb - oy) * fwy;
         if (za < 0.05f || zb2 < 0.05f) continue;
@@ -1606,9 +1754,10 @@ static void rain_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
         int sx = (int)((x * rgx + z * rgz) * it * KX + RW / 2);
         if ((unsigned)sx >= RW) continue;
         float by = x * upx + z * upz;
-        float top = RH / 2 - (by + (yb - oy) * upy) / zb2 * KY;
         float bot = RH / 2 - (by + (ya - oy) * upy) / za * KY;
-        if (bot <= py0 || top >= py0 + rows) continue;
+        if (bot <= py0) continue;
+        float top = RH / 2 - (by + (yb - oy) * upy) / zb2 * KY;
+        if (top >= py0 + rows) continue;
         /* how much of a pixel the texels cover: across, and down when shorter than one */
         float cover = KX * it * (1 / 64.0f);
         if (cover > 1) cover = 1;
@@ -1619,7 +1768,7 @@ static void rain_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
         if (k <= 0) continue;
         if (k > 32) k = 32;
         for (int py = k0 < py0 ? py0 : k0; py <= k1 && py < py0 + rows; py++)
-          if (zb[py - py0][sx] > t) cb[py - py0][sx] = mix565(cb[py - py0][sx], s->col, k);
+          if (zb[py - py0][sx] > t) cb[py - py0][sx] = mix565(cb[py - py0][sx], scol, k);
       }
     }
   }
@@ -1826,6 +1975,104 @@ static void select_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW])
   }
 }
 
+/* ---------------------------------------------------------------- the monster spawners' eggs
+ * A spawner that has been set turns its mob's spawn egg inside it, as Minecraft turns the mob
+ * itself there: the egg's own picture, flat and turning about the cage's centre, a turn in five
+ * seconds. Only the four nearest in 16 blocks are drawn, so a wall of spawners costs no more than
+ * four dropped items; with none about, the table walk below is all there is. (112 bytes of RAM
+ * for the four.) */
+#define N_SDRAW 4
+typedef struct {
+  float ex, ey, ez, yaw;   /* where it turns (cache coordinates), its spin */
+  int16_t r[4];            /* its rectangle on the picture */
+  uint8_t light, egg;      /* its light, its spawn egg - I_ZOMBIE_SPAWN_EGG */
+} SDraw;
+static SDraw sdraws[N_SDRAW];
+static int nsdraws;
+extern uint32_t game_time;   /* (also declared with the rain: before its use here) */
+
+static void spawner_frame(void) {
+  nsdraws = 0;
+  float ndist[N_SDRAW];
+  for (int i = 0, n = spawners_count(); i < n; i++) {
+    int x, y, z;
+    int set = spawners_get(i, &x, &y, &z);
+    if (set <= 0 || world_get(x, y, z) != B_MOB_SPAWNER) continue;   /* (empty since, or broken since) */
+    int cx = x - vc_x0, cy = y - vc_y0, cz = z - vc_z0;
+    if ((unsigned)cx >= VCX || (unsigned)cy >= VCY || (unsigned)cz >= VCZ) continue;
+    float ex = cx + 0.5f - ox, ey = cy + 0.5f - oy, ez = cz + 0.5f - oz;
+    float d2 = ex * ex + ey * ey + ez * ez;
+    if (d2 > 256) continue;   /* (further than 16 blocks: too small to see) */
+    float c[8][3];
+    for (int k = 0; k < 8; k++) {
+      c[k][0] = cx + 0.5f + ((k & 1) ? 0.45f : -0.45f);
+      c[k][1] = cy + 0.5f + ((k & 2) ? 0.45f : -0.45f);
+      c[k][2] = cz + 0.5f + ((k & 4) ? 0.45f : -0.45f);
+    }
+    int r[4];
+    if (!rect_of(c, r)) continue;
+    int at = nsdraws;
+    if (at >= N_SDRAW) {
+      at = 0;
+      for (int k = 1; k < N_SDRAW; k++)
+        if (ndist[k] > ndist[at]) at = k;
+      if (d2 >= ndist[at]) continue;
+    } else nsdraws++;
+    SDraw *d = &sdraws[at];
+    ndist[at] = d2;
+    d->ex = cx + 0.5f, d->ey = cy + 0.5f, d->ez = cz + 0.5f;
+    d->yaw = (game_time + tick_frac) * 0.0628319f;   /* a turn in five seconds */
+    for (int k = 0; k < 4; k++) d->r[k] = (int16_t)r[k];
+    d->light = vl[VC_I(cx, cy, cz)];
+    d->egg = (uint8_t)(set - E_ZOMBIE);
+  }
+}
+
+/* one spawner's egg over a strip: its own picture, flat and turning in place (an item's, not the
+ * little cube with the sprite on every face a dropped block-like item keeps), centred in the cage */
+static void spawner_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
+  if (!nsdraws) return;
+  float rbc[SR][3];
+  for (int r = 0; r < rows; r++) {
+    int py = py0 + r;
+    float sv = (1 - 2 * (py + 0.5f) / RH) * TAN_V;
+    rbc[r][0] = fwx + upx * sv, rbc[r][1] = fwy + upy * sv, rbc[r][2] = fwz + upz * sv;
+  }
+  for (int k = 0; k < nsdraws; k++) {
+    const SDraw *sd = &sdraws[k];
+    if (sd->r[1] >= py0 + rows || sd->r[3] <= py0) continue;
+    Entity f;
+    memset(&f, 0, sizeof f);
+    f.type = E_ITEM;
+    f.item.id = (uint16_t)(I_ZOMBIE_SPAWN_EGG + sd->egg);
+    f.yaw = sd->yaw;
+    Draw dr = {&f, sd->r[0], sd->r[1], sd->r[2], sd->r[3], sd->ex, sd->ey, sd->ez, sd->light, 0};
+    ItemCache h = {0};
+    item_prep(&dr, &h);
+    if (h.ic < 0) continue;
+    /* ...the egg itself, where item_prep leaves an item's flat picture: the cage's centre
+     * instead of a bob over the ground, turning in place about it */
+    h.cube = false;
+    h.cy = sd->ey;
+    h.rel[0] = h.cx - ox, h.rel[1] = h.cy - oy, h.rel[2] = h.cz - oz;
+    h.rfw = h.rel[0] * fwx + h.rel[1] * fwy + h.rel[2] * fwz;
+    h.ca = cosf(sd->yaw), h.sa = sinf(sd->yaw);
+    h.spin = true;
+    for (int py = py0 > sd->r[1] ? py0 : sd->r[1]; py < sd->r[3] && py < py0 + rows; py++) {
+      float rb0 = rbc[py - py0][0], rb1 = rbc[py - py0][1], rb2 = rbc[py - py0][2];
+      for (int px = sd->r[0]; px < sd->r[2]; px++) {
+        float d[3];
+        ray_dir2(rb0, rb1, rb2, px, d);
+        float t = zb[py - py0][px];
+        uint16_t c;
+        if (!item_hit(&h, d, &t, &c)) continue;
+        cb[py - py0][px] = c;
+        zb[py - py0][px] = t;
+      }
+    }
+  }
+}
+
 static void ents_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
   Box bx[MAX_PARTS];
   particles_strip(py0, rows, cb, zb);
@@ -1839,29 +2086,41 @@ static void ents_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
     int red = mob && (e->hurt > 0 || e->state == 255) ? 10 : 0;
     int white = e->type == E_CREEPER && e->delay > 0 && ((e->delay / 3) & 1) ? 16 : 0;
     /* each part over its own rectangle (the depth buffer keeps the nearest); an item over the draw's */
+    ItemCache ih = {0};
+    if (!mob) item_prep(dr, &ih);
+    /* per-row ray bases are identical for all parts: compute once (rows==SR==4) */
+    float rbc[SR][3];
+    for (int r = 0; r < rows; r++) {
+      int py = py0 + r;
+      float sv = (1 - 2 * (py + 0.5f) / RH) * TAN_V;
+      rbc[r][0] = fwx + upx * sv, rbc[r][1] = fwy + upy * sv, rbc[r][2] = fwz + upz * sv;
+    }
     for (int p = 0; p < (mob ? n : 1); p++) {
       int x0 = dr->x0, y0 = dr->y0, x1 = dr->x1, y1 = dr->y1;
       if (mob) x0 = bx[p].r[0], y0 = bx[p].r[1], x1 = bx[p].r[2], y1 = bx[p].r[3];
-      for (int py = py0 > y0 ? py0 : y0; py < y1 && py < py0 + rows; py++)
+      for (int py = py0 > y0 ? py0 : y0; py < y1 && py < py0 + rows; py++) {
+        float rb0 = rbc[py - py0][0], rb1 = rbc[py - py0][1], rb2 = rbc[py - py0][2];
         for (int px = x0; px < x1; px++) {
           float d[3];
-          ray_dir(px, py, d);
+          ray_dir2(rb0, rb1, rb2, px, d);
           float t = zb[py - py0][px];
           uint16_t c;
-          bool hit = mob ? boxes_hit(&bx[p], 1, d, &t, &c) : item_hit(dr, d, &t, &c);
+          bool hit = mob ? boxes_hit(&bx[p], 1, d, &t, &c) : item_hit(&ih, d, &t, &c);
           if (!hit) continue;
           if (mob) {
             if (red) c = mix565(c, 0xF800, red);
             if (white) c = mix565(c, 0xFFFF, white);
-            float dist = t * sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+            float dist = unfogged(t, d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
             if (dist > fog0) c = mix565(c, fog565, dist >= fog1 ? 32 : (int)((dist - fog0) * fog_k * 32));
           }
           cb[py - py0][px] = c;
           zb[py - py0][px] = t;
         }
+      }
     }
   }
   select_strip(py0, rows, cb, zb);
+  spawner_strip(py0, rows, cb, zb);
   line_strip(py0, rows, cb, zb);
   rain_strip(py0, rows, cb, zb);
   bolt_strip(py0, rows, cb, zb);
@@ -1893,12 +2152,13 @@ static bool shown_ok;
 static uint32_t strip_hash(void) {
   const uint32_t *w = (const uint32_t *)strip;
   uint32_t h = 2166136261u;
-  for (unsigned k = 0; k < sizeof strip / 4; k++) h = (h ^ w[k]) * 16777619u;
+  for (unsigned k = 0; k < STRIP_N / 2; k++) h = (h ^ w[k]) * 16777619u;
   return h;
 }
 static bool still_screen(void) {
-  return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_WORLDS || gui == GUI_CREATE ||
-         gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS;
+  return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_WORLDS || gui == GUI_CREATE ||
+         gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS ||
+         gui == GUI_FLAT;
 }
 static void send_strip(int py, bool still) {
   if (still) {
@@ -1911,6 +2171,8 @@ static void send_strip(int py, bool still) {
 static void strips_sent(bool still) { shown_ok = still; }
 
 void render_frame(const Camera *c, uint32_t tod) {
+  uint16_t buf[STRIP_N] __attribute__((aligned(4)));
+  strip = buf;
   bool still = still_screen();
   static int last_gui;
   bool opening_pause = gui == GUI_PAUSE && last_gui == GUI_NONE && c;
@@ -1939,7 +2201,7 @@ void render_frame(const Camera *c, uint32_t tod) {
   if (!c) {
     /* no world: only what the screens draw */
     for (int py = 0; py < RH; py += SR) {
-      memset(strip, 0, sizeof strip);
+      memset(strip, 0, STRIP_N * sizeof *strip);
       hud_strip(strip, py * 2, SR * 2);
       send_strip(py, still);
     }
@@ -2070,8 +2332,16 @@ void render_frame(const Camera *c, uint32_t tod) {
   fog_r = (int)(fr * 255);
   fog_g = (int)(fg * 255);
   fog_b = (int)(fb * 255);
-  fog1 = MAX_T;
-  fog0 = MAX_T * 0.75f;
+  /* The rays run to where the fog is full; the fog closes where the ground does
+   * (view_reach: the camera's margin to the cache's nearest side). What is past is
+   * sky, and the sky's horizon row is this very fog colour, so the ground fading
+   * into fog and the sky beyond it are one thing. (1.8's fog is fixed and short;
+   * here it is what hides the end of the world, so it has to close at the world's
+   * edge, or the ground is cut off against the sky in the open.) */
+  cur_max_t = view_dist();
+  fog1 = fminf(cur_max_t, view_reach());
+  cur_max_t = fog1;
+  fog0 = fog1 * 0.75f;
   cam_x = (int)floorf(ox), cam_y = (int)floorf(oy), cam_z = (int)floorf(oz);
   cam_i = (unsigned)cam_x < VCX && (unsigned)cam_y < VCY && (unsigned)cam_z < VCZ ? VC_I(cam_x, cam_y, cam_z) : -1;
   cam_b = cam_i < 0 ? B_AIR : vc[cam_i];
@@ -2087,13 +2357,15 @@ void render_frame(const Camera *c, uint32_t tod) {
   }
   fog_k = 1 / (fog1 - fog0);
   fog565 = pack(fog_r, fog_g, fog_b);
-  for (int k = 0; k <= 128; k++)
-    sky_grad[k] = (uint32_t)(fog_r + (sky_r - fog_r) * k / 128) << 20 | (uint32_t)(fog_g + (sky_g - fog_g) * k / 128) << 10 |
-                  (uint32_t)(fog_b + (sky_b - fog_b) * k / 128);
+  for (int k = 0; k <= 128; k++) {
+    sky_grad[k][0] = (uint8_t)(fog_r + (sky_r - fog_r) * k / 128);
+    sky_grad[k][1] = (uint8_t)(fog_g + (sky_g - fog_g) * k / 128);
+    sky_grad[k][2] = (uint8_t)(fog_b + (sky_b - fog_b) * k / 128);
+  }
   /* the highest row with anything in it */
   sky_top = 0;
   for (int k = MCY * MCZ * MCX - 1; k >= 0; k--)
-    if (vmac[k]) {
+    if (vmac_get(k)) {
       sky_top = (k / (MCZ * MCX) + 1) * 4;
       break;
     }
@@ -2107,6 +2379,7 @@ void render_frame(const Camera *c, uint32_t tod) {
     if (brk_stage > 9) brk_stage = 9;
   }
   ents_frame();
+  spawner_frame();
   rain_frame();
   bolt_frame();
   line_frame();
@@ -2119,10 +2392,7 @@ void render_frame(const Camera *c, uint32_t tod) {
   if (!tops) shape_tops(), tops = true;
   cam_liq = liquid[cam_b] ? liquid[cam_b] : 255;
   bool fast_sky = sky_fast();
-  for (int k = 0; k <= 128; k++) {
-    uint32_t gc = sky_grad[k];
-    sky_pk[k] = pack((int)(gc >> 20), (int)(gc >> 10) & 1023, (int)gc & 1023);
-  }
+  for (int k = 0; k <= 128; k++) sky_pk[k] = pack(sky_grad[k][0], sky_grad[k][1], sky_grad[k][2]);
   enum { NC = RW / 4 };
   static Sample cn[2][NC + 1], ed[2][NC + 1], md[2 * NC + 1];   /* corners, edges' middles, the middle row */
   static uint8_t ed_ok[2][NC + 1], md_ok[2 * NC + 1];

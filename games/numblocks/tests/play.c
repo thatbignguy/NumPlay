@@ -1,6 +1,9 @@
 /* Plays NumBlocks on a computer with scripted keys and saves screenshots.
  *
  *   play [--frames N] [--ms-per-frame M] [--keys "10-40:fwd,50:use,..."] [--shots 30,60] [--out DIR]
+ *        [--showcase]   (the hotbar of the README's GIF: TNT, flint and steel, water and lava, blocks)
+ *        [--spawner]    (a monster spawner hanging in the air in front of the player, unset, and the eggs to set it with)
+ *        [--distance 1..2]   (render distance, default: the saved option, 2 chunks)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9. */
 #include <stdio.h>
@@ -33,7 +36,8 @@ static uint32_t key_bit(const char *s) {
 
 int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
-  int give = 0, title_screen = 0, mobs = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0;
+  int give = 0, showcase = 0, title_screen = 0, mobs = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
+  int distance = -1;
   float hurt = 0;
   int frames = 60, mspf = 50;
   for (int i = 1; i < argc; i++) {
@@ -42,14 +46,17 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--out") && i + 1 < argc) out = argv[++i];
     else if (!strcmp(argv[i], "--shots") && i + 1 < argc) shots = argv[++i];
     else if (!strcmp(argv[i], "--give")) give = 1;
+    else if (!strcmp(argv[i], "--showcase")) showcase = 1;
     else if (!strcmp(argv[i], "--title")) title_screen = 1;
     else if (!strcmp(argv[i], "--mobs")) mobs = 1;
     else if (!strcmp(argv[i], "--torches")) torches = 1;
     else if (!strcmp(argv[i], "--water")) water = 1;
     else if (!strcmp(argv[i], "--creative")) creative = 1;
     else if (!strcmp(argv[i], "--build")) build = 1;
+    else if (!strcmp(argv[i], "--spawner")) spawner = 1;
     else if (!strcmp(argv[i], "--rain")) rain = 1;
     else if (!strcmp(argv[i], "--storm")) rain = 2;
+    else if (!strcmp(argv[i], "--distance") && i + 1 < argc) distance = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--time") && i + 1 < argc) start_time = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--seed") && i + 1 < argc) {
       extern int64_t start_seed;
@@ -81,11 +88,23 @@ int main(int argc, char **argv) {
     for (unsigned i = 0; i < sizeof kit / sizeof kit[0]; i++) inv_add(pl.inv, 36, kit[i][0], kit[i][1], 0);
     pl.inv[0].aux = 100;   /* a worn pickaxe */
   }
+  if (showcase) {
+    /* the README's GIF: the hotbar first, then a full inventory to look at */
+    static const int kit[][2] = {{B_TNT, 16}, {I_FLINT_AND_STEEL, 1}, {I_WATER_BUCKET, 1}, {I_LAVA_BUCKET, 1},
+                                 {B_COBBLESTONE, 64}, {B_PLANKS_OAK, 48}, {B_GLASS, 32}, {I_DIAMOND_PICKAXE, 1},
+                                 {B_TORCH, 32}, {I_DIAMOND_SWORD, 1}, {I_BOW, 1}, {I_ARROW, 48}, {I_DIAMOND, 12},
+                                 {I_GOLD_INGOT, 21}, {I_IRON_INGOT, 30}, {I_COOKED_BEEF, 9}, {I_BREAD, 7},
+                                 {I_APPLE, 4}, {B_OBSIDIAN, 10}, {B_DIAMOND_BLOCK, 2}, {B_LOG_OAK, 24},
+                                 {B_CRAFTING_TABLE, 1}, {B_FURNACE, 2}, {B_CHEST, 3}, {I_IRON_HELMET, 1},
+                                 {I_IRON_CHESTPLATE, 1}, {B_SAND, 40}};
+    for (unsigned i = 0; i < sizeof kit / sizeof kit[0]; i++) inv_add(pl.inv, 36, kit[i][0], kit[i][1], 0);
+  }
   if (start_time >= 0) {
     extern uint32_t game_time;
     game_time = (uint32_t)start_time;
   }
   if (creative) pl.mode = 1;
+  if (distance >= 1 && distance <= 2) opt.distance = (uint8_t)distance;
   if (rain) {
     /* raining (and storming) from the start, for long enough */
     weather.raining = 1, weather.rain_time = 24000, rain_str = 1;
@@ -142,6 +161,19 @@ int main(int argc, char **argv) {
     world_set((int)pl.x + 2, fy, (int)pl.z + 6, B_GLOWSTONE);
   }
   if (hurt > 0) pl.health -= hurt, pl.food -= 7, pl.xp_level = 7, pl.xp = 0.4f;
+  if (spawner) {
+    /* a cleared grass field with a monster spawner hanging in the air in front of the player,
+     * empty as it comes from the inventory, and the spawn eggs to set it with */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 3; z < pz + 12; z++)
+      for (int x = px - 9; x < px + 10; x++)
+        for (int y = fy - 1; y < fy + 10; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
+    world_set(px, fy + 1, pz + 3, B_MOB_SPAWNER);
+    spawners_note(px, fy + 1, pz + 3);
+    opt.difficulty = 2;   /* (no monsters at all on a peaceful world: the fresh options have 0) */
+    static const int kit[][2] = {{I_ZOMBIE_SPAWN_EGG, 8}, {I_CREEPER_SPAWN_EGG, 8}, {I_PIG_SPAWN_EGG, 8}};
+    for (unsigned i = 0; i < sizeof kit / sizeof kit[0]; i++) inv_add(pl.inv, 36, kit[i][0], kit[i][1], 0);
+  }
   double init_ms = (clock() - c0) * 1000.0 / CLOCKS_PER_SEC;
   c0 = clock();
   double slowest = 0;

@@ -68,6 +68,9 @@ RENAME = {'CHARCOAL': ('coal', 1), 'MELON_SLICE': ('melon', 0), 'RAW_FISH': ('fi
           'COOKED_SALMON': ('cooked_fish', 1)}
 for k, d in enumerate(DYES):
     RENAME['DYE_' + d] = ('dye', k)
+# spawn eggs: Minecraft has one item (spawn_egg) told apart by the mob's data value
+for m, _lab, mc_id in items.MOBS:
+    RENAME[f'{m.upper()}_SPAWN_EGG'] = ('spawn_egg', mc_id)
 # a block's item has data 0 where the block's data is only its facing
 FACING_ONLY = {50, 54, 61, 65}
 
@@ -84,7 +87,8 @@ def main():
     have_item = set()
     for k, it in enumerate(items.I):
         name, data = RENAME.get(it['name'], (it['name'].lower(), 0))
-        assert name in ITEM, name
+        if name not in ITEM:
+            continue   # modern-only items (e.g. raw iron/gold): no 1.8 name, not /give-able
         mid = 256 + ITEM.index(name)
         give.append(((mid << 4) | data, 256 + k))
         have_item.add(mid)
