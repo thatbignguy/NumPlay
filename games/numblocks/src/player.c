@@ -7,9 +7,19 @@
  * air, a 0.6 x 1.8 box that steps up 0.6, eyes at 1.62. */
 #include <math.h>
 #include "nb.h"
+#include "mob.h"   /* mob_height: the eyes a spectator riding a mob has */
 #pragma GCC optimize("Os")   /* (not where the time goes: small) */
 
 Player pl;
+
+/* Spectator (mode 2, Minecraft's /gamemode spectator): the camera is either an
+ * entity's - the player sees the world through its eyes, as the mouse left click
+ * on one does in Minecraft - or flies free, through every block, with nothing
+ * touched. pl.mode says which game mode it is; what is below is only spectator:
+ * three small values (no place in Player, which is what the world saves). */
+int8_t spectate = -1;      /* the entity ridden (its index in ents, -1: flying free) */
+int8_t spec_target = -1;    /* the entity under the crosshair, as last drawn (-1: none) */
+float spec_eye;             /* the eyes above the ridden entity's feet (0: not riding) */
 
 #define W 0.3f   /* half width */
 #define H 1.8f
@@ -143,7 +153,7 @@ static void exhaust(float f) { pl.exhaustion += f; }
  * grace after a hit (only more damage gets through), armour takes 4% a point */
 void player_hurt(float amount, int kind) {
   if (pl.dead || amount <= 0) return;
-  if (pl.mode == 1 && kind != DMG_VOID) return;
+  if (pl.mode && kind != DMG_VOID) return;   /* creative and spectator: nothing hurts but the void */
   if (pl.invuln > 10) {
     if (amount <= pl.last_damage) return;
     float a = amount;
@@ -425,6 +435,14 @@ void player_look(float ex, float ey, float ez, float yaw, float pitch) {
   float yr = yaw * 0.017453292f, pr = pitch * 0.017453292f;
   look_ray[0] = ex, look_ray[1] = ey, look_ray[2] = ez;
   look_ray[3] = -sinf(yr) * cosf(pr), look_ray[4] = -sinf(pr), look_ray[5] = cosf(yr) * cosf(pr);
+  if (pl.mode == 2) {
+    /* a spectator: no block is in reach (nothing is mined, none is outlined), so
+     * what the crosshair is on is the entity whose eyes the next OK would take */
+    pl.hit_face = -1;
+    Entity *e = entity_looked_at(5.0f, 1e9f);
+    spec_target = e ? (int8_t)(e - ents) : -1;
+    return;
+  }
   pick();
 }
 
@@ -769,9 +787,23 @@ void player_pick_block(void) {
   pl.inv[pl.slot] = (Stack){(uint16_t)id, 1};
 }
 
+/* a game mode change, as /gamemode does it: the fall starts from here, and
+ * survival no longer flies. What the mode rules over (health, hunger, drops,
+ * the breaking speed, the inventory that opens) is read from pl.mode where it
+ * is used, so one place changing it changes all of it. Kept in the world's save. */
+void player_set_mode(int m) {
+  pl.mode = (uint8_t)m;
+  pl.fall = 0;
+  if (m == 0) pl.flying = false;
+  /* spectator (2): always flying, and out of whatever entity's eyes it was in */
+  if (m != 2) spectate = -1, spec_eye = 0;
+  else pl.flying = true;
+  chat_add("Your game mode has been updated", CHAT_WHITE);
+}
+
 void player_spawn(void) {
   int x, y, z;
-  gen_spawn(&x, &y, &z);
+  world_spawn(&x, &y, &z);
   memset(&pl, 0, sizeof pl);
   pl.spawn_x = x, pl.spawn_y = y, pl.spawn_z = z;
   pl.x = x + 0.5f;
@@ -792,9 +824,7 @@ void player_respawn(void) {
   pl.pitch = 0;
 }
 
-static int break_cooldown, jump_timer, sprint_timer;
-static bool was_fwd;   /* forward was held last tick */
-static bool sprint_keyed;   /* the sprint key started this sprint (Hold: it must stay held) */
+static int break_cooldown, jump_timer;
 static uint32_t prev_keys;
 
 /* the damage the world does: falls, drowning, lava, fire, cactus, suffocation, the void */
@@ -846,8 +876,51 @@ static void hazards(float fell_from) {
   if (pl.y < -64) player_hurt(4, DMG_VOID);
 }
 
+/* ---------------------------------------------------------------- spectator */
+/* Minecraft's spectator: no collision, no landing, nothing to touch, and the
+ * camera through an entity's eyes until sneak brings it back to its own body.
+ * It flies as in creative (0.05 a tick, twice that with the sprint key), but
+ * through the blocks rather than against them, so a tick is only the speed and
+ * the integration: nothing here looks at the world's shape. */
+static void spectate_tick(uint32_t keys, uint32_t pressed) {
+  if (pressed & K_SNEAK) spectate = -1;   /* alpha: out of the entity (Minecraft's dismount key) */
+  if (pressed & K_ATTACK && spec_target >= 0 && spec_target < N_ENT && ents[spec_target].type != E_NONE)
+    spectate = spec_target;   /* OK on a mob under the crosshair: through its eyes */
+  if (spectate >= 0 && spectate < N_ENT && ents[spectate].type != E_NONE) {
+    const Entity *e = &ents[spectate];
+    pl.x = e->x, pl.y = e->y, pl.z = e->z;
+    pl.vx = e->vx, pl.vy = e->vy, pl.vz = e->vz;
+    pl.yaw = e->yaw, pl.pitch = e->pitch;
+    pl.sprinting = false;
+    /* the eyes where a mob aims from (mob.c: 0.85 of its height); other entities
+     * are seen from where they are */
+    spec_eye = e->type >= E_ZOMBIE && e->type <= E_CHICKEN ? mob_height(e->type) * 0.85f : 0.0f;
+    return;
+  }
+  spectate = -1, spec_eye = 0;
+  float fwd = (keys & K_FWD ? 1.0f : 0) - (keys & K_BACKW ? 1.0f : 0);
+  float strafe = (keys & K_STRAFE_L ? 1.0f : 0) - (keys & K_STRAFE_R ? 1.0f : 0);
+  pl.sneaking = false;
+  pl.sprinting = (keys & K_SPRINT) != 0;
+  fwd *= 0.98f, strafe *= 0.98f;
+  if (keys & K_JUMP) pl.vy += 0.15f;
+  if (keys & K_SNEAK) pl.vy -= 0.15f;
+  move_flying(strafe, fwd, pl.sprinting ? 0.1f : 0.05f);
+  pl.x += pl.vx, pl.y += pl.vy, pl.z += pl.vz;
+  if (pl.y < 0.5f) pl.y = 0.5f, pl.vy = 0;                          /* the bottom of the world */
+  if (pl.y > (float)(WORLD_H + 24)) pl.y = (float)(WORLD_H + 24), pl.vy = 0;   /* above the clouds */
+  pl.vx *= 0.91f, pl.vy *= 0.6f, pl.vz *= 0.91f;
+  pl.on_ground = false;
+  pl.walked = pl.prev_walked = pl.bob = pl.prev_bob = 0;
+  pl.in_water = in_liquid();
+}
+
 void player_tick(uint32_t keys, uint32_t pressed) {
   if (pl.dead) return;
+  if (pl.mode == 2) {
+    spectate_tick(keys, pressed);
+    return;
+  }
   if (pl.sleep_timer) {
     /* asleep: after 100 ticks the night is over (WorldServer.wakeAllPlayers); a key gets you up */
     if (++pl.sleep_timer >= 100) {
@@ -866,30 +939,22 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   fwd *= 0.98f;
   strafe *= 0.98f;
   if (pl.sneaking) fwd *= 0.3f, strafe *= 0.3f;
-  if (pl.using_ticks) fwd *= 0.2f, strafe *= 0.2f, sprint_timer = 0;   /* eating slows you down */
-  /* EntityPlayerSP.onLivingUpdate: forward pressed twice within 7 ticks on the ground, or with the
-   * sprint key, sprints until forward is let go, you walk into a wall, sneak or get hungry. With
-   * Sprint: Toggle (Options, Controls) a tap of the key switches it on and off instead: the key
-   * need not be held while walking, but letting go of forward ends it either way */
+  if (pl.using_ticks) fwd *= 0.2f, strafe *= 0.2f;   /* eating slows you down */
+  /* EntityPlayerSP.onLivingUpdate: the sprint key sprints until forward is let go, you walk into
+   * a wall, sneak or get hungry. With Sprint: Toggle (Options, Controls) a tap of the key switches
+   * it on and off instead: the key need not be held while walking, but letting go of forward ends
+   * it either way. Forward pressed twice does nothing: only the key sprints */
   bool fed = pl.food > 6 || pl.mode == 1, went = fwd >= 0.8f * 0.98f;
-  bool key_down = (keys & K_SPRINT) != 0, by_key = (pressed & K_SPRINT) != 0, tap = by_key;
-  if (sprint_timer) sprint_timer--;
-  if (pl.on_ground && !was_fwd && went && !pl.using_ticks) {
-    if (sprint_timer) tap = true;
-    else sprint_timer = 7;   /* (the first press: 7 ticks for another) */
-  }
+  bool key_down = (keys & K_SPRINT) != 0, key_tap = (pressed & K_SPRINT) != 0;
   if (opt.sprint_toggle) {
-    if (tap) pl.sprinting = !pl.sprinting && fed && !pl.using_ticks;
-  } else if (fed && !pl.using_ticks) {
-    /* Hold: the sprint key held while walking, or forward twice. One started by the key runs only
-     * while the key is held; one started by forward twice carries on while forward is held */
-    if (tap) pl.sprinting = true, sprint_keyed = by_key;
-    else if (went && key_down) pl.sprinting = true, sprint_keyed = true;
+    if (key_tap) pl.sprinting = !pl.sprinting && fed && !pl.using_ticks;
+  } else if (key_down && went && fed && !pl.using_ticks) {
+    /* Hold: the sprint key held while walking; it runs only while the key is held */
+    pl.sprinting = true;
   }
   if (pl.sprinting && (hit_wall || !went || pl.sneaking || !fed || pl.using_ticks ||
-                       (!opt.sprint_toggle && sprint_keyed && !key_down)))
+                       (!opt.sprint_toggle && !key_down)))
     pl.sprinting = false;
-  was_fwd = went;
   pl.in_water = in_liquid();
   /* creative: jump twice quickly to fly or land */
   if (jump_timer) jump_timer--;

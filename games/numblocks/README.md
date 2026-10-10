@@ -12,6 +12,7 @@ Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1
 - **Building:** 250 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
 - **Fire:** light it with flint and steel. It spreads and burns wood, leaves and wool, like in 1.8.
 - **Creative mode:** fly, every block and item, break things at once, and search for any block.
+- **Spectator mode:** fly through the blocks and see through them, nothing to touch, and OK on a mob sees the world through its eyes.
 - **Commands:** /gamemode, /give, /time, /weather, /tp and more, with cheats on (Allow Cheats, or Open to LAN).
 - **Your worlds:** keep several, give them names, and they save as you play and when you quit. A copy also goes into `numblocks_saves.py`, so installing the game again doesn't erase them.
 
@@ -22,8 +23,8 @@ Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1
 | Arrows | Look around |
 | , π √ x² | Walk forward, left, back, right (like W, A, S, D) |
 | shift | Jump (twice in Creative: fly) |
-| alpha | Sneak |
-| i | Sprint (or press forward twice) |
+| alpha | Sneak (in Spectator: sink while flying, leave a mob's eyes) |
+| i | Sprint |
 | OK | Mine, attack (like the left mouse button) |
 | Back | Place, use, eat (like the right mouse button) |
 | var | Inventory |
@@ -33,9 +34,12 @@ Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1
 | × | Chat |
 | ÷ | Type a command (toolbox finishes words) |
 | ans | Pause |
+| sin + cos | Game mode switcher: Creative / Survival / Spectator (needs cheats) |
 | Home | Save and quit |
 
-You can change these keys in Options, then Controls, where Sprint chooses between holding the i key and switching sprinting on with a tap. In the inventory, the arrows move between slots, OK picks up or puts down, EXE takes or leaves one, and shift with OK moves a whole stack. To spread a stack, hold OK and move over the slots: it splits evenly when you let go (hold EXE to drop one in each). In Creative, the Search Items tab finds blocks as you type, and shift with up or down jumps to the top or bottom of a tab. The game shows these keys the first time you open it, and again from Options, then Controls.
+You can change these keys in Options, then Controls, where Sprint chooses between holding the i key and switching sprinting on with a tap. Press sin and cos together to switch game mode, as modern Minecraft does with F3 and F4: the modes appear in the middle of the screen with the one last used outlined, cos moves the outline along them, and letting go of sin (or pressing OK) takes the one outlined — Back leaves without changing anything. It needs cheats on, which Open to LAN gives, and without them the chat says so, as with the command it runs. In the inventory, the arrows move between slots, OK picks up or puts down, EXE takes or leaves one, and shift with OK moves a whole stack. To spread a stack, hold OK and move over the slots: it splits evenly when you let go (hold EXE to drop one in each). In Creative, the Search Items tab finds blocks as you type, and shift with up or down jumps to the top or bottom of a tab. The game shows these keys the first time you open it, and again from Options, then Controls.
+
+Spectator, as `/gamemode spectator` or the switcher's third slot, is Minecraft's: you always fly, through every block, with nothing to touch — no mining, placing, eating or opening, no damage, and no mob noticing you, so the world goes on living around you. Its whole HUD is the crosshair, and that only while it is on a mob: OK then sees the world through that mob's eyes, at its eye height, turning where it looks, until alpha brings you back to your own flying body. Flying into the ground, the rock around your head turns see-through — you see the cave walls and the grass above through the stone, as in Minecraft.
 
 ## Get it
 

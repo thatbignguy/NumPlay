@@ -230,10 +230,12 @@ const char *const mob_name[8] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig
  * and the world remembers the ones set. Minecraft keeps that in the spawner's tile entity; here it
  * is a small table by position, which the world's record saves. A farm has two or three of them,
  * so twenty-four is plenty and costs 240 bytes of RAM. The table also notes the spawners nobody
- * has set (the dungeons', and ones fresh from the inventory) with mob 0, so the once-a-second scan
- * and the picture find them again without looking the blocks over every frame. A spawner nobody
- * has set is empty, as Minecraft's are until an egg is used on one: no egg turning inside it and
- * no mobs out of it, whichever mob the place would otherwise be given. */
+ * has set (ones fresh from the inventory) with mob 0, so the once-a-second scan and the picture
+ * find them again without looking the blocks over every frame. The world's own spawners, the
+ * dungeon ones, are set when they are placed: the spawner of the table comes back (as a spawn egg
+ * would have set it) with its mob, so the table keeps them and the record saves them. A spawner
+ * nobody has set (one from the inventory) is empty: no mob turning inside it and no mobs out of it
+ * until an egg is used on one. */
 typedef struct { int32_t x, z; uint8_t y, mob; } Spawner;
 static Spawner spawners[SPAWNERS_MAX];
 static int n_spawners;
@@ -268,6 +270,14 @@ static void note(int x, int y, int z, int mob) {
 
 void spawners_set(int x, int y, int z, int mob) { note(x, y, z, mob); }
 void spawners_note(int x, int y, int z) { note(x, y, z, -1); }   /* fresh from the inventory */
+
+/* world generation placed a spawner (a dungeon's): the mob its own draw made of it
+ * (WorldGenDungeons.a: its nextInt(4), two of the four a skeleton, one a zombie, one a spider).
+ * The draw is the generator's, come back through gen_spawner_hook, so the same dungeon has the same
+ * mob whenever the world is made, and the place is set as a spawn egg on it would have set it. */
+static const uint8_t dungeon_mob[4] = {E_SKELETON, E_SKELETON, E_ZOMBIE, E_SPIDER};
+
+void spawners_made(int x, int y, int z, int mob) { spawners_set(x, y, z, dungeon_mob[mob & 3]); }
 
 void spawners_clear(void) { n_spawners = 0; }
 
@@ -978,10 +988,11 @@ void mob_tick(Entity *e) {
     } else if (e->love > 0 && e->gx != e->x) {
       go = true;   /* (to its mate: set above) */
       e->tx = (int16_t)ifl(e->gx), e->tz = (int16_t)ifl(e->gz);
-    } else if (food && held()->id == food && dist < 10 && !pl.dead) {
+    } else if (food && held()->id == food && dist < 10 && !pl.dead && pl.mode != 2) {
       /* EntityAITempt: after the player holding its food, up to 2.5 blocks away. It looks at
        * them on its way in, and beside them it watches them for a while like any other watch
-       * (vanilla holds that look for as long as the food is out; here it is timed) */
+       * (vanilla holds that look for as long as the food is out; here it is timed).
+       * (a spectator is not noticed: it is not there, as far as the world is concerned) */
       e->tx = (int16_t)ifl(pl.x), e->tz = (int16_t)ifl(pl.z);
       go = dist > 2.5f, look = go;
     } else {

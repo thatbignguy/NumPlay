@@ -57,6 +57,7 @@ static int map_key(KeySym k) {
     case XK_l: return 20;                   /* log: pick block */
     case XK_w: case XK_comma: return 22;    /* forward */
     case XK_F3: case XK_f: return 24;       /* sin: debug overlay */
+    case XK_F4: case XK_g: return 25;       /* cos: with sin, the game mode switcher */
     case XK_a: return 27;                   /* strafe left */
     case XK_s: return 28;                   /* backwards */
     case XK_d: return 29;                   /* strafe right */

@@ -29,6 +29,8 @@ ALONE = {
                      "NumPlay: install it on its own"),
     "championisland": ("Champion Island", "the Doodle Champion Island Games. Too big to share the calculator with "
                        "NumPlay: install it on its own"),
+    "numblocks": ("NumBlocks", "mine, craft, survive in a world like Minecraft 1.8. Too big to share the calculator "
+                  "with NumPlay: install it on its own"),
 }
 VARIANTS = [
     ("NumPlay-Invisible.nwa", "The same app, hidden: a blank icon with no name"),

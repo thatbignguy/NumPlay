@@ -40,6 +40,8 @@ static void slab(int cx, int cz) {
 }
 
 int main(void) {
+    uint8_t gs[GEN_SCRATCH];
+    gen_scratch(gs);
     gen_init(SEED);
     phase = 1;
     /* world load: 4 x 3 chunks */

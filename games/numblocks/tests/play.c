@@ -4,8 +4,12 @@
  *        [--showcase]   (the hotbar of the README's GIF: TNT, flint and steel, water and lava, blocks)
  *        [--spawner]    (a monster spawner hanging in the air in front of the player, unset, and the eggs to set it with)
  *        [--distance 1..2]   (render distance, default: the saved option, 2 chunks)
+ *        [--flat]       (a superflat world)
+ *        [--spectator]  (spectator mode: flying through the blocks, nothing to touch)
+ *        [--spectate N] (with --mobs: the spectator's camera is the N-th mob's, 0..7)
  *
- * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9. */
+ * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
+ * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,13 +18,17 @@
 #include "../src/nb.h"
 
 extern uint32_t host_keys, host_time;
+extern uint64_t host_raw;   /* the calculator's own key numbers (plat_scan) */
 void host_shot(const char *path);
 void game_init(void);
 bool game_frame(void);
 
 typedef struct { int a, b; uint32_t k; } Hold;
+typedef struct { int a, b, k; } RHold;   /* the calculator's own key numbers (plat_scan) */
 static Hold holds[512];
 static int nholds;
+static RHold rholds[64];
+static int nrholds;
 
 static uint32_t key_bit(const char *s) {
   static const struct { const char *n; uint32_t k; } t[] = {
@@ -38,8 +46,10 @@ int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
+  int spectator = 0, ride = -1, flat = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
+  int cheats = 0;
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--ms-per-frame") && i + 1 < argc) mspf = atoi(argv[++i]);
@@ -52,6 +62,10 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--torches")) torches = 1;
     else if (!strcmp(argv[i], "--water")) water = 1;
     else if (!strcmp(argv[i], "--creative")) creative = 1;
+    else if (!strcmp(argv[i], "--flat")) flat = 1;
+    else if (!strcmp(argv[i], "--spectator")) spectator = 1;
+    else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "--cheats")) cheats = 1;
     else if (!strcmp(argv[i], "--build")) build = 1;
     else if (!strcmp(argv[i], "--spawner")) spawner = 1;
     else if (!strcmp(argv[i], "--rain")) rain = 1;
@@ -72,11 +86,21 @@ int main(int argc, char **argv) {
         else if (sscanf(t, "%d:%15s", &a, k) == 2) holds[nholds++] = (Hold){a, a, key_bit(k)};
       }
     }
+    else if (!strcmp(argv[i], "--raws") && i + 1 < argc) {
+      char *s = strdup(argv[++i]);
+      for (char *t = strtok(s, ","); t && nrholds < 64; t = strtok(NULL, ",")) {
+        int a, b, k;
+        if (sscanf(t, "%d-%d:%d", &a, &b, &k) == 3) rholds[nrholds++] = (RHold){a, b, k};
+        else if (sscanf(t, "%d:%d", &a, &k) == 2) rholds[nrholds++] = (RHold){a, a, k};
+      }
+    }
   }
   mkdir(out, 0755);
   clock_t c0 = clock();
   extern bool start_in_world;
+  extern int start_type;
   start_in_world = !title_screen;
+  start_type = flat ? WT_FLAT : WT_DEFAULT;
   game_init();
   if (give) {
     /* a test kit: tools, blocks, food, armour */
@@ -104,6 +128,8 @@ int main(int argc, char **argv) {
     game_time = (uint32_t)start_time;
   }
   if (creative) pl.mode = 1;
+  if (spectator) pl.mode = 2, pl.flying = true;
+  if (cheats) world_cheats = true;   /* the new world starts without them; the switcher needs them */
   if (distance >= 1 && distance <= 2) opt.distance = (uint8_t)distance;
   if (rain) {
     /* raining (and storming) from the start, for long enough */
@@ -153,6 +179,7 @@ int main(int argc, char **argv) {
       Entity *e = ent_new(E_ZOMBIE + k, x, (float)fy, z);
       if (e) e->health = 20, e->yaw = 180, e->gx = e->x, e->gz = e->z;
     }
+    if (ride >= 0 && ride < N_ENT) spectate = (int8_t)ride;   /* the spectator's camera on the k-th mob */
   }
   if (torches) {
     /* torches around, for the night */
@@ -180,8 +207,11 @@ int main(int argc, char **argv) {
   int slowest_at = 0;
   for (int f = 0; f < frames; f++) {
     host_keys = 0;
+    host_raw = 0;
     for (int i = 0; i < nholds; i++)
       if (f >= holds[i].a && f <= holds[i].b) host_keys |= holds[i].k;
+    for (int i = 0; i < nrholds; i++)
+      if (f >= rholds[i].a && f <= rholds[i].b) host_raw |= 1LL << rholds[i].k;
     host_time += mspf;
     clock_t f0 = clock();
     if (!game_frame()) break;

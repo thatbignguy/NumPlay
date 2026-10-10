@@ -146,6 +146,7 @@ APP_numvisuals = games/numvisuals/output/numvisuals.nwa:NumVisuals.nwa
 APP_celeste = games/celeste/output/celeste.nwa:Celeste.nwa
 APP_championisland = games/championisland/output/championisland.nwa:ChampionIsland.nwa
 APP_hollowknight = games/hollowknight/output/hollowknight.nwa:HollowKnight.nwa
+APP_numblocks = games/numblocks/output/numblocks.nwa:NumBlocks.nwa
 
 apps: | $(B)
 	$(MAKE) -C games/numdash build NWLINK="node node_modules/nwlink/bin/nwlink"
@@ -159,6 +160,7 @@ apps: | $(B)
 	$(MAKE) -C games/celeste build NWLINK="$(NWLINK)"
 	$(MAKE) -C games/championisland build NWLINK="$(NWLINK)"
 	$(MAKE) -C games/hollowknight build NWLINK="$(NWLINK)"
+	$(MAKE) -C games/numblocks build NWLINK="$(NWLINK)"
 	cd games/tetris/tetris && NWLINK="$(NWLINK)" $(CARGO) build --release --quiet
 	cp $(word 1,$(subst :, ,$(APP_numdash))) $(B)/apps/$(word 2,$(subst :, ,$(APP_numdash)))
 	cp $(word 1,$(subst :, ,$(APP_crossyroad))) $(B)/apps/$(word 2,$(subst :, ,$(APP_crossyroad)))
@@ -172,6 +174,7 @@ apps: | $(B)
 	cp $(word 1,$(subst :, ,$(APP_celeste))) $(B)/apps/$(word 2,$(subst :, ,$(APP_celeste)))
 	cp $(word 1,$(subst :, ,$(APP_championisland))) $(B)/apps/$(word 2,$(subst :, ,$(APP_championisland)))
 	cp $(word 1,$(subst :, ,$(APP_hollowknight))) $(B)/apps/$(word 2,$(subst :, ,$(APP_hollowknight)))
+	cp $(word 1,$(subst :, ,$(APP_numblocks))) $(B)/apps/$(word 2,$(subst :, ,$(APP_numblocks)))
 	arm-none-eabi-strip --strip-unneeded $(B)/apps/Tetris.nwa
 
 STD_APPS = $(foreach g,$(STD_GAMES),$(B)/apps/$(NWA_$(g)))

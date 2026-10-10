@@ -271,7 +271,8 @@ static void fmt1(float v, char *out) {
 /* Minecraft 1.8 F3, top-left white text with shadow: version, XYZ feet, velocity, block + chunk,
  * facing cardinal + yaw/pitch, biome, light, FPS + time. 8 short lines for 320x240. */
 static void debug_overlay(void) {
-  if (!opt.debug || gui != GUI_NONE) return;
+  /* over the world: the game mode switcher (sin + cos) keeps it, as Minecraft's does */
+  if (!opt.debug || (gui != GUI_NONE && gui != GUI_MODE)) return;
   /* built once a frame (hud runs once a strip, ~30 times): the player and the
    * time stay put mid-frame, so every strip draws the same strings */
   static uint32_t built_for = (uint32_t)-1;
@@ -281,7 +282,9 @@ static void debug_overlay(void) {
     extern uint32_t game_time;
     int bx = (int)floorf(pl.x), by = (int)floorf(pl.y), bz = (int)floorf(pl.z);
     int cx = chunk_of(bx), cy = chunk_of(by), cz = chunk_of(bz);
-    int bio = gen_biome(bx, bz);
+    /* the biome of the column the player is in, as the renderer has it (the same answer
+     * gen_biome gives for a column of the cache, without calling the generator) */
+    int bio = world_loaded(bx, 1, bz) ? vbiome[(bz - vc_z0) * VCX + bx - vc_x0] : -1;
     int sky = 0, blk = 0;
     if (world_loaded(bx, by, bz)) {
       int i = VC_I(bx - vc_x0, by - vc_y0, bz - vc_z0);
@@ -493,6 +496,84 @@ static void chat_lines(void) {
   }
 }
 
+/* ---------------------------------------------------------------- the game mode switcher (GuiGameModeSwitcher) */
+/* Minecraft 1.16+ picks a game mode with F3 + F4: the modes in a row, each with
+ * its icon inside the switcher's own panel, the one picked in its outline, and the
+ * key that goes to the next one under them. On the calculator sin is F3 (the debug
+ * overlay) and cos, the key beside it, is F4, so the pair is sin + cos. The panel,
+ * the slot and the outline are the modern client's gui/container/gamemode_switcher
+ * and gui/sprites/gamemode_switcher. Only with cheats on, as the switcher is the
+ * /gamemode command and gives the message it gives without them. */
+#define N_MODES 3
+#define MODE_W 125
+#define MODE_H 75
+#define SLOT_DY 26       /* the slots' row, from the panel's top */
+#define SLOT_DX 30       /* a slot and the empty space after it */
+static const int mode_of[N_MODES] = {1, 0, 2};   /* the mode of each slot: Creative, Survival, Spectator */
+static const char *const mode_name[N_MODES] = {"Creative", "Survival", "Spectator"};
+static uint8_t mode_sel;                      /* the slot outlined */
+
+/* Minecraft opens it on Creative if in any other mode, and on Survival if in
+ * Creative */
+static int slot_of(int m) { return m == 1 ? 0 : m == 2 ? 2 : 1; }   /* the slot of a game mode */
+
+void mode_open(void) {
+  if (gui != GUI_NONE) return;   /* (over the world, as in Minecraft) */
+  if (!cheats_on()) {
+    /* what /gamemode says without cheats: the switcher is that command */
+    chat_add("You do not have permission to use this command", CHAT_RED);
+    return;
+  }
+  mode_sel = slot_of(pl.mode == 1 ? 0 : 1);   /* the other mode */
+  gui = GUI_MODE;
+}
+
+void mode_next(void) { mode_sel = (mode_sel + 1) % N_MODES; }
+
+void mode_use(void) {
+  player_set_mode(mode_of[mode_sel]);
+  gui = GUI_NONE;
+}
+
+void mode_cancel(void) { gui = GUI_NONE; }
+
+static const char *key_name(int k);
+
+/* the panel: Minecraft's, bar and frame opaque and its body on the world through
+ * it, so the world behind is tinted and only the frame is drawn over */
+static void mode_panel(int x, int y) {
+  tint_rect(x + 1, y + 22, MODE_W - 2, 50, RGB(0x21, 0x21, 0x21), 13);   /* 40%, as alpha 102 */
+  sprite_part(SP_GM_BG, x, y, 0, 0, MODE_W, 22);                         /* the bar and its frame */
+  sprite_part(SP_GM_BG, x, y + 72, 0, 72, MODE_W, 3);                     /* the bottom frame */
+  sprite_part(SP_GM_BG, x, y + 22, 0, 22, 1, 50);                         /* the sides */
+  sprite_part(SP_GM_BG, x + MODE_W - 1, y + 22, MODE_W - 1, 22, 1, 50);
+}
+
+static void mode_screen(void) {
+  int x0 = (SCREEN_W - MODE_W) / 2, y0 = (SCREEN_H - MODE_H) / 2;
+  mode_panel(x0, y0);
+  /* the bar: the mode the outline is on, as Minecraft names it */
+  char t[24];
+  strcpy(t, mode_name[mode_sel]);
+  strcat(t, " Mode");
+  text_center(t, x0 + MODE_W / 2, y0 + 8, 0xFFFF);
+  /* the modes, in the middle of the panel, the one picked inside its outline */
+  int row = N_MODES * 26 + (N_MODES - 1) * (SLOT_DX - 26);
+  int sx = x0 + (MODE_W - row) / 2, sy = y0 + SLOT_DY;
+  for (int i = 0; i < N_MODES; i++) {
+    int x = sx + i * SLOT_DX;
+    sprite(i == mode_sel ? SP_GM_SEL : SP_GM_SLOT, x, sy);
+    int ic = mode_of[i] == 1 ? blk_icon[B_GRASS] : mode_of[i] == 2 ? SP_EYE : item_icon(I_IRON_SWORD);
+    if (ic >= 0) sprite(ic, x + 5, sy + 5);
+  }
+  /* under them: the key that goes to the next one, as Minecraft's "[F4] Next" */
+  char k[16];
+  strcpy(k, "[");
+  strcat(k, key_name(opt.keys[A_DEBUG] < 64 ? opt.keys[A_DEBUG] + 1 : 25));
+  strcat(k, "] Next");
+  text_center(k, x0 + MODE_W / 2, y0 + 57, 0xFFFF);
+}
+
 /* ---------------------------------------------------------------- the HUD (GuiIngame) */
 static int name_timer, last_slot = -1, last_id;
 
@@ -500,19 +581,23 @@ static void hud(void) {
   debug_overlay();
   int hx = (SCREEN_W - 182) / 2, hy = SCREEN_H - 22;
   if (gui == GUI_NONE || gui == GUI_CHAT) {
-    /* Minecraft draws its crosshair inverting what is behind it */
-    for (int k = -4; k <= 4; k++) {
-      int pts[2][2] = {{SCREEN_W / 2 + k, SCREEN_H / 2}, {SCREEN_W / 2, SCREEN_H / 2 + k}};
-      for (int p = 0; p < 2; p++) {
-        if (p == 1 && k == 0) continue;
-        int x = pts[p][0], y = pts[p][1];
-        if (y < clip_y0 || y >= clip_y1) continue;
-        uint16_t *d = row_at(y) + x;
-        *d = (uint16_t)~*d;
+    /* Minecraft draws its crosshair inverting what is behind it. A spectator's
+     * whole HUD is that crosshair, and it only shows while it is on a mob: the
+     * one OK would take the eyes of */
+    if (pl.mode != 2 || spec_target >= 0)
+      for (int k = -4; k <= 4; k++) {
+        int pts[2][2] = {{SCREEN_W / 2 + k, SCREEN_H / 2}, {SCREEN_W / 2, SCREEN_H / 2 + k}};
+        for (int p = 0; p < 2; p++) {
+          if (p == 1 && k == 0) continue;
+          int x = pts[p][0], y = pts[p][1];
+          if (y < clip_y0 || y >= clip_y1) continue;
+          uint16_t *d = row_at(y) + x;
+          *d = (uint16_t)~*d;
+        }
       }
-    }
   }
   if (clip_y1 <= SCREEN_H - 60) return;
+  if (pl.mode == 2) return;   /* a spectator holds nothing: no hotbar, and nothing to eat, live or level */
   sprite(SP_HOTBAR, hx, hy);
   sprite(SP_HOTBAR_SEL, hx - 1 + pl.slot * 20, hy - 1);
   for (int i = 0; i < 9; i++) draw_stack(&pl.inv[i], hx + 3 + i * 20, hy + 3);
@@ -688,7 +773,11 @@ void gui_tick(void) {
 /* ---------------------------------------------------------------- container screens */
 enum { SL_NORMAL, SL_RESULT, SL_OUTPUT, SL_ARMOR, SL_FUEL, SL_CREATIVE, SL_TAB, SL_TRASH };
 typedef struct { int16_t x, y; uint8_t kind, k; Stack *s; } Slot;
-static Slot slots[72];
+#define N_SLOTS 72
+/* the open screen's slots, in the buffer of whoever is using them (layout_slots fills it,
+ * as the screen is laid out again for whoever reads them): nobody keeps them from one use to
+ * the next. What carries over between two uses is the drag, in `dragged` below. */
+static Slot *slots;
 static int drag;                      /* spreading a stack (below): 0, 1 even shares (OK), 2 one each (EXE) */
 static uint8_t dragged[72], ndragged;
 static int nslots, cur, panel_x, panel_y, panel_h, grid_w;
@@ -770,27 +859,22 @@ static void creative_refresh(void) {
 }
 
 static int origin_x, origin_y, origin_z;
+/* the open screen's state that outlives this opening: which chest or furnace it shows, where
+ * the cursor parks, what its crafting grid is. Its slots are laid out for use, not kept:
+ * layout_slots below, for whoever reads them. */
 void gui_open(int screen, int x, int y, int z) {
   gui = screen;
-  nslots = 0;
   cur = 0, drag = 0, ndragged = 0;
   grid = NULL;
   origin_x = x, origin_y = y, origin_z = z;
   panel_h = 166;
   switch (screen) {
     case GUI_INVENTORY:
-      add_slot(144, 36, SL_RESULT, 0, &result);
-      for (int i = 0; i < 4; i++) add_slot(88 + (i & 1) * 18, 26 + (i >> 1) * 18, SL_NORMAL, 0, &pl.craft[i]);
-      for (int i = 0; i < 4; i++) add_slot(8, 8 + i * 18, SL_ARMOR, (uint8_t)(3 - i), &pl.armor[3 - i]);
-      add_player_slots(84, 142);
       grid = pl.craft, grid_w = 2;
       cur = 5 + 4 + 27;   /* the first hotbar slot */
       break;
     case GUI_CRAFTING:
-      add_slot(124, 35, SL_RESULT, 0, &result);
       memset(table_grid, 0, sizeof table_grid);
-      for (int i = 0; i < 9; i++) add_slot(30 + (i % 3) * 18, 17 + (i / 3) * 18, SL_NORMAL, 0, &table_grid[i]);
-      add_player_slots(84, 142);
       grid = table_grid, grid_w = 3;
       cur = 10 + 27;
       break;
@@ -800,11 +884,61 @@ void gui_open(int screen, int x, int y, int z) {
         gui = GUI_NONE;
         return;
       }
+      cur = 3 + 27;
+      break;
+    case GUI_CREATIVE:
+      if (csurv) {
+        /* the Survival Inventory tab: Minecraft's creative survival inventory (IMG_TAB_INVENTORY):
+           the player in the middle, two armour slots on each side, the main inventory, the hotbar
+           and the destroy slot. No crafting: this is creative mode. The offhand slot on the left
+           has no slot: NumBlocks has no offhand to put in it. */
+        panel_h = 136;
+        cur = 4 + 27;   /* the first hotbar slot */
+      } else {
+        cscroll = 0;
+        creative_refresh();
+        panel_h = 136;
+        cur = 45;
+      }
+      break;
+    case GUI_CHEST:
+      chest = chest_at(x, y, z, true);
+      if (!chest) {
+        gui = GUI_NONE;
+        return;
+      }
+      panel_h = 167;
+      cur = 27 + 27;
+      break;
+  }
+  panel_x = (SCREEN_W - (screen == GUI_CREATIVE ? 195 : 176)) / 2;
+  panel_y = (SCREEN_H - panel_h) / 2;
+  update_result();
+}
+
+/* the open screen's slots, in a buffer of the caller's (N_SLOTS of them at most), laid out for
+ * whoever reads them: the input handler and the drawing, one after the other. The same slots in
+ * the same order gui_open used to build once, so the cursor's index means the same slot. */
+static void layout_slots(Slot *buf) {
+  slots = buf;
+  nslots = 0;
+  switch (gui) {
+    case GUI_INVENTORY:
+      add_slot(144, 36, SL_RESULT, 0, &result);
+      for (int i = 0; i < 4; i++) add_slot(88 + (i & 1) * 18, 26 + (i >> 1) * 18, SL_NORMAL, 0, &pl.craft[i]);
+      for (int i = 0; i < 4; i++) add_slot(8, 8 + i * 18, SL_ARMOR, (uint8_t)(3 - i), &pl.armor[3 - i]);
+      add_player_slots(84, 142);
+      break;
+    case GUI_CRAFTING:
+      add_slot(124, 35, SL_RESULT, 0, &result);
+      for (int i = 0; i < 9; i++) add_slot(30 + (i % 3) * 18, 17 + (i / 3) * 18, SL_NORMAL, 0, &table_grid[i]);
+      add_player_slots(84, 142);
+      break;
+    case GUI_FURNACE:
       add_slot(56, 17, SL_NORMAL, 0, &furnace->s[0]);
       add_slot(56, 53, SL_FUEL, 0, &furnace->s[1]);
       add_slot(116, 35, SL_OUTPUT, 0, &furnace->s[2]);
       add_player_slots(84, 142);
-      cur = 3 + 27;
       break;
     case GUI_CREATIVE:
       if (csurv) {
@@ -818,34 +952,18 @@ void gui_open(int screen, int x, int y, int z) {
         add_slot(107, 32, SL_ARMOR, 0, &pl.armor[0]);  /* the boots, below them */
         add_player_slots(52, 111);
         add_slot(170, 111, SL_TRASH, 0, &trash);   /* Minecraft's destroy slot, at the far right */
-        panel_h = 136;
-        cur = 4 + 27;   /* the first hotbar slot */
       } else {
         for (int i = 0; i < 45; i++) add_slot(9 + (i % 9) * 18, 18 + (i / 9) * 18, SL_CREATIVE, (uint8_t)i, &cshown[i]);
         for (int c = 0; c < 9; c++) add_slot(9 + c * 18, 112, SL_NORMAL, 0, &pl.inv[c]);
-        cscroll = 0;
-        creative_refresh();
-        panel_h = 136;
-        cur = 45;
       }
       for (int t = 0; t < 13; t++)
         if (t != TAB_BREW) add_slot(tab_x(t) + 6, t < 6 ? -28 + 9 : panel_h + 2, SL_TAB, (uint8_t)t, &ctabs[t]);
       break;
     case GUI_CHEST:
-      chest = chest_at(x, y, z, true);
-      if (!chest) {
-        gui = GUI_NONE;
-        return;
-      }
       for (int i = 0; i < 27; i++) add_slot(8 + (i % 9) * 18, 18 + (i / 9) * 18, SL_NORMAL, 0, &chest->s[i]);
       add_player_slots(85, 143);
-      panel_h = 167;
-      cur = 27 + 27;
       break;
   }
-  panel_x = (SCREEN_W - (screen == GUI_CREATIVE ? 195 : 176)) / 2;
-  panel_y = (SCREEN_H - panel_h) / 2;
-  update_result();
 }
 
 void gui_close(void) {
@@ -916,6 +1034,7 @@ static void click(Slot *sl, int button) {
     if (t == TAB_SURV) csurv = 1;
     else csurv = 0, ctab = t, cscroll = 0, csearch[0] = 0;
     gui_open(GUI_CREATIVE, 0, 0, 0);
+    layout_slots(slots);   /* the tabs' slots changed with the tab */
     /* stay on the picked tab, so the tabs can be browsed (gui_open parks on the hotbar) */
     for (int i = 0; i < nslots; i++)
       if (slots[i].kind == SL_TAB && slots[i].k == t) {
@@ -1127,7 +1246,10 @@ static void move_cursor(int dx, int dy) {
  * GuiMainMenu, GuiSelectWorld, GuiCreateWorld, GuiCreateFlatWorld/GuiFlatPresets,
  * GuiYesNo, GuiOptions, GuiIngameMenu, GuiGameOver: their buttons where 1.8 puts them. */
 typedef struct { int16_t x, y, w; uint8_t on, id; char label[FLAT_MAX + 1]; } Button;
-static Button buttons[12];
+#define N_BUTTONS 12
+/* the screen's buttons, in the buffer of whoever is using them (menu, below, fills it):
+ * nobody keeps them from one use to the next */
+static Button *buttons;
 static int nbuttons, bcur;
 enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCEL, B_MODE, B_SEED, B_DOCREATE,
        B_DODELETE, B_DIFF, B_GFX, B_LOOK, B_CLOUDS, B_BOB, B_DONE, B_BACK_GAME, B_SAVEQUIT, B_RESPAWN, B_TITLE,
@@ -1180,7 +1302,7 @@ static uint8_t f_digits, f_caps;   /* (f_caps: 1 the next letter, 2 all of them)
 static bool f_sel;              /* the text is selected: the first key typed replaces it (an arrow keeps it) */
 static int f_cur;               /* the cursor: where the next letter goes, what backspace takes */
 static uint64_t raw_held;
-static void press(int id);
+static void press(Button *buttons, int id);
 static char key_char(int k) {
   static const char letters[53] = {[18] = 'a', [19] = 'b', [20] = 'c', [21] = 'd', [22] = 'e', [23] = 'f', [24] = 'g',
                                    [25] = 'h', [26] = 'i', [27] = 'j', [28] = 'k', [29] = 'l', [30] = 'm', [31] = 'n',
@@ -1207,7 +1329,7 @@ static void field_open(int f) {
   f_cur = (int)strlen(t);
   raw_held = ~(uint64_t)0;   /* (the key that opened it is not typed) */
 }
-static void field_input(void) {
+static void field_input(Button *buttons) {
   uint64_t raw = plat_scan(), down = raw & ~raw_held;
   raw_held = raw;
   char *t = field == F_NAME ? name_text : field == F_FLAT ? flat_text : seed_text;
@@ -1233,13 +1355,13 @@ static void field_input(void) {
       if (gui == GUI_RENAME && k != RK_BACK && name_text[0]) {
         /* (OK in the rename screen's field: rename, as Enter does) */
         field = F_NONE;
-        press(B_DORENAME);
+        press(buttons, B_DORENAME);
         return;
       }
       if (gui == GUI_FLAT && k != RK_BACK) {
         /* (OK in the preset field: use it, as Enter does) */
         field = F_NONE;
-        press(B_FLAT_USE);
+        press(buttons, B_FLAT_USE);
         return;
       }
       field = F_NONE;
@@ -1408,7 +1530,10 @@ static void cat(char *d, const char *a, const char *b) {
   *d = 0;
 }
 
-static void menu(int screen) {
+/* the screen's buttons, in a buffer of the caller's (N_BUTTONS of them at most); the labels
+ * follow the screen, so they are filled before each use */
+static void menu(Button *buf, int screen) {
+  buttons = buf;
   nbuttons = 0;
   int w = SCREEN_W, h = SCREEN_H;
   char t[80];
@@ -1541,6 +1666,7 @@ static void menu(int screen) {
 }
 
 void gui_menu(int screen) {
+  Button buttons[N_BUTTONS];
   if (screen == GUI_CONTROLS && gui != GUI_CONTROLS) controls_from = gui;   /* Options, or the title */
   gui = screen;
   bcur = 0;
@@ -1548,7 +1674,7 @@ void gui_menu(int screen) {
   if (screen == GUI_WORLDS) list_worlds();
   if (screen == GUI_KEYS && controls_from != GUI_KEYS) ksel = -1, kcol = 0, kscroll = 0;
   kwait = false;
-  menu(screen);
+  menu(buttons, screen);
 }
 
 /* the world selected in the list */
@@ -1589,7 +1715,7 @@ static void button(const Button *b, bool hover) {
   text_center(b->label, b->x + b->w / 2, b->y + (20 - 8) / 2, col);
 }
 
-static void press(int id) {
+static void press(Button *buttons, int id) {
   WorldInfo wi;
   switch (id) {
     case B_SINGLE: gui_menu(GUI_WORLDS); break;
@@ -1762,7 +1888,7 @@ static void press(int id) {
     case B_RESPAWN: menu_choice = ACT_RESPAWN; break;
     case B_TITLE: menu_choice = ACT_TITLE; break;
   }
-  if (gui != GUI_NONE) menu(gui);
+  if (gui != GUI_NONE) menu(buttons, gui);
 }
 
 static void menu_input(uint32_t keys, uint32_t pressed) {
@@ -1770,10 +1896,11 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     keys_input(pressed);
     return;
   }
-  if (!nbuttons) menu(gui);
+  Button buttons[N_BUTTONS];
+  menu(buttons, gui);
   if (field) {
-    field_input();
-    if (gui != GUI_NONE) menu(gui);
+    field_input(buttons);
+    if (gui != GUI_NONE) menu(buttons, gui);
     return;
   }
   raw_held = plat_scan();
@@ -1790,7 +1917,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
       if (pressed & K_RIGHT) d = d >= 2 ? 2 : d + 1;
       else d = d <= 1 ? 1 : d - 1;
       opt.distance = (uint8_t)d;
-      menu(gui);
+      menu(buttons, gui);
       return;
     }
     if (buttons[bcur].id == B_LOOK) {
@@ -1799,7 +1926,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
       if (pressed & K_RIGHT) v = v >= 200 ? 200 : v + 25;
       else v = v <= 50 ? 50 : v - 25;
       opt.look = (uint8_t)v;
-      menu(gui);
+      menu(buttons, gui);
       return;
     }
   }
@@ -1809,17 +1936,17 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
       bcur = (bcur + dir + nbuttons) % nbuttons;
       if (buttons[bcur].on) break;
     }
-  if (pressed & (K_OK | K_EXE) && buttons[bcur].on) press(buttons[bcur].id);
+  if (pressed & (K_OK | K_EXE) && buttons[bcur].on) press(buttons, buttons[bcur].id);
   else if (pressed & K_BACK) {
     /* Back: the way out of each screen */
     if (gui == GUI_PAUSE) gui = GUI_NONE;
-    else if (gui == GUI_OPTIONS) press(B_DONE);
-    else if (gui == GUI_VIDEO) press(B_VIDEO_DONE);
-    else if (gui == GUI_CTRLMENU) press(B_CTRL_DONE);
-    else if (gui == GUI_CONTROLS) press(B_CONTROLS_DONE);
-    else if (gui == GUI_FLAT) press(B_FLAT_CANCEL);
+    else if (gui == GUI_OPTIONS) press(buttons, B_DONE);
+    else if (gui == GUI_VIDEO) press(buttons, B_VIDEO_DONE);
+    else if (gui == GUI_CTRLMENU) press(buttons, B_CTRL_DONE);
+    else if (gui == GUI_CONTROLS) press(buttons, B_CONTROLS_DONE);
+    else if (gui == GUI_FLAT) press(buttons, B_FLAT_CANCEL);
     else if (gui == GUI_WORLDS || gui == GUI_CREATE || gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LAN)
-      press(B_CANCEL);
+      press(buttons, B_CANCEL);
   }
 }
 
@@ -2014,13 +2141,12 @@ static void key_sheet(void) {
   line[0][0] = line[1][0] = 0;
   bool digits = true;
   for (int a = A_SLOT1; a < A_SLOT1 + 9; a++) digits &= opt.keys[a] == actions[a].key;
-  for (int a = -1; a <= N_ACTIONS && n < 2; a++) {
+  for (int a = -1; a < N_ACTIONS && n < 2; a++) {
     char t[32];
     if (a == -1) {
       if (!digits) continue;
       strcpy(t, "1 to 9: hotbar slot.");
-    } else if (a == N_ACTIONS) strcpy(t, "EXE: as OK.");
-    else {
+    } else {
       int k = opt.keys[a];
       if ((digits && a >= A_SLOT1 && a < A_SLOT1 + 9) || k == 4 || k == 5 || (k >= 12 && k < 30) || k > 51) continue;
       cat(t, key_name(k), ": ");
@@ -2036,12 +2162,13 @@ static void key_sheet(void) {
     strcat(line[n], t);
     len++;
   }
-  static const char *const notes[3] = {"Forward twice: sprint.   Jump twice: fly (Creative).",
-                                       "Menus: OK takes or puts, EXE one, shift+OK moves.",
-                                       "Hold OK and move over slots to spread a stack out."};
+  static const char *const notes[3] = {"Jump twice: fly (Creative).",
+                                       "sin + cos: the game mode switcher, with cheats.",
+                                       "Menus: OK takes or puts, EXE one, shift+OK moves."};
   int rows = line[1][0] ? 2 : 1;
-  for (int i = 0; i < rows; i++) text_center(line[i], SCREEN_W / 2, 177 + i * 10, 0xFFFF);
-  for (int i = 0; i + rows < 4; i++) text_center(notes[i], SCREEN_W / 2, 177 + (i + rows) * 10, 0xFFFF);
+  for (int i = 0; i < rows; i++) text_center(line[i], SCREEN_W / 2, 177 + i * 9, 0xFFFF);
+  /* the notes under them, 9 apart: five lines fit between the keys and Done */
+  for (int i = 0; i + rows < 5; i++) text_center(notes[i], SCREEN_W / 2, 177 + (i + rows) * 9, 0xFFFF);
 }
 
 /* GuiControls: the actions by category, each with its key and Reset; Done and Reset Keys under them */
@@ -2171,6 +2298,8 @@ static void text_field(const Button *b, bool hover, bool typing) {
 
 static void menu_screen(void) {
   int w = SCREEN_W, h = SCREEN_H;
+  Button buttons[N_BUTTONS];
+  menu(buttons, gui);
   switch (gui) {
     case GUI_TITLE:
       logo(30);
@@ -2197,7 +2326,8 @@ static void menu_screen(void) {
         char f[4] = {'n', 'b', (char)('0' + wlist[k]), 0};
         text(f, x + 2, y + 12, RGB(0x80, 0x80, 0x80), true);
         char m[24];
-        cat(m, wi.mode == 1 ? "Creative Mode" : "Survival Mode", wi.cheats ? ", Cheats" : "");
+        cat(m, wi.mode == 1 ? "Creative Mode" : wi.mode == 2 ? "Spectator Mode" : "Survival Mode",
+        wi.cheats ? ", Cheats" : "");
         text(m, x + 2, y + 22, RGB(0x80, 0x80, 0x80), true);
       }
       if (!nworlds) text_center("No worlds yet", w / 2, 60, RGB(0x80, 0x80, 0x80));
@@ -2248,6 +2378,7 @@ static void menu_screen(void) {
     case GUI_CTRLMENU: text_center("Controls", w / 2, 15, 0xFFFF); break;
     case GUI_VIDEO: text_center("Video Settings", w / 2, 15, 0xFFFF); break;
     case GUI_CONTROLS: key_sheet(); break;
+    case GUI_MODE: mode_screen(); break;
     case GUI_PAUSE: text_center("Game menu", w / 2, 40, 0xFFFF); break;
     case GUI_LAN:
       text_center("LAN World", w / 2, 50, 0xFFFF);
@@ -2280,6 +2411,14 @@ static void menu_screen(void) {
 
 /* ---------------------------------------------------------------- input */
 void gui_input(uint32_t keys, uint32_t pressed) {
+  if (gui == GUI_MODE) {
+    /* sin and cos are read from the scan in main.c; the arrows move the outline
+     * too, OK takes the mode outlined, Back leaves without changing it */
+    if (pressed & (K_LEFT | K_RIGHT | K_UP | K_DOWN)) mode_next();
+    else if (pressed & (K_OK | K_EXE)) mode_use();
+    else if (pressed & K_BACK) mode_cancel();
+    return;
+  }
   if (gui >= GUI_PAUSE) {
     if (gui == GUI_PAUSE && (pressed & K_PAUSE)) {
       gui = GUI_NONE;
@@ -2294,7 +2433,7 @@ void gui_input(uint32_t keys, uint32_t pressed) {
   }
   if (gui == GUI_NONE) {
     nbuttons = 0;
-    if (pressed & K_INV && !pl.dead) {
+    if (pressed & K_INV && !pl.dead && pl.mode != 2) {   /* (a spectator's inventory: nothing it can do) */
       csurv = 0;   /* the tabs, not the survival inventory */
       gui_open(pl.mode == 1 ? GUI_CREATIVE : GUI_INVENTORY, 0, 0, 0);
     }
@@ -2306,6 +2445,8 @@ void gui_input(uint32_t keys, uint32_t pressed) {
     return;
   }
   /* a container */
+  Slot slots[N_SLOTS];
+  layout_slots(slots);
   if (pressed & (K_INV | K_BACK | K_PAUSE)) {
     gui_close();
     return;
@@ -2415,6 +2556,8 @@ static void tooltip(const char *s, int x, int y) {
 }
 
 static void container(void) {
+  Slot slots[N_SLOTS];
+  layout_slots(slots);
   int px = panel_x, py = panel_y;
   static const uint8_t img[] = {0, IMG_INVENTORY, IMG_CRAFTING_TABLE, IMG_FURNACE, IMG_CHEST, IMG_CREATIVE};
   if (gui == GUI_CREATIVE) {
@@ -2510,18 +2653,18 @@ static void container(void) {
   else if (sl->s->id) tooltip(item_label(sl->s->id), px + sl->x + 8, py + sl->y + 8);
 }
 
-void hud_strip(uint16_t *buf, int y0, int rows) {
+void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
   clip_buf = buf;
   clip_y0 = y0;
   clip_y1 = y0 + rows;
-  if (y0 == 0) frame_no++, hand_frame();
-  hand_strip(buf, y0, rows);
+  if (y0 == 0) frame_no++;
+  hand_strip(buf, y0, rows, hand);
   if (pl.sleep_timer) {
     /* falling asleep: the screen darkens (GuiIngame.renderSleep) */
     int a = pl.sleep_timer * 32 / 100;
     tint_rect(0, y0, SCREEN_W, rows, 0x0841, a > 30 ? 30 : a);
   }
-  if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_DEATH || gui == GUI_LAN ||
+  if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_DEATH || gui == GUI_LAN ||
       ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CTRLMENU || gui == GUI_KEYS) && options_from == GUI_PAUSE))
     hud();
   if (gui == GUI_NONE || gui == GUI_CHAT) chat_lines();
@@ -2537,6 +2680,9 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
     case GUI_PAUSE: case GUI_LAN:
       dark_background();
       menu_screen();
+      break;
+    case GUI_MODE:
+      mode_screen();
       break;
     case GUI_CHAT: chat_screen(); break;
     case GUI_OPTIONS: case GUI_VIDEO: case GUI_CTRLMENU: case GUI_CONTROLS: case GUI_KEYS:
@@ -2565,6 +2711,8 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
       number(pl.xp_total, n);
       memcpy(b + 7, n, strlen(n) + 1);
       text_center(b, SCREEN_W / 2, 100, 0xFFFF);
+      Button buttons[N_BUTTONS];
+      menu(buttons, GUI_DEATH);
       for (int i = 0; i < nbuttons; i++) button(&buttons[i], i == bcur);
       break;
     }

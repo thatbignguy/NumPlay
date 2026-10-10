@@ -99,7 +99,7 @@ static const uint8_t *read_head(int s, Head4 *h, uint32_t *len, uint32_t *head_l
   if (h->h3.h2.h.player_size != sizeof pl || *len < *head_len + sizeof pl) return NULL;
   if (*head_len < sizeof(Head) + sizeof(h->flat_preset)) {
     /* (older worlds: cheats as a new world of their mode would have them, the rules as they start) */
-    h->h3.cheats = d[*head_len + offsetof(Player, mode)] == 1;
+    h->h3.cheats = d[*head_len + offsetof(Player, mode)] != 0;
     h->h3.rules = GR_DEFAULT;
   }
   return d;

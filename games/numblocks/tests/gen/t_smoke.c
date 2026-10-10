@@ -5,6 +5,8 @@
 #include "../../src/gen.h"
 #include "../../src/blocks.h"
 int main(int argc, char **argv) {
+    uint8_t gs[GEN_SCRATCH];
+    gen_scratch(gs);
     int64_t seed = argc > 1 ? strtoll(argv[1], 0, 10) : 12345;
     int R = argc > 2 ? atoi(argv[2]) : 3;
     gen_init(seed);

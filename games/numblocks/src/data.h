@@ -292,13 +292,17 @@ extern const uint16_t blk_icon[B_COUNT];   /* sprite of its icon */
 #define SP_BUTTON 430
 #define SP_BUTTON_HOVER 431
 #define SP_BUTTON_OFF 432
-#define SP_SLOT_HELMET 433
-#define SP_SLOT_CHESTPLATE 434
-#define SP_SLOT_LEGGINGS 435
-#define SP_SLOT_BOOTS 436
-#define SP_STEVE 437
-#define SP_ARM 438
-#define SP_DIRT_BG 439
+#define SP_GM_BG 433
+#define SP_GM_SLOT 434
+#define SP_GM_SEL 435
+#define SP_SLOT_HELMET 436
+#define SP_SLOT_CHESTPLATE 437
+#define SP_SLOT_LEGGINGS 438
+#define SP_SLOT_BOOTS 439
+#define SP_STEVE 440
+#define SP_ARM 441
+#define SP_DIRT_BG 442
+#define SP_EYE 443   /* the ender eye: the spectator slot's icon (the item is not in the game) */
 
 #include "items.h"
 extern const uint16_t blk_item[B_COUNT];   /* the item a block state counts as (0xFFFF: none) */

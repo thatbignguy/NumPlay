@@ -56,4 +56,21 @@ void gen_spawn(int *x, int *y, int *z);
 /* Statistics for tests: bytes of static RAM the generator uses (27108 on the M7). */
 unsigned gen_ram_bytes(void);
 
+/* Where the mob of a monster spawner that world generation places is handed out. The generator
+ * has no world of its own to remember it in (as Minecraft keeps it in the spawner's tile entity),
+ * so it gives it here when it places one, as the world would: (x, y, z) where, and mob what
+ * WorldGenDungeons.a's draw made of it (0-1 skeleton, 2 zombie, 3 spider). Nobody has to set it:
+ * the tests leave it unset, and nothing in them asks a spawner for its mob. */
+extern void (*gen_spawner_hook)(int x, int y, int z, int mob);
+
+/* The generator's scratch: its passes never overlap (layers, then terrain, then caves and
+ * populations), so they share one buffer, which the caller gives it -- a local of a function
+ * that makes the world is what it is for, and where the game would otherwise keep 7.7 KB of
+ * it in the app's RAM. Call gen_scratch(buf), buf at least GEN_SCRATCH bytes, before any other
+ * gen_* call below, and keep it alive for the whole of the calls that follow (the world keeps
+ * it in world_follow's frame for a move, and in world_spawn's for the spawn search, and gives
+ * NULL when it is done: a call without a live scratch faults instead of writing nowhere). */
+#define GEN_SCRATCH 7684
+void gen_scratch(void *buf);
+
 #endif

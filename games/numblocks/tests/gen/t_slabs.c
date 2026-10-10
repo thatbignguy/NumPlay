@@ -7,6 +7,8 @@
 #include "../../src/gen.h"
 
 int main(int argc, char **argv) {
+    uint8_t gs[GEN_SCRATCH];
+    gen_scratch(gs);
     int64_t seed = argc > 1 ? strtoll(argv[1], 0, 10) : 12345;
     int n = argc > 2 ? atoi(argv[2]) : 10;
     static uint8_t full[128 * 256], part[128 * 256];

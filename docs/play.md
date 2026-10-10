@@ -58,7 +58,7 @@ Keep moving, or the eagle gets you. Coins add up across every run and stay saved
 | **,** / **π** / **√** / **x²** | Walk forward / left / back / right (like W, A, S, D) |
 | **shift** | Jump (twice in Creative: fly) |
 | **alpha** | Sneak |
-| **⌫** | Sprint (or press forward twice) |
+| **i** | Sprint |
 | **OK** or **EXE** | Mine and attack, like the left mouse button (hold it to mine) |
 | **Back** | Place a block, use, eat, like the right mouse button |
 | **var** | Inventory (in Creative: every block and item) |

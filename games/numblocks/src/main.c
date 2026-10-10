@@ -47,13 +47,17 @@ static void loading(void) {
   gui = GUI_LOADING;
   render_frame(NULL, game_time);
   world_follow(pl.x, pl.y, pl.z);
-  /* standing inside blocks (the world changed under a saved player): up to the first free space */
-  for (int k = 0; k < WORLD_H; k++) {
-    int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
-    if (!(blk_flags[world_get(x, y, z)] & BF_SOLID) && !(blk_flags[world_get(x, y + 1, z)] & BF_SOLID)) break;
-    pl.y = (float)(y + 1);
-    world_follow(pl.x, pl.y, pl.z);
-  }
+  /* the camera starts free of any entity's eyes: what it rode was not saved */
+  spectate = -1, spec_eye = 0;
+  /* standing inside blocks (the world changed under a saved player): up to the first free space
+   * (a spectator goes through them: it stays where it was saved) */
+  if (pl.mode != 2)
+    for (int k = 0; k < WORLD_H; k++) {
+      int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
+      if (!(blk_flags[world_get(x, y, z)] & BF_SOLID) && !(blk_flags[world_get(x, y + 1, z)] & BF_SOLID)) break;
+      pl.y = (float)(y + 1);
+      world_follow(pl.x, pl.y, pl.z);
+    }
   camera_reset();
   gui = GUI_NONE;
   in_world = true;
@@ -126,18 +130,34 @@ bool game_frame(void) {
   uint32_t k = plat_keys();
   uint32_t pressed = k & ~keys_held;
   keys_held = k;
-  static bool pick_held, debug_held;
+  static bool pick_held, debug_held, pair_held, pair_used;
   /* one scan a frame for both (each scan is a call into the calculator) */
   uint64_t raw = plat_scan();
   bool pick = opt.keys[A_PICK] < 64 && (raw >> opt.keys[A_PICK] & 1);
   if (pick && !pick_held && in_world && gui == GUI_NONE && !pl.dead) player_pick_block();
   pick_held = pick;
-  bool dbg = opt.keys[A_DEBUG] < 64 && (raw >> opt.keys[A_DEBUG] & 1);
-  if (dbg && !debug_held && in_world && gui == GUI_NONE) {
-    opt.debug = (uint8_t)!opt.debug;
-    save_options();
+  /* sin + cos: the game mode switcher, as Minecraft's F3 + F4. The pair wins over the
+   * debug overlay sin alone gives, so sin's own toggle waits until it is let go, and is
+   * dropped if cos was pressed while it was held. */
+  uint32_t dbg_key = opt.keys[A_DEBUG] < 64 ? opt.keys[A_DEBUG] : 64;
+  bool sin = opt.keys[A_DEBUG] < 64 && (raw >> opt.keys[A_DEBUG] & 1);
+  bool cos = dbg_key + 1 < 64 && (raw >> (dbg_key + 1) & 1);
+  if (sin && cos && !pair_held) {
+    /* the pair's first frame: cos pressed with sin held (or the other way round) */
+    if (gui == GUI_MODE) mode_next();
+    else if (in_world && gui == GUI_NONE) mode_open();
+    pair_used = true;
   }
-  debug_held = dbg;
+  pair_held = sin && cos;
+  if (debug_held && !sin) {
+    if (gui == GUI_MODE) mode_use();   /* sin let go: the mode outlined */
+    else if (in_world && gui == GUI_NONE && !pair_used) {
+      opt.debug = (uint8_t)!opt.debug;
+      save_options();
+    }
+    pair_used = false;
+  }
+  debug_held = sin;
   if (k & K_HOME) {
     /* Home: save and quit, from anywhere */
     if (in_world) {
@@ -212,7 +232,7 @@ bool game_frame(void) {
     if (pl.pitch > 90) pl.pitch = 90;
     if (pl.pitch < -90) pl.pitch = -90;
   }
-  bool paused = gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CTRLMENU || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS;
+  bool paused = gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_OPTIONS || gui == GUI_CTRLMENU || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS;
   if (!paused) acc += dt;
   /* a key pressed on a frame between ticks waits for the next tick (else that press is lost) */
   static uint32_t game_pressed;
@@ -242,8 +262,10 @@ bool game_frame(void) {
   world_follow(pl.x, pl.y, pl.z);
   float t = acc / 50.0f;
   tick_frac = t;
-  Camera c = {px + (pl.x - px) * t, py + (pl.y - py) * t + (pl.sneaking ? 1.54f : 1.62f), pz + (pl.z - pz) * t, pl.yaw,
-              pl.pitch};
+  /* the eyes: a spectator riding an entity has that entity's height, its own 1.62
+   * otherwise (1.54 sneaking, as Minecraft's) */
+  float eye = spec_eye ? spec_eye : pl.sneaking ? 1.54f : 1.62f;
+  Camera c = {px + (pl.x - px) * t, py + (pl.y - py) * t + eye, pz + (pl.z - pz) * t, pl.yaw, pl.pitch};
   if (opt.bobbing && !pl.flying) {
     /* EntityRenderer.setupViewBobbing: the eyes sway side to side and dip with each step */
     float w = (pl.prev_walked + (pl.walked - pl.prev_walked) * t) * 3.14159265f;

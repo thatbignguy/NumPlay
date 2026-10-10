@@ -147,6 +147,9 @@ def modern_rel(name):
         # (the offhand slot, the armour in two columns at the player's sides). Every
         # other container background stays on the 1.8.8 jar (see below).
         return 'gui/container/creative_inventory/tab_inventory'
+    if name == 'gui/container/gamemode_switcher':
+        # the game mode switcher's panel (sin + cos): 1.8.8 has none of it
+        return 'gui/container/gamemode_switcher'
     # GUI/HUD pictures with no modern same-layout equivalent stay on the jar:
     #   - the container backgrounds: gui.c lays its slots out at 1.8's
     #     coordinates, and the modern ones were rearranged (1.9 moved the

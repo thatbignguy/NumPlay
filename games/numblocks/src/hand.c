@@ -8,8 +8,8 @@
 #include <math.h>
 #include <string.h>
 #include "nb.h"
+#include "hand.h"
 
-int view_light(void);
 int held_texel(int b, int face, int u, int v);
 
 /* ---------------------------------------------------------------- the state (per tick) */
@@ -69,15 +69,11 @@ static void rotate(Mat *a, float deg, int axis) {   /* glRotate about x (0), y (
 
 /* ---------------------------------------------------------------- this frame's model */
 enum { H_NONE, H_ARM, H_BLOCK, H_ITEM };
-static int kind, model_id, icon;     /* what is drawn: the block, or the item's icon */
-static int nbox;
-static float box[5][6];              /* the model's boxes, in its pixels (x0 y0 z0 x1 y1 z1) */
-static float org[3], dx0[3], ddx[3], ddy[3];   /* the eye and the ray of pixel (x, y), in the model */
-static int face_sh[6];               /* each face's shade, 0..32: -x +x -y +y -z +z */
-/* the faces turned to the eye (at most 3 a box), with their corners on the screen */
-typedef struct { int8_t b, f; bool near; float sx[4], sy[4], ymin, ymax; } Face;
-static Face faces[15];
-static int nfaces;
+
+/* Nothing held: what a frame that builds no model draws (the loading screen, the screens with
+ * no world behind them, the frame the pause menu opens over a picture read back from the
+ * screen). hand_strip only looks at the kind: with this one there is nothing to draw. */
+void hand_none(HandFrame *h) { h->kind = H_NONE; h->nbox = 0; h->nfaces = 0; }
 
 #define FOCAL 171.38f   /* pixels: 120 / tan(35 degrees), 1.8's 70 degree field of view */
 /* 1.8's window is 16:9: the hand is drawn as it is at the right of one as tall as the screen */
@@ -101,9 +97,18 @@ static bool flat_item(int id) {
   return m == M_CROSS || m == M_TORCH || m == M_FLAT || m == M_VINE || m == M_LADDER;
 }
 
-void hand_frame(void) {
-  kind = H_NONE;
-  if (pl.dead || pl.sleep_timer || gui > GUI_PAUSE) return;
+void hand_frame(HandFrame *h, int light) {
+  int kind = H_NONE, model_id = 0, icon = -1;
+  int nbox = 0;
+  float box[5][6];              /* the model's boxes, in its pixels (x0 y0 z0 x1 y1 z1) */
+  float org[3], dx0[3], ddx[3], ddy[3];   /* the eye and the ray of pixel (x, y), in the model */
+  int face_sh[6];               /* each face's shade, 0..32: -x +x -y +y -z +z */
+  int nfaces = 0;
+  HandFace faces[15];
+  /* what the frame shows nothing of: dead, asleep, a spectator (no hand at all), and every
+   * screen but the game mode switcher - these open over a frozen picture or no world. The
+   * switcher (sin + cos) is drawn over the living world, so the hand goes on behind it */
+  if (pl.dead || pl.sleep_timer || pl.mode == 2 || (gui > GUI_PAUSE && gui != GUI_MODE)) goto done;
   float t = tick_frac;
   float swing = swing_t < 0 ? 0 : (swing_t + t) / 6.0f;
   if (swing > 1) swing = 1;
@@ -207,10 +212,7 @@ void hand_frame(void) {
     } else {
       kind = H_ITEM, nbox = 1;
       icon = id == I_FISHING_ROD && bobber() ? SP_FISHING_ROD_CAST : item_icon(id);   /* (the line out) */
-      if (icon < 0) {
-        kind = H_NONE;
-        return;
-      }
+      if (icon < 0) goto done;
       static const float slab[6] = {0, 0, 7.5f, 16, 16, 8.5f};
       memcpy(box[0], slab, sizeof slab);
     }
@@ -219,10 +221,7 @@ void hand_frame(void) {
   float (*a)[4] = m.m;
   float det = a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
               a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
-  if (fabsf(det) < 1e-12f) {
-    kind = H_NONE;
-    return;
-  }
+  if (fabsf(det) < 1e-12f) goto done;
   float id_ = 1 / det, inv[3][3];
   inv[0][0] = (a[1][1] * a[2][2] - a[1][2] * a[2][1]) * id_;
   inv[0][1] = (a[0][2] * a[2][1] - a[0][1] * a[2][2]) * id_;
@@ -250,7 +249,6 @@ void hand_frame(void) {
     float n = sqrtf(L[l][0] * L[l][0] + L[l][1] * L[l][1] + L[l][2] * L[l][2]);
     for (int i = 0; i < 3; i++) le[l][i] = (lm.m[i][0] * L[l][0] + lm.m[i][1] * L[l][1] + lm.m[i][2] * L[l][2]) / n;
   }
-  int light = view_light();
   for (int f = 0; f < 6; f++) {
     /* the face's normal in the eye: a row of the inverse */
     float s = (f & 1) ? 1 : -1, n[3] = {inv[f >> 1][0] * s, inv[f >> 1][1] * s, inv[f >> 1][2] * s};
@@ -269,7 +267,7 @@ void hand_frame(void) {
     for (int f = 0; f < 6; f++) {
       int k = f >> 1;
       if ((f & 1) ? org[k] <= box[b][k + 3] : org[k] >= box[b][k]) continue;
-      Face *fc = &faces[nfaces++];
+      HandFace *fc = &faces[nfaces++];
       fc->b = (int8_t)b, fc->f = (int8_t)f, fc->near = false;
       fc->ymin = 1e9f, fc->ymax = -1e9f;
       int i = (k + 1) % 3, j = (k + 2) % 3;
@@ -286,6 +284,12 @@ void hand_frame(void) {
       }
       if (fc->near) fc->ymin = 0, fc->ymax = SCREEN_H;
     }
+done:
+  h->kind = kind, h->model_id = model_id, h->icon = icon, h->nbox = nbox;
+  h->nfaces = nfaces;
+  memcpy(h->box, box, sizeof box), memcpy(h->org, org, sizeof org);
+  memcpy(h->dx0, dx0, sizeof dx0), memcpy(h->ddx, ddx, sizeof ddx), memcpy(h->ddy, ddy, sizeof ddy);
+  memcpy(h->face_sh, face_sh, sizeof face_sh), memcpy(h->faces, faces, sizeof h->faces);
 }
 
 /* ---------------------------------------------------------------- drawing */
@@ -303,7 +307,7 @@ static inline int sprite_texel(int id, int u, int v) {   /* -1: see-through */
 static inline int clamp15(float x) { int i = (int)x; return i < 0 ? 0 : i > 15 ? 15 : i; }   /* (below 0 is 0 anyway) */
 
 /* a block face's texel at point p (Minecraft's default UVs) */
-static int block_texel(int f, const float *p) {
+static int block_texel(int f, const float *p, int model_id) {
   static const uint8_t tex_face[6] = {4, 5, 0, 1, 2, 3};   /* -x +x -y +y -z +z in blk_tex's order */
   float u, v;
   switch (f) {
@@ -335,7 +339,7 @@ static int arm_texel(int f, const float *p) {
 
 /* an item: from where the ray enters its slab (point p, through face f, at t), through the texel
  * cells it crosses, a pixel thick, to the first solid one */
-static int item_texel(const float *p, const float *d, int *f) {
+static int item_texel(const float *p, const float *d, int *f, const float (*box)[6], int icon) {
   int cx = clamp15(p[0]), cy = clamp15(p[1]);
   int c = sprite_texel(icon, cx, 15 - cy);
   if (c >= 0) return c;
@@ -361,7 +365,7 @@ static int item_texel(const float *p, const float *d, int *f) {
 }
 
 /* the pixels of a row a face covers: where the row's middle crosses its edges */
-static bool face_span(const Face *fc, float yc, int *xa, int *xb) {
+static bool face_span(const HandFace *fc, float yc, int *xa, int *xb) {
   if (fc->near) {
     *xa = 0, *xb = SCREEN_W;
     return true;
@@ -381,9 +385,14 @@ static bool face_span(const Face *fc, float yc, int *xa, int *xb) {
   return *xa < *xb;
 }
 
-void hand_strip(uint16_t *buf, int y0, int rows) {
-  if (kind == H_NONE) return;
+void hand_strip(uint16_t *buf, int y0, int rows, const HandFrame *h) {
+  if (h->kind == H_NONE) return;
   static float zrow[SCREEN_W];   /* (several boxes: the nearest wins) */
+  const int kind = h->kind, nbox = h->nbox, nfaces = h->nfaces;
+  const float (*box)[6] = h->box;
+  const float *org = h->org, *dx0 = h->dx0, *ddx = h->ddx, *ddy = h->ddy;
+  const int *face_sh = h->face_sh;
+  const HandFace *faces = h->faces;
   for (int y = y0; y < y0 + rows; y++) {
     uint16_t *row = buf + (y - y0) * SCREEN_W;
     float yc = y + 0.5f;
@@ -391,7 +400,7 @@ void hand_strip(uint16_t *buf, int y0, int rows) {
       for (int x = 0; x < SCREEN_W; x++) zrow[x] = 1e30f;
     float r[3] = {dx0[0] + ddy[0] * y, dx0[1] + ddy[1] * y, dx0[2] + ddy[2] * y};
     for (int n = 0; n < nfaces; n++) {
-      const Face *fc = &faces[n];
+      const HandFace *fc = &faces[n];
       int xa, xb;
       if (yc < fc->ymin || yc > fc->ymax || !face_span(fc, yc, &xa, &xb)) continue;
       int f = fc->f, k = f >> 1, i = (k + 1) % 3, j = (k + 2) % 3;
@@ -418,7 +427,7 @@ void hand_strip(uint16_t *buf, int y0, int rows) {
             if (pi >= bx[i] && pi <= bx[i + 3] && pj >= bx[j] && pj <= bx[j + 3]) {
               float p[3];
               p[k] = c, p[i] = pi, p[j] = pj;
-              int col = kind == H_ARM ? arm_texel(f, p) : block_texel(f, p);
+              int col = kind == H_ARM ? arm_texel(f, p) : block_texel(f, p, h->model_id);
               if (col >= 0) {
                 uint16_t s = shade((uint16_t)col, face_sh[f]);
                 for (int q = x; q < nx; q++) row[q] = s;
@@ -439,7 +448,8 @@ void hand_strip(uint16_t *buf, int y0, int rows) {
         p[k] = c, p[i] = org[i] + t * d[i], p[j] = org[j] + t * d[j];
         if (p[i] < bx[i] || p[i] > bx[i + 3] || p[j] < bx[j] || p[j] > bx[j + 3]) continue;
         if (nbox > 1 && t >= zrow[x]) continue;
-        int ff = f, col = kind == H_ARM ? arm_texel(f, p) : kind == H_BLOCK ? block_texel(f, p) : item_texel(p, d, &ff);
+        int ff = f, col = kind == H_ARM ? arm_texel(f, p) : kind == H_BLOCK ? block_texel(f, p, h->model_id)
+                                                                        : item_texel(p, d, &ff, h->box, h->icon);
         if (col < 0) continue;
         row[x] = shade((uint16_t)col, face_sh[ff]);
         if (nbox > 1) zrow[x] = t;

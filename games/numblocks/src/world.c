@@ -342,11 +342,35 @@ void world_new(int64_t seed, const char *name) {
   if (world_type == WT_FLAT) gen_set_flat_preset(world_preset);
   else gen_set_flat(0);
   gen_init(seed);
+  gen_spawner_hook = spawners_made;   /* a dungeon's spawner gets its mob, and the world keeps it */
   edits_setup(name, slab32, sizeof slab32 / 4);
   edits_clear();
   vc_valid = false;
   npend = 0;
   memset(vpend, 0, sizeof vpend);
+}
+
+/* The world spawn point. gen_spawn runs the whole generator, so it takes the scratch with it
+ * (gen_scratch), here on this function's stack. */
+void world_spawn(int *x, int *y, int *z) {
+  uint8_t gs[GEN_SCRATCH];
+  memset(gs, 0, GEN_SCRATCH);
+  gen_scratch(gs);
+  gen_spawn(x, y, z);
+  gen_scratch(NULL);   /* the buffer goes with this frame */
+}
+
+static void world_follow_gen(float x, float y, float z);
+
+/* Keeps the cache around (x, y, z). The generator's scratch rides along for the whole of the
+ * move (gen.c: its passes never overlap, so one buffer serves them all): on this function's
+ * stack, where the game would otherwise keep 7.7 KB of it in the app's RAM. */
+void world_follow(float x, float y, float z) {
+  uint8_t gs[GEN_SCRATCH];
+  memset(gs, 0, GEN_SCRATCH);
+  gen_scratch(gs);
+  world_follow_gen(x, y, z);
+  gen_scratch(NULL);   /* the buffer goes with this frame */
 }
 
 /* Near a side of the cache the next move is coming: the chunks it will make there (one row of
@@ -371,7 +395,7 @@ static void prepare_ahead(int lx, int lz, int mx, int mz) {
   }
 }
 
-void world_follow(float x, float y, float z) {
+static void world_follow_gen(float x, float y, float z) {
   int px = ifloor(x), py = ifloor(y), pz = ifloor(z);
   static int wfx, wfz;
   static bool wfgot;

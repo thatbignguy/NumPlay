@@ -1,3 +1,34 @@
+## 1.3.12
+**Spectator mode: fly through the blocks, see through them, and look at the world through a mob's eyes**
+- `/gamemode spectator` (cheats on) is Minecraft's spectator: you always fly,
+  through every block, with nothing to touch — no mining, placing, eating or
+  opening, no damage, and no mob noticing you, so the world goes on living
+  around you. Its whole HUD is the crosshair, and that only while it is on a mob:
+  OK then sees the world through that mob's eyes, at its eye height, turning
+  where it looks, until alpha brings you back to your own flying body. Flying
+  into the ground, the rock around your head turns see-through, so the cave walls
+  and the grass above show through the stone.
+- sin + cos together is the game mode switcher, as Minecraft's F3 + F4: the modes
+  come up in the middle of the screen with the one last used outlined, cos moves
+  the outline along them, and letting go of sin (or pressing OK) takes the one
+  outlined — Back leaves without changing anything. It needs cheats, as the
+  command does; sin on its own still turns the F3 overlay on and off.
+- The hand is drawn from a model of its own (`src/hand.c` + `src/hand.h`) put
+  together for the frame it is drawn in, on render_frame's stack, instead of the
+  fixed animation tables: it follows the swing, the mining progress and the item
+  held, and the spectator's empty hand is nothing at all.
+- The generator's scratch buffer (7.7 KB) is given to it by its caller and lives
+  on that caller's stack — `world_follow`'s for a move, `world_spawn`'s for the
+  spawn search — instead of in the app's RAM, and a dungeon's monster spawner is
+  placed with the mob its draw made of it, which the world then keeps (as a spawn
+  egg on it would have set it), so a dungeon keeps its mob once it is loaded again.
+- NumBlocks no longer rides inside NumPlay: `games/games.json` drops it, the
+  launcher builds without it, and it ships as `build/apps/NumBlocks.nwa` (its own
+  app, "too big to share the calculator with NumPlay", as Champion Island and
+  Hollow Knight already do). The interest front that hides NumBlocks behind an
+  Interest calculator (`games/numblocks-interest`) and the Interest app itself
+  (`games/finance`) build beside it.
+
 ## 1.3.11
 **The modern names: terracotta, mossy cobblestone, smooth stone, oak planks**
 - Every block and item reads the way the modern game names it (todo [6]): the

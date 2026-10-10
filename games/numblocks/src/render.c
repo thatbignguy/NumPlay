@@ -20,22 +20,67 @@
 /* the strip sent to the screen: on render_frame's stack (the calculator gives apps 32 KB of it, the
  * game uses a few), not in the RAM that calculator software since 23.2 gives apps (148928 bytes) */
 static uint16_t *strip;
-static uint16_t cbuf[SR][RW];      /* a strip of the picture */
-static float zbuf[SR][RW];         /* and how far each pixel's ray went (entities are hidden behind) */
+/* Everything else a frame's picture needs lives on render_frame's stack too: in one
+ * struct (Frame, below) for what the frame's helpers fill and read, and in the frame's
+ * own locals for the rest. None of it outlives a frame. What is left in RAM is only
+ * what the innermost loops address once a pixel (zbuf, the sky's colours, the light
+ * tables, col_su): moving those to the stack cost more in the pixel loops than the
+ * RAM they freed. */
+typedef struct Frame Frame;
+
+/* an entity on the picture: where it is drawn, where it is (see ents_frame) */
+typedef struct {
+  const Entity *e;
+  int x0, y0, x1, y1;          /* its rectangle on the picture (internal pixels) */
+  float ex, ey, ez;            /* where it is (cache coordinates) */
+  int light;
+  float dist;
+} Draw;
+#define N_DRAW 56
+
+/* a monster spawner's egg, turning inside its cage (see spawner_frame) */
+typedef struct {
+  float ex, ey, ez, yaw;   /* where it turns (cache coordinates), its spin */
+  int16_t r[4];            /* its rectangle on the picture */
+  uint8_t light, egg;      /* its light, its spawn egg - I_ZOMBIE_SPAWN_EGG */
+} SDraw;
+#define N_SDRAW 4
+
+/* What the frame's helpers fill and read, on render_frame's stack: the lists of what
+ * is drawn (entities, spawners' eggs), the fishing line's corners, the box looked at
+ * and the lightning's path. All of it is set up once a frame and read while the frame
+ * is drawn; none of it outlives it. */
+struct Frame {
+  Draw draws[N_DRAW];         /* the entities drawn this frame */
+  int ndraws;
+  SDraw sdraws[N_SDRAW];      /* the monster spawners' eggs turning in their cages */
+  int nsdraws;
+  float line_pt[17][3];       /* the fishing line on the picture: x, y, 1 / depth */
+  int line_on;
+  float sel_pt[8][3], sel_w[8][3];   /* the block looked at: its box's corners, and in the cache */
+  int sel_on;
+  float bolt_off[3][9][2];   /* lightning: the path's offsets from its foot at heights 16 i */
+};
 
 /* per frame */
 static float ox, oy, oz;           /* camera, cache coordinates */
 static float fwx, fwy, fwz, rgx, rgz, upx, upy, upz;
 static float fog0, fog1;           /* fog start and end (blocks) */
 static int fog_r, fog_g, fog_b, sky_r, sky_g, sky_b;   /* 0..255 */
-static uint8_t sky_grad[129][3];   /* the horizon to the sky, by elevation 0..0.4 (r, g, b) */
 static int sky_top;               /* the cache is empty from this row up: rays going up end there */
 static int trace_top = -1;        /* (>= 0) rays going down start on this plane (y): see render_frame */
-static int shade[4][16];           /* face shade x sky light level -> 0..32 */
-static int shade_blk[4][16];       /* face shade x block light level -> 0..32 */
 static float sun_x, sun_y, sun_z;  /* towards the sun */
 static float sun_tx, sun_ty;       /* the way the sun moves */
 static float cos_c, sin_c;         /* the sky's turn (the celestial angle) */
+/* ...and what is addressed once a pixel in the innermost loops, which is why it stays here in
+ * RAM rather than in the frame (Frame, at the top): the depth a pixel's ray reached, the sky's
+ * colours, the light tables and the rays of the columns */
+static float zbuf[SR][RW];         /* and how far each pixel's ray went (entities are hidden behind) */
+static float col_su[RW + 1];       /* the ray of each picture column: its sideways part */
+static int shade[4][16];           /* face shade x sky light level -> 0..32 */
+static int shade_blk[4][16];       /* face shade x block light level -> 0..32 */
+static uint8_t sky_grad[129][3];   /* the horizon to the sky, by elevation 0..0.4 (r, g, b) */
+static uint16_t sky_pk[129];       /* the same, packed (the sky row's fast path) */
 static int moon_phase, star_k;     /* the moon's phase (0 full), how bright the stars are (0..255) */
 static int bed_east = 0;   /* the bed head top's pillow east (1.8.8 blocks/, u = 15 white)
                              * vs north (modern entity, v = 0 white) */
@@ -45,6 +90,7 @@ static float cloud_off;
 static int cloud_r, cloud_g, cloud_b;   /* the clouds' colour (0..255) */
 static float sun_a;                     /* how much of the sun or moon shows (rain hides it) */
 static bool night;
+static bool xray;                       /* (a spectator's head inside a solid block: see through the rock) */
 static int under_water;
 static int cam_x, cam_y, cam_z, cam_i, cam_b;   /* the camera's cell, its index (-1 outside the cache), its block */
 static int cam_mi, cam_liq;      /* its region, the liquid it is in (liquid[], 255: none) */
@@ -441,6 +487,12 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
   int m = blk_model[b];
   int col = z * VCX + x;
   float lx = ox + R->dx * t - x, ly = oy + R->dy * t - y, lz = oz + R->dz * t - z;
+  /* A spectator flying through the blocks sees through them, as Minecraft's does with
+   * its head inside one: a face shows only when nothing solid stands in front of it,
+   * so the ray goes on past every cell it came into from solid rock (the camera's own
+   * block included) until it meets a face that shows - a cave's wall, the ground, the
+   * sky. One more look at the world's blocks, and only while the head is in one. */
+  if (xray && (blk_flags[vc[came_from(i, face, x, y, z)]] & BF_OPAQUE)) return -1;
   if (m == M_CUBE || m == M_LEAVES || m == M_GLASS) {
     /* the face the ray came in through */
     float hx = lx, hy = ly, hz = lz;
@@ -639,9 +691,14 @@ static uint16_t trace(float dx, float dy, float dz) {
       if (shape_top[b] >= 16 || oy + dy * (dy > 0 ? t : te) - y <= shape_top[b] * (1 / 16.0f)) {
         float px = tx - idx, py = ty - idy, pz = tz - idz;
         int face = t == tj ? jf : px > py ? (px > pz ? fx : fz) : (py > pz ? fy : fz);
-        int c = cell_hit(&R, b, i, x, y, z, face, t, te - t);
-        if (c >= 0) return (uint16_t)c;
-        in_liq = liquid[R.inside] ? liquid[R.inside] : 255;   /* (it may have gone into water) */
+        /* a spectator's head in solid rock: this cell's face is hidden by whatever the
+         * ray came through - the rock itself (cell_hit's own rule, here where it costs a
+         * comparison instead of a call), so the ray walks on past it */
+        if (!(xray && (blk_flags[vc[came_from(i, face, x, y, z)]] & BF_OPAQUE))) {
+          int c = cell_hit(&R, b, i, x, y, z, face, t, te - t);
+          if (c >= 0) return (uint16_t)c;
+          in_liq = liquid[R.inside] ? liquid[R.inside] : 255;   /* (it may have gone into water) */
+        }
       }
     }
     /* the next cell */
@@ -767,8 +824,9 @@ static int face_pixel(float dx, float dy, float dz, int plane, int f, bool wet) 
     light = 15;
     if ((unsigned)px < VCX && (unsigned)py < VCY && (unsigned)pz < VCZ) {
       int fi = VC_I(px, py, pz);
-      /* hidden, or something stands in front: trace (wet: water in front is clear) */
-      if (vc[fi] != B_AIR && !(wet && is_water(vc[fi]))) return -1;
+      /* hidden, or something stands in front: trace (wet: water in front is clear; a
+       * spectator's head in the rock: only what is solid stands in its way) */
+      if (vc[fi] != B_AIR && !(wet && is_water(vc[fi])) && !(xray && !(blk_flags[vc[fi]] & BF_OPAQUE))) return -1;
       light = vl[fi];
     }
   } else light = vl[i];
@@ -805,14 +863,12 @@ typedef struct {
   float t;
 } Sample;
 /* (the ray of picture column px across: rgx, rgz times this, on top of the row's base) */
-static float col_su[RW + 1];
 
 /* A 4 x 4 cell of daytime sky. Along a row of it where the sun and the moon cannot be (the
  * brighter of its ends too far from them) the sky's gradient goes from what it is at one end to
  * what it is at the other (worked out there, the rest in between: it bends little over 4
  * pixels), its colours packed once a frame (sky_pk); only a pixel with a cloud in front is
  * worked out on its own */
-static uint16_t sky_pk[129];   /* (render_frame) */
 static __attribute__((unused)) void sky_fill(uint16_t (*cb)[RW], float (*zb)[RW], float (*rb)[3], const SkyRow *skr, int x0) {
   float s0 = col_su[x0], s3 = col_su[x0 + 3], lo2 = fminf(s0 * s0, s3 * s3);
   bool mid = s0 < 0 && s3 > 0;   /* (the elevation is highest where su is 0: not between its ends) */
@@ -990,7 +1046,7 @@ static __attribute__((unused)) void plane_fill(uint16_t (*cb)[RW], float (*zb)[R
           light = 15;
           if ((unsigned)px < VCX && (unsigned)py < VCY && (unsigned)pz < VCZ) {
             int fi = VC_I(px, py, pz);
-            if (vc[fi] != B_AIR && !(wet && is_water(vc[fi]))) {
+            if (vc[fi] != B_AIR && !(wet && is_water(vc[fi])) && !(xray && !(blk_flags[vc[fi]] & BF_OPAQUE))) {
               ok = 0;
               goto miss;
             }
@@ -1078,7 +1134,7 @@ static void sample_at(Sample *s, int px, int py) {
     if (hit_p & 15) flags |= 1;   /* (inside its cell: nothing else there) */
     else {
       int fb = vc[came_from(hit_i, f, x, y, z)];
-      if (fb == B_AIR || (is_water(fb) && is_water(cam_b))) flags |= 1;
+      if (fb == B_AIR || (is_water(fb) && is_water(cam_b)) || (xray && !(blk_flags[fb] & BF_OPAQUE))) flags |= 1;
     }
     if (m == M_CUBE || m == M_LEAVES || m == M_GLASS) flags |= 2;
     if (m == M_LEAVES && !opt.fancy) flags |= 4;
@@ -1166,17 +1222,6 @@ static void quad(uint16_t (*cb)[RW], float (*zb)[RW], float (*rb)[3], int r, int
 #include "mob.h"
 
 float tick_frac;   /* how far between the last two ticks this frame is (main.c) */
-#define N_DRAW 56
-typedef struct {
-  const Entity *e;
-  int x0, y0, x1, y1;          /* its rectangle on the picture (internal pixels) */
-  float ex, ey, ez;            /* where it is (cache coordinates) */
-  int light;
-  float dist;
-} Draw;
-static Draw draws[N_DRAW];
-static int ndraws;
-
 /* the ray of picture pixel (px, py): the row's base (as render_frame's rb) plus the
  * column's sideways part (col_su, same expression): no division per pixel */
 static inline void ray_dir2(float rb0, float rb1, float rb2, int px, float *d) {
@@ -1243,11 +1288,11 @@ int held_texel(int b, int face, int u, int v) {
 }
 
 /* how lit the player's hand is (0..32): the light where the eyes are */
-int view_light(void) { return light_shade(0, cam_i >= 0 ? vl[cam_i] : 15); }
+static int view_light(void) { return light_shade(0, cam_i >= 0 ? vl[cam_i] : 15); }
 
-static void ents_frame(void) {
-  ndraws = 0;
-  for (int i = 0; i < N_ENT && ndraws < N_DRAW; i++) {
+static void ents_frame(Frame *F) {
+  F->ndraws = 0;
+  for (int i = 0; i < N_ENT && F->ndraws < N_DRAW; i++) {
     const Entity *e = &ents[i];
     if (e->type == E_NONE) continue;
     float t = tick_frac;
@@ -1268,7 +1313,7 @@ static void ents_frame(void) {
     float c[8][3];
     for (int k = 0; k < 8; k++)
       c[k][0] = ex + ((k & 1) ? w : -w) / 2, c[k][1] = ey + ((k & 2) ? h : 0), c[k][2] = ez + ((k & 4) ? w : -w) / 2;
-    Draw *d = &draws[ndraws];
+    Draw *d = &F->draws[F->ndraws];
     int r[4];
 
     if (!rect_of(c, r)) continue;
@@ -1276,7 +1321,7 @@ static void ents_frame(void) {
     d->e = e, d->ex = ex, d->ey = ey, d->ez = ez, d->dist = sqrtf(d2);
     int cx = (int)floorf(ex), cy = (int)floorf(ey + 0.2f), cz2 = (int)floorf(ez);
     d->light = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz2 < VCZ ? vl[VC_I(cx, cy, cz2)] : 15;
-    ndraws++;
+    F->ndraws++;
   }
 }
 
@@ -1778,19 +1823,17 @@ static void rain_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
 /* RenderLightningBolt: a path 128 blocks up in 16-block steps that wander up
  * to 5 blocks, and two branches that wander up to 15; each drawn four times,
  * 0.1, 0.3, 0.5 and 0.7 blocks wide, adding (0.45, 0.45, 0.5) x 0.3 of light */
-static float bolt_off[3][9][2];   /* the path's offsets from its foot at heights 16 i; then the branches' */
-
-static void bolt_frame(void) {
+static void bolt_frame(Frame *F) {
   if (!bolt.on) return;
   uint32_t r = bolt.seed;
 #define BR(n) ((int)(((r = r * 1664525u + 1013904223u) >> 8) % (n)))
-  bolt_off[0][0][0] = bolt_off[0][0][1] = 0;
+  F->bolt_off[0][0][0] = F->bolt_off[0][0][1] = 0;
   for (int i = 1; i <= 8; i++)
-    bolt_off[0][i][0] = bolt_off[0][i - 1][0] + BR(11) - 5, bolt_off[0][i][1] = bolt_off[0][i - 1][1] + BR(11) - 5;
+    F->bolt_off[0][i][0] = F->bolt_off[0][i - 1][0] + BR(11) - 5, F->bolt_off[0][i][1] = F->bolt_off[0][i - 1][1] + BR(11) - 5;
   for (int j = 1; j <= 2; j++) {
-    bolt_off[j][8 - j][0] = bolt_off[0][8 - j][0], bolt_off[j][8 - j][1] = bolt_off[0][8 - j][1];
+    F->bolt_off[j][8 - j][0] = F->bolt_off[0][8 - j][0], F->bolt_off[j][8 - j][1] = F->bolt_off[0][8 - j][1];
     for (int i = 7 - j; i >= 5 - j; i--)
-      bolt_off[j][i][0] = bolt_off[j][i + 1][0] + BR(31) - 15, bolt_off[j][i][1] = bolt_off[j][i + 1][1] + BR(31) - 15;
+      F->bolt_off[j][i][0] = F->bolt_off[j][i + 1][0] + BR(31) - 15, F->bolt_off[j][i][1] = F->bolt_off[j][i + 1][1] + BR(31) - 15;
   }
 #undef BR
 }
@@ -1857,7 +1900,7 @@ static void bolt_piece(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW], c
   }
 }
 
-static void bolt_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
+static void bolt_strip(Frame *F, int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
   if (!bolt.on) return;
   float bx = bolt.x - vc_x0, by = bolt.y - vc_y0, bz = bolt.z - vc_z0;
   for (int j = 0; j < 3; j++) {
@@ -1866,7 +1909,7 @@ static void bolt_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
       for (int q = 0; q < 4; q++) {
         /* four pieces a step: the path is straight, the picture's perspective is not */
         float f0 = q / 4.0f, f1 = (q + 1) / 4.0f;
-        const float *o0 = bolt_off[j][i], *o1 = bolt_off[j][i + 1];
+        const float *o0 = F->bolt_off[j][i], *o1 = F->bolt_off[j][i + 1];
         float a[3] = {bx + o0[0] + (o1[0] - o0[0]) * f0, by + 16 * (i + f0), bz + o0[1] + (o1[1] - o0[1]) * f0};
         float b[3] = {bx + o0[0] + (o1[0] - o0[0]) * f1, by + 16 * (i + f1), bz + o0[1] + (o1[1] - o0[1]) * f1};
         float ma = j ? 1 : (i - 1 + f0) * 0.1f + 1, mb = j ? 1 : (i - 1 + f1) * 0.1f + 1;
@@ -1878,12 +1921,9 @@ static void bolt_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
 /* ---------------------------------------------------------------- the fishing line */
 /* RenderFish: from the rod's tip (in the right hand, 0.4 ahead of the eyes)
  * to the hook in 16 pieces, sagging, black */
-static float line_pt[17][3];   /* picture x, y, 1 / depth (0: behind the camera) */
-static bool line_on;
-
-static void line_frame(void) {
+static void line_frame(Frame *F) {
   const Entity *e = bobber();
-  line_on = e != NULL;
+  F->line_on = e != NULL;
   if (!e) return;
   float t = tick_frac;
   float bx = e->px + (e->x - e->px) * t - vc_x0, by = e->py + (e->y - e->py) * t - vc_y0;
@@ -1895,7 +1935,7 @@ static void line_frame(void) {
   float x2 = vx * cosf(yw) - z1 * sinf(yw), z2 = z1 * cosf(yw) + vx * sinf(yw);
   float dx = ox + x2 - bx, dy = oy + y1 - by - 0.25f, dz = oz + z2 - bz;
   for (int l = 0; l <= 16; l++) {
-    float f = l / 16.0f, *q = line_pt[l];
+    float f = l / 16.0f, *q = F->line_pt[l];
     float rx = bx + dx * f - ox, ry = by + dy * (f * f + f) / 2 + 0.25f - oy, rz = bz + dz * f - oz;
     float cz = rx * fwx + ry * fwy + rz * fwz;
     q[2] = 0;
@@ -1905,10 +1945,10 @@ static void line_frame(void) {
   }
 }
 
-static void line_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
-  if (!line_on) return;
+static void line_strip(Frame *F, int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
+  if (!F->line_on) return;
   for (int l = 0; l < 16; l++) {
-    const float *a = line_pt[l], *b = line_pt[l + 1];
+    const float *a = F->line_pt[l], *b = F->line_pt[l + 1];
     if (a[2] <= 0 || b[2] <= 0) continue;
     float dx = b[0] - a[0], dy = b[1] - a[1];
     if ((a[1] < py0 && b[1] < py0) || (a[1] >= py0 + rows && b[1] >= py0 + rows)) continue;
@@ -1926,12 +1966,8 @@ static void line_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
 /* ---------------------------------------------------------------- the block looked at */
 /* RenderGlobal.drawSelectionBox: the edges of the block's selection box (its shape, grown
  * by 0.002) in black at 40%, hidden where something is in front of them */
-static float sel_pt[8][3];   /* the corners on the picture: x, y, 1 / depth (0: behind the camera) */
-static float sel_w[8][3];    /* and in the cache */
-static bool sel_on;
-
-static void select_frame(void) {
-  sel_on = false;
+static void select_frame(Frame *F) {
+  F->sel_on = false;
   if (pl.hit_face < 0 || gui != GUI_NONE || !world_loaded(pl.hit_x, pl.hit_y, pl.hit_z)) return;
   int b = world_get(pl.hit_x, pl.hit_y, pl.hit_z);
   if (b == B_AIR || blk_model[b] == M_LIQUID) return;
@@ -1940,7 +1976,7 @@ static void select_frame(void) {
   for (int i = 0; i < 3; i++) s[i] -= 0.002f, s[i + 3] += 0.002f;
   float bx = (float)(pl.hit_x - vc_x0), by = (float)(pl.hit_y - vc_y0), bz = (float)(pl.hit_z - vc_z0);
   for (int k = 0; k < 8; k++) {
-    float *w = sel_w[k], *q = sel_pt[k];
+    float *w = F->sel_w[k], *q = F->sel_pt[k];
     w[0] = bx + s[k & 1 ? 3 : 0], w[1] = by + s[k & 2 ? 4 : 1], w[2] = bz + s[k & 4 ? 5 : 2];
     float rx = w[0] - ox, ry = w[1] - oy, rz = w[2] - oz, cz = rx * fwx + ry * fwy + rz * fwz;
     q[2] = 0;
@@ -1948,15 +1984,15 @@ static void select_frame(void) {
     float cx = rx * rgx + rz * rgz, cy = rx * upx + ry * upy + rz * upz;
     q[0] = (cx / cz / TAN_H + 1) * RW / 2, q[1] = (1 - cy / cz / TAN_V) * RH / 2, q[2] = 1 / cz;
   }
-  sel_on = true;
+  F->sel_on = true;
 }
 
-static void select_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
-  if (!sel_on) return;
+static void select_strip(Frame *F, int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
+  if (!F->sel_on) return;
   static const uint8_t edge[12][2] = {{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3},
                                       {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
   for (int e = 0; e < 12; e++) {
-    const float *a = sel_pt[edge[e][0]], *b = sel_pt[edge[e][1]];
+    const float *a = F->sel_pt[edge[e][0]], *b = F->sel_pt[edge[e][1]];
     if (a[2] <= 0 || b[2] <= 0) continue;   /* (an edge reaching behind the camera: not drawn) */
     if ((a[1] < py0 - 1 && b[1] < py0 - 1) || (a[1] > py0 + rows && b[1] > py0 + rows)) continue;
     float dx = b[0] - a[0], dy = b[1] - a[1];
@@ -1981,18 +2017,10 @@ static void select_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW])
  * seconds. Only the four nearest in 16 blocks are drawn, so a wall of spawners costs no more than
  * four dropped items; with none about, the table walk below is all there is. (112 bytes of RAM
  * for the four.) */
-#define N_SDRAW 4
-typedef struct {
-  float ex, ey, ez, yaw;   /* where it turns (cache coordinates), its spin */
-  int16_t r[4];            /* its rectangle on the picture */
-  uint8_t light, egg;      /* its light, its spawn egg - I_ZOMBIE_SPAWN_EGG */
-} SDraw;
-static SDraw sdraws[N_SDRAW];
-static int nsdraws;
 extern uint32_t game_time;   /* (also declared with the rain: before its use here) */
 
-static void spawner_frame(void) {
-  nsdraws = 0;
+static void spawner_frame(Frame *F) {
+  F->nsdraws = 0;
   float ndist[N_SDRAW];
   for (int i = 0, n = spawners_count(); i < n; i++) {
     int x, y, z;
@@ -2011,14 +2039,14 @@ static void spawner_frame(void) {
     }
     int r[4];
     if (!rect_of(c, r)) continue;
-    int at = nsdraws;
+    int at = F->nsdraws;
     if (at >= N_SDRAW) {
       at = 0;
       for (int k = 1; k < N_SDRAW; k++)
         if (ndist[k] > ndist[at]) at = k;
       if (d2 >= ndist[at]) continue;
-    } else nsdraws++;
-    SDraw *d = &sdraws[at];
+    } else F->nsdraws++;
+    SDraw *d = &F->sdraws[at];
     ndist[at] = d2;
     d->ex = cx + 0.5f, d->ey = cy + 0.5f, d->ez = cz + 0.5f;
     d->yaw = (game_time + tick_frac) * 0.0628319f;   /* a turn in five seconds */
@@ -2030,16 +2058,16 @@ static void spawner_frame(void) {
 
 /* one spawner's egg over a strip: its own picture, flat and turning in place (an item's, not the
  * little cube with the sprite on every face a dropped block-like item keeps), centred in the cage */
-static void spawner_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
-  if (!nsdraws) return;
+static void spawner_strip(Frame *F, int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
+  if (!F->nsdraws) return;
   float rbc[SR][3];
   for (int r = 0; r < rows; r++) {
     int py = py0 + r;
     float sv = (1 - 2 * (py + 0.5f) / RH) * TAN_V;
     rbc[r][0] = fwx + upx * sv, rbc[r][1] = fwy + upy * sv, rbc[r][2] = fwz + upz * sv;
   }
-  for (int k = 0; k < nsdraws; k++) {
-    const SDraw *sd = &sdraws[k];
+  for (int k = 0; k < F->nsdraws; k++) {
+    const SDraw *sd = &F->sdraws[k];
     if (sd->r[1] >= py0 + rows || sd->r[3] <= py0) continue;
     Entity f;
     memset(&f, 0, sizeof f);
@@ -2073,11 +2101,11 @@ static void spawner_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]
   }
 }
 
-static void ents_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
+static void ents_strip(Frame *F, int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
   Box bx[MAX_PARTS];
   particles_strip(py0, rows, cb, zb);
-  for (int k = 0; k < ndraws; k++) {
-    const Draw *dr = &draws[k];
+  for (int k = 0; k < F->ndraws; k++) {
+    const Draw *dr = &F->draws[k];
     if (dr->y1 <= py0 || dr->y0 >= py0 + rows) continue;
     const Entity *e = dr->e;
     bool mob = e->type >= E_ZOMBIE && e->type <= E_CHICKEN;
@@ -2119,11 +2147,11 @@ static void ents_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
       }
     }
   }
-  select_strip(py0, rows, cb, zb);
-  spawner_strip(py0, rows, cb, zb);
-  line_strip(py0, rows, cb, zb);
+  select_strip(F, py0, rows, cb, zb);
+  spawner_strip(F, py0, rows, cb, zb);
+  line_strip(F, py0, rows, cb, zb);
   rain_strip(py0, rows, cb, zb);
-  bolt_strip(py0, rows, cb, zb);
+  bolt_strip(F, py0, rows, cb, zb);
 }
 
 /* ---------------------------------------------------------------- the frame */
@@ -2174,6 +2202,15 @@ static void strips_sent(bool still) { shown_ok = still; }
 void render_frame(const Camera *c, uint32_t tod) {
   uint16_t buf[STRIP_N] __attribute__((aligned(4)));
   strip = buf;
+  /* the frame's state, all of it written and read while this frame is drawn: a strip of
+   * the picture (the rest goes straight to the screen), what the frame's helpers keep
+   * (Frame) and the hand's model (HandFrame). On the stack, as the strip buffer already
+   * is, not in the app's RAM. */
+  uint16_t cbuf[SR][RW];      /* a strip of the picture */
+  Frame frame;
+  Frame *F = &frame;
+  HandFrame hand;
+  hand_none(&hand);   /* the frames that return early (below) draw nothing held */
   bool still = still_screen();
   static int last_gui;
   bool opening_pause = gui == GUI_PAUSE && last_gui == GUI_NONE && c;
@@ -2192,7 +2229,7 @@ void render_frame(const Camera *c, uint32_t tod) {
           strip[y * SCREEN_W + x] = (uint16_t)~strip[y * SCREEN_W + x];
         }
       }
-      hud_strip(strip, py * 2, SR * 2);
+      hud_strip(strip, py * 2, SR * 2, &hand);
       send_strip(py, false);
       shown[py / SR] = strip_hash();
     }
@@ -2203,7 +2240,7 @@ void render_frame(const Camera *c, uint32_t tod) {
     /* no world: only what the screens draw */
     for (int py = 0; py < RH; py += SR) {
       memset(strip, 0, STRIP_N * sizeof *strip);
-      hud_strip(strip, py * 2, SR * 2);
+      hud_strip(strip, py * 2, SR * 2, &hand);
       send_strip(py, still);
     }
     strips_sent(still);
@@ -2351,6 +2388,16 @@ void render_frame(const Camera *c, uint32_t tod) {
   cam_fr[1][0] = cam_y - oy, cam_fr[1][1] = cam_y + 1 - oy;
   cam_fr[2][0] = cam_z - oz, cam_fr[2][1] = cam_z + 1 - oz;
   under_water = is_water(cam_b);
+  /* A spectator's head in a solid block: what it sees is through the rock (cell_hit):
+   * a face shows only with nothing solid in front of it, so the ray walks on past
+   * the rock until it meets one. It costs what it costs to see through the world
+   * - the rays run 14 blocks a pixel instead of 7 - and only while the head is in
+   * a block. One thing it does not do exactly: a surface the rays meet almost edge
+   * on (the side of a hill, seen from under it) can slip between the 4 x 4 samples
+   * the picture is drawn from, so a pixel or two of it here and there is sky where
+   * the rock was. Tracing every pixel instead - the reference build - costs three
+   * times the frame. */
+  xray = pl.mode == 2 && cam_i >= 0 && (blk_flags[cam_b] & BF_OPAQUE) != 0;
   if (under_water) {
     fog_r = 10, fog_g = 30, fog_b = 110;
     fog0 = 0;
@@ -2379,12 +2426,14 @@ void render_frame(const Camera *c, uint32_t tod) {
     brk_stage = (int)(pl.breaking * 10);
     if (brk_stage > 9) brk_stage = 9;
   }
-  ents_frame();
-  spawner_frame();
+  ents_frame(F);
+  spawner_frame(F);
+  /* the hand: its model for this frame, lit by the light where the eyes are */
+  hand_frame(&hand, view_light());
   rain_frame();
-  bolt_frame();
-  line_frame();
-  select_frame();
+  bolt_frame(F);
+  line_frame(F);
+  select_frame(F);
   /* The picture in 4 x 4 cells: their corners and middles are traced. A cell whose corners
    * and middle met the same thing (a face, the sky, a plant) is drawn from them; any other is
    * cut in four of 2 x 2, the points between traced as needed (once, for both sides) */
@@ -2395,8 +2444,8 @@ void render_frame(const Camera *c, uint32_t tod) {
   bool fast_sky = sky_fast();
   for (int k = 0; k <= 128; k++) sky_pk[k] = pack(sky_grad[k][0], sky_grad[k][1], sky_grad[k][2]);
   enum { NC = RW / 4 };
-  static Sample cn[2][NC + 1], ed[2][NC + 1], md[2 * NC + 1];   /* corners, edges' middles, the middle row */
-  static uint8_t ed_ok[2][NC + 1], md_ok[2 * NC + 1];
+  Sample cn[2][NC + 1], ed[2][NC + 1], md[2 * NC + 1];   /* corners, edges' middles, the middle row */
+  uint8_t ed_ok[2][NC + 1], md_ok[2 * NC + 1];
   Sample *ct = cn[0], *cbt = cn[1], *et = ed[0], *eb = ed[1];
   uint8_t *et_ok = ed_ok[0], *eb_ok = ed_ok[1];
   for (int k = 0; k <= NC; k++) sample_at(&ct[k], 4 * k, 0);
@@ -2481,7 +2530,7 @@ void render_frame(const Camera *c, uint32_t tod) {
     ts = et, et = eb, eb = ts;
     uint8_t *to = et_ok;
     et_ok = eb_ok, eb_ok = to;
-    ents_strip(py, SR, cbuf, zbuf);
+    ents_strip(F, py, SR, cbuf, zbuf);
     /* 2 x 2 screen pixels each */
     for (int r = 0; r < SR; r++) {
       /* (a word a picture pixel: the C library's memcpy here goes a byte at a time) */
@@ -2493,7 +2542,7 @@ void render_frame(const Camera *c, uint32_t tod) {
         d[x + 1] = d2[x + 1] = hi;
       }
     }
-    hud_strip(strip, py * 2, SR * 2);
+    hud_strip(strip, py * 2, SR * 2, &hand);
     send_strip(py, still);
   }
   strips_sent(still);

@@ -32,7 +32,7 @@
 </p>
 
 <p align="center">
-  <sub>NumDash, Crossy Road, NumBlocks, NumDrive, Balatro, Buckshot Roulette, Portal Returns, Tetris, Chess, Flappy Bird, Pac-Man, Snake, Connect Four, Solitaire, 2048, Minesweeper and Block Breaker, plus NumVisuals: moving backgrounds with a clock, a timer and more.</sub>
+  <sub>NumDash, Crossy Road, NumDrive, Balatro, Buckshot Roulette, Portal Returns, Tetris, Chess, Flappy Bird, Pac-Man, Snake, Connect Four, Solitaire, 2048, Minesweeper and Block Breaker, plus NumVisuals: moving backgrounds with a clock, a timer and more.</sub>
 </p>
 
 ## ⭐ Enjoying NumPlay? Give it a star
@@ -59,7 +59,7 @@ Mine, craft and survive in a world like Minecraft 1.8, right on your calculator.
 </p>
 
 <p align="center">
-  It's in NumPlay too. &nbsp;<a href="games/numblocks/README.md"><b>More about NumBlocks</b></a> &nbsp;·&nbsp; <a href="docs/play.md#numblocks"><b>How to play</b></a>
+  Too big to share the calculator with NumPlay: install NumBlocks.nwa on its own. &nbsp;<a href="games/numblocks/README.md"><b>More about NumBlocks</b></a> &nbsp;·&nbsp; <a href="docs/play.md#numblocks"><b>How to play</b></a>
 </p>
 
 
@@ -143,7 +143,7 @@ Click a file to download it. Not sure which one? Take the first.
 <table>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><b><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay.nwa">NumPlay.nwa</a></b><br><b>All 17 games and NumVisuals in one app. Start here!</b></td>
+    <td><b><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay.nwa">NumPlay.nwa</a></b><br><b>All 16 games and NumVisuals in one app. Start here!</b></td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon-invisible.png" width="64" alt="A blank white icon"></td>

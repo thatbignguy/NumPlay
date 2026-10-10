@@ -92,8 +92,17 @@ static void frame(float x, float y, float z, float yaw, float pitch) {
   Camera c = {x, y, z, yaw, pitch};
   fno++;
   phase = (uint32_t)fno;
-  hand_frame();
   render_frame(&c, game_time);
+}
+
+/* the generator's scratch: it lives for the whole of a call that makes the world, so the
+ * gen_top calls here (outside any world_follow) each get their own */
+static int top_at(int x, int z) {
+  uint8_t gs[GEN_SCRATCH];
+  gen_scratch(gs);
+  int t = gen_top(x, z);
+  gen_scratch(NULL);
+  return t;
 }
 
 int main(void) {
@@ -105,11 +114,11 @@ int main(void) {
   world_new(SEED, "nb9");
   /* settle the cache around a spot on the ground */
   float px = 8.5f, pz = 8.5f;
-  int gt = gen_top(8, 8);
+  int gt = top_at(8, 8);
   float py = (float)gt + 2;
   for (int k = 0; k < 60 && (k < 3 || world_pending()); k++) world_follow(px, py, pz);
   while (world_pending()) world_follow(px, py, pz);
-  int top = gen_top(8, 8);
+  int top = top_at(8, 8);
   float eye = (float)top + 1.62f, high = (float)top + 30;
 
   memset(&pl, 0, sizeof pl);
@@ -122,9 +131,9 @@ int main(void) {
 #if NMOBS
   /* a zombie close ahead (south), a cow mid-range, a pig far, two dropped items */
   {
-    Entity *z = ent_new(E_ZOMBIE, px, (float)gen_top(8, 11) + 1, pz + 2.5f);
-    Entity *c = ent_new(E_COW, px - 3.0f, (float)gen_top(5, 14) + 1, pz + 6.0f);
-    Entity *p = ent_new(E_PIG, px + 4.0f, (float)gen_top(12, 20) + 1, pz + 12.0f);
+    Entity *z = ent_new(E_ZOMBIE, px, (float)top_at(8, 11) + 1, pz + 2.5f);
+    Entity *c = ent_new(E_COW, px - 3.0f, (float)top_at(5, 14) + 1, pz + 6.0f);
+    Entity *p = ent_new(E_PIG, px + 4.0f, (float)top_at(12, 20) + 1, pz + 12.0f);
     if (z) {
       z->health = 20;
       z->yaw = 180;
@@ -137,8 +146,8 @@ int main(void) {
       p->health = 10;
       p->yaw = 270;
     }
-    Entity *i1 = ent_drop(B_DIRT, 3, 0, px + 0.5f, (float)gen_top(9, 10) + 1, pz + 1.5f, false);
-    Entity *i2 = ent_drop(I_STICK, 2, 0, px - 1.0f, (float)gen_top(7, 12) + 1, pz + 4.0f, false);
+    Entity *i1 = ent_drop(B_DIRT, 3, 0, px + 0.5f, (float)top_at(9, 10) + 1, pz + 1.5f, false);
+    Entity *i2 = ent_drop(I_STICK, 2, 0, px - 1.0f, (float)top_at(7, 12) + 1, pz + 4.0f, false);
     if (i1) i1->age = 20;
     if (i2) i2->age = 20;
   }
