@@ -19,7 +19,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.3.12"
+#define NB_VERSION "1.3.13"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {

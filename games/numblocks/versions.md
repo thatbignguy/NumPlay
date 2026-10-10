@@ -1,3 +1,17 @@
+## 1.3.13
+**The control sheet no longer crashes the game when the keys fit on one line**
+- The three notes under the key list ("Jump twice: fly", "sin + cos: the game
+  mode switcher", "Menus: OK takes or puts") were drawn by a loop that counted
+  to five rows instead of to the three notes there are, so as soon as the keys
+  above them wrapped onto one line the sheet's fourth line read past the end of
+  the list and drew text from whatever followed it in memory. On the calculator
+  that was the address 0, and the game stopped there on the first boot — the
+  sheet every new player sees before anything else. The loop now stops at the
+  list's length.
+- The other fix the device build needed to bring the sheet back: nothing else.
+  Verified on the device emulator (tools/emu.py): the first-boot sheet, then
+  Home quitting on its own, 46 fps, no violations.
+
 ## 1.3.12
 **Spectator mode: fly through the blocks, see through them, and look at the world through a mob's eyes**
 - `/gamemode spectator` (cheats on) is Minecraft's spectator: you always fly,

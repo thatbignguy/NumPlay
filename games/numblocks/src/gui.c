@@ -2167,8 +2167,9 @@ static void key_sheet(void) {
                                        "Menus: OK takes or puts, EXE one, shift+OK moves."};
   int rows = line[1][0] ? 2 : 1;
   for (int i = 0; i < rows; i++) text_center(line[i], SCREEN_W / 2, 177 + i * 9, 0xFFFF);
-  /* the notes under them, 9 apart: five lines fit between the keys and Done */
-  for (int i = 0; i + rows < 5; i++) text_center(notes[i], SCREEN_W / 2, 177 + (i + rows) * 9, 0xFFFF);
+  /* the notes under them, 9 apart: five lines fit between the keys and Done (there are three
+   * of them, so the shorter list of two rows above leaves them all shown, never a fourth) */
+  for (int i = 0; i < 3 && i + rows < 5; i++) text_center(notes[i], SCREEN_W / 2, 177 + (i + rows) * 9, 0xFFFF);
 }
 
 /* GuiControls: the actions by category, each with its key and Reset; Done and Reset Keys under them */
