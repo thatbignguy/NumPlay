@@ -1,3 +1,8 @@
+## 1.3.4
+- The version is written in full where it shows: the title screen reads "Numblocks
+  custom 1.3.4" and the F3 overlay "Numblock custom 1.3.4 (minecraft.1.8.8)",
+  where both used to stop at 1.3. One version in the source now feeds both, so
+  they cannot drift from versions.md again.
 ## 1.3.3
 - Options, Controls is a menu of its own now, not the key bindings opened at once:
   the key sheet wide across the top, with Sprint and Keybinds side by side under

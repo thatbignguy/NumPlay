@@ -350,7 +350,7 @@ static void debug_overlay(void) {
     number((int)(game_time % 24000), p);
   }
   int y = 2;
-  text("Numblock custom 1.3 (minecraft.1.8.8)", 2, y, 0xFFFF, true);
+  text("Numblock custom " NB_VERSION " (minecraft.1.8.8)", 2, y, 0xFFFF, true);
   y += 9;
   text(lxyz, 2, y, 0xFFFF, true);
   y += 9;
@@ -2153,7 +2153,7 @@ static void menu_screen(void) {
     case GUI_TITLE:
       logo(30);
       splash("Also try Minecraft!", w / 2 + 72, 72, 1.25f + 0.08f * fabsf(sinf((frame_no % 60) * 0.1047f)));
-      text("Numblocks custom 1.3", 2, h - 10, 0xFFFF, true);
+      text("Numblocks custom " NB_VERSION, 2, h - 10, 0xFFFF, true);
       text("Not affiliated with Mojang",
            w - text_width("Not affiliated with Mojang") - 2, h - 20, 0xFFFF, true);
       text("Modified from numplay by N", w - text_width("Modified from numplay by N") - 2, h - 10,
