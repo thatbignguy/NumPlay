@@ -337,7 +337,7 @@ int main(void) {
     plat_remove_prefix("ut7");
   }
   {
-    /* sprinting (EntityPlayerSP): forward twice, or with the sprint key; it lasts while forward is held */
+    /* sprinting (EntityPlayerSP): with the sprint key; it lasts while forward is held */
     world_new(0, "ut8");
     world_follow(8, 110, 8);
     int g = 110;
@@ -349,20 +349,11 @@ int main(void) {
     for (int t = 0; t < 3; t++) player_tick(0, 0);
     player_tick(K_FWD, K_FWD), player_tick(0, 0), player_tick(0, 0);
     CHECK(!pl.sprinting);
-    player_tick(K_FWD, K_FWD);
-    CHECK(pl.sprinting);
+    player_tick(K_FWD, K_FWD);   /* forward twice: only walking */
+    CHECK(!pl.sprinting);
     for (int t = 0; t < 5; t++) player_tick(K_FWD, 0);
-    CHECK(pl.sprinting);
-    player_tick(0, 0);
     CHECK(!pl.sprinting);
-    /* too slow a second press: walking */
-    for (int t = 0; t < 10; t++) player_tick(0, 0);
-    player_tick(K_FWD, K_FWD);
-    for (int t = 0; t < 10; t++) player_tick(0, 0);
-    player_tick(K_FWD, K_FWD);
-    CHECK(!pl.sprinting);
-    /* the key: held while it is held, and letting go of it ends the sprint (Hold), where a
-     * double-tap of forward carries its own sprint while forward is held */
+    /* the key: held while it is held, and letting go of it ends the sprint (Hold) */
     player_tick(K_FWD | K_SPRINT, K_SPRINT);
     CHECK(pl.sprinting);
     player_tick(K_FWD, 0);
@@ -400,8 +391,8 @@ int main(void) {
     CHECK(pl.sprinting);                       /* a tap again: on */
     for (int t = 0; t < 5; t++) player_tick(0, 0);
     CHECK(!pl.sprinting);                       /* forward let go: it ends, as it does on Hold */
-    player_tick(K_FWD, 0), player_tick(0, 0), player_tick(K_FWD, K_FWD);   /* forward twice */
-    CHECK(pl.sprinting);
+    player_tick(K_FWD, K_FWD), player_tick(0, 0), player_tick(K_FWD, K_FWD);   /* forward twice */
+    CHECK(!pl.sprinting);                      /* (forward twice no longer sprints) */
     player_tick(K_FWD | K_SNEAK, K_SNEAK);
     CHECK(!pl.sprinting);                       /* sneaking ends it */
     pl.food = 6;
@@ -455,6 +446,8 @@ int main(void) {
         while (world_pending()) world_follow(8, (float)y, 8);
       }
     static uint8_t g[16 * 16 * VCY];
+    uint8_t gs[GEN_SCRATCH];
+    gen_scratch(gs);
     int off = 0;
     for (int cz = -2; cz <= 1; cz++)
       for (int cx = -2; cx <= 1; cx++) {
@@ -529,6 +522,46 @@ int main(void) {
     CHECK(pl.hit_face < 0 && !entity_looked_at(3, 1e9f));
     plat_remove_prefix("ut10");
   }
+  /* the names are the modern ones: 1.13's ids renamed the blocks and items (and 1.12's the
+   * terracotta, 1.14's the dyes), and the inventory and the /give chat show these */
+  CHECK(!strcmp(item_label(B_PLANKS_OAK), "Oak Planks"));
+  CHECK(!strcmp(item_label(B_LOG_OAK), "Oak Log"));
+  CHECK(!strcmp(item_label(B_LEAVES_OAK), "Oak Leaves"));
+  CHECK(!strcmp(item_label(B_WOOD_SLAB_OAK), "Oak Slab"));
+  CHECK(!strcmp(item_label(B_SAPLING_OAK), "Oak Sapling"));
+  CHECK(!strcmp(item_label(B_HARDENED_CLAY), "Terracotta"));
+  CHECK(!strcmp(item_label(B_STAINED_CLAY_WHITE), "White Terracotta"));
+  CHECK(!strcmp(item_label(B_STAINED_CLAY_BLACK), "Black Terracotta"));
+  CHECK(!strcmp(item_label(B_STAINED_CLAY_LIGHT_BLUE), "Light Blue Terracotta"));
+  CHECK(!strcmp(item_label(B_MOSSY_COBBLESTONE), "Mossy Cobblestone"));
+  CHECK(!strcmp(item_label(B_SNOW), "Snow Block"));
+  CHECK(!strcmp(item_label(B_SNOW_LAYER), "Snow"));
+  CHECK(!strcmp(item_label(B_STONE_SLAB), "Smooth Stone Slab"));
+  CHECK(!strcmp(item_label(B_STONE_SLAB_DOUBLE), "Smooth Stone"));
+  CHECK(!strcmp(item_label(B_WOOD_SLAB_OLD), "Petrified Oak Slab"));
+  CHECK(!strcmp(item_label(B_BRICK_SLAB), "Brick Slab"));
+  CHECK(!strcmp(item_label(B_STONE_BRICK_SLAB), "Stone Brick Slab"));
+  CHECK(!strcmp(item_label(B_DOUBLE_GRASS_LOWER), "Tall Grass"));
+  CHECK(!strcmp(item_label(B_DEAD_SHRUB), "Dead Bush"));
+  CHECK(!strcmp(item_label(B_BROWN_MUSHROOM), "Brown Mushroom"));
+  CHECK(!strcmp(item_label(B_RED_MUSHROOM), "Red Mushroom"));
+  CHECK(!strcmp(item_label(B_BROWN_MUSHROOM_CAP), "Brown Mushroom Block"));
+  CHECK(!strcmp(item_label(B_OAK_STAIRS), "Oak Stairs"));
+  CHECK(!strcmp(item_label(B_GRASS), "Grass Block"));
+  CHECK(!strcmp(item_label(I_REEDS), "Sugar Cane"));
+  CHECK(!strcmp(item_label(I_MELON_SLICE), "Melon Slice"));
+  CHECK(!strcmp(item_label(I_CLAY_BALL), "Clay Ball"));
+  CHECK(!strcmp(item_label(I_WHEAT_SEEDS), "Wheat Seeds"));
+  CHECK(!strcmp(item_label(I_MILK_BUCKET), "Milk Bucket"));
+  CHECK(!strcmp(item_label(I_BED), "White Bed"));
+  CHECK(!strcmp(item_label(I_DYE_RED), "Red Dye"));
+  CHECK(!strcmp(item_label(I_DYE_GREEN), "Green Dye"));
+  CHECK(!strcmp(item_label(I_DYE_YELLOW), "Yellow Dye"));
+  CHECK(!strcmp(item_label(I_DYE_WHITE), "Bone Meal"));
+  CHECK(!strcmp(item_label(I_RAW_FISH), "Raw Cod"));
+  CHECK(!strcmp(item_label(I_COOKED_FISH), "Cooked Cod"));
+  CHECK(!strcmp(item_label(I_CLOWNFISH), "Tropical Fish"));
+  CHECK(!strcmp(item_label(I_RAW_SALMON), "Raw Salmon"));
   {
     /* commands: what they do; most need cheats */
     extern uint32_t game_time;
@@ -542,20 +575,28 @@ int main(void) {
     CHECK(pl.mode == 1);
     command_run("/gamemode survival");
     CHECK(pl.mode == 0);
+    command_run("/gamemode spectator");
+    CHECK(pl.mode == 2 && pl.flying);   /* a spectator: always flying */
+    command_run("/gamemode sp");
+    CHECK(pl.mode == 2);
+    command_run("/gamemode 3");
+    CHECK(pl.mode == 2);
+    command_run("/gamemode adventure");
+    CHECK(pl.mode == 2);   /* (NumBlocks has no adventure) */
     memset(pl.inv, 0, sizeof pl.inv);
     command_run("/give @p minecraft:diamond_sword");
     CHECK(pl.inv[0].id == I_DIAMOND_SWORD);
-    command_run("/give Player wool 5 14");
+    command_run("/give Player red_wool 5");
     CHECK(pl.inv[1].id == B_WOOL_RED && item_count(&pl.inv[1]) == 5);
     command_run("/give @p 5 64 2");
     CHECK(pl.inv[2].id == B_PLANKS_BIRCH && item_count(&pl.inv[2]) == 64);
-    command_run("/give @p dye 1 15");
+    command_run("/give @p bone_meal 1");
     CHECK(pl.inv[3].id == I_DYE_WHITE);
     command_run("/give @p 276 1 100");
     CHECK(pl.inv[4].id == I_DIAMOND_SWORD && pl.inv[4].aux == 100);
     command_run("/give @p nothing");
     CHECK(!pl.inv[5].id);
-    command_run("/clear @p wool");
+    command_run("/clear @p red_wool");
     CHECK(!pl.inv[1].id && pl.inv[0].id);
     command_run("/clear");
     CHECK(!pl.inv[0].id && !pl.inv[2].id);
@@ -572,8 +613,67 @@ int main(void) {
     command_run("/xp -2L");
     CHECK(pl.xp_level == 3);
     int sx = (int)floorf(pl.x), sy = (int)floorf(pl.y + 0.5f), sz = (int)floorf(pl.z);
-    command_run("/setblock ~ ~3 ~ wool 4");
+    command_run("/setblock ~ ~3 ~ yellow_wool");
     CHECK(world_get(sx, sy + 3, sz) == B_WOOL_YELLOW);
+    /* 1.13's names: a name says which block state or item it is, and no data value goes
+     * with one - the woods, the colours and the slabs one 1.8 id could not name */
+    memset(pl.inv, 0, sizeof pl.inv);
+    command_run("/give @p oak_planks 3");
+    CHECK(pl.inv[0].id == B_PLANKS_OAK && item_count(&pl.inv[0]) == 3);
+    command_run("/give @p spruce_planks 3");
+    CHECK(pl.inv[1].id == B_PLANKS_SPRUCE);
+    command_run("/give @p smooth_stone_slab 1");
+    CHECK(pl.inv[2].id == B_STONE_SLAB);
+    command_run("/give @p smooth_stone 1");
+    CHECK(pl.inv[3].id == B_STONE_SLAB_DOUBLE);
+    command_run("/give @p petrified_oak_slab 1");
+    CHECK(pl.inv[4].id == B_WOOD_SLAB_OLD);
+    command_run("/give @p white_terracotta 1");
+    CHECK(pl.inv[5].id == B_STAINED_CLAY_WHITE);
+    command_run("/give @p orange_terracotta 1");
+    CHECK(pl.inv[6].id == B_STAINED_CLAY_ORANGE);
+    command_run("/give @p snow_block 1");
+    CHECK(pl.inv[7].id == B_SNOW);
+    command_run("/give @p grass 1");
+    CHECK(pl.inv[8].id == B_TALL_GRASS);
+    command_run("/give @p tall_grass 1");
+    CHECK(pl.inv[9].id == B_DOUBLE_GRASS_LOWER);
+    command_run("/give @p dead_bush 1");
+    CHECK(pl.inv[10].id == B_DEAD_SHRUB);
+    command_run("/give @p zombie_spawn_egg 1");
+    CHECK(pl.inv[11].id == I_ZOMBIE_SPAWN_EGG);
+    command_run("/give @p red_dye 1");
+    CHECK(pl.inv[12].id == I_DYE_RED);
+    command_run("/give @p bone_meal 1");
+    CHECK(pl.inv[13].id == I_DYE_WHITE);
+    command_run("/give @p tropical_fish 1");
+    CHECK(pl.inv[14].id == I_CLOWNFISH);
+    command_run("/give @p melon_slice 1");
+    CHECK(pl.inv[15].id == I_MELON_SLICE);
+    command_run("/give @p sugar_cane 1");
+    CHECK(pl.inv[16].id == I_REEDS);
+    /* the 1.8 spellings are gone */
+    command_run("/give @p wool 5 14");
+    CHECK(!pl.inv[17].id);
+    command_run("/give @p stained_hardened_clay 1");
+    CHECK(!pl.inv[18].id);
+    command_run("/give @p tallgrass 1");
+    CHECK(!pl.inv[19].id);
+    /* /setblock: the modern name places exactly that state, its handling beside the name */
+    command_run("/setblock ~ ~3 ~ orange_terracotta");
+    CHECK(world_get(sx, sy + 3, sz) == B_STAINED_CLAY_ORANGE);
+    command_run("/setblock ~ ~3 ~ infested_stone");
+    CHECK(world_get(sx, sy + 3, sz) == B_MONSTER_EGG_STONE);
+    command_run("/setblock ~ ~3 ~ oak_stairs destroy");
+    CHECK(world_get(sx, sy + 3, sz) == B_OAK_STAIRS);
+    /* /clear: a name clears the one item it names */
+    memset(pl.inv, 0, sizeof pl.inv);
+    command_run("/give @p red_wool 2");
+    command_run("/give @p white_wool 2");
+    command_run("/clear @p red_wool");
+    CHECK(!pl.inv[0].id && pl.inv[1].id == B_WOOL_WHITE);
+    command_run("/clear @p oak_planks");
+    CHECK(pl.inv[1].id == B_WOOL_WHITE);
     command_run("/gamerule keepInventory true");
     CHECK(rule(GR_KEEP_INVENTORY) && rule(GR_DAYLIGHT_CYCLE));
     command_run("/gamerule doDaylightCycle false");
@@ -599,9 +699,113 @@ int main(void) {
     CHECK(command_complete("/gam", 1, &at, o, sizeof o) && !strcmp(o, "gamerule"));
     CHECK(!command_complete("/gam", 2, &at, o, sizeof o));
     CHECK(command_complete("/give @p diamond_sw", 0, &at, o, sizeof o) && at == 9 && !strcmp(o, "minecraft:diamond_sword"));
+    CHECK(command_complete("/give @p oak_pl", 0, &at, o, sizeof o) && at == 9 && !strcmp(o, "minecraft:oak_planks"));
+    CHECK(command_complete("/give @p red_w", 0, &at, o, sizeof o) && at == 9 && !strcmp(o, "minecraft:red_wool"));
+    CHECK(command_complete("/setblock ~ ~ ~ ", 0, &at, o, sizeof o) && at == 16 && !strcmp(o, "minecraft:stone"));
+    CHECK(command_complete("/setblock ~ ~ ~ wa", 0, &at, o, sizeof o) && at == 16 && !strcmp(o, "minecraft:water"));
+    CHECK(command_complete("/setblock ~ ~3 ~ oak_stairs des", 0, &at, o, sizeof o) && !strcmp(o, "destroy"));
     CHECK(command_complete("/gamemode cr", 0, &at, o, sizeof o) && !strcmp(o, "creative"));
     CHECK(command_complete("/time set ", 1, &at, o, sizeof o) && !strcmp(o, "night"));
     delete_world(1);
+  }
+  {
+    /* the game mode switcher (sin + cos): cheats first, the pair through the modes */
+    world_new(0, "ut20");
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    world_cheats = false;
+    pl.mode = 0, gui = GUI_NONE;
+    mode_open();
+    CHECK(gui == GUI_NONE && pl.mode == 0);   /* no cheats: the message, not the screen */
+    world_cheats = true;
+    /* in Creative it opens on Survival: Minecraft opens on Creative if in any other
+     * mode, and on Survival if in Creative */
+    pl.mode = 1;
+    mode_open();
+    CHECK(gui == GUI_MODE);
+    mode_next();   /* and cos goes on to Spectator, the third mode */
+    mode_use();
+    CHECK(gui == GUI_NONE && pl.mode == 2 && pl.flying);   /* a spectator is always flying */
+    /* Back, mid-way: nothing changes */
+    pl.mode = 1;
+    mode_open();
+    mode_cancel();
+    CHECK(gui == GUI_NONE && pl.mode == 1);
+    /* in Spectator it opens on Creative, so confirming switches to Creative */
+    pl.mode = 2, pl.flying = true;
+    mode_open();
+    mode_use();
+    CHECK(gui == GUI_NONE && pl.mode == 1);
+    /* and in Survival it opens on Creative, so confirming switches to Creative */
+    pl.mode = 0, pl.flying = true;
+    mode_open();
+    mode_use();
+    CHECK(gui == GUI_NONE && pl.mode == 1);
+    /* in Survival again: confirming brings flying to an end */
+    pl.mode = 0, pl.flying = true;
+    mode_open(), mode_next(), mode_use();
+    CHECK(gui == GUI_NONE && pl.mode == 0 && !pl.flying);
+    gui = GUI_NONE;
+    /* and the mode is kept with the world */
+    save_world();
+    pl.mode = 1;
+    CHECK(load_world(1) && pl.mode == 0);
+    plat_remove_prefix("ut20");
+  }
+  {
+    /* spectator: flying free through the blocks, nothing to touch, and a mob's eyes */
+    world_new(0, "ut21");
+    int g = 110;
+    for (int z = -8; z <= 60; z++)
+      for (int x = 2; x <= 14; x++)
+        for (int y = g - 2; y < g + 4; y++) world_set(x, y, z, y >= g ? B_AIR : B_STONE);
+    memset(&pl, 0, sizeof pl);
+    pl.x = 8.5f, pl.z = 0.5f, pl.y = (float)g, pl.health = 20, pl.food = 20, pl.mode = 2, pl.flying = true;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    /* free flight: forward carries it, and nothing makes it fall */
+    float z0 = pl.z;
+    for (int t = 0; t < 10; t++) player_tick(K_FWD, t == 0 ? K_FWD : 0);
+    CHECK(pl.z - z0 > 1.0f && pl.z - z0 < 10.0f);   /* flying forward, as in creative */
+    CHECK(!pl.on_ground);
+    float fy = pl.y;
+    for (int t = 0; t < 20; t++) player_tick(0, 0);
+    CHECK(pl.y == fy);            /* no gravity: it hangs where it is left */
+    /* through the rock: inside the stone it goes on, straight, and still does not fall */
+    pl.y = (float)(g - 1);
+    float sy = pl.y;
+    z0 = pl.z;
+    for (int t = 0; t < 20; t++) player_tick(K_FWD, t == 0 ? K_FWD : 0);
+    CHECK(pl.z - z0 > 1.0f && pl.y == sy);
+    /* the bottom of the world and the top of it: it stops at both */
+    for (int t = 0; t < 600; t++) player_tick(K_SNEAK, 0);
+    CHECK(pl.y >= 0.5f && pl.y < 1.0f);
+    for (int t = 0; t < 900; t++) player_tick(K_JUMP, 0);
+    CHECK(pl.y > WORLD_H + 20 && pl.y <= WORLD_H + 24);
+    /* nothing hurts a spectator */
+    pl.health = 20;
+    player_hurt(5, DMG_GENERIC), player_hurt(5, DMG_FALL), player_hurt(5, DMG_LAVA);
+    CHECK(pl.health == 20 && !pl.dead);
+    /* nothing is in reach: no block is mined or placed, none is outlined */
+    player_look(pl.x, pl.y, pl.z, 0, 0);
+    CHECK(pl.hit_face < 0);
+    player_tick(K_ATTACK | K_USE, K_ATTACK | K_USE);
+    CHECK(pl.health == 20);
+    /* a mob in front: the eyes' pick finds it, OK takes its eyes, alpha gives them back */
+    pl.x = 8.5f, pl.z = 8.5f, pl.y = (float)g;
+    world_set((int)pl.x, (int)pl.y, (int)pl.z + 4, B_AIR);
+    Entity *m = ent_new(E_ZOMBIE, pl.x, (float)g, pl.z + 4);
+    CHECK(m != NULL);
+    player_look(pl.x, pl.y, pl.z, 0, 0);
+    CHECK(spec_target == (int8_t)(m - ents));
+    player_tick(K_ATTACK, K_ATTACK);
+    CHECK(spectate == (int8_t)(m - ents));
+    CHECK(spec_eye > 1.5f && spec_eye < 1.8f);   /* the zombie's eyes: 0.85 of its 1.95 */
+    player_tick(0, 0);
+    CHECK(pl.z == m->z && pl.yaw == m->yaw);     /* the camera is the mob's */
+    player_tick(K_SNEAK, K_SNEAK);
+    CHECK(spectate < 0 && spec_eye == 0);
+    plat_remove_prefix("ut21");
   }
   {
     /* fire: lit on stone it goes out; by planks it spreads and burns them; flint and steel lights it */
@@ -674,6 +878,14 @@ int main(void) {
     CHECK(flat_simplify("2;7,2x3,2;1", simple, sizeof simple) && !strcmp(simple, "bedrock,dirt,dirt,grass"));
     CHECK(flat_simplify("bedrock,stone,stone,dirt,dirt,grass", simple, sizeof simple) &&
           !strcmp(simple, "bedrock,stone,stone,dirt,dirt,grass"));
+    /* 1.13's names, with the 1.8 spellings as aliases: an old preset still loads, and one
+     * kept with them is shown with the modern names */
+    CHECK(flat_validate("bedrock,terracotta,whiteterracotta,orangeterracotta", e, sizeof e));
+    CHECK(flat_validate("bedrock,hardenedclay,stainedclay,whiteclay", e, sizeof e));
+    CHECK(flat_validate("bedrock,oakplanks,spruceplanks,oaklog,snowblock", e, sizeof e));
+    CHECK(flat_validate("bedrock,planks,logoak,snow,mossstone,wool", e, sizeof e));
+    CHECK(flat_simplify("bedrock,hardenedclay,whiteclay,wool", simple, sizeof simple) &&
+          !strcmp(simple, "bedrock,terracotta,whiteterracotta,whitewool"));
     new_world(2, 78, 0, false, WT_FLAT, "Simple", "bedrock,stone,stone,dirt,dirt,grass");
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
@@ -684,6 +896,18 @@ int main(void) {
     WorldInfo wi;
     CHECK(load_world(2) && !strcmp(world_preset, "bedrock,stone,stone,dirt,dirt,grass") && world_info(2, &wi) &&
           !strcmp(wi.preset, "bedrock,stone,stone,dirt,dirt,grass"));
+    delete_world(2);
+    world_type = WT_DEFAULT;
+    /* and the terracotta names put their blocks down */
+    new_world(2, 79, 0, false, WT_FLAT, "Terracotta", "bedrock,terracotta,orangeterracotta");
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    x = (int)floorf(pl.x), z = (int)floorf(pl.z);
+    CHECK(world_get(x, 0, z) == B_BEDROCK && world_get(x, 1, z) == B_HARDENED_CLAY &&
+          world_get(x, 2, z) == B_STAINED_CLAY_ORANGE);
+    save_world();
+    WorldInfo wi2;
+    CHECK(load_world(2) && world_info(2, &wi2) && !strcmp(wi2.preset, "bedrock,terracotta,orangeterracotta"));
     delete_world(2);
     world_type = WT_DEFAULT;
   }

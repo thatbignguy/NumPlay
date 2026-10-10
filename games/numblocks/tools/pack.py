@@ -779,6 +779,12 @@ GUI_SPRITES = [
     ('button', 'gui/widgets', 0, 66, 200, 20),
     ('button_hover', 'gui/widgets', 0, 86, 200, 20),
     ('button_off', 'gui/widgets', 0, 46, 200, 20),
+    # the game mode switcher (sin + cos, as Minecraft's F3 + F4): its panel, the
+    # slot a mode sits in, and the outline of the one selected. From the modern
+    # client, as modern_rel() lets gui/sprites and this container through.
+    ('gm_bg', 'gui/container/gamemode_switcher', 0, 0, 125, 75),
+    ('gm_slot', 'gui/sprites/gamemode_switcher/slot', 0, 0, 26, 26),
+    ('gm_sel', 'gui/sprites/gamemode_switcher/selection', 0, 0, 26, 26),
 ]
 
 
@@ -854,7 +860,7 @@ def main():
     out.append('const uint8_t blk_meta[B_COUNT] = {' + ','.join(str(s['meta']) for s in blocks.S) + '};')
     # NOTE for the superflat customizer (gen.c flat_parse_block): a preset layer may name any
     # block by these same Minecraft numeric ids, as id or id:meta (e.g. 1 stone, 2 grass, 3 dirt,
-    # 7 bedrock, 12 sand, 20 glass, 44 stone slab, 159:14 red stained clay, 172 hardened clay).
+    # 7 bedrock, 12 sand, 20 glass, 44 smooth stone slab, 159:14 red terracotta, 172 terracotta).
     # Every id:meta pair listed in blocks.py (i.e. with a B_* state) is legal; anything else is
     # rejected with a message, never placed.
     # GUI sprites and block icons: 4 bits a pixel, a palette each; index 0 see-through
@@ -880,6 +886,10 @@ def main():
     bg = first_frame(jar.image('gui/options_background'))
     bg.putdata([(r * 0x40 // 255, g * 0x40 // 255, b * 0x40 // 255, 255) for r, g, b, a in pixels(bg)])
     sprites.append(('dirt_bg', bg))
+    # the ender eye: the spectator slot's icon in the game mode switcher, as Minecraft's
+    # is. The eye of ender is not an item of the game (there is no End): its picture is
+    # here for that one icon and nothing else
+    sprites.append(('eye_ender', first_frame(jar.image('items/ender_eye'))))
     data, offs, pals, dims, flags2 = [], [], [], [], []
     for n, im in sprites:
         bs, pal, alpha = pack_sprite(im)

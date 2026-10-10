@@ -137,6 +137,15 @@ static int to_int(const char *s) {
   return neg ? -v : v;
 }
 static const char *strip_ns(const char *s) { return !strncmp(s, "minecraft:", 10) ? s + 10 : s; }
+/* NumBlocks' item for a name (1.13's flattened ids): every block state and item the commands
+ * know has one mc_state_name entry (a second 1.8 block that is the modern dead bush has none),
+ * parallel to give_key/give_id; -1: none */
+static int state_named(const char *s) {
+  const char *n = strip_ns(s);
+  for (int i = 0; i < n_give; i++)
+    if (mc_state_name[i][0] && !strcmp(mc_state_name[i], n)) return give_id[i];
+  return -1;
+}
 /* a block's id by name or number (Block.getBlockFromName); -1: none */
 static int block_named(const char *s) {
   const char *n = strip_ns(s);
@@ -199,7 +208,7 @@ static const char *const cmd_usage[N_COMMANDS] = {
 /* (permission level 0, or /seed in a world of one's own) */
 static bool allowed(int c) { return cheats_on() || c == C_HELP || c == C_ME || c == C_SEED; }
 
-static const char *const mode_name[2] = {"Survival Mode", "Creative Mode"};
+static const char *const mode_name[4] = {"Survival Mode", "Creative Mode", "Adventure Mode", "Spectator Mode"};
 static const char *const modes[4] = {"survival", "creative", "adventure", "spectator"};
 static const char *const diffs[4] = {"peaceful", "easy", "normal", "hard"};
 static const char *const diff_name[4] = {"Peaceful", "Easy", "Normal", "Hard"};
@@ -221,15 +230,13 @@ static int choice(const char *s, const char *const *names, int n, const char *co
 static void cmd_gamemode(char **a, int n) {
   if (n < 1) return usage(cmd_usage[C_GAMEMODE]);
   static const char *const l[4] = {"s", "c", "a", "sp"};
-  int m = choice(a[0], modes, 4, l);
+  int m = choice(a[0], modes, 4, l);   /* Minecraft's numbering: 3 is spectator */
   if (n > 1) player(a[1]);
   if (failed) return;
-  if (m > 1) return error("'%s' is not a valid number", a[0], 0, 0);   /* (NumBlocks has no adventure or spectator) */
-  pl.mode = (uint8_t)m;
-  pl.fall = 0;
-  if (m == 0) pl.flying = false;
-  chat_add("Your game mode has been updated", CHAT_WHITE);
-  ok("Set own game mode to %s", mode_name[m], 0);
+  if (m == 2) return error("'%s' is not a valid number", a[0], 0, 0);   /* (NumBlocks has no adventure) */
+  int nb = m == 3 ? 2 : m;   /* spectator is Minecraft's third mode and NumBlocks' second */
+  player_set_mode(nb);
+  ok("Set own game mode to %s", mode_name[nb], 0);
 }
 
 static void cmd_time(char **a, int n) {
@@ -274,14 +281,21 @@ static void cmd_give(char **a, int n) {
   if (n < 2) return usage(cmd_usage[C_GIVE]);
   player(a[0]);
   if (failed) return;
-  int id = item_named(a[1]);
-  if (id < 0) return error("There is no such item with name %s", a[1], 0, 0);
+  /* a name says which block state or item it is (1.13's ids), so no data value goes with
+   * one: what is left of the data value is how worn a tool is given */
+  int it = state_named(a[1]), id = -1;
+  if (it < 0) {
+    id = item_named(a[1]);
+    if (id < 0) return error("There is no such item with name %s", a[1], 0, 0);
+  }
   int count = n > 2 ? (int)num(a[2], 1, 64) : 1, data = n > 3 ? (int)num(a[3], -2147483647, 2147483647) : 0;
   if (failed) return;
-  /* data: which kind (wool's colour), or for tools how worn */
-  int it = data >= 0 && data <= 15 ? give_of(id, data) : -1;
-  if (it < 0) it = give_of(id, 0);
-  if (it < 0) return error("There is no such item with name %s", a[1], 0, 0);
+  if (it < 0) {
+    /* data: which kind (wool's colour), or for tools how worn */
+    it = data >= 0 && data <= 15 ? give_of(id, data) : -1;
+    if (it < 0) it = give_of(id, 0);
+    if (it < 0) return error("There is no such item with name %s", a[1], 0, 0);
+  }
   int wear = item_dur(it) ? (data < 0 ? 0 : data > item_dur(it) ? item_dur(it) : data) : 0;
   /* InventoryPlayer.addItemStackToInventory; what does not fit falls at the player's feet */
   int left = inv_add(pl.inv, 36, it, count, wear);
@@ -383,10 +397,13 @@ static void cmd_xp(char **a, int n) {
 
 static void cmd_clear(char **a, int n) {
   if (n > 0) player(a[0]);
-  int id = -1, data = -1, most = -1;
+  int id = -1, st = -1, data = -1, most = -1;
   if (n > 1) {
-    id = item_named(a[1]);
-    if (id < 0 && !failed) error("There is no such item with name %s", a[1], 0, 0);
+    st = state_named(a[1]);   /* a modern name: the one item it is */
+    if (st < 0) {
+      id = item_named(a[1]);
+      if (id < 0 && !failed) error("There is no such item with name %s", a[1], 0, 0);
+    }
   }
   if (n > 2) data = (int)num(a[2], -1, 2147483647);
   if (n > 3) most = (int)num(a[3], -1, 2147483647);
@@ -401,7 +418,9 @@ static void cmd_clear(char **a, int n) {
   for (int i = 0; i < k && (most < 0 || gone < most); i++) {
     Stack *t = s[i];
     if (!t->id) continue;
-    if (id >= 0) {
+    if (st >= 0) {
+      if (t->id != st) continue;
+    } else if (id >= 0) {
       int want = data < 0 ? -1 : give_of(id, data & 15);
       bool match = false;
       for (int g = 0; g < n_give && !match; g++)
@@ -481,22 +500,30 @@ static void cmd_setblock(char **a, int n) {
   int x = (int)floorf(coord(floorf(pl.x), a[0], false)), y = (int)floorf(coord(floorf(pl.y + 0.5f), a[1], false)),
       z = (int)floorf(coord(floorf(pl.z), a[2], false));
   if (failed) return;
-  int id = block_named(a[3]);
-  if (id < 0) return error("There is no such block with ID/name %s", a[3], 0, 0);
-  int data = n > 4 ? (int)num(a[4], 0, 15) : 0;
-  if (failed) return;
+  /* a name says which block state it is (1.13's ids), so no data value goes with one; a
+   * number and the names of blocks no item has keep the 1.8 <dataValue> between the id and
+   * the handling, a state's handling comes straight after the name */
+  int b = state_named(a[3]);
+  const char *hand = NULL;
+  if (b < 0) {
+    int id = block_named(a[3]);
+    if (id < 0) return error("There is no such block with ID/name %s", a[3], 0, 0);
+    int data = n > 4 ? (int)num(a[4], 0, 15) : 0;
+    if (failed) return;
+    hand = n > 5 ? a[5] : NULL;
+    /* the state: the block's with that data, else its first */
+    for (int i = 0; i < B_COUNT && b < 0; i++)
+      if (blk_id[i] == id && blk_meta[i] == data) b = i;
+    for (int i = 0; i < B_COUNT && b < 0; i++)
+      if (blk_id[i] == id) b = i;
+    if (b < 0) return error("There is no such block with ID/name %s", a[3], 0, 0);
+  } else
+    hand = n > 4 ? a[4] : NULL;
   if (y < 0 || y >= WORLD_H || !world_loaded(x, y, z)) return error("Cannot place block outside of the world", NULL, 0, 0);
-  /* the state: the block's with that data, else its first */
-  int b = -1;
-  for (int i = 0; i < B_COUNT && b < 0; i++)
-    if (blk_id[i] == id && blk_meta[i] == data) b = i;
-  for (int i = 0; i < B_COUNT && b < 0; i++)
-    if (blk_id[i] == id) b = i;
-  if (b < 0) return error("There is no such block with ID/name %s", a[3], 0, 0);
   int was = world_get(x, y, z);
-  if (n > 5) {
-    if (!strcmp(a[5], "keep") && was != B_AIR) return error("The block couldn't be placed", NULL, 0, 0);
-    if (!strcmp(a[5], "destroy")) break_block_at(x, y, z, true);
+  if (hand) {
+    if (!strcmp(hand, "keep") && was != B_AIR) return error("The block couldn't be placed", NULL, 0, 0);
+    if (!strcmp(hand, "destroy")) break_block_at(x, y, z, true);
   }
   if (world_get(x, y, z) == b) return error("The block couldn't be placed", NULL, 0, 0);
   /* (a chest or furnace replaced is emptied first, nothing falls out) */
@@ -694,10 +721,8 @@ bool command_complete(const char *line, int k, int *at, char *o, int max) {
     case C_CLEAR:
       if (arg == 0) return offer_list(word, players, 1, k, o, max);
       if (arg == 1) {
-        for (int i = 0; i < 198; i++)
-          if ((mc_block_item[i >> 3] >> (i & 7) & 1) && offer(word, mc_block_name[i], "minecraft:", k, o, max)) return true;
-        for (int i = 0; i < 176; i++)
-          if (mc_item_name[i][0] && offer(word, mc_item_name[i], "minecraft:", k, o, max)) return true;
+        for (int i = 0; i < n_give; i++)
+          if (mc_state_name[i][0] && offer(word, mc_state_name[i], "minecraft:", k, o, max)) return true;
       }
       return false;
     case C_SETBLOCK:
@@ -710,10 +735,19 @@ bool command_complete(const char *line, int k, int *at, char *o, int max) {
         return offer(word, t, "", k, o, max);
       }
       if (arg == 3) {
+        /* every state and item /give knows, then the blocks that are no item: air, the
+         * liquids, the crops */
+        for (int i = 0; i < n_give; i++)
+          if (mc_state_name[i][0] && give_id[i] < 256 &&
+              offer(word, mc_state_name[i], "minecraft:", k, o, max)) return true;
         for (int i = 0; i < 198; i++)
-          if (mc_block_name[i][0] && offer(word, mc_block_name[i], "minecraft:", k, o, max)) return true;
+          if (mc_block_name[i][0] && !(mc_block_item[i >> 3] >> (i & 7) & 1) &&
+              offer(word, mc_block_name[i], "minecraft:", k, o, max)) return true;
         return false;
       }
+      /* the handling: straight after a state's name (no data value), or after the data
+       * value a number takes */
+      if (arg == 4 && state_named(w[4]) >= 0) return offer_list(word, handling, 3, k, o, max);
       return arg == 5 && offer_list(word, handling, 3, k, o, max);
     case C_TP: case C_KILL: case C_SPAWNPOINT: case C_XP:
       return arg == (c == C_XP) && offer_list(word, players, 1, k, o, max);

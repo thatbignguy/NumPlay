@@ -1,3 +1,72 @@
+## 1.3.11
+**The modern names: terracotta, mossy cobblestone, smooth stone, oak planks**
+- Every block and item reads the way the modern game names it (todo [6]): the
+  inventory and the creative tabs show Oak Planks and Oak Log (not "Oak Wood
+  Planks" and "Oak Wood"), Mossy Cobblestone, Smooth Stone and Smooth Stone
+  Slab, Petrified Oak Slab, the sixteen Terracottas ("White Terracotta" ..
+  "Black Terracotta"), Snow Block beside Snow, Dead Bush, Tall Grass, the Brown
+  and Red Mushrooms, Oak Stairs, and the items 1.13 and 1.14 renamed: Wheat
+  Seeds, Sugar Cane, Clay Ball, Milk Bucket, White Bed, Melon Slice, Raw Cod,
+  Cooked Cod, Tropical Fish and the dyes (Red Dye, Yellow Dye ... Bone Meal).
+- The commands name a block state or an item, 1.13's way, so a name carries no
+  data value beside it: `/give @p oak_planks`, `/give @p zombie_spawn_egg` (the
+  spawn eggs are give-able by name for the first time), `/setblock ~ ~ ~
+  orange_terracotta` (its handling word now follows the name directly), and
+  `/clear @p red_wool` clears the one item it names. Tab completion offers the
+  same names; the numeric ids and the 1.8 ids keep taking what has no single
+  modern name.
+- The superflat customizer's layer names put each block's modern name first and
+  keep its 1.8 spelling as an alias, so a preset saved with the old names
+  ("hardenedclay", "whiteclay", "logoak", "snow") still loads and is shown
+  modern.
+- tools/names.py now writes a third table, `mc_state_name`: the modern name of
+  every block state and item `/give` knows. The give keys, the ids, the
+  recipes and the saves are untouched, so nothing moves but the names; the
+  build grows by 4 KB of flash for the new table.
+
+## 1.3.10
+**A dungeon's spawner comes set to a mob: skeletons, zombies and spiders**
+- The monster spawner a dungeon is built with now has the mob Minecraft gives it, instead of
+  coming out of the ground empty: WorldGenDungeons' own draw (a nextInt(4) — half skeletons,
+  a quarter zombies and a quarter spiders, as 1.8 picks them), which the generator now hands
+  out rather than throwing away. The world keeps it in its monster spawner record, so the same
+  dungeon has the same mob again when the world is loaded and its chunk is made once more.
+- Such a spawner shows its egg turning inside the cage and makes its mobs as the game is
+  played, exactly as one you have set with a spawn egg does: a dungeon is a working farm from
+  the moment you find it. A spawner fresh out of the inventory stays empty until you set it,
+  as before.
+- The world itself is unchanged: that draw was always taken from the population's stream, and
+  the terrain still comes out block for block as it did.
+## 1.3.9
+**Spectator: fly through the world, and see through a mob's eyes**
+- A third game mode, Minecraft's spectator: /gamemode spectator (or sp, or 3),
+  and the sin + cos switcher has it as a third slot after Survival, with an eye
+  for its icon. It needs cheats, as the other two modes do.
+- You fly, always, and through every block: nothing stops you, nothing lands
+  you, and nothing you do touches the world - no mining, placing, eating or
+  opening, no damage, no mob noticing you (a zombie wanders off instead of
+  coming, animals graze). The HUD goes away with it all: no hotbar, hearts,
+  hunger, air or experience, no first-person hand, no block outlined, only the
+  crosshair - and that only while it is on a mob, as in Minecraft.
+- With the crosshair on a mob, OK sees the world through its eyes: the camera
+  is the mob's, at its eye height, and turns where it looks, for as long as it
+  lives. alpha, the dismount key, brings you back to your own flying body. The
+  chat, the commands, the F3 overlay and the save all work as before.
+- Flying into the ground, the rock goes see-through around your head, as in
+  Minecraft: the faces with nothing solid in front of them show - a cave's
+  walls, the grass above - through the stone, until you are out the other side.
+  It is the most a frame does: 14 steps a pixel where the surface is 7, and
+  only with your head inside a block.
+## 1.3.8
+**The sprint key alone sprints: forward twice no longer does**
+- Pressing forward twice in quick succession no longer starts a sprint: it is
+  the i key that sprints, held while walking in Hold, or tapped in Toggle, as
+  Options, Controls, Sprint chooses. The 7-tick double-tap window and everything
+  it needed (the timer, forward's last state) are gone; the sprint still ends
+  when forward is let go, on a wall, on sneaking, while eating or when hungry.
+- The key sheet drops the "Forward twice: sprint" note and the "EXE: as OK"
+  line, which no longer said anything the sheet's own keys did not. With the
+  sheet changed it shows once more on the next start (KEY_SHEET 8).
 ## 1.3.7
 **Hold mode: letting go of the sprint key ends the sprint**
 - Sprint: Hold ran on while forward was held, whatever the key was doing: it now ends
@@ -6,6 +75,35 @@
   forward is held, as before.
 - Toggle is as it was: a tap switches sprinting on, letting go of the key does not
   end it, and letting go of forward does.
+## 1.3.6
+**The game mode switcher on sin + cos, as Minecraft's F3 + F4**
+- Hold sin and press cos (the key beside it, the two of them next to each other
+  like F3 and F4) to switch game mode. It opens the switcher's own panel, as
+  Minecraft draws it: the gray bar across the top says which mode is picked
+  ("Creative Mode"), the two modes sit in the middle in their slots with
+  Minecraft's own icons - the grass block and the iron sword - the one picked
+  inside its golden outline, and "[cos] Next" under them says the key that moves
+  along the row. The world stays bright behind the panel, as in Minecraft.
+- cos marches the outline along the modes while sin is held, the arrows move it
+  too, letting go of sin takes the mode outlined, OK takes it straight away, and
+  Back leaves without changing anything. It opens on the other mode - in Creative
+  on Survival, in Survival on Creative - which is Minecraft's rule of opening on
+  the mode you were in last, and with two modes that is always the other one. The
+  mode is kept with the world.
+- Adventure and Spectator are left out: the first needs "you cannot break a
+  block" all through the game, and the second a view that flies through blocks
+  and shows no player, which the calculator can only fake. The switcher shows the
+  two modes NumBlocks has, so cos just goes back and forth.
+- The switcher needs cheats on, as it is the /gamemode command; without them the
+  chat says "You do not have permission to use this command", exactly as running
+  that command by hand does.
+- sin alone still turns the debug overlay on and off, and it now waits until sin
+  is let go to do it, so that holding sin and pressing cos never brings the
+  overlay up: the pair wins, as F3 + F4 does.
+- The control sheet shows the pair and shows again at startup (KEY_SHEET 7), and
+  the panel, the slots and the outline are packed from the modern client's
+  gui/container/gamemode_switcher.png and gui/sprites/gamemode_switcher, not
+  the 1.8.8 jar. The panel's body is 40% see-through, as the texture's own alpha.
 ## 1.3.5
 **Toggle sprint ends with forward; F3 counts the velocity; version entries get titles**
 - Sprint: Toggle now ends the sprint when forward is let go, as Hold does: the

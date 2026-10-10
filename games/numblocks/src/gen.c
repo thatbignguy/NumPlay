@@ -61,6 +61,10 @@
  *    item draws are replayed, but not the enchanted book's enchantment draws
  *    (TODO, see dungeon_book), so after a dungeon chest the rest of that
  *    population draws differently from Minecraft (still a valid decoration).
+ *  - Dungeon spawners are placed with the mob their draw made of them (as
+ *    Minecraft keeps it in their tile entity, handed out through
+ *    gen_spawner_hook); whoever takes it keeps it, so a dungeon keeps its mob
+ *    when the world is loaded and its chunk is made again.
  *  - Structures are not generated (see TODO below), which matches Minecraft
  *    only where no structure exists.
  * Slabs (gen_slab's y range)
@@ -1210,9 +1214,7 @@ static i32 *base_sub(const i32 *base, Win bw, Win sw) {
     return p;
 }
 
-static const LayerDef *chain_buf[40];
-
-static int chain_build(const LayerDef *tail, int ntail, int with_base) {
+static int chain_build(const LayerDef **chain_buf, const LayerDef *tail, int ntail, int with_base) {
     int n = 0;
     if (with_base)
         for (int i = 0; i < NBASE; i++) chain_buf[n++] = &LBASE[i];
@@ -1222,6 +1224,7 @@ static int chain_build(const LayerDef *tail, int ntail, int with_base) {
 
 /* GenLayerRiverMix output for window (x,z,w,h) into dst (biome ids) */
 static void layers_rivermix(int x, int z, int w, int h, i32 *dst) {
+    const LayerDef *chain_buf[40];
     int mark0 = lay_top, mark = mark0;
     /* biome branch: base + biome1 to desert, then hills (needs the hills river noise), then biome2 */
     /* window of the hills layer input */
@@ -1249,16 +1252,16 @@ static void layers_rivermix(int x, int z, int w, int h, i32 *dst) {
         bw.w = x1 - bw.x;
         bw.h = z1 - bw.z;
     }
-    int n = chain_build(0, 0, 1);
+    int n = chain_build(chain_buf, 0, 0, 1);
     i32 *base = run_chain(chain_buf, n, bw.x, bw.z, bw.w, bw.h, 0, 0);
     /* river branch first (its result stays below the biome branch's work) */
-    n = chain_build(LRIVER, 9, 0);
+    n = chain_build(chain_buf, LRIVER, 9, 0);
     i32 *river = run_chain(chain_buf, n, x, z, w, h, 0, base_sub(base, bw, w3));
     /* hills river noise */
-    n = chain_build(LHILLSRIVER, 3, 0);
+    n = chain_build(chain_buf, LHILLSRIVER, 3, 0);
     i32 *hr = run_chain(chain_buf, n, hin.x, hin.z, hin.w, hin.h, 0, base_sub(base, bw, w1));
     /* biome chain up to desert */
-    n = chain_build(LBIOME1, 4, 0);
+    n = chain_build(chain_buf, LBIOME1, 4, 0);
     i32 *bd = run_chain(chain_buf, n, hin.x, hin.z, hin.w, hin.h, 0, base_sub(base, bw, w2));
     mark = (int)(hr - lay_mem); /* the biome branch's results go over hr and bd */
     /* hills .. smooth, fed by bd (the hills layer also reads hr) */
@@ -1722,8 +1725,11 @@ typedef struct {
 } BigPos;
 
 /* Scratch memory. The phases never overlap: layers (in the terrain pass), terrain, then caves
- * and populations (PopScratch plus the cave walk's and big oak's tables after it). */
-static union {
+ * and populations (PopScratch plus the cave walk's and big oak's tables after it). One buffer
+ * serves them all, given to the generator by its caller (gen_scratch): the world keeps it on its
+ * stack while it makes the world around the player, where the game would otherwise keep it in
+ * the app's RAM. */
+typedef union {
     TerrainScratch t;
     i32 lay[LAY_INTS];
     PopScratch p;
@@ -1733,9 +1739,19 @@ static union {
         BigPos big_list[48]; /* WorldGenBigTree's branch ends */
     } x;
     uint8_t spawn_rows[sizeof(i32) * LAY_INTS + 8 * 129];
-} U;
-#define canyon_w (U.x.canyon_w)
-#define big_list (U.x.big_list)
+} GenScratch;
+
+static GenScratch *U;
+
+/* The scratch must outlive the calls that follow it: the generators keep it for the whole of the
+ * move (or the spawn search), and it lives on the stack of whichever of the world's functions
+ * is making the world. Passing NULL (as the world does when it is done) makes a stray call
+ * fault at once instead of quietly writing through a dead pointer. */
+__attribute__((noinline)) void gen_scratch(void *buf) { U = buf; }
+/* GEN_SCRATCH (gen.h) is the size callers give it: keep the two together */
+_Static_assert(GEN_SCRATCH == sizeof(GenScratch), "GEN_SCRATCH must match GenScratch");
+#define canyon_w (U->x.canyon_w)
+#define big_list (U->x.big_list)
 
 /* ======================================================================== */
 /* Terrain                                                                   */
@@ -1766,13 +1782,13 @@ static void chunk_biomes(int cx, int cz) {
         bg_z = z0 - 4;
         bg_seed = g_seed;
         bg_ok = 1;
-        lay_mem = U.lay + BG_W * BG_W;
+        lay_mem = U->lay + BG_W * BG_W;
         lay_cap = LAY_INTS - BG_W * BG_W;
         lay_top = 0;
-        layers_rivermix(bg_x, bg_z, BG_W, BG_W, U.lay);
-        for (int i = 0; i < BG_W * BG_W; i++) bgrid[i] = (uint8_t)U.lay[i];
+        layers_rivermix(bg_x, bg_z, BG_W, BG_W, U->lay);
+        for (int i = 0; i < BG_W * BG_W; i++) bgrid[i] = (uint8_t)U->lay[i];
     }
-    i32 *rm = U.lay;
+    i32 *rm = U->lay;
     for (int j = 0; j < 10; j++)
         for (int i = 0; i < 10; i++) rm[i + j * 10] = bgrid[(x0 - bg_x + i) + (z0 - bg_z + j) * BG_W];
     for (int i = 0; i < 100; i++) cb4[i] = (uint8_t)rm[i];
@@ -1781,7 +1797,7 @@ static void chunk_biomes(int cx, int cz) {
     voronoi(rm + 1 + 10, cx * 4 - 1, cz * 4 - 1, 10, cx * 16, cz * 16, 16, 16, cb16, 16);
 }
 
-static void octave_setup(const Octave *o, i64 off[3]) { perm_build(o->st, U.t.perm, off); }
+static void octave_setup(const Octave *o, i64 off[3]) { perm_build(o->st, U->t.perm, off); }
 
 /* octave o (generator state oc) of a 3D noise over the chunk grid at grid origin (bx, bz):
  * horizontal / vertical sample spacings sxz, sy (Q32), accumulated into acc as perlin3_octave */
@@ -1796,7 +1812,7 @@ HOT static void noise3_octave(const Octave *oc, int o, i64 bx, i64 bz, u64 sxz, 
         coord_split(coord_q32(bz, sxz, o, n, off[2]), &zc[n], &zf[n]);
     }
     for (int n = 0; n < 33; n++) coord_split(coord_q32(0, sy, o, n, off[1]), &yc[n], &yf[n]);
-    perlin3_octave(U.t.perm, acc, need, bit, rng, mul, xc, xf, zc, zf, yc, yf, (float)(1 << o));
+    perlin3_octave(U->t.perm, acc, need, bit, rng, mul, xc, xf, zc, zf, yc, yf, (float)(1 << o));
 }
 
 /* the density's height offset at grid level j2 (ChunkProviderGenerate: d4) */
@@ -1805,14 +1821,14 @@ INLINE float dens_offset(int j2, float d3, float d2) {
     return d4 < 0.0f ? d4 * 4.0f : d4;
 }
 
-/* noise grid for chunk (cx, cz) -> U.t.grid holds the 5x5x33 densities.
+/* noise grid for chunk (cx, cz) -> U->t.grid holds the 5x5x33 densities.
  * The density is lerp(min, max, main) / 512 - offset(y); each limit noise is a sum of 16
  * octaves of amplitude 2^o whose values are within [-2, 2] (gradient dots of fractions,
  * lerped), so the noise part is within +-256. Grid points where offset(y) alone decides the
  * sign for every cell around them do not need any noise: they get +-1 instead (cells whose
  * 8 corners all agree interpolate to the same sign whatever the values). */
 HOT static void chunk_density(int cx, int cz) {
-    TerrainScratch *T = &U.t;
+    TerrainScratch *T = &U->t;
     int xc[5], zc[5];
     float xf[5], zf[5];
     i64 off[3];
@@ -1960,9 +1976,9 @@ HOT static void chunk_density(int cx, int cz) {
     }
 }
 
-/* surface depth noise (NoiseGenerator3, 4 octaves) for chunk -> U.t.surf[z*16+x] */
+/* surface depth noise (NoiseGenerator3, 4 octaves) for chunk -> U->t.surf[z*16+x] */
 static void chunk_surface_noise(int cx, int cz) {
-    TerrainScratch *T = &U.t;
+    TerrainScratch *T = &U->t;
     i64 off[3];
     memset(T->surf, 0, sizeof T->surf);
     for (int o = 0; o < 4; o++) {
@@ -2102,7 +2118,7 @@ HOT static void build_default(uint8_t *col, const Biome *b, JRand *r, float nois
 
 /* BiomeMesa band at (x, y): aD[(y + round(aH(x/512, x/512) * 2) + 64) % 64] */
 static uint8_t mesa_band(int x, int y) {
-    const uint8_t *P = U.t.mperm[0];
+    const uint8_t *P = U->t.mperm[0];
     float xf = (float)(x & 511) / 512.0f;
     float v = simplex2(P, x >> 9, xf, x >> 9, xf) * 2.0f;
     int l = (int)floor_f(v + 0.5f);
@@ -2110,9 +2126,9 @@ static uint8_t mesa_band(int x, int y) {
 }
 
 static void mesa_prepare(void) {
-    if (U.t.mesa_ready) return;
-    for (int i = 0; i < 6; i++) perm_build(oc_mesa[i].st, U.t.mperm[i], 0);
-    U.t.mesa_ready = 1;
+    if (U->t.mesa_ready) return;
+    for (int i = 0; i < 6; i++) perm_build(oc_mesa[i].st, U->t.mperm[i], 0);
+    U->t.mesa_ready = 1;
 }
 
 /* NoiseGenerator3.a(x, z) (single point, no offsets) over n octaves with perms P[o] */
@@ -2136,12 +2152,12 @@ static void build_mesa(uint8_t *col, const Biome *b, JRand *r, int bx, int bz, f
     if (b->mode & 1) { /* bryce */
         int k = (bx & -16) + (bz & 15), l = (bz & -16) + (bx & 15);
         /* aF: 4 octaves at (k*0.25, l*0.25): perms mperm[0..3] (aF[0] == aH) */
-        uint8_t(*P)[256] = U.t.mperm;
+        uint8_t(*P)[256] = U->t.mperm;
         float d2 = simplex_oct_point(4, P, k, 0.0f, l, 0.0f, 2);
         float an = noise < 0 ? -noise : noise;
         if (an < d2) d2 = an;
         if (d2 > 0.0f) {
-            float d4 = simplex_oct_point(1, &U.t.mperm[4], k, 0.0f, l, 0.0f, 9);
+            float d4 = simplex_oct_point(1, &U->t.mperm[4], k, 0.0f, l, 0.0f, 9);
             if (d4 < 0) d4 = -d4;
             d1 = d2 * d2 * 2.5f;
             float c = d4 * 50.0f;
@@ -2303,11 +2319,11 @@ HOT static void column_summary(const uint8_t *col, ColSum *s) {
 }
 
 /* Sign classes of the density grid for column_density: for each of the 4 x 4 grid cells and
- * each level, 1 if its four corners are > 0, 2 if they are all <= 0, else 0 (kept in U.t.cls,
+ * each level, 1 if its four corners are > 0, 2 if they are all <= 0, else 0 (kept in U->t.cls,
  * free after chunk_density). Bilinear values between corners of one sign keep it. */
 static void column_signs(void) {
-    const float *g = U.t.grid;
-    uint8_t *sg = U.t.cls;
+    const float *g = U->t.grid;
+    uint8_t *sg = U->t.cls;
     for (int gx = 0; gx < 4; gx++)
         for (int gz = 0; gz < 4; gz++) {
             const float *c00 = g + (gx * 5 + gz) * 33, *c01 = c00 + 33, *c10 = c00 + 165, *c11 = c00 + 198;
@@ -2324,12 +2340,12 @@ static void column_signs(void) {
  * it: their distance to 0 is at least an eighth of an end's, far above rounding); levels are
  * interpolated only for the other cells. Returns the highest non-air y. */
 HOT static int column_density(int x, int z, uint8_t *col) {
-    const float *g = U.t.grid;
+    const float *g = U->t.grid;
     int gx = x >> 2, gz = z >> 2;
     float fx = (float)(x & 3) * 0.25f, fz = (float)(z & 3) * 0.25f;
     const float *c00 = g + (gx * 5 + gz) * 33, *c01 = g + (gx * 5 + gz + 1) * 33;
     const float *c10 = g + ((gx + 1) * 5 + gz) * 33, *c11 = g + ((gx + 1) * 5 + gz + 1) * 33;
-    const uint8_t *sg = U.t.cls + (gx * 4 + gz) * 33;
+    const uint8_t *sg = U->t.cls + (gx * 4 + gz) * 33;
     float v0 = 0.0f, v1;
     int have = -1; /* level whose value v0 holds */
     int top = 0;
@@ -2397,18 +2413,18 @@ HOT static int column_density(int x, int z, uint8_t *col) {
  * the column summaries to sum (if sum). Also leaves the biomes in cb4/cb16. */
 HOT static void chunk_terrain(int cx, int cz, uint8_t *out, int y0, int h, ColSum *sum) {
     chunk_biomes(cx, cz);
-    U.t.mesa_ready = 0;
+    U->t.mesa_ready = 0;
     chunk_density(cx, cz);
     column_signs();
     chunk_surface_noise(cx, cz);
     JRand r;
     jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL));
-    uint8_t *col = U.t.col;
+    uint8_t *col = U->t.col;
     for (int z = 0; z < 16; z++)
         for (int x = 0; x < 16; x++) {
             col_top = column_density(x, z, col);
             const Biome *b = bio(cb16[x + z * 16]);
-            build_surface(col, b, &r, cx * 16 + z, cz * 16 + x, U.t.surf[z * 16 + x]);
+            build_surface(col, b, &r, cx * 16 + z, cz * 16 + x, U->t.surf[z * 16 + x]);
             if (sum) column_summary(col, &sum[x + z * 16]);
             if (out)
                 for (int y = 0; y < h; y++) out[y * 256 + z * 16 + x] = col[y0 + y];
@@ -2820,11 +2836,11 @@ typedef struct {
     uint16_t act;
 } Tunnel;
 #define TSTACK 4 /* branches (width < 1) never branch again: depth <= 2 */
-static Tunnel tstack[TSTACK];
 
 /* Walks one cave tunnel (WorldGenCaves.a, 13-argument version) and its branches. */
 NOINLINE HOT static void cave_tunnel(i64 seed0, Q32 x0, Q32 y0, Q32 z0, float f0, float f10, float f20, int l0, int i10, int room0,
                         unsigned act0) {
+    Tunnel tstack[TSTACK];   /* here on the stack: the walk is the only user */
     int sp = 0;
     tstack[sp++] = (Tunnel){seed0, x0, y0, z0, f0, f10, f20, (int16_t)l0, (int16_t)i10, (uint8_t)room0, (uint16_t)act0};
     while (sp > 0) {
@@ -3226,7 +3242,9 @@ static uint8_t *c_out;
 static int c_y0, c_h, c_cx, c_cz;
 /* (c_top, c_sl: declared with the caves, which keep them right) */
 
-#define PV (U.p.v)
+#define PV (U->p.v)
+#define QMASK (U->p.qmask)
+#define QMASK_SIZE ((int)sizeof((GenScratch *)0)->p.qmask)
 
 static inline int lake_bit(const LakeRec *L, int x, int y, int z) {
     int i = (x * 16 + z) * 8 + y;
@@ -3258,7 +3276,7 @@ HOT static uint8_t vget(int X, int Y, int Z) {
     if (!s) return Y < SEA ? B_STONE : B_AIR;
     if (Y > cs_top(s)) return B_AIR;
     if (v->qon && X >= v->qx0 && X < v->qx1 && Y >= v->qy0 && Y < v->qy1 && Z >= v->qz0 && Z < v->qz1) {
-        uint8_t m = U.p.qmask[((Y - v->qy0) * (v->qz1 - v->qz0) + (Z - v->qz0)) * (v->qx1 - v->qx0) + (X - v->qx0)];
+        uint8_t m = U->p.qmask[((Y - v->qy0) * (v->qz1 - v->qz0) + (Z - v->qz0)) * (v->qx1 - v->qx0) + (X - v->qx0)];
         if (m) return (uint8_t)(m - 1);
     }
     return sum_block(s, Y);
@@ -3440,11 +3458,11 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
     View *v = &PV;
     if (y0 < 0) y0 = 0;
     if (y1 > 256) y1 = 256;
-    if ((x1 - x0) * (y1 - y0) * (z1 - z0) > (int)sizeof U.p.qmask || y1 <= y0) {
+    if ((x1 - x0) * (y1 - y0) * (z1 - z0) > QMASK_SIZE || y1 <= y0) {
         v->qon = 0;
         return;
     }
-    memset(U.p.qmask, 0, sizeof U.p.qmask);
+    memset(QMASK, 0, QMASK_SIZE);
     CaveCtx ctx[4];
     unsigned tmask = 0;
     int n = 0;
@@ -3461,7 +3479,7 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
             c->by1 = y1;
             c->bz0 = z0;
             c->bz1 = z1;
-            c->mask = U.p.qmask;
+            c->mask = U->p.qmask;
             c->tcx = tcx;
             c->tcz = tcz;
             c->sum = nb[dz][dx]->s;
@@ -3718,7 +3736,11 @@ static void dungeon(int X, int Y, int Z) {
             }
         }
     put(X, Y, Z, B_MOB_SPAWNER, R_ALWAYS);
-    RI(4); /* mob type */
+    /* WorldGenDungeons.a: the mob its spawner is set to (half skeletons, a quarter zombies, a
+     * quarter spiders). The generator has no world to keep that in, so whoever has one takes it
+     * from here; the draw is one of the population's either way. */
+    int spawner_mob = RI(4);
+    if (gen_spawner_hook) gen_spawner_hook(X, Y, Z, spawner_mob);
     PV.qon = 0;
 }
 
@@ -3847,31 +3869,34 @@ static void tree_dirt(int x, int y, int z) {
 }
 
 /* The current tree's own blocks around its trunk (7x7 columns, 32 high): vine passes and
- * trunk vines read them. 0 = untouched, else block id + 1. */
-static uint8_t tov[7 * 7 * 32];
+ * trunk vines read them. 0 = untouched, else block id + 1. Only trees use it, so tree_grow
+ * keeps it on its stack and passes it down (tree_grow, below). */
+#define TOV_W 7
+#define TOV_H 32
 static int tov_on, tov_x, tov_y, tov_z;
 
-static uint8_t tget(int x, int y, int z) {
+static uint8_t tget(const uint8_t *tov, int x, int y, int z) {
     if (tov_on) {
         int dx = x - tov_x + 3, dz = z - tov_z + 3, dy = y - tov_y;
-        if (dx >= 0 && dx < 7 && dz >= 0 && dz < 7 && dy >= 0 && dy < 32) {
-            uint8_t m = tov[(dy * 7 + dz) * 7 + dx];
+        if (dx >= 0 && dx < TOV_W && dz >= 0 && dz < TOV_W && dy >= 0 && dy < TOV_H) {
+            uint8_t m = tov[(dy * TOV_W + dz) * TOV_W + dx];
             if (m) return (uint8_t)(m - 1);
         }
     }
     return vget(x, y, z);
 }
 
-static void tput(int x, int y, int z, uint8_t b, int rule) {
+static void tput(uint8_t *tov, int x, int y, int z, uint8_t b, int rule) {
     if (tov_on) {
         int dx = x - tov_x + 3, dz = z - tov_z + 3, dy = y - tov_y;
-        if (dx >= 0 && dx < 7 && dz >= 0 && dz < 7 && dy >= 0 && dy < 32) tov[(dy * 7 + dz) * 7 + dx] = (uint8_t)(b + 1);
+        if (dx >= 0 && dx < TOV_W && dz >= 0 && dz < TOV_W && dy >= 0 && dy < TOV_H)
+            tov[(dy * TOV_W + dz) * TOV_W + dx] = (uint8_t)(b + 1);
     }
     put(x, y, z, b, rule);
 }
 
-static void tov_begin(int x, int y, int z) {
-    memset(tov, 0, sizeof tov);
+static void tov_begin(uint8_t *tov, int x, int y, int z) {
+    memset(tov, 0, TOV_W * TOV_W * TOV_H);
     tov_on = 1;
     tov_x = x;
     tov_y = y;
@@ -3881,9 +3906,9 @@ static void tov_begin(int x, int y, int z) {
 static const int8_t HDIR[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}}; /* N, E, S, W */
 
 /* hanging vine (WorldGenTrees.b / WorldGenSwampTree.a) */
-static void vine_hang(int x, int y, int z) {
-    tput(x, y, z, B_VINE, R_AIR);
-    for (int i = 4; --y, tget(x, y, z) == B_AIR && i > 0; --i) tput(x, y, z, B_VINE, R_AIR);
+static void vine_hang(uint8_t *tov, int x, int y, int z) {
+    tput(tov, x, y, z, B_VINE, R_AIR);
+    for (int i = 4; --y, tget(tov, x, y, z) == B_AIR && i > 0; --i) tput(tov, x, y, z, B_VINE, R_AIR);
 }
 
 /* WorldGenTrees (oak, small jungle): base height c, vines */
@@ -3916,7 +3941,7 @@ static int space_ok(int x, int z, int rmax, const int lo[3], int yhi, int kind) 
     return 1;
 }
 
-static int gen_trees(int x, int y, int z, int c, uint8_t log, uint8_t leaf, int vines) {
+static int gen_trees(uint8_t *tov, int x, int y, int z, int c, uint8_t log, uint8_t leaf, int vines) {
     int i = RI(3) + c;
     if (y < 1 || y + i + 1 > 256) return 0;
     {
@@ -3925,7 +3950,7 @@ static int gen_trees(int x, int y, int z, int c, uint8_t log, uint8_t leaf, int 
     }
     uint8_t below = vget(x, y - 1, z);
     if (!((below == B_GRASS || IS_DIRTISH(below) || below == B_FARMLAND) && y < 256 - i - 1)) return 0;
-    if (vines) tov_begin(x, y, z);
+    if (vines) tov_begin(tov, x, y, z);
     tree_dirt(x, y - 1, z);
     for (int j = y - 3 + i; j <= y + i; j++) {
         int k = j - (y + i), i1 = 1 - k / 2;
@@ -3934,19 +3959,19 @@ static int gen_trees(int x, int y, int z, int c, uint8_t log, uint8_t leaf, int 
             for (int k1 = z - i1; k1 <= z + i1; k1++) {
                 int i2 = k1 - z;
                 if ((j1 < 0 ? -j1 : j1) != i1 || (i2 < 0 ? -i2 : i2) != i1 || (RI(2) != 0 && k != 0)) {
-                    if (TREE_REPL(tget(l1, j, k1))) tput(l1, j, k1, leaf, R_TREE);
+                    if (TREE_REPL(tget(tov, l1, j, k1))) tput(tov, l1, j, k1, leaf, R_TREE);
                 }
             }
         }
     }
     for (int j = 0; j < i; j++) {
-        if (!TREE_REPL(tget(x, y + j, z))) continue;
-        tput(x, y + j, z, log, R_TREE);
+        if (!TREE_REPL(tget(tov, x, y + j, z))) continue;
+        tput(tov, x, y + j, z, log, R_TREE);
         if (vines && j > 0) {
-            if (RI(3) > 0 && tget(x - 1, y + j, z) == B_AIR) tput(x - 1, y + j, z, B_VINE, R_AIR);
-            if (RI(3) > 0 && tget(x + 1, y + j, z) == B_AIR) tput(x + 1, y + j, z, B_VINE, R_AIR);
-            if (RI(3) > 0 && tget(x, y + j, z - 1) == B_AIR) tput(x, y + j, z - 1, B_VINE, R_AIR);
-            if (RI(3) > 0 && tget(x, y + j, z + 1) == B_AIR) tput(x, y + j, z + 1, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(tov, x - 1, y + j, z) == B_AIR) tput(tov, x - 1, y + j, z, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(tov, x + 1, y + j, z) == B_AIR) tput(tov, x + 1, y + j, z, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(tov, x, y + j, z - 1) == B_AIR) tput(tov, x, y + j, z - 1, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(tov, x, y + j, z + 1) == B_AIR) tput(tov, x, y + j, z + 1, B_VINE, R_AIR);
         }
     }
     if (vines) {
@@ -3954,11 +3979,11 @@ static int gen_trees(int x, int y, int z, int c, uint8_t log, uint8_t leaf, int 
             int k = j - (y + i), i1 = 2 - k / 2;
             for (int j1 = x - i1; j1 <= x + i1; j1++)
                 for (int k1 = z - i1; k1 <= z + i1; k1++) {
-                    if (!IS_LEAVES(tget(j1, j, k1))) continue;
-                    if (RI(4) == 0 && tget(j1 - 1, j, k1) == B_AIR) vine_hang(j1 - 1, j, k1);
-                    if (RI(4) == 0 && tget(j1 + 1, j, k1) == B_AIR) vine_hang(j1 + 1, j, k1);
-                    if (RI(4) == 0 && tget(j1, j, k1 - 1) == B_AIR) vine_hang(j1, j, k1 - 1);
-                    if (RI(4) == 0 && tget(j1, j, k1 + 1) == B_AIR) vine_hang(j1, j, k1 + 1);
+                    if (!IS_LEAVES(tget(tov, j1, j, k1))) continue;
+                    if (RI(4) == 0 && tget(tov, j1 - 1, j, k1) == B_AIR) vine_hang(tov, j1 - 1, j, k1);
+                    if (RI(4) == 0 && tget(tov, j1 + 1, j, k1) == B_AIR) vine_hang(tov, j1 + 1, j, k1);
+                    if (RI(4) == 0 && tget(tov, j1, j, k1 - 1) == B_AIR) vine_hang(tov, j1, j, k1 - 1);
+                    if (RI(4) == 0 && tget(tov, j1, j, k1 + 1) == B_AIR) vine_hang(tov, j1, j, k1 + 1);
                 }
         }
         if (RI(5) == 0 && i > 5) {
@@ -4065,7 +4090,7 @@ static int gen_taiga2(int x, int y, int z) {
     return 1;
 }
 
-static int gen_swamp_tree(int x, int y, int z) {
+static int gen_swamp_tree(uint8_t *tov, int x, int y, int z) {
     int i = RI(4) + 5;
     while (IS_WATER(vget(x, y - 1, z))) y--;
     if (y < 1 || y + i + 1 > 256) return 0;
@@ -4085,7 +4110,7 @@ static int gen_swamp_tree(int x, int y, int z) {
     }
     uint8_t below = vget(x, y - 1, z);
     if (!((below == B_GRASS || IS_DIRTISH(below)) && y < 256 - i - 1)) return 0;
-    tov_begin(x, y, z);
+    tov_begin(tov, x, y, z);
     tree_dirt(x, y - 1, z);
     for (int j1 = y - 3 + i; j1 <= y + i; j1++) {
         int k1 = j1 - (y + i), j = 2 - k1 / 2;
@@ -4094,23 +4119,23 @@ static int gen_swamp_tree(int x, int y, int z) {
             for (int i1 = z - j; i1 <= z + j; i1++) {
                 int i2 = i1 - z;
                 if ((l1 < 0 ? -l1 : l1) != j || (i2 < 0 ? -i2 : i2) != j || (RI(2) != 0 && k1 != 0))
-                    if (!IS_CUBE(tget(k, j1, i1))) tput(k, j1, i1, B_LEAVES_OAK, R_NOTCUBE);
+                    if (!IS_CUBE(tget(tov, k, j1, i1))) tput(tov, k, j1, i1, B_LEAVES_OAK, R_NOTCUBE);
             }
         }
     }
     for (int j1 = 0; j1 < i; j1++) {
-        uint8_t b = tget(x, y + j1, z);
-        if (AIR_OR_LEAVES(b) || IS_WATER(b)) tput(x, y + j1, z, B_LOG_OAK, R_ALWAYS);
+        uint8_t b = tget(tov, x, y + j1, z);
+        if (AIR_OR_LEAVES(b) || IS_WATER(b)) tput(tov, x, y + j1, z, B_LOG_OAK, R_ALWAYS);
     }
     for (int j1 = y - 3 + i; j1 <= y + i; j1++) {
         int k1 = j1 - (y + i), j = 2 - k1 / 2;
         for (int l1 = x - j; l1 <= x + j; l1++)
             for (int i1 = z - j; i1 <= z + j; i1++) {
-                if (!IS_LEAVES(tget(l1, j1, i1))) continue;
-                if (RI(4) == 0 && tget(l1 - 1, j1, i1) == B_AIR) vine_hang(l1 - 1, j1, i1);
-                if (RI(4) == 0 && tget(l1 + 1, j1, i1) == B_AIR) vine_hang(l1 + 1, j1, i1);
-                if (RI(4) == 0 && tget(l1, j1, i1 - 1) == B_AIR) vine_hang(l1, j1, i1 - 1);
-                if (RI(4) == 0 && tget(l1, j1, i1 + 1) == B_AIR) vine_hang(l1, j1, i1 + 1);
+                if (!IS_LEAVES(tget(tov, l1, j1, i1))) continue;
+                if (RI(4) == 0 && tget(tov, l1 - 1, j1, i1) == B_AIR) vine_hang(tov, l1 - 1, j1, i1);
+                if (RI(4) == 0 && tget(tov, l1 + 1, j1, i1) == B_AIR) vine_hang(tov, l1 + 1, j1, i1);
+                if (RI(4) == 0 && tget(tov, l1, j1, i1 - 1) == B_AIR) vine_hang(tov, l1, j1, i1 - 1);
+                if (RI(4) == 0 && tget(tov, l1, j1, i1 + 1) == B_AIR) vine_hang(tov, l1, j1, i1 + 1);
             }
     }
     tov_on = 0;
@@ -4633,10 +4658,11 @@ static TreeSel tree_select(const Biome *b) {
 
 /* generate() then, on success, the post step (podzol of mega spruces) */
 static void tree_grow(TreeSel t, int x, int y, int z) {
+    uint8_t tov[TOV_W * TOV_W * TOV_H];   /* this tree's blocks around its trunk: on the stack */
     int ok = 0;
     switch (t.type) {
-    case TR_OAK: ok = gen_trees(x, y, z, 4, B_LOG_OAK, B_LEAVES_OAK, 0); break;
-    case TR_JUNGLE_SMALL: ok = gen_trees(x, y, z, t.c, B_LOG_JUNGLE, B_LEAVES_JUNGLE, 1); break;
+    case TR_OAK: ok = gen_trees(tov, x, y, z, 4, B_LOG_OAK, B_LEAVES_OAK, 0); break;
+    case TR_JUNGLE_SMALL: ok = gen_trees(tov, x, y, z, t.c, B_LOG_JUNGLE, B_LEAVES_JUNGLE, 1); break;
     case TR_BIG: ok = gen_big_tree(x, y, z); break;
     case TR_BIRCH: ok = gen_birch(x, y, z, 0); break;
     case TR_BIRCH_TALL: ok = gen_birch(x, y, z, 1); break;
@@ -4645,7 +4671,7 @@ static void tree_grow(TreeSel t, int x, int y, int z) {
     case TR_TAIGA2: ok = gen_taiga2(x, y, z); break;
     case TR_MEGA_SPRUCE: ok = gen_mega_spruce(x, y, z, 0); break;
     case TR_MEGA_SPRUCE_H: ok = gen_mega_spruce(x, y, z, 1); break;
-    case TR_SWAMP: ok = gen_swamp_tree(x, y, z); break;
+    case TR_SWAMP: ok = gen_swamp_tree(tov, x, y, z); break;
     case TR_ACACIA: ok = gen_acacia(x, y, z); break;
     case TR_JUNGLE_MEGA: ok = gen_jungle_mega(x, y, z); break;
     case TR_BUSH: ok = gen_bush(x, y, z); break;
@@ -5344,6 +5370,9 @@ static void dungeon_book(void) {
 static int last_cx = 0x7fffffff, last_cz; /* chunk of the last gen_slab: c_top, c_b16 valid */
 static uint8_t col_tmp[256];
 
+/* who takes the mob of a monster spawner world generation places (gen.h) */
+void (*gen_spawner_hook)(int x, int y, int z, int mob) = 0;
+
 /* carve hook: keep c_top / c_sl of C right when caves open the surface */
 static void cave_track(int x, int y, int z, uint8_t b) {
     int i = z * 16 + x;
@@ -5473,29 +5502,42 @@ static int flat_biome = 1;
 static int flat_top = 3;   /* highest non-air layer (gen_top without a loop each call) */
 
 /* Simple block names for flat layers (lowercase, underscores ignored in match).
+ * Each block's modern (1.13) name comes first and its 1.8 spelling after it, so a preset
+ * kept with the old names still loads; e.g. "terracotta" and "hardenedclay" are both 172,
+ * "whiteterracotta", "stainedclay" and "whiteclay" are all 159:0.
  * Legal numeric ids are any Minecraft id with a B_* state (blk_id[]/blk_meta[],
  * same ids tools/pack.py uses, e.g. 1 stone, 2 grass, 3 dirt, 7 bedrock, 12 sand,
- * 20 glass, 172 hardened clay, 159:14 red stained clay). Unknown ids rejected. */
+ * 20 glass, 172 terracotta, 159:14 red terracotta). Unknown ids rejected. */
 static const struct { const char *name; uint8_t block; } flat_names[] = {
   {"air", B_AIR}, {"stone", B_STONE}, {"granite", B_GRANITE}, {"polishedgranite", B_POLISHED_GRANITE},
   {"diorite", B_DIORITE}, {"polisheddiorite", B_POLISHED_DIORITE}, {"andesite", B_ANDESITE},
   {"polishedandesite", B_POLISHED_ANDESITE}, {"grass", B_GRASS}, {"dirt", B_DIRT},
   {"coarsedirt", B_COARSE_DIRT}, {"podzol", B_PODZOL}, {"cobblestone", B_COBBLESTONE},
-  {"planks", B_PLANKS_OAK}, {"planksoak", B_PLANKS_OAK}, {"oakplanks", B_PLANKS_OAK},
-  {"planksspruce", B_PLANKS_SPRUCE}, {"planksbirch", B_PLANKS_BIRCH}, {"planksjungle", B_PLANKS_JUNGLE},
-  {"planksacacia", B_PLANKS_ACACIA}, {"planksdarkoak", B_PLANKS_DARK_OAK}, {"bedrock", B_BEDROCK},
+  {"oakplanks", B_PLANKS_OAK}, {"planks", B_PLANKS_OAK}, {"planksoak", B_PLANKS_OAK},
+  {"spruceplanks", B_PLANKS_SPRUCE}, {"planksspruce", B_PLANKS_SPRUCE},
+  {"birchplanks", B_PLANKS_BIRCH}, {"planksbirch", B_PLANKS_BIRCH},
+  {"jungleplanks", B_PLANKS_JUNGLE}, {"planksjungle", B_PLANKS_JUNGLE},
+  {"acaciaplanks", B_PLANKS_ACACIA}, {"planksacacia", B_PLANKS_ACACIA},
+  {"darkoakplanks", B_PLANKS_DARK_OAK}, {"planksdarkoak", B_PLANKS_DARK_OAK}, {"bedrock", B_BEDROCK},
   {"sand", B_SAND}, {"redsand", B_RED_SAND}, {"gravel", B_GRAVEL}, {"goldore", B_GOLD_ORE},
-  {"ironore", B_IRON_ORE}, {"coalore", B_COAL_ORE}, {"logoak", B_LOG_OAK}, {"logspruce", B_LOG_SPRUCE},
-  {"logbirch", B_LOG_BIRCH}, {"logjungle", B_LOG_JUNGLE}, {"logacacia", B_LOG_ACACIA},
-  {"logdarkoak", B_LOG_DARK_OAK}, {"leavesoak", B_LEAVES_OAK}, {"leavesspruce", B_LEAVES_SPRUCE},
-  {"leavesbirch", B_LEAVES_BIRCH}, {"leavesjungle", B_LEAVES_JUNGLE}, {"leavesacacia", B_LEAVES_ACACIA},
-  {"leavesdarkoak", B_LEAVES_DARK_OAK}, {"sponge", B_SPONGE}, {"glass", B_GLASS},
+  {"ironore", B_IRON_ORE}, {"coalore", B_COAL_ORE}, {"oaklog", B_LOG_OAK}, {"logoak", B_LOG_OAK},
+  {"sprucelog", B_LOG_SPRUCE}, {"logspruce", B_LOG_SPRUCE}, {"birchlog", B_LOG_BIRCH},
+  {"logbirch", B_LOG_BIRCH}, {"junglelog", B_LOG_JUNGLE}, {"logjungle", B_LOG_JUNGLE},
+  {"acacialog", B_LOG_ACACIA}, {"logacacia", B_LOG_ACACIA},
+  {"darkoaklog", B_LOG_DARK_OAK}, {"logdarkoak", B_LOG_DARK_OAK},
+  {"oakleaves", B_LEAVES_OAK}, {"leavesoak", B_LEAVES_OAK},
+  {"spruceleaves", B_LEAVES_SPRUCE}, {"leavesspruce", B_LEAVES_SPRUCE},
+  {"birchleaves", B_LEAVES_BIRCH}, {"leavesbirch", B_LEAVES_BIRCH},
+  {"jungleleaves", B_LEAVES_JUNGLE}, {"leavesjungle", B_LEAVES_JUNGLE},
+  {"acacialeaves", B_LEAVES_ACACIA}, {"leavesacacia", B_LEAVES_ACACIA},
+  {"darkoakleaves", B_LEAVES_DARK_OAK}, {"leavesdarkoak", B_LEAVES_DARK_OAK},
+  {"sponge", B_SPONGE}, {"glass", B_GLASS},
   {"lapisore", B_LAPIS_ORE}, {"lapisblock", B_LAPIS_BLOCK}, {"sandstone", B_SANDSTONE},
   {"chiseledsandstone", B_SANDSTONE_CHISELED}, {"smoothsandstone", B_SANDSTONE_SMOOTH},
-  {"wool", B_WOOL_WHITE}, {"whitewool", B_WOOL_WHITE}, {"orangewool", B_WOOL_ORANGE},
+  {"whitewool", B_WOOL_WHITE}, {"wool", B_WOOL_WHITE}, {"orangewool", B_WOOL_ORANGE},
   {"magentawool", B_WOOL_MAGENTA}, {"lightbluewool", B_WOOL_LIGHT_BLUE}, {"yellowwool", B_WOOL_YELLOW},
   {"limewool", B_WOOL_LIME}, {"pinkwool", B_WOOL_PINK}, {"graywool", B_WOOL_GRAY},
-  {"silverwool", B_WOOL_SILVER}, {"lightgraywool", B_WOOL_SILVER}, {"cyanwool", B_WOOL_CYAN},
+  {"lightgraywool", B_WOOL_SILVER}, {"silverwool", B_WOOL_SILVER}, {"cyanwool", B_WOOL_CYAN},
   {"purplewool", B_WOOL_PURPLE}, {"bluewool", B_WOOL_BLUE}, {"brownwool", B_WOOL_BROWN},
   {"greenwool", B_WOOL_GREEN}, {"redwool", B_WOOL_RED}, {"blackwool", B_WOOL_BLACK},
   {"goldblock", B_GOLD_BLOCK}, {"ironblock", B_IRON_BLOCK}, {"bricks", B_BRICKS},
@@ -5504,23 +5546,34 @@ static const struct { const char *name; uint8_t block; } flat_names[] = {
   {"obsidian", B_OBSIDIAN}, {"chest", B_CHEST}, {"diamondore", B_DIAMOND_ORE},
   {"diamondblock", B_DIAMOND_BLOCK}, {"craftingtable", B_CRAFTING_TABLE},
   {"workbench", B_CRAFTING_TABLE}, {"furnace", B_FURNACE}, {"ladder", B_LADDER},
-  {"rail", B_RAIL}, {"snow", B_SNOW}, {"ice", B_ICE}, {"packedice", B_PACKED_ICE},
+  {"rail", B_RAIL}, {"snowblock", B_SNOW}, {"snow", B_SNOW}, {"ice", B_ICE}, {"packedice", B_PACKED_ICE},
   {"cactus", B_CACTUS}, {"clay", B_CLAY}, {"pumpkin", B_PUMPKIN},
   {"jackolantern", B_JACK_O_LANTERN}, {"stonebricks", B_STONE_BRICKS},
   {"stonebrick", B_STONE_BRICKS}, {"mossystonebricks", B_MOSSY_STONE_BRICKS},
   {"crackedstonebricks", B_CRACKED_STONE_BRICKS}, {"chiseledstonebricks", B_CHISELED_STONE_BRICKS},
   {"melon", B_MELON}, {"mycelium", B_MYCELIUM}, {"emeraldore", B_EMERALD_ORE},
   {"emeraldblock", B_EMERALD_BLOCK}, {"cobblestonewall", B_COBBLESTONE_WALL},
-  {"hardenedclay", B_HARDENED_CLAY}, {"stainedclay", B_STAINED_CLAY_WHITE},
-  {"stainedhardenedclay", B_STAINED_CLAY_WHITE}, {"whiteclay", B_STAINED_CLAY_WHITE},
-  {"orangeclay", B_STAINED_CLAY_ORANGE}, {"magentaclay", B_STAINED_CLAY_MAGENTA},
-  {"lightblueclay", B_STAINED_CLAY_LIGHT_BLUE}, {"yellowclay", B_STAINED_CLAY_YELLOW},
-  {"limeclay", B_STAINED_CLAY_LIME}, {"pinkclay", B_STAINED_CLAY_PINK},
-  {"grayclay", B_STAINED_CLAY_GRAY}, {"silverclay", B_STAINED_CLAY_SILVER},
-  {"cyanclay", B_STAINED_CLAY_CYAN}, {"purpleclay", B_STAINED_CLAY_PURPLE},
-  {"blueclay", B_STAINED_CLAY_BLUE}, {"brownclay", B_STAINED_CLAY_BROWN},
-  {"greenclay", B_STAINED_CLAY_GREEN}, {"redclay", B_STAINED_CLAY_RED},
-  {"blackclay", B_STAINED_CLAY_BLACK}, {"hayblock", B_HAY_BALE}, {"haybale", B_HAY_BALE},
+  {"terracotta", B_HARDENED_CLAY}, {"hardenedclay", B_HARDENED_CLAY},
+  {"whiteterracotta", B_STAINED_CLAY_WHITE},
+  {"stainedclay", B_STAINED_CLAY_WHITE},
+  {"stainedhardenedclay", B_STAINED_CLAY_WHITE},
+  {"whiteclay", B_STAINED_CLAY_WHITE},
+  {"orangeterracotta", B_STAINED_CLAY_ORANGE}, {"orangeclay", B_STAINED_CLAY_ORANGE},
+  {"magentaterracotta", B_STAINED_CLAY_MAGENTA}, {"magentaclay", B_STAINED_CLAY_MAGENTA},
+  {"lightblueterracotta", B_STAINED_CLAY_LIGHT_BLUE}, {"lightblueclay", B_STAINED_CLAY_LIGHT_BLUE},
+  {"yellowterracotta", B_STAINED_CLAY_YELLOW}, {"yellowclay", B_STAINED_CLAY_YELLOW},
+  {"limeterracotta", B_STAINED_CLAY_LIME}, {"limeclay", B_STAINED_CLAY_LIME},
+  {"pinkterracotta", B_STAINED_CLAY_PINK}, {"pinkclay", B_STAINED_CLAY_PINK},
+  {"grayterracotta", B_STAINED_CLAY_GRAY}, {"grayclay", B_STAINED_CLAY_GRAY},
+  {"lightgrayterracotta", B_STAINED_CLAY_SILVER}, {"silverclay", B_STAINED_CLAY_SILVER},
+  {"cyanterracotta", B_STAINED_CLAY_CYAN}, {"cyanclay", B_STAINED_CLAY_CYAN},
+  {"purpleterracotta", B_STAINED_CLAY_PURPLE}, {"purpleclay", B_STAINED_CLAY_PURPLE},
+  {"blueterracotta", B_STAINED_CLAY_BLUE}, {"blueclay", B_STAINED_CLAY_BLUE},
+  {"brownterracotta", B_STAINED_CLAY_BROWN}, {"brownclay", B_STAINED_CLAY_BROWN},
+  {"greenterracotta", B_STAINED_CLAY_GREEN}, {"greenclay", B_STAINED_CLAY_GREEN},
+  {"redterracotta", B_STAINED_CLAY_RED}, {"redclay", B_STAINED_CLAY_RED},
+  {"blackterracotta", B_STAINED_CLAY_BLACK}, {"blackclay", B_STAINED_CLAY_BLACK},
+  {"hayblock", B_HAY_BALE}, {"haybale", B_HAY_BALE},
   {"coalblock", B_COAL_BLOCK}, {"redsandstone", B_RED_SANDSTONE}, {"glowstone", B_GLOWSTONE},
 };
 
@@ -5961,13 +6014,13 @@ void gen_spawn(int *px, int *py, int *pz) {
     }
     /* WorldChunkManager.a(0, 0, 256, spawn biomes, random): 129 x 129 cells of rivermix */
     int found = 0, fx = 0, fz = 0, j2 = 0;
-    uint8_t *rows = (uint8_t *)U.lay + sizeof(i32) * LAY_INTS; /* 8 rows x 129, after the layer scratch */
+    uint8_t *rows = (uint8_t *)U->lay + sizeof(i32) * LAY_INTS; /* 8 rows x 129, after the layer scratch */
     for (int tz = 0; tz < 129; tz += 8) {
         int th = 129 - tz < 8 ? 129 - tz : 8;
         for (int tx = 0; tx < 129; tx += 43) { /* 43 x 8 tiles: the layers' cost is mostly per run */
             int tw = 43;
-            i32 *rm = U.lay;
-            lay_mem = U.lay + 43 * 8;
+            i32 *rm = U->lay;
+            lay_mem = U->lay + 43 * 8;
             lay_cap = LAY_INTS - 43 * 8;
             lay_top = 0;
             layers_rivermix(-64 + tx, -64 + tz, tw, th, rm);
@@ -6015,9 +6068,9 @@ unsigned gen_ram_bytes(void) {
                       sizeof reg_z0 + sizeof reg_z1 + sizeof vor_c + sizeof sum_pin + sizeof oc_surf +
                       sizeof nb + sizeof tg + sizeof oc_mesa + sizeof mesa_bands + sizeof oc_main +
                       sizeof tg_cx + sizeof tg_cz + sizeof jump_add + sizeof jump_mul + sizeof bweights +
-                      sizeof cb4 + sizeof oc_depth + sizeof oc_max + sizeof oc_min + sizeof chain_buf +
-                      sizeof pmemo + sizeof tstack + sizeof biome_index + sizeof c_b16 + sizeof c_sl +
+                      sizeof cb4 + sizeof oc_depth + sizeof oc_max + sizeof oc_min +
+                      sizeof pmemo + sizeof biome_index + sizeof c_b16 + sizeof c_sl +
                       sizeof c_top + sizeof cb16 + sizeof col_tmp + sizeof perm_grass + sizeof perm_temp +
-                      sizeof bgrid + sizeof lay_wseed + sizeof bflags + sizeof tov + sizeof crec + sizeof U +
-                      sizeof sumc);
+                      sizeof bgrid + sizeof lay_wseed + sizeof bflags + sizeof crec +
+                      sizeof sumc + sizeof gen_spawner_hook);
 }

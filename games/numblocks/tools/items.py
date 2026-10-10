@@ -78,12 +78,12 @@ item('BONE', 'Bone', 'bone')
 item('GUNPOWDER', 'Gunpowder', 'gunpowder')
 item('LEATHER', 'Leather', 'leather')
 item('WHEAT', 'Wheat', 'wheat')
-item('WHEAT_SEEDS', 'Seeds', 'seeds_wheat', 'placer', place='WHEAT_0')
-item('REEDS', 'Sugar Canes', 'reeds', 'placer', place='SUGAR_CANE')
+item('WHEAT_SEEDS', 'Wheat Seeds', 'seeds_wheat', 'placer', place='WHEAT_0')
+item('REEDS', 'Sugar Cane', 'reeds', 'placer', place='SUGAR_CANE')
 item('SUGAR', 'Sugar', 'sugar')
 item('PAPER', 'Paper', 'paper')
 item('BOOK', 'Book', 'book_normal')
-item('CLAY_BALL', 'Clay', 'clay_ball')
+item('CLAY_BALL', 'Clay Ball', 'clay_ball')
 item('BRICK', 'Brick', 'brick')
 item('BOWL', 'Bowl', 'bowl')
 item('SNOWBALL', 'Snowball', 'snowball', 'snowball', stack=16)
@@ -93,17 +93,17 @@ item('GLOWSTONE_DUST', 'Glowstone Dust', 'glowstone_dust')
 item('BUCKET', 'Bucket', 'bucket_empty', 'bucket', stack=16)
 item('WATER_BUCKET', 'Water Bucket', 'bucket_water', 'water_bucket', stack=1)
 item('LAVA_BUCKET', 'Lava Bucket', 'bucket_lava', 'lava_bucket', stack=1, fuel=20000)
-item('MILK_BUCKET', 'Milk', 'bucket_milk', 'milk_bucket', stack=1)
+item('MILK_BUCKET', 'Milk Bucket', 'bucket_milk', 'milk_bucket', stack=1)
 item('WOODEN_DOOR', 'Oak Door', 'door_wood', 'placer', place='DOOR_OAK_LOWER')
-item('BED', 'Bed', 'bed', 'placer', stack=1, place='BED_FOOT')
+item('BED', 'White Bed', 'bed', 'placer', stack=1, place='BED_FOOT')
 item('COMPASS', 'Compass', 'compass')
 item('FISHING_ROD', 'Fishing Rod', 'fishing_rod_uncast', 'fishing_rod', stack=1, dur=64)
 item('CLOCK', 'Clock', 'clock')
 # dyes, in Minecraft's damage order (0 black (ink sac) .. 15 white (bone meal))
-DYES = [('BLACK', 'Ink Sac', 'black'), ('RED', 'Rose Red', 'red'), ('GREEN', 'Cactus Green', 'green'),
+DYES = [('BLACK', 'Ink Sac', 'black'), ('RED', 'Red Dye', 'red'), ('GREEN', 'Green Dye', 'green'),
         ('BROWN', 'Cocoa Beans', 'brown'), ('BLUE', 'Lapis Lazuli', 'blue'), ('PURPLE', 'Purple Dye', 'purple'),
         ('CYAN', 'Cyan Dye', 'cyan'), ('SILVER', 'Light Gray Dye', 'silver'), ('GRAY', 'Gray Dye', 'gray'),
-        ('PINK', 'Pink Dye', 'pink'), ('LIME', 'Lime Dye', 'lime'), ('YELLOW', 'Dandelion Yellow', 'yellow'),
+        ('PINK', 'Pink Dye', 'pink'), ('LIME', 'Lime Dye', 'lime'), ('YELLOW', 'Yellow Dye', 'yellow'),
         ('LIGHT_BLUE', 'Light Blue Dye', 'light_blue'), ('MAGENTA', 'Magenta Dye', 'magenta'),
         ('ORANGE', 'Orange Dye', 'orange'), ('WHITE', 'Bone Meal', 'white')]
 for n, lab, t in DYES:
@@ -124,17 +124,17 @@ food('ROTTEN_FLESH', 'Rotten Flesh', 'rotten_flesh', 4, 0.1)
 food('SPIDER_EYE', 'Spider Eye', 'spider_eye', 2, 0.8)
 food('MUSHROOM_STEW', 'Mushroom Stew', 'mushroom_stew', 6, 0.6, stack=1, kind='stew')
 food('COOKIE', 'Cookie', 'cookie', 2, 0.1)
-food('MELON_SLICE', 'Melon', 'melon', 2, 0.3)
+food('MELON_SLICE', 'Melon Slice', 'melon', 2, 0.3)
 food('CARROT', 'Carrot', 'carrot', 3, 0.6, place='CARROTS_0')
 food('POTATO', 'Potato', 'potato', 1, 0.3, place='POTATOES_0')
 food('BAKED_POTATO', 'Baked Potato', 'potato_baked', 5, 0.6)
 food('POISONOUS_POTATO', 'Poisonous Potato', 'potato_poisonous', 2, 0.3)
 food('PUMPKIN_PIE', 'Pumpkin Pie', 'pumpkin_pie', 8, 0.3)
-food('RAW_FISH', 'Raw Fish', 'fish_cod_raw', 2, 0.1)
+food('RAW_FISH', 'Raw Cod', 'fish_cod_raw', 2, 0.1)
 food('RAW_SALMON', 'Raw Salmon', 'fish_salmon_raw', 2, 0.1)
-food('CLOWNFISH', 'Clownfish', 'fish_clownfish_raw', 1, 0.1)
+food('CLOWNFISH', 'Tropical Fish', 'fish_clownfish_raw', 1, 0.1)
 food('PUFFERFISH', 'Pufferfish', 'fish_pufferfish_raw', 1, 0.1)
-food('COOKED_FISH', 'Cooked Fish', 'fish_cod_cooked', 5, 0.6)
+food('COOKED_FISH', 'Cooked Cod', 'fish_cod_cooked', 5, 0.6)
 food('COOKED_SALMON', 'Cooked Salmon', 'fish_salmon_cooked', 6, 0.8)
 item('RAW_IRON', 'Raw Iron', 'raw_iron')
 item('RAW_GOLD', 'Raw Gold', 'raw_gold')
@@ -160,42 +160,42 @@ LABELS = {
     'GOLD_ORE': 'Gold Ore', 'IRON_ORE': 'Iron Ore', 'COAL_ORE': 'Coal Ore', 'SPONGE': 'Sponge', 'GLASS': 'Glass',
     'LAPIS_ORE': 'Lapis Lazuli Ore', 'LAPIS_BLOCK': 'Lapis Lazuli Block', 'SANDSTONE': 'Sandstone',
     'SANDSTONE_CHISELED': 'Chiseled Sandstone', 'SANDSTONE_SMOOTH': 'Smooth Sandstone', 'COBWEB': 'Cobweb',
-    'DEAD_SHRUB': 'Shrub', 'TALL_GRASS': 'Grass', 'FERN': 'Fern', 'DEAD_BUSH': 'Dead Bush', 'DANDELION': 'Dandelion',
+    'DEAD_SHRUB': 'Dead Bush', 'TALL_GRASS': 'Grass', 'FERN': 'Fern', 'DEAD_BUSH': 'Dead Bush', 'DANDELION': 'Dandelion',
     'POPPY': 'Poppy', 'BLUE_ORCHID': 'Blue Orchid', 'ALLIUM': 'Allium', 'AZURE_BLUET': 'Azure Bluet',
     'RED_TULIP': 'Red Tulip', 'ORANGE_TULIP': 'Orange Tulip', 'WHITE_TULIP': 'White Tulip', 'PINK_TULIP': 'Pink Tulip',
-    'OXEYE_DAISY': 'Oxeye Daisy', 'BROWN_MUSHROOM': 'Mushroom', 'RED_MUSHROOM': 'Mushroom',
-    'GOLD_BLOCK': 'Block of Gold', 'IRON_BLOCK': 'Block of Iron', 'STONE_SLAB_DOUBLE': 'Stone Slab',
-    'STONE_SLAB': 'Stone Slab', 'SANDSTONE_SLAB': 'Sandstone Slab', 'WOOD_SLAB_OLD': 'Wooden Slab',
-    'COBBLESTONE_SLAB': 'Cobblestone Slab', 'BRICK_SLAB': 'Bricks Slab', 'STONE_BRICK_SLAB': 'Stone Bricks Slab',
-    'BRICKS': 'Bricks', 'TNT': 'TNT', 'BOOKSHELF': 'Bookshelf', 'MOSSY_COBBLESTONE': 'Moss Stone',
-    'OBSIDIAN': 'Obsidian', 'TORCH': 'Torch', 'MOB_SPAWNER': 'Monster Spawner', 'OAK_STAIRS': 'Oak Wood Stairs',
+    'OXEYE_DAISY': 'Oxeye Daisy', 'BROWN_MUSHROOM': 'Brown Mushroom', 'RED_MUSHROOM': 'Red Mushroom',
+    'GOLD_BLOCK': 'Block of Gold', 'IRON_BLOCK': 'Block of Iron', 'STONE_SLAB_DOUBLE': 'Smooth Stone',
+    'STONE_SLAB': 'Smooth Stone Slab', 'SANDSTONE_SLAB': 'Sandstone Slab', 'WOOD_SLAB_OLD': 'Petrified Oak Slab',
+    'COBBLESTONE_SLAB': 'Cobblestone Slab', 'BRICK_SLAB': 'Brick Slab', 'STONE_BRICK_SLAB': 'Stone Brick Slab',
+    'BRICKS': 'Bricks', 'TNT': 'TNT', 'BOOKSHELF': 'Bookshelf', 'MOSSY_COBBLESTONE': 'Mossy Cobblestone',
+    'OBSIDIAN': 'Obsidian', 'TORCH': 'Torch', 'MOB_SPAWNER': 'Monster Spawner', 'OAK_STAIRS': 'Oak Stairs',
     'CHEST': 'Chest', 'DIAMOND_ORE': 'Diamond Ore', 'DIAMOND_BLOCK': 'Block of Diamond',
     'CRAFTING_TABLE': 'Crafting Table', 'FARMLAND': 'Farmland', 'FURNACE': 'Furnace', 'LADDER': 'Ladder',
     'RAIL': 'Rail', 'COBBLESTONE_STAIRS': 'Cobblestone Stairs', 'REDSTONE_ORE': 'Redstone Ore', 'SNOW_LAYER': 'Snow',
-    'ICE': 'Ice', 'SNOW': 'Snow', 'CACTUS': 'Cactus', 'CLAY': 'Clay', 'FENCE_OAK': 'Oak Fence', 'PUMPKIN': 'Pumpkin',
+    'ICE': 'Ice', 'SNOW': 'Snow Block', 'CACTUS': 'Cactus', 'CLAY': 'Clay', 'FENCE_OAK': 'Oak Fence', 'PUMPKIN': 'Pumpkin',
     'JACK_O_LANTERN': "Jack o'Lantern", 'STONE_BRICKS': 'Stone Bricks', 'MOSSY_STONE_BRICKS': 'Mossy Stone Bricks',
     'CRACKED_STONE_BRICKS': 'Cracked Stone Bricks', 'CHISELED_STONE_BRICKS': 'Chiseled Stone Bricks',
-    'BROWN_MUSHROOM_CAP': 'Mushroom', 'RED_MUSHROOM_CAP': 'Mushroom', 'GLASS_PANE': 'Glass Pane', 'MELON': 'Melon',
+    'BROWN_MUSHROOM_CAP': 'Brown Mushroom Block', 'RED_MUSHROOM_CAP': 'Red Mushroom Block', 'GLASS_PANE': 'Glass Pane', 'MELON': 'Melon',
     'VINE': 'Vines', 'MYCELIUM': 'Mycelium', 'LILY_PAD': 'Lily Pad', 'EMERALD_ORE': 'Emerald Ore',
-    'EMERALD_BLOCK': 'Block of Emerald', 'COBBLESTONE_WALL': 'Cobblestone Wall', 'HARDENED_CLAY': 'Hardened Clay',
+    'EMERALD_BLOCK': 'Block of Emerald', 'COBBLESTONE_WALL': 'Cobblestone Wall', 'HARDENED_CLAY': 'Terracotta',
     'HAY_BALE': 'Hay Bale', 'COAL_BLOCK': 'Block of Coal', 'PACKED_ICE': 'Packed Ice', 'SUNFLOWER_LOWER': 'Sunflower',
-    'LILAC_LOWER': 'Lilac', 'DOUBLE_GRASS_LOWER': 'Double Tallgrass', 'LARGE_FERN_LOWER': 'Large Fern',
+    'LILAC_LOWER': 'Lilac', 'DOUBLE_GRASS_LOWER': 'Tall Grass', 'LARGE_FERN_LOWER': 'Large Fern',
     'ROSE_BUSH_LOWER': 'Rose Bush', 'PEONY_LOWER': 'Peony', 'RED_SANDSTONE': 'Red Sandstone', 'GLOWSTONE': 'Glowstone',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
-    LABELS[f'PLANKS_{n}'] = f'{t} Wood Planks'
+    LABELS[f'PLANKS_{n}'] = f'{t} Planks'
     LABELS[f'SAPLING_{n}'] = f'{t} Sapling'
-    LABELS[f'LOG_{n}'] = f'{t} Wood'
+    LABELS[f'LOG_{n}'] = f'{t} Log'
     LABELS[f'LEAVES_{n}'] = f'{t} Leaves'
-    LABELS[f'WOOD_SLAB_{n}'] = f'{t} Wood Slab'
+    LABELS[f'WOOD_SLAB_{n}'] = f'{t} Slab'
 COLORS = ['WHITE', 'ORANGE', 'MAGENTA', 'LIGHT_BLUE', 'YELLOW', 'LIME', 'PINK', 'GRAY', 'SILVER', 'CYAN', 'PURPLE',
           'BLUE', 'BROWN', 'GREEN', 'RED', 'BLACK']
 CLAB = ['White', 'Orange', 'Magenta', 'Light Blue', 'Yellow', 'Lime', 'Pink', 'Gray', 'Light Gray', 'Cyan', 'Purple',
         'Blue', 'Brown', 'Green', 'Red', 'Black']
 for c, l in zip(COLORS, CLAB):
     LABELS[f'WOOL_{c}'] = 'Wool' if c == 'WHITE' else f'{l} Wool'
-    LABELS[f'STAINED_CLAY_{c}'] = f'{l} Stained Clay'
+    LABELS[f'STAINED_CLAY_{c}'] = f'{l} Terracotta'
 
 # block states that stand for another one in the inventory
 ITEM_OF = {'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
@@ -426,7 +426,7 @@ TABS = ['Natural Blocks', 'Building Blocks', 'Decorative Items', 'Functional', '
 NATURAL = ('GRASS', 'DIRT', 'COARSE_DIRT', 'PODZOL', 'MYCELIUM', 'STONE', 'GRANITE', 'DIORITE', 'ANDESITE',
            'SAND', 'RED_SAND', 'GRAVEL', 'CLAY', 'SNOW', 'ICE', 'PACKED_ICE', 'BEDROCK', 'OBSIDIAN',
            'COAL_ORE', 'IRON_ORE', 'GOLD_ORE', 'DIAMOND_ORE', 'REDSTONE_ORE', 'LAPIS_ORE', 'EMERALD_ORE')
-NATURAL_ONLY = ('SNOW_LAYER',)   # natural, but not a full cube, and "Snow" is already in Building Blocks
+NATURAL_ONLY = ('SNOW_LAYER',)   # natural, but not a full cube, and "Snow Block" is already in Building Blocks
 # blocks that do something rather than just sit there (Minecraft's decoration tab, most of it)
 FUNC = ('TNT', 'TORCH', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'RAIL')
 # of those, the ones that fill a whole cube, so they go first in their tab

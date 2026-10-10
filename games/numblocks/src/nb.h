@@ -14,10 +14,12 @@
 #include <string.h>
 #include "blocks.h"
 #include "data.h"
+#include "gen.h"     /* the generator's scratch (GEN_SCRATCH, gen_scratch) */
+#include "hand.h"    /* the hand's model for a frame, on render_frame's stack */
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.3.7"
+#define NB_VERSION "1.3.11"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -111,6 +113,7 @@ static inline int block_light_at(int i) { return vl[i] >> 4; }   /* torches, lav
 
 void world_new(int64_t seed, const char *name);   /* name: the save's record prefix */
 void world_follow(float x, float y, float z);   /* keeps the cache around (x, y, z) */
+void world_spawn(int *x, int *y, int *z);   /* the world's spawn point (the generator's own choice) */
 int world_get(int x, int y, int z);            /* B_AIR outside the cache, B_BEDROCK below 0 */
 void world_set(int x, int y, int z, int b);     /* a player's change: kept in the edit log */
 void world_light_flush(void);   /* the light of changed blocks (world_follow does it each frame) */
@@ -167,7 +170,7 @@ typedef struct {
   float walked, bob, prev_walked, prev_bob;   /* view bobbing (EntityPlayer.cameraYaw) */
   float xp;               /* 0..1 of the way to the next level */
   int spawn_x, spawn_y, spawn_z;
-  uint8_t mode;           /* 0 survival, 1 creative */
+  uint8_t mode;           /* 0 survival, 1 creative, 2 spectator */
   uint8_t eff_amp[3];     /* effects: their amplifiers (0: level I) */
   uint16_t eff[3];        /* effects: ticks left (poison, hunger, regeneration) */
 } Player;
@@ -176,8 +179,14 @@ extern Player pl;
 void player_spawn(void);
 void player_pick_block(void);   /* the block looked at, into the hand (Pick Block) */
 extern float look_ray[6];   /* the eyes' ray as last drawn: from, direction */
+/* the spectator's state (player.c): the entity its camera rides (its index in ents,
+ * -1 none), the one under its crosshair (-1 none), and the eyes above the ridden
+ * entity's feet (0 not riding) */
+extern int8_t spectate, spec_target;
+extern float spec_eye;
 void player_look(float ex, float ey, float ez, float yaw, float pitch);
 void player_tick(uint32_t keys, uint32_t pressed);   /* 20 a second */
+void player_set_mode(int m);   /* /gamemode, or the game mode switcher: 0 survival, 1 creative */
 static inline Stack *held(void) { return &pl.inv[pl.slot]; }
 void player_hurt(float amount, int kind);   /* kind: DMG_* */
 enum { DMG_GENERIC, DMG_FALL, DMG_DROWN, DMG_LAVA, DMG_FIRE, DMG_STARVE, DMG_WALL, DMG_VOID, DMG_MOB, DMG_ARROW,
@@ -185,9 +194,11 @@ enum { DMG_GENERIC, DMG_FALL, DMG_DROWN, DMG_LAVA, DMG_FIRE, DMG_STARVE, DMG_WAL
 void player_add_xp(int n);
 void player_swing(void);   /* the arm swings (hand.c) */
 void hand_tick(void);
-void hand_frame(void);     /* the hand and what it holds, once a frame, */
-void hand_strip(uint16_t *buf, int y0, int rows);   /* then drawn on each strip */
 void gui_message(const char *s);   /* a line at the bottom left, as Minecraft's chat shows */
+void mode_open(void);              /* the game mode switcher (sin + cos), over the world */
+void mode_next(void);              /* cos again: the next mode */
+void mode_use(void);               /* sin let go (or OK): the mode picked */
+void mode_cancel(void);            /* Back: the way out, nothing changed */
 
 /* ---------------------------------------------------------------- entities (entity.c) */
 enum { E_NONE, E_ITEM, E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN, E_ARROW, E_TNT,
@@ -238,6 +249,7 @@ int mob_of_egg(int id);                /* the mob a spawn egg makes (0: not one)
 bool mob_can_stand(int x, int y, int z);   /* room for a mob to stand there */
 extern const char *const mob_name[8];   /* the mobs' names (Zombie .. Chicken) */
 void spawners_set(int x, int y, int z, int mob);   /* a spawn egg used on a monster spawner */
+void spawners_made(int x, int y, int z, int mob);  /* world generation placed one (a dungeon's) */
 void spawners_note(int x, int y, int z);           /* one fresh from the inventory (unset) */
 void spawners_clear(void);                     /* a new world (or one loaded without any) */
 void spawners_spawn(void);                     /* the monster spawners near the player make their mob */
@@ -290,7 +302,7 @@ void break_block_at(int x, int y, int z, bool drops);
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU };
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU, GUI_MODE };
 extern int gui;            /* the screen open */
 void gui_open(int screen, int x, int y, int z);
 void gui_close(void);
@@ -329,7 +341,7 @@ enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PA
 uint32_t keys_of(uint64_t raw);   /* the K_ bits of the keys held (the calculator's keys, as bound) */
 void keys_reset(void);            /* the keys as they start */
 void keys_update(int seen);       /* keys saved by an older version (seen: its key sheet) brought up to date */
-#define KEY_SHEET 6       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places; 5: debug overlay; 6: sprint on i) */
+#define KEY_SHEET 8       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places; 5: debug overlay; 6: sprint on i; 7: sin + cos, the game mode switcher; 8: forward twice no longer sprints, no EXE line) */
 extern Options opt;
 extern int64_t world_seed;
 enum { WT_DEFAULT, WT_FLAT };
@@ -376,6 +388,7 @@ void command_run(const char *line);        /* a line sent from the chat: a comma
 /* tab completion: the k-th way to finish the last word of line (the word starts at *at); false: no more */
 bool command_complete(const char *line, int k, int *at, char *out, int max);
 extern const char *const mc_block_name[198], *const mc_item_name[176];   /* (names.c) */
+extern const char *const mc_state_name[];   /* each give entry's name: the block state or item it is (names.c) */
 extern const uint8_t mc_block_item[25];
 extern const uint16_t give_key[], give_id[];   /* Minecraft's id << 4 | data, and NumBlocks' id */
 extern const int n_give;
@@ -385,8 +398,9 @@ extern const int n_give;
 #define RH 120
 typedef struct { float x, y, z, yaw, pitch; } Camera;
 void render_frame(const Camera *c, uint32_t time_of_day);
-/* the HUD and screens draw over each strip of the screen before it is sent */
-void hud_strip(uint16_t *buf, int y0, int rows);
+/* the HUD and screens draw over each strip of the screen before it is sent
+ * (hand: the hand's state for this frame, on render_frame's stack) */
+void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand);
 void camera_reset(void);
 extern uint32_t ticks_run;   /* the player moved at once: the camera with them (main.c) */
 extern float dbg_fps;        /* frames a second, EMA of the frame time (main.c) */
