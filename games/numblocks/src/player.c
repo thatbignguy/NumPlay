@@ -868,8 +868,8 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   if (pl.using_ticks) fwd *= 0.2f, strafe *= 0.2f, sprint_timer = 0;   /* eating slows you down */
   /* EntityPlayerSP.onLivingUpdate: forward pressed twice within 7 ticks on the ground, or with the
    * sprint key, sprints until forward is let go, you walk into a wall, sneak or get hungry. With
-   * Sprint: Toggle (Options, Controls) a tap of the key switches it on and off instead, and forward
-   * may be let go, as 1.15's toggle sprint does */
+   * Sprint: Toggle (Options, Controls) a tap of the key switches it on and off instead: the key
+   * need not be held while walking, but letting go of forward ends it either way */
   bool fed = pl.food > 6 || pl.mode == 1, went = fwd >= 0.8f * 0.98f;
   if (sprint_timer) sprint_timer--;
   bool tap = (pressed & K_SPRINT) != 0;   /* the sprint key pressed this tick, or forward twice */
@@ -883,8 +883,7 @@ void player_tick(uint32_t keys, uint32_t pressed) {
     if (tap) pl.sprinting = fed && !pl.using_ticks;
     else if (went && fed && !pl.using_ticks && (keys & K_SPRINT)) pl.sprinting = true;
   }
-  if (pl.sprinting && (hit_wall || !fed || pl.using_ticks || (opt.sprint_toggle ? pl.sneaking : !went)))
-    pl.sprinting = false;
+  if (pl.sprinting && (hit_wall || !went || pl.sneaking || !fed || pl.using_ticks)) pl.sprinting = false;
   was_fwd = went;
   pl.in_water = in_liquid();
   /* creative: jump twice quickly to fly or land */

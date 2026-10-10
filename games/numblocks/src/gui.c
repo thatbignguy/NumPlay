@@ -268,8 +268,8 @@ static void fmt1(float v, char *out) {
   *p++ = (char)('0' + fp);
   *p = 0;
 }
-/* Minecraft 1.8 F3, top-left white text with shadow: version, XYZ feet, block + chunk,
- * facing cardinal + yaw/pitch, biome, light, FPS + time. 7 short lines for 320x240. */
+/* Minecraft 1.8 F3, top-left white text with shadow: version, XYZ feet, velocity, block + chunk,
+ * facing cardinal + yaw/pitch, biome, light, FPS + time. 8 short lines for 320x240. */
 static void debug_overlay(void) {
   if (!opt.debug || gui != GUI_NONE) return;
   /* built once a frame (hud runs once a strip, ~30 times): the player and the
@@ -354,6 +354,28 @@ static void debug_overlay(void) {
   y += 9;
   text(lxyz, 2, y, 0xFFFF, true);
   y += 9;
+  /* the velocity: blocks a second, the whole of it and the three axes. Put together where it is
+   * drawn - three or so strips a frame show the overlay, and the player does not move between
+   * them, so every strip says the same thing */
+  {
+    char vel[48], vs[16], vxs[16], vys[16], vzs[16], *q = vel;
+    float vx = pl.vx * 20, vy = pl.vy * 20, vz = pl.vz * 20;   /* (the state is a tick's move) */
+    fmt3(sqrtf(vx * vx + vy * vy + vz * vz), vs);
+    fmt3(vx, vxs);
+    fmt3(vy, vys);
+    fmt3(vz, vzs);
+    memcpy(q, "Vel: ", 5), q += 5;
+    strcpy(q, vs), q += strlen(vs);
+    memcpy(q, " (", 2), q += 2;
+    strcpy(q, vxs), q += strlen(vxs);
+    memcpy(q, " / ", 3), q += 3;
+    strcpy(q, vys), q += strlen(vys);
+    memcpy(q, " / ", 3), q += 3;
+    strcpy(q, vzs), q += strlen(vzs);
+    *q++ = ')', *q = 0;
+    text(vel, 2, y, 0xFFFF, true);
+    y += 9;
+  }
   text(lblock, 2, y, 0xFFFF, true);
   y += 9;
   text(lface, 2, y, 0xFFFF, true);

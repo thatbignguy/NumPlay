@@ -381,21 +381,21 @@ int main(void) {
     for (int t = 0; t < 30; t++) player_tick(K_FWD, 0);
     CHECK(!pl.sprinting);
     CHECK(ran > (pl.z - z0) * 1.2f && ran < (pl.z - z0) * 1.4f);   /* (1.3 times as quick) */
-    /* Sprint: Toggle (Options, Controls): a tap of the key switches it on and off, forward may
-     * be let go, and sneaking or getting hungry still end it */
+    /* Sprint: Toggle (Options, Controls): a tap of the key switches it on and off, so the key
+     * need not be held while walking; letting go of forward ends it either way */
     opt.sprint_toggle = 1;
     pl.sprinting = false;
-    player_tick(K_FWD | K_SPRINT, K_SPRINT);   /* a tap */
+    player_tick(K_FWD | K_SPRINT, K_SPRINT);   /* a tap: on */
     CHECK(pl.sprinting);
-    for (int t = 0; t < 5; t++) player_tick(0, 0);
-    CHECK(pl.sprinting);                       /* forward let go: it holds */
+    player_tick(K_FWD, 0);
+    CHECK(pl.sprinting);                       /* the key let go: it holds */
     player_tick(K_FWD | K_SPRINT, K_SPRINT);
     CHECK(!pl.sprinting);                       /* another tap: off */
     player_tick(K_FWD | K_SPRINT, K_SPRINT);
-    CHECK(pl.sprinting);
+    CHECK(pl.sprinting);                       /* a tap again: on */
+    for (int t = 0; t < 5; t++) player_tick(0, 0);
+    CHECK(!pl.sprinting);                       /* forward let go: it ends, as it does on Hold */
     player_tick(K_FWD, 0), player_tick(0, 0), player_tick(K_FWD, K_FWD);   /* forward twice */
-    CHECK(!pl.sprinting);                       /* that switches it off too */
-    player_tick(K_FWD | K_SPRINT, K_SPRINT);
     CHECK(pl.sprinting);
     player_tick(K_FWD | K_SNEAK, K_SNEAK);
     CHECK(!pl.sprinting);                       /* sneaking ends it */
