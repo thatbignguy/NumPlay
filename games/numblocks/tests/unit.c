@@ -361,11 +361,16 @@ int main(void) {
     for (int t = 0; t < 10; t++) player_tick(0, 0);
     player_tick(K_FWD, K_FWD);
     CHECK(!pl.sprinting);
-    /* the key, let go, still sprints; sneaking stops it; hungry, it doesn't start */
-    player_tick(K_FWD | K_SPRINT, K_SPRINT), player_tick(K_FWD, 0);
+    /* the key: held while it is held, and letting go of it ends the sprint (Hold), where a
+     * double-tap of forward carries its own sprint while forward is held */
+    player_tick(K_FWD | K_SPRINT, K_SPRINT);
     CHECK(pl.sprinting);
+    player_tick(K_FWD, 0);
+    CHECK(!pl.sprinting);            /* the key let go: it ends */
+    player_tick(K_FWD, 0);
+    CHECK(!pl.sprinting);            /* (forward alone is only walking) */
     player_tick(K_FWD | K_SNEAK, K_SNEAK);
-    CHECK(!pl.sprinting);
+    CHECK(!pl.sprinting);            /* sneaking ends it */
     pl.food = 6;
     player_tick(K_FWD | K_SPRINT, K_SPRINT);
     CHECK(!pl.sprinting);

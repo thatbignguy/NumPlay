@@ -1,3 +1,11 @@
+## 1.3.7
+**Hold mode: letting go of the sprint key ends the sprint**
+- Sprint: Hold ran on while forward was held, whatever the key was doing: it now ends
+  the moment the i key is let go, which is what Hold means. A double-tap of forward
+  keeps its own sprint - that one is not the key's to end, so it carries on while
+  forward is held, as before.
+- Toggle is as it was: a tap switches sprinting on, letting go of the key does not
+  end it, and letting go of forward does.
 ## 1.3.5
 **Toggle sprint ends with forward; F3 counts the velocity; version entries get titles**
 - Sprint: Toggle now ends the sprint when forward is let go, as Hold does: the

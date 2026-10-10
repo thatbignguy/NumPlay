@@ -794,6 +794,7 @@ void player_respawn(void) {
 
 static int break_cooldown, jump_timer, sprint_timer;
 static bool was_fwd;   /* forward was held last tick */
+static bool sprint_keyed;   /* the sprint key started this sprint (Hold: it must stay held) */
 static uint32_t prev_keys;
 
 /* the damage the world does: falls, drowning, lava, fire, cactus, suffocation, the void */
@@ -871,19 +872,23 @@ void player_tick(uint32_t keys, uint32_t pressed) {
    * Sprint: Toggle (Options, Controls) a tap of the key switches it on and off instead: the key
    * need not be held while walking, but letting go of forward ends it either way */
   bool fed = pl.food > 6 || pl.mode == 1, went = fwd >= 0.8f * 0.98f;
+  bool key_down = (keys & K_SPRINT) != 0, by_key = (pressed & K_SPRINT) != 0, tap = by_key;
   if (sprint_timer) sprint_timer--;
-  bool tap = (pressed & K_SPRINT) != 0;   /* the sprint key pressed this tick, or forward twice */
   if (pl.on_ground && !was_fwd && went && !pl.using_ticks) {
     if (sprint_timer) tap = true;
     else sprint_timer = 7;   /* (the first press: 7 ticks for another) */
   }
   if (opt.sprint_toggle) {
     if (tap) pl.sprinting = !pl.sprinting && fed && !pl.using_ticks;
-  } else {
-    if (tap) pl.sprinting = fed && !pl.using_ticks;
-    else if (went && fed && !pl.using_ticks && (keys & K_SPRINT)) pl.sprinting = true;
+  } else if (fed && !pl.using_ticks) {
+    /* Hold: the sprint key held while walking, or forward twice. One started by the key runs only
+     * while the key is held; one started by forward twice carries on while forward is held */
+    if (tap) pl.sprinting = true, sprint_keyed = by_key;
+    else if (went && key_down) pl.sprinting = true, sprint_keyed = true;
   }
-  if (pl.sprinting && (hit_wall || !went || pl.sneaking || !fed || pl.using_ticks)) pl.sprinting = false;
+  if (pl.sprinting && (hit_wall || !went || pl.sneaking || !fed || pl.using_ticks ||
+                       (!opt.sprint_toggle && sprint_keyed && !key_down)))
+    pl.sprinting = false;
   was_fwd = went;
   pl.in_water = in_liquid();
   /* creative: jump twice quickly to fly or land */
