@@ -1632,16 +1632,16 @@ static void menu(Button *buf, int screen) {
         t[k + 7] = 0;
         add_button(w / 2 - 155, h / 6 - 12, 150, 1, B_DIST, t);
       }
-      /* the Brightness slider, 0 Moody to 15 Bright (the two ends write the word,
-       * the stops between them the number, as Minecraft's does) */
-      cat_brightness(t);
-      add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_BRIGHT, t);
       cat(t, "Graphics: ", opt.fancy ? "Fancy" : "Fast");
       add_button(w / 2 + 5, h / 6 - 12, 150, 1, B_GFX, t);
       cat(t, "View Bobbing: ", opt.bobbing ? "ON" : "OFF");
-      add_button(w / 2 + 5, h / 6 + 12, 150, 1, B_BOB, t);
+      add_button(w / 2 - 155, h / 6 + 12, 150, 1, B_BOB, t);
       cat(t, "Clouds: ", opt.clouds ? "ON" : "OFF");
-      add_button(w / 2 + 5, h / 6 + 36, 150, 1, B_CLOUDS, t);
+      add_button(w / 2 + 5, h / 6 + 12, 150, 1, B_CLOUDS, t);
+      /* the Brightness slider, 0 Moody to 15 Bright, alone under the pairs (the two
+       * ends write the word, the stops between them the number, as Minecraft's does) */
+      cat_brightness(t);
+      add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_BRIGHT, t);
       add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_VIDEO_DONE, "Done");
       break;
     }

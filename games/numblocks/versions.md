@@ -1,3 +1,15 @@
+## 1.3.15
+**Brightness comes in at 8, its top stop is a little dimmer, and it sits alone under the Video Settings' pairs**
+- The Brightness slider of 1.3.14 comes in at 8, just over the middle of Moody to
+  Bright, rather than at 0: a room with no light block in it can be made out
+  without opening the settings (Minecraft's own default is half of its slider),
+  and 0 is still there at the first stop for the pitch black it has always been.
+- 15 gives a little less light than it did: it is what stops 12 and 13 used to
+  give (level 0 lifted by 0.375 where the light table's curve puts 0.03).
+- It has moved under the two pairs of buttons in Video Settings, as the pairs
+  are laid out there: Render Distance beside Graphics, View Bobbing beside
+  Clouds, then Brightness on its own row under them, with Done below it.
+
 ## 1.3.14
 **A spectator flying into a tree sees the world through its leaves, and the Video Settings have a Brightness slider**
 - The eyes' own block was drawn as the inside of one face at zero distance, so flying into

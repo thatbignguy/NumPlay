@@ -80,8 +80,8 @@ static float col_su[RW + 1];       /* the ray of each picture column: its sidewa
 static int shade[4][16];           /* face shade x sky light level -> 0..32 */
 static int shade_blk[4][16];       /* face shade x block light level -> 0..32 */
 /* the Brightness setting's lift at its top (15): how much of the light table's dark end it
- * adds (setup_light: level 0 goes from 0.03, the pitch black, to 0.48) */
-#define LIFT_MAX 0.45f
+ * adds (setup_light: level 0 goes from 0.03, the pitch black, to 0.405) */
+#define LIFT_MAX 0.375f
 static uint8_t sky_grad[129][3];   /* the horizon to the sky, by elevation 0..0.4 (r, g, b) */
 static uint16_t sky_pk[129];       /* the same, packed (the sky row's fast path) */
 static int moon_phase, star_k;     /* the moon's phase (0 full), how bright the stars are (0..255) */

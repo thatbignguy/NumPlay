@@ -12,8 +12,9 @@
 
 /* the options' defaults, positional (the record is the struct as it comes):
  * difficulty, fancy, look speed, clouds, bobbing, key sheet version, last world,
- * plays, the keys, debug overlay, render distance, sprint toggle, brightness */
-Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 0};
+ * plays, the keys, debug overlay, render distance, sprint toggle, brightness
+ * (8, just over the middle of Moody..Bright: a dark room can be made out at once) */
+Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 8};
 int64_t world_seed;
 uint8_t world_type;
 char world_preset[FLAT_MAX + 1] = FLAT_DEFAULT;

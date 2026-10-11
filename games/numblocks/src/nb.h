@@ -19,7 +19,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.3.14"
+#define NB_VERSION "1.3.15"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -334,7 +334,7 @@ typedef struct {
   uint8_t debug;        /* F3 debug overlay on */
   uint8_t distance;     /* render distance, 1..2 chunks (2 is what the game had); global, in numblocks.cfg */
   uint8_t sprint_toggle;   /* Sprint: 0 hold the key while walking, 1 a tap switches it on and off (1.15) */
-  uint8_t brightness;   /* Brightness (Video Settings): 0 Moody (what the game has always been), 15 Bright */
+  uint8_t brightness;   /* Brightness (Video Settings): 0 Moody to 15 Bright (its default, 8) */
 } Options;
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,

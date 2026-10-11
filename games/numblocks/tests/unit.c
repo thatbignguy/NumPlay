@@ -1236,9 +1236,11 @@ int main(void) {
     keys_reset();
   }
   {
-    /* Brightness: one byte appended at the end of the options record. A record written
-     * before the field existed is shorter than the struct, so what the field had stays;
-     * a value the four bits cannot hold is never set (Moody). */
+    /* Brightness: the options come in at 8, just over the middle of Moody to Bright. One
+     * byte is appended at the end of the options record: a record written before the field
+     * existed is shorter, so what the field had stays; a value the four bits cannot hold
+     * is never set (Moody). */
+    CHECK(opt.brightness == 8);
     static uint8_t rec[sizeof opt];
     save_options();
     uint32_t len = 0;
