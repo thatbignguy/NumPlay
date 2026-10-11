@@ -333,13 +333,13 @@ The NumWorks website doesn't install apps on Upsilon (it shows 0 KB free), and t
 2. Plug in the calculator and turn it on.
 3. In a terminal, in the folder where you downloaded the file, run: `npx nwlink install-nwa NumPlay-Upsilon.nwa`
 
-Upsilon support is new. If it doesn't work on your calculator, please [email me](mailto:masonchen204@gmail.com) what happens.
+Upsilon support is new. If it doesn't work on your calculator, please [email me](mailto:roberteinweger@gmail.com) what happens.
 
 ### Keeping your saves
 
 - Your progress is saved in the calculator's memory, as files. Turning the calculator off keeps them.
 - **Installing apps erases these files**, all but the Python scripts. That's why NumPlay keeps a copy of every save in a Python script, `numplay_saves.py`: open NumPlay once after installing, and your progress comes back. NumBlocks on its own does the same with `numblocks_saves.py`. Don't delete these scripts.
-- **A restart erases every file**, scripts included: pressing the reset button on the back, or the calculator crashing and starting over. Nothing can bring progress back after that. If your calculator restarts by itself while you play, please [email me](mailto:masonchen204@gmail.com) which game and what you were doing, so I can fix it.
+- **A restart erases every file**, scripts included: pressing the reset button on the back, or the calculator crashing and starting over. Nothing can bring progress back after that. If your calculator restarts by itself while you play, please [email me](mailto:roberteinweger@gmail.com) which game and what you were doing, so I can fix it.
 - The calculator holds 42 KB of files in all. A big NumBlocks world can fill it, and then NumPlay has no room for its copy. Delete worlds you don't play anymore, or Python scripts you don't need, to make room.
 
 ### The app doesn't show up after installing
