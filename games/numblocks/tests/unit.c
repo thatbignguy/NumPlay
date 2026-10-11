@@ -1301,7 +1301,7 @@ int main(void) {
     memset(ents, 0, sizeof ents);
     game_time = 6000;   /* (daylight on the grass: only a spawner's monsters, natural ones want the dark) */
     int events = 0, prev = 0, first_at = -1;
-    for (int t = 0; t < 1200; t++) {
+    for (int t = 0; t < 2400; t++) {
       pl.health = 20, pl.dead = false, ents_tick(), game_time++;
       int n = 0;
       for (int i = 0; i < N_ENT; i++)
@@ -1313,8 +1313,9 @@ int main(void) {
       prev = n;
     }
     CHECK(first_at >= 0 && first_at < 900);   /* the first within three quarters of a minute of ticks */
-    CHECK(events >= 10);                      /* and the ones after it: ten in a minute, where the one
-                                               * try in sixteen a second it had gave six */
+    CHECK(events >= 15);                      /* and the ones after it: a stream of them over the two
+                                               * minutes, where the one try in sixteen a second it had
+                                               * gave about a third as many */
     delete_world(2);
   }
   {

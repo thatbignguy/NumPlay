@@ -3519,11 +3519,11 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
  * per population and a known failure only makes its draws. */
 /* dungeon tries per population: WorldGenDungeons's eight, more here as a dungeon is the one
  * place a monster spawner comes from and they were too rare to find */
-#define DUNG_TRIES 32
+#define DUNG_TRIES 96
 typedef struct {
     int px, pz;
     uint8_t valid, lakes; /* bit set: lake (0 water, 1 lava) placed */
-    uint32_t dungeons;    /* bit set: dungeon try passed, one bit per try */
+    uint8_t dungeons[(DUNG_TRIES + 7) / 8];   /* bit set: dungeon try passed, one bit per try */
 } PopMemo;
 _Static_assert(DUNG_TRIES <= 8 * sizeof((PopMemo *)0)->dungeons, "a bit is kept per dungeon try");
 #define NPMEMO 16
@@ -3689,7 +3689,7 @@ static void dungeon_loot(void) {
 static void dungeon(int X, int Y, int Z) {
     int i = RI(2) + 2, j = -i - 1, k = i + 1;
     int l = RI(2) + 2, i1 = -l - 1, j1 = l + 1;
-    if (pm_known && !(pm->dungeons >> dung_idx & 1)) return; /* failed before */
+    if (pm_known && !(pm->dungeons[dung_idx >> 3] >> (dung_idx & 7) & 1)) return; /* failed before */
     /* floor and ceiling must be buildable: caves only remove blocks, so test the view first */
     for (int a = j; a <= k; a++)
         for (int c = i1; c <= j1; c++)
@@ -3706,11 +3706,15 @@ static void dungeon(int X, int Y, int Z) {
                 }
                 if ((a == j || a == k || c == i1 || c == j1) && b == 0 && m == B_AIR && v_empty(X + a, Y + 1, Z + c)) ++k1;
             }
-    if (k1 < 1 || k1 > 5) {
+    /* the population's first try makes its dungeon even with no way in: the ground about it is
+     * solid, so about one chunk in six has a sealed room of its own that nothing walks into
+     * (the opening count the other tries ask for is WorldGenDungeons's, one to five onto a
+     * cave, which is where a findable dungeon comes from) */
+    if (k1 > 5 || (k1 < 1 && dung_idx != 0)) {
         PV.qon = 0;
         return;
     }
-    pm->dungeons |= (uint32_t)1 << dung_idx;
+    pm->dungeons[dung_idx >> 3] |= (uint8_t)(1u << (dung_idx & 7));
     for (int a = j; a <= k; a++)
         for (int b = 3; b >= -1; b--)
             for (int c = i1; c <= j1; c++) {
@@ -5333,7 +5337,7 @@ static void populate(int px, int pz, int biome) {
         int x = PK + RI(16) + 8, y = RI(RI(248) + 8), z = PL + RI(16) + 8;
         if (y < SEA || RI(10) == 0) lake(B_LAVA, x, y, z);
     }
-    /* WorldGenDungeons is tried eight times per chunk in Minecraft; thirty-two here, as a
+    /* WorldGenDungeons is tried eight times per chunk in Minecraft; ninety-six here, as a
      * dungeon is the one place a monster spawner comes from and they were too rare to find.
      * Twice as many tries does not make twice as many dungeons: the ones of a population
      * that pass dig the ground out from under the later tries' floor and ceiling test */

@@ -1,3 +1,22 @@
+## 1.4.2
+**Dungeons are ten times as many as 1.3.17's, and about one chunk in six has a sealed room of its own**
+- Ninety-six dungeon tries a chunk where Minecraft makes eight and 1.3.17 made thirty-two: three
+  and a third times as many dungeons with a way in, ten times as many as 1.3.17 gave and twenty
+  times what the game had before 1.3.16. A monster spawner is the one thing a dungeon has that
+  nothing else makes, and they were still too rare to find by flying or digging.
+- The first try of a population makes its dungeon even when no cave opens onto it: the floor and
+  the ceiling still have to be solid ground, so what it makes is a sealed room the ground keeps,
+  with its chest and its spawner like any other and no way in but digging. About one try in six
+  is geometrically valid, so about one chunk in six has one; the other ninety-five tries still
+  ask for WorldGenDungeons's one to five openings onto a cave, which is where a dungeon you can
+  walk into comes from.
+- The population's memo keeps a bit for each of the ninety-six tries (twelve bytes where
+  thirty-two bits had held thirty-two), so a population replayed by the chunks it writes into
+  still makes the same dungeons whichever order the world is walked in.
+- The world only exists in a 24-block-tall slice around the player, and dungeons live from the
+  bedrock to the surface, so a flight through the rock at one height meets the rooms at that
+  height: with this many of them there is one every few chunks to meet.
+
 ## 1.4.1
 **The world generator's summary cache left the RAM it used to sit in for the stack, so NumBlocks needs 13 KB less of it and fits where it did not**
 - The summary cache (`sumc`, 25 entries of a chunk's column summaries) was a `static SumEntry[NSUM]`
