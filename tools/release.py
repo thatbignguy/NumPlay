@@ -38,6 +38,12 @@ VARIANTS = [
     ("NumPlay-Invisible.nwa", "The same app, hidden: a blank icon with no name"),
     ("NumPlay-Matrices.nwa", "The same app, disguised as a math app called Matrices"),
 ]
+# NumBlocks behind the Interest front: an app of its own, under Interest's name
+# and icon, linked straight into build/apps by games/numblocks-interest/Makefile
+DISGUISED = [
+    ("numblocks-interest.nwa", "NumBlocks, hidden: it opens as the Interest app, and NumBlocks is inside. Too big "
+                              "to share the calculator with NumPlay: install it on its own"),
+]
 # other languages, and Upsilon (see the README)
 LANGUAGES = [
     ("NumPlay-French.nwa", "NumPlay en français : tous les jeux, en français"),
@@ -78,6 +84,10 @@ def main():
              "### The same app, in disguise", "", "| File | |", "| --- | --- |"]
     for name, what in VARIANTS:
         files.append((os.path.join(a.build, name), f"{name} · {what}"))
+        notes.append(f"| {link(name)} | {what} |")
+    notes += ["", "### And NumBlocks, hidden too", "", "| File | |", "| --- | --- |"]
+    for name, what in DISGUISED:
+        files.append((os.path.join(a.build, "apps", name), f"{name} · {what}"))
         notes.append(f"| {link(name)} | {what} |")
     notes += ["", "### In French and Chinese", "", "| File | |", "| --- | --- |"]
     for name, what in LANGUAGES:

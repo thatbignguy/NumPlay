@@ -181,6 +181,10 @@ Click a file to download it. Not sure which one? Take the first.
     <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a><br>The same app, in disguise. It looks like a math app called <b>Matrices</b>, next to the calculator's own apps.</td>
   </tr>
   <tr>
+    <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa">numblocks-interest.nwa</a><br>NumBlocks, hidden: it opens as the <b>Interest</b> app, and NumBlocks is inside. Too big to share the calculator with NumPlay: install it on its own.</td>
+  </tr>
+  <tr>
     <td></td>
     <td><img src="docs/media/home_invisible.png" width="240" alt="The calculator's home screen with NumPlay-Invisible installed: the spot after Settings looks empty"> <img src="docs/media/home_matrices.png" width="240" alt="The calculator's home screen with NumPlay-Matrices installed, next to the calculator's own apps"><br><sub>On the home screen: the invisible one is really there, in the empty spot after Settings. The Matrices one sits among the calculator's own apps.</sub></td>
   </tr>

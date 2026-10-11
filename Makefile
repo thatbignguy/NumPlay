@@ -208,6 +208,9 @@ APP_hollowknight = games/hollowknight/output/hollowknight.nwa:HollowKnight.nwa
 # NumBlocks is a game of its own, not in the launcher (games/games.json): it is
 # built as its own app here, alongside its disguised numblocks-interest build.
 APP_numblocks = games/numblocks/output/numblocks.nwa:NumBlocks.nwa
+# NumBlocks behind the Interest front, under Interest's name and icon. Its Makefile
+# links the app straight into $(B)/apps, so there is nothing to copy here.
+APP_numblocks_interest = $(B)/apps/numblocks-interest.nwa:numblocks-interest.nwa
 APP_finalearth2 = games/finalearth2/output/finalearth2.nwa:FinalEarth2.nwa
 
 apps: | $(B)
@@ -223,6 +226,7 @@ apps: | $(B)
 	$(MAKE) -C games/championisland build NWLINK="$(NWLINK)"
 	$(MAKE) -C games/hollowknight build NWLINK="$(NWLINK)"
 	$(MAKE) -C games/numblocks build NWLINK="$(NWLINK)"
+	$(MAKE) -C games/numblocks-interest build NWLINK="$(NWLINK)"
 	$(MAKE) -C games/finalearth2 build NWLINK="$(NWLINK)"
 	cd games/tetris/tetris && NWLINK="$(NWLINK)" $(CARGO) build --release --quiet
 	cp $(word 1,$(subst :, ,$(APP_numdash))) $(B)/apps/$(word 2,$(subst :, ,$(APP_numdash)))
@@ -295,5 +299,6 @@ clean:
 	-$(MAKE) -C games/hollowknight clean
 	-$(MAKE) -C games/finalearth2 clean
 	-$(MAKE) -C games/numblocks clean
+	-$(MAKE) -C games/numblocks-interest clean
 	-cd games/tetris/tetris && $(CARGO) clean
 	-$(foreach g,$(STD_GAMES),$(MAKE) -C games/$(g) clean;)
