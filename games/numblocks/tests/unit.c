@@ -1,5 +1,6 @@
 /* Checks of the item rules: crafting, stacking, smelting, drops. */
 #include <stdio.h>
+#include <stddef.h>
 #include <math.h>
 #include <unistd.h>
 #include "nb.h"
@@ -402,8 +403,8 @@ int main(void) {
     plat_remove_prefix("ut8");
   }
   {
-    /* Sprint: Toggle is kept with the options; a record an older version wrote (a byte shorter,
-     * where the new option does not live yet) reads as Hold */
+    /* Sprint: Toggle is kept with the options; a record an older version wrote (ending
+     * where the Sprint option does not live yet) reads as Hold */
     remove("build/unit-saves/numblocks.cfg");
     opt.sprint_toggle = 1;
     save_options();
@@ -412,7 +413,7 @@ int main(void) {
     CHECK(opt.sprint_toggle == 1);
     /* the record as the older version wrote it: its last byte is not there */
     remove("build/unit-saves/numblocks.cfg");
-    plat_save("numblocks.cfg", &opt, sizeof opt - 1);
+    plat_save("numblocks.cfg", &opt, offsetof(Options, sprint_toggle));
     opt.sprint_toggle = 0;
     load_options();
     CHECK(opt.sprint_toggle == 0);   /* (Hold, as the options fresh from boot have it) */
@@ -1233,6 +1234,30 @@ int main(void) {
     keys_update(5);
     CHECK(opt.keys[A_SPRINT] == 12);
     keys_reset();
+  }
+  {
+    /* Brightness: one byte appended at the end of the options record. A record written
+     * before the field existed is shorter than the struct, so what the field had stays;
+     * a value the four bits cannot hold is never set (Moody). */
+    static uint8_t rec[sizeof opt];
+    save_options();
+    uint32_t len = 0;
+    const uint8_t *d = plat_load("numblocks.cfg", &len);   /* (save.c's OPTIONS_REC) */
+    CHECK(d && len == sizeof opt);
+    memcpy(rec, d, sizeof rec);
+    /* the record as an older version wrote it: it ends before the field */
+    opt.brightness = 7;
+    plat_save("numblocks.cfg", rec, offsetof(Options, brightness));
+    load_options();
+    CHECK(opt.brightness == 7);                     /* (what the field had stays) */
+    /* a value the field cannot hold: never set */
+    rec[offsetof(Options, brightness)] = 200;
+    plat_save("numblocks.cfg", rec, sizeof rec);
+    opt.brightness = 7;
+    load_options();
+    CHECK(opt.brightness == 0);
+    opt.brightness = 0;
+    remove("build/unit-saves/numblocks.cfg");
   }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);
   return fails != 0;

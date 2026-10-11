@@ -10,7 +10,10 @@
 
 #define OPTIONS_REC "numblocks.cfg"
 
-Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2};
+/* the options' defaults, positional (the record is the struct as it comes):
+ * difficulty, fancy, look speed, clouds, bobbing, key sheet version, last world,
+ * plays, the keys, debug overlay, render distance, sprint toggle, brightness */
+Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 0};
 int64_t world_seed;
 uint8_t world_type;
 char world_preset[FLAT_MAX + 1] = FLAT_DEFAULT;
@@ -369,6 +372,9 @@ void load_options(void) {
   /* (older records end in padding where distance now lives: 0 means "never set") */
   if (opt.distance < 1 || opt.distance > 2) opt.distance = 2;
   if (opt.sprint_toggle) opt.sprint_toggle = 1;
+  /* (an older record is shorter than the struct: the fields it has no room for stay
+   * as they were initialised above; a value past what the field holds is never set) */
+  if (opt.brightness > 15) opt.brightness = 0;
 }
 void save_options(void) {
   plat_save(OPTIONS_REC, &opt, sizeof opt);

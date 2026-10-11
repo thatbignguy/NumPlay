@@ -79,6 +79,9 @@ static float zbuf[SR][RW];         /* and how far each pixel's ray went (entitie
 static float col_su[RW + 1];       /* the ray of each picture column: its sideways part */
 static int shade[4][16];           /* face shade x sky light level -> 0..32 */
 static int shade_blk[4][16];       /* face shade x block light level -> 0..32 */
+/* the Brightness setting's lift at its top (15): how much of the light table's dark end it
+ * adds (setup_light: level 0 goes from 0.03, the pitch black, to 0.48) */
+#define LIFT_MAX 0.45f
 static uint8_t sky_grad[129][3];   /* the horizon to the sky, by elevation 0..0.4 (r, g, b) */
 static uint16_t sky_pk[129];       /* the same, packed (the sky row's fast path) */
 static int moon_phase, star_k;     /* the moon's phase (0 full), how bright the stars are (0..255) */
@@ -494,6 +497,12 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
    * sky. One more look at the world's blocks, and only while the head is in one. */
   if (xray && (blk_flags[vc[came_from(i, face, x, y, z)]] & BF_OPAQUE)) return -1;
   if (m == M_CUBE || m == M_LEAVES || m == M_GLASS) {
+    /* The camera's own cell: the face a ray would "come in through" is the one behind it,
+     * a back face - Minecraft's faces are culled, and leaves and glass are see-through
+     * anyway (fancy leaves are holes, and a spectator flies through both). So the eyes in
+     * a canopy (spectator, or stuck in a tree) see the world through the leaves they are
+     * in, and not the inside of one leaf filling the screen at zero distance. */
+    if (face < 0 && (m == M_LEAVES || m == M_GLASS)) return -1;
     /* the face the ray came in through */
     float hx = lx, hy = ly, hz = lz;
     int u, v, f = face < 0 ? 1 : face;
@@ -2159,14 +2168,24 @@ static void setup_light(float sun) {
   /* Minecraft's light table (gamma "Moody"): (1 - f) / (3f + 1), f = 1 - level / 15,
    * sky light scaled by the sun, then brightened to at least 0.03 */
   static const float face_shade[4] = {1.0f, 0.8f, 0.6f, 0.5f};
+  /* Brightness (Video Settings, 0 Moody .. 15 Bright): the player's setting, as
+   * Minecraft's is, not the world's - a block's light is the same at every stop, and
+   * only the light table's dark end is lifted, so a cave with no light in it can be
+   * made out (a lit cave is the same at every stop, and the sky - its own gradient,
+   * not in this table - stays as it is). Minecraft's own is a gamma over every level
+   * of its table; here the lift fades away as the light comes up (f is 1 at the
+   * pitch-black end, 0 at full light), which keeps 0 exactly the game it has always
+   * been and a torch-lit cave the same at every stop too. */
+  float lift = (opt.brightness > 15 ? 15 : opt.brightness) / 15.0f * LIFT_MAX;
   for (int l = 0; l < 16; l++) {
     float f = 1 - l / 15.0f;
+    float f6 = f * f * f * f * f * f;
     float bri = (1 - f) / (f * 3 + 1);
     bri = bri * (sun * 0.95f + 0.05f);
-    bri = bri * 0.96f + 0.03f;
+    bri = bri * 0.96f + 0.03f + lift * f6;
     for (int s = 0; s < 4; s++) shade[s][l] = (int)(bri * face_shade[s] * 32 + 0.5f);
     /* block light does not follow the sun */
-    float blk = (1 - f) / (f * 3 + 1) * 0.96f + 0.03f;
+    float blk = (1 - f) / (f * 3 + 1) * 0.96f + 0.03f + lift * f6;
     for (int s = 0; s < 4; s++) shade_blk[s][l] = (int)(blk * face_shade[s] * 32 + 0.5f);
   }
 }

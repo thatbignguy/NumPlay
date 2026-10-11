@@ -1255,7 +1255,8 @@ enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCE
        B_DODELETE, B_DIFF, B_GFX, B_LOOK, B_CLOUDS, B_BOB, B_DONE, B_BACK_GAME, B_SAVEQUIT, B_RESPAWN, B_TITLE,
        B_CONTROLS, B_CONTROLS_DONE, B_NAME, B_RENAME, B_DORENAME, B_RECREATE, B_CHEATS, B_LAN, B_LAN_MODE,
        B_LAN_CHEATS, B_LAN_START, B_TYPE, B_CUSTOMIZE, B_FLAT_FIELD, B_FLAT_USE, B_FLAT_DONE, B_FLAT_RESET,
-       B_FLAT_CANCEL, B_DIST, B_VIDEO, B_VIDEO_DONE, B_CTRL_SHEET, B_CTRL_SPRINT, B_CTRL_KEYS, B_CTRL_DONE };
+       B_FLAT_CANCEL, B_DIST, B_VIDEO, B_VIDEO_DONE, B_CTRL_SHEET, B_CTRL_SPRINT, B_CTRL_KEYS, B_CTRL_DONE,
+       B_BRIGHT };
 int menu_choice;            /* an action for main.c (ACT_*) */
 int create_mode;            /* the new world's game mode */
 bool create_cheats;         /* and whether it allows cheats */
@@ -1530,6 +1531,19 @@ static void cat(char *d, const char *a, const char *b) {
   *d = 0;
 }
 
+/* Brightness (Video Settings), 0 Moody to 15 Bright: the stop the slider is on */
+static int brightness_stop(void) { return opt.brightness > 15 ? 0 : opt.brightness; }
+/* its label: the word at either end, as Minecraft writes it, the number between them */
+static void cat_brightness(char *t) {
+  if (brightness_stop() == 0) cat(t, "Brightness: ", "Moody");
+  else if (brightness_stop() >= 15) cat(t, "Brightness: ", "Bright");
+  else {
+    char n[8];
+    number(brightness_stop(), n);
+    cat(t, "Brightness: ", n);
+  }
+}
+
 /* the screen's buttons, in a buffer of the caller's (N_BUTTONS of them at most); the labels
  * follow the screen, so they are filled before each use */
 static void menu(Button *buf, int screen) {
@@ -1618,12 +1632,16 @@ static void menu(Button *buf, int screen) {
         t[k + 7] = 0;
         add_button(w / 2 - 155, h / 6 - 12, 150, 1, B_DIST, t);
       }
+      /* the Brightness slider, 0 Moody to 15 Bright (the two ends write the word,
+       * the stops between them the number, as Minecraft's does) */
+      cat_brightness(t);
+      add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_BRIGHT, t);
       cat(t, "Graphics: ", opt.fancy ? "Fancy" : "Fast");
       add_button(w / 2 + 5, h / 6 - 12, 150, 1, B_GFX, t);
       cat(t, "View Bobbing: ", opt.bobbing ? "ON" : "OFF");
-      add_button(w / 2 - 155, h / 6 + 12, 150, 1, B_BOB, t);
+      add_button(w / 2 + 5, h / 6 + 12, 150, 1, B_BOB, t);
       cat(t, "Clouds: ", opt.clouds ? "ON" : "OFF");
-      add_button(w / 2 + 5, h / 6 + 12, 150, 1, B_CLOUDS, t);
+      add_button(w / 2 + 5, h / 6 + 36, 150, 1, B_CLOUDS, t);
       add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_VIDEO_DONE, "Done");
       break;
     }
@@ -1682,7 +1700,7 @@ static int selected(WorldInfo *w) { return nworlds && world_info(wlist[wsel], w)
 
 static void button(const Button *b, bool hover) {
   int sp = !b->on ? SP_BUTTON_OFF : hover ? SP_BUTTON_HOVER : SP_BUTTON;
-  if (b->id == B_DIST || b->id == B_LOOK) {
+  if (b->id == B_DIST || b->id == B_LOOK || b->id == B_BRIGHT) {
     /* Minecraft's option slider (gui/sprites/widget/slider.png + slider_handle.png,
      * 200x20 track, 8x20 thumb): the track is dark like a disabled button (43,43,43,
      * the same grey), the thumb a mini-button riding it. The label goes over both,
@@ -1691,13 +1709,16 @@ static void button(const Button *b, bool hover) {
     if (b->id == B_DIST) {
       int d = opt.distance >= 1 && opt.distance <= 2 ? opt.distance : 2;
       stops = d - 1, nstop = 2;
-    } else {
+    } else if (b->id == B_LOOK) {
       /* look speed, 50..200% in steps of 25 (where FOV's slider is) */
       int v = opt.look < 50 || opt.look > 200 ? 100 : opt.look;
       stops = (v - 50 + 12) / 25;
       if (stops < 0) stops = 0;
       if (stops > 6) stops = 6;
       nstop = 7;
+    } else {
+      /* brightness, 0 Moody to 15 Bright */
+      stops = brightness_stop(), nstop = 16;
     }
     /* GuiButton.drawButton: the left half from the texture's left, the right half from its right */
     sprite_part(SP_BUTTON_OFF, b->x, b->y, 0, 0, b->w / 2, 20);
@@ -1860,6 +1881,12 @@ static void press(Button *buttons, int id) {
       opt.distance = (uint8_t)(d >= 2 ? 1 : d + 1);
       break;
     }
+    case B_BRIGHT: {
+      /* one press of OK steps it one stop along, as the render distance's does */
+      int v = brightness_stop();
+      opt.brightness = (uint8_t)(v >= 15 ? 0 : v + 1);
+      break;
+    }
     case B_VIDEO:
       gui_menu(GUI_VIDEO);
       break;
@@ -1926,6 +1953,15 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
       if (pressed & K_RIGHT) v = v >= 200 ? 200 : v + 25;
       else v = v <= 50 ? 50 : v - 25;
       opt.look = (uint8_t)v;
+      menu(buttons, gui);
+      return;
+    }
+    if (buttons[bcur].id == B_BRIGHT) {
+      /* Minecraft's slider: left and right move it a stop along */
+      int v = brightness_stop();
+      if (pressed & K_RIGHT) v = v >= 15 ? 15 : v + 1;
+      else v = v <= 0 ? 0 : v - 1;
+      opt.brightness = (uint8_t)v;
       menu(buttons, gui);
       return;
     }

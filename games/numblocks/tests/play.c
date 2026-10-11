@@ -4,9 +4,13 @@
  *        [--showcase]   (the hotbar of the README's GIF: TNT, flint and steel, water and lava, blocks)
  *        [--spawner]    (a monster spawner hanging in the air in front of the player, unset, and the eggs to set it with)
  *        [--distance 1..2]   (render distance, default: the saved option, 2 chunks)
+ *        [--fancy]           (graphics: Fancy, see-through leaves; the default is what the options say, Fast)
+ *        [--bright 0..15]    (the Brightness setting: 0 Moody, 15 Bright; default: the saved option)
  *        [--flat]       (a superflat world)
  *        [--spectator]  (spectator mode: flying through the blocks, nothing to touch)
  *        [--spectate N] (with --mobs: the spectator's camera is the N-th mob's, 0..7)
+ *        [--tree]       (an oak in front of the player, with the spectator's head in its canopy)
+ *        [--cave]       (a sealed stone room with no light in it, for what the dark is)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
@@ -46,7 +50,7 @@ int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
-  int spectator = 0, ride = -1, flat = 0;
+  int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -63,6 +67,8 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--water")) water = 1;
     else if (!strcmp(argv[i], "--creative")) creative = 1;
     else if (!strcmp(argv[i], "--flat")) flat = 1;
+    else if (!strcmp(argv[i], "--tree")) tree = 1;
+    else if (!strcmp(argv[i], "--cave")) cave = 1;
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
@@ -71,6 +77,11 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--rain")) rain = 1;
     else if (!strcmp(argv[i], "--storm")) rain = 2;
     else if (!strcmp(argv[i], "--distance") && i + 1 < argc) distance = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "--fancy")) opt.fancy = 1;
+    else if (!strcmp(argv[i], "--bright") && i + 1 < argc) {
+      bright = atoi(argv[++i]);
+      if (bright >= 0 && bright <= 15) opt.brightness = (uint8_t)bright;
+    }
     else if (!strcmp(argv[i], "--time") && i + 1 < argc) start_time = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--seed") && i + 1 < argc) {
       extern int64_t start_seed;
@@ -129,6 +140,22 @@ int main(int argc, char **argv) {
   }
   if (creative) pl.mode = 1;
   if (spectator) pl.mode = 2, pl.flying = true;
+  if (tree) {
+    /* an oak in front of the player, with the spectator's head in its canopy:
+     * flying into leaves (Minecraft's spectator goes through them, and sees the
+     * world through them: the canopy is see-through, not a wall of leaf) */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    int cx = px, cz = pz + 6;
+    for (int k = 0; k < 4; k++) world_set(cx, fy + k, cz, B_LOG_OAK);
+    for (int dy = 2; dy <= 4; dy++)
+      for (int dx = -2; dx <= 2; dx++)
+        for (int dz = -2; dz <= 2; dz++)
+          if (dx * dx + dz * dz + (dy - 4) * (dy - 4) * 3 <= 7) world_set(cx + dx, fy + dy, cz + dz, B_LEAVES_OAK);
+    world_set(cx, fy + 5, cz, B_LEAVES_OAK);
+    pl.mode = 2, pl.flying = true;
+    pl.x = cx + 0.5f, pl.y = fy + 4.05f, pl.z = cz + 0.5f;
+    pl.yaw = 0, pl.pitch = 0;
+  }
   if (cheats) world_cheats = true;   /* the new world starts without them; the switcher needs them */
   if (distance >= 1 && distance <= 2) opt.distance = (uint8_t)distance;
   if (rain) {
@@ -181,11 +208,32 @@ int main(int argc, char **argv) {
     }
     if (ride >= 0 && ride < N_ENT) spectate = (int8_t)ride;   /* the spectator's camera on the k-th mob */
   }
+  if (cave) {
+    /* a sealed stone room, the player standing inside it, for what the dark is: a cave with
+     * no light in it (pitch black at Moody, readable at Bright). Built rather than dug out
+     * of the rock, so nothing of the sky light around it reaches the air inside, and
+     * Peaceful, so nothing comes out of the dark to spoil the picture while it is taken */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 9; z <= pz + 9; z++)
+      for (int x = px - 9; x <= px + 9; x++)
+        for (int y = fy - 1; y <= fy + 7; y++)
+          world_set(x, y, z, y == fy - 1 ? B_GRASS
+                        : y == fy + 7 || x <= px - 8 || x >= px + 8 || z <= pz - 8 || z >= pz + 8 ? B_STONE
+                                                                                                : B_AIR);
+    cave_by = fy + 1;
+    opt.difficulty = 0;
+  }
   if (torches) {
-    /* torches around, for the night */
-    int fy = (int)pl.y;
-    for (int k = 0; k < 3; k++) world_set((int)pl.x - 3 + k * 3, fy, (int)pl.z + 3 + k, B_TORCH);
-    world_set((int)pl.x + 2, fy, (int)pl.z + 6, B_GLOWSTONE);
+    /* torches around, for the night (on the cave's floor when there is one, in front of
+     * the player, so a lit room can be seen against an unlit one at any brightness) */
+    if (cave) {
+      world_set((int)pl.x - 4, cave_by, (int)pl.z + 6, B_TORCH);
+      world_set((int)pl.x + 4, cave_by, (int)pl.z + 6, B_TORCH);
+    } else {
+      int fy = (int)pl.y;
+      for (int k = 0; k < 3; k++) world_set((int)pl.x - 3 + k * 3, fy, (int)pl.z + 3 + k, B_TORCH);
+      world_set((int)pl.x + 2, fy, (int)pl.z + 6, B_GLOWSTONE);
+    }
   }
   if (hurt > 0) pl.health -= hurt, pl.food -= 7, pl.xp_level = 7, pl.xp = 0.4f;
   if (spawner) {

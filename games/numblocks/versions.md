@@ -1,3 +1,23 @@
+## 1.3.14
+**A spectator flying into a tree sees the world through its leaves, and the Video Settings have a Brightness slider**
+- The eyes' own block was drawn as the inside of one face at zero distance, so flying into
+  a canopy filled the whole screen with one leaf (and the same in a pane of glass): the
+  green flashes a spectator saw with its head inside a tree. A ray that starts inside a
+  see-through block now goes on through it, the way Minecraft's back-face culling leaves
+  nothing of the block you are in, so you see the world through the leaves you are flying
+  through, or the sky above the canopy.
+- Brightness is in Video Settings beside the Render Distance and the Graphics buttons, a
+  slider of sixteen stops, 0 (Moody) to 15 (Bright): the word at either end where
+  Minecraft writes it, the number between them, one stop a press of left or right (or OK,
+  which steps it along and wraps round). It is the player's setting, as Minecraft's is,
+  and not the world's: the light a block has is the same at every stop (a torch is a torch
+  wherever the slider is) and only the dark end of the light table is lifted, so a cave
+  with no light in it stays the pitch black it has always been at 0 and can be made out at
+  15, while a lit cave and the sky look the same at every stop. Minecraft's own is a gamma
+  over every level of its table; here the lift fades away as the light comes up, which
+  keeps 0 exactly the game it was and a torch-lit cave unchanged. The setting comes in at
+  0: nothing about the game's look changes until the player asks for it.
+
 ## 1.3.13
 **The control sheet no longer crashes the game when the keys fit on one line**
 - The three notes under the key list ("Jump twice: fly", "sin + cos: the game

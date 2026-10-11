@@ -3,11 +3,14 @@
 Work list for `games/numblocks`. Each item: what it is, where the code lives,
 what "done" means. Order matters only where noted.
 
-- [ ] **[2] Fix the mob staring bug** — mobs hold their head on the player in
-      both survival and creative.
-- [ ] **[7] A brightness setting** — 0 (Moody) to 15 (Bright) as a slider in
+- [x] **[2] Fix the mob staring bug** — mobs hold their head on the player in
+      both survival and creative. (In 1.3.2: EntityAIWatchClosest's timed
+      watch, then EntityAILookIdle's random looks; the head no longer kept on
+      the player in creative either. Verified: a pig, a cow by the player looks
+      at it for a while, then looks away; a chasing zombie still aims.)
+- [x] **[7] A brightness setting** — 0 (Moody) to 15 (Bright) as a slider in
       the graphics settings: 0 keeps the pitch-black caves, 15 lets you see in
-      the dark.
+      the dark. (In 1.3.14.)
 
 ---
 
