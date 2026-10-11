@@ -69,6 +69,10 @@ static float fog0, fog1;           /* fog start and end (blocks) */
 static int fog_r, fog_g, fog_b, sky_r, sky_g, sky_b;   /* 0..255 */
 static int sky_top;               /* the cache is empty from this row up: rays going up end there */
 static int trace_top = -1;        /* (>= 0) rays going down start on this plane (y): see render_frame */
+/* the camera under the world (below the cache's bottom plane, render_frame): the plane the
+ * samples of a cell agree on may be a ceiling a nearer face of a hole in it stands in front
+ * of, which only a ray knows, so its cells are drawn pixel by pixel */
+static bool under_world;
 static float sun_x, sun_y, sun_z;  /* towards the sun */
 static float sun_tx, sun_ty;       /* the way the sun moves */
 static float cos_c, sin_c;         /* the sky's turn (the celestial angle) */
@@ -477,6 +481,14 @@ static inline int came_from(int i, int face, int x, int y, int z) {
   return i;
 }
 
+/* the light a face of cell i (x, y, z) is lit by: the cell in front of it. Under the world's
+ * lowest layer that cell is the void, which Minecraft lights at 15 (a light layer's default
+ * value outside the world), so the underside of the world shows as the lit blocks they are */
+static inline int face_lit(int i, int face, int x, int y, int z) {
+  if (face == 0 && y == 0 && vc_y0 == 0) return 15;   /* (the void under the world, lit as Minecraft's is) */
+  return vl[came_from(i, face, x, y, z)];
+}
+
 /* a ray: its direction, and a see-through layer (water) it went through: its colour and how much */
 typedef struct {
   float dx, dy, dz, len, ivx, ivy, ivz;
@@ -520,7 +532,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
     if (tc >= 0) {
       tc = cracked(tc, i, u, v);
       last_t = t;
-      int lt = vl[came_from(i, face, x, y, z)];
+      int lt = face_lit(i, face, x, y, z);
       uint16_t c = lit565((uint16_t)tc, f, lt, t * R->len);
       if (R->wa) {
         c = pack_nc((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
@@ -581,7 +593,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
       int tc = texel565(b, tex, h.u, h.v, col);
       if (tc >= 0) {
         /* (a face R->inside the cell is lit by the cell's light, one on its side by the cell in front) */
-        int lt = vl[m == M_LIQUID || m == M_TORCH || h.t > 0 ? i : came_from(i, face, x, y, z)];
+        int lt = m == M_LIQUID || m == M_TORCH || h.t > 0 ? vl[i] : face_lit(i, face, x, y, z);
         uint16_t c = lit565((uint16_t)tc, h.face, lt, (t + h.t) * R->len);
         if (!R->wa && one_box(b) && i != cam_i) {
           /* a face of a block of one box (slab, snow layer...): the pixels between can find it too */
@@ -651,12 +663,22 @@ static uint16_t trace(float dx, float dy, float dz) {
   float idx = fabsf(ivx), idy = fabsf(ivy), idz = fabsf(ivz);
   float tx = cam_fr[0][bx] * ivx, ty = cam_fr[1][by] * ivy, tz = cam_fr[2][bz] * ivz;
   float tmax = MAX_T / len, t = 0;
-  /* the camera above the cache (high in the air, the cache kept on the ground): rays going down come
-   * in through its top; any other way out of it, only the sky */
-  int top = trace_top;
+  /* the camera outside the cache in y: the camera above it (high in the air, the cache kept on
+   * the ground) has its rays going down come in through its top; the camera below it (the void
+   * under the world) has its rays going up come in through its bottom. Any other way out of
+   * the cache, and the cache sideways, is only the sky */
+  int top = trace_top, bot = -1;
   if (cam_i < 0) {
-    if (dy >= 0 || oy < VCY || cam_x < 0 || cam_x >= VCX || cam_z < 0 || cam_z >= VCZ) return hit_kind = 2, sky(dx, dy, dz, len);
-    if (top < 0) top = VCY;
+    if (cam_x < 0 || cam_x >= VCX || cam_z < 0 || cam_z >= VCZ) return hit_kind = 2, sky(dx, dy, dz, len);
+    if (oy < 0) {
+      if (dy <= 0) return hit_kind = 2, sky(dx, dy, dz, len);
+      bot = 0;
+    } else if (oy < VCY) {
+      return hit_kind = 2, sky(dx, dy, dz, len);
+    } else {
+      if (dy >= 0) return hit_kind = 2, sky(dx, dy, dz, len);
+      if (top < 0) top = VCY;
+    }
   }
   int i = cam_i;
   Ray R;   /* (in the block the camera is in: water...) */
@@ -683,6 +705,21 @@ static uint16_t trace(float dx, float dy, float dz) {
       if ((unsigned)x0 < VCX && (unsigned)z0 < VCZ && (unsigned)(top - 1) < VCY) {
         x = x0, y = top - 1, z = z0;
         t = tj = t0, jf = 1;
+        tx = (x + bx - ox) * ivx, ty = (y - oy) * ivy, tz = (z + bz - oz) * ivz;
+        i = VC_I(x, y, z), mi = MC_I(x, y, z);
+      } else if (cam_i < 0)
+        goto out;
+    }
+  }
+  if (bot >= 0 && dy > 0) {
+    /* start where the ray comes up through plane y = bot, in through the bottom of the cell above */
+    float t0 = (bot - oy) * ivy;
+    if (t0 > 0 || cam_i < 0) {
+      if (t0 > tmax) goto out;
+      int x0 = (int)floorf(ox + dx * t0), z0 = (int)floorf(oz + dz * t0);
+      if ((unsigned)x0 < VCX && (unsigned)z0 < VCZ && (unsigned)bot < VCY) {
+        x = x0, y = bot, z = z0;
+        t = tj = t0, jf = 0;
         tx = (x + bx - ox) * ivx, ty = (y - oy) * ivy, tz = (z + bz - oz) * ivz;
         i = VC_I(x, y, z), mi = MC_I(x, y, z);
       } else if (cam_i < 0)
@@ -1167,7 +1204,7 @@ static inline bool same(const Sample *a, const Sample *b) {
 /* the pixel (px, py) knowing the samples around it agree (a, b) or not */
 /* the pixel of ray (dx, dy, dz) between samples that agree (one: they met the same cell) */
 static uint16_t agreed(float dx, float dy, float dz, const Sample *a, bool one) {
-  if (a->kind == 1) {
+  if (a->kind == 1 && !under_world) {
     int r = one ? face_cell(dx, dy, dz, a) : face_pixel(dx, dy, dz, a->plane, a->f, is_water(cam_b));
     if (r >= 0) return ST(st_fpok++), (uint16_t)r;
     ST(st_fpfail++);
@@ -2461,6 +2498,13 @@ void render_frame(const Camera *c, uint32_t tod) {
   if (!tops) shape_tops(), tops = true;
   cam_liq = liquid[cam_b] ? liquid[cam_b] : 255;
   bool fast_sky = sky_fast();
+  /* The camera under the world (below the cache's bottom plane): the plane the five samples
+   * of a cell agree on can be a ceiling a nearer face of a hole in it stands in front of,
+   * which only a ray knows - the fills of a whole cell from that plane, and the pixels
+   * between samples on it, would draw the rock across the hole's walls. Its cells are then
+   * drawn trace by trace, the sky and the same-block faces staying as they are. (The camera
+   * above the cache, its rays coming down on the ground as they do from inside it, keeps them.) */
+  under_world = oy < 0;
   for (int k = 0; k <= 128; k++) sky_pk[k] = pack(sky_grad[k][0], sky_grad[k][1], sky_grad[k][2]);
   enum { NC = RW / 4 };
   Sample cn[2][NC + 1], ed[2][NC + 1], md[2 * NC + 1];   /* corners, edges' middles, the middle row */
@@ -2491,7 +2535,7 @@ void render_frame(const Camera *c, uint32_t tod) {
         bool one = a->cell == b->cell && a->cell == c->cell && a->cell == d->cell && a->cell == m->cell;
         (void)one;
 #ifndef FULL_TRACE
-        if (a->kind == 1 && (one ? (a->flags & 1) && a->cell != brk_i : true)) {
+        if (a->kind == 1 && !under_world && (one ? (a->flags & 1) && a->cell != brk_i : true)) {
           if (one) face_fill(cbuf, zbuf, rb, x0, a);
           else plane_fill(cbuf, zbuf, rb, x0, a);
           cbuf[0][x0] = a->c, zbuf[0][x0] = a->t;

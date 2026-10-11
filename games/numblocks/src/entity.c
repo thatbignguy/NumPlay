@@ -385,7 +385,7 @@ void ents_tick(void) {
     if (e->type == E_ITEM) item_tick(e);
     else if (e->type == E_BOBBER) bobber_tick(e);
     else mob_tick(e);
-    if (e->y < -64) e->type = E_NONE;
+    if (e->y < (float)VOID_Y) e->type = E_NONE;   /* fell into the void */
   }
   static int spawn_wait;
   if (++spawn_wait >= 20) {

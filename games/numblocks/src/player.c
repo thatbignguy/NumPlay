@@ -153,7 +153,12 @@ static void exhaust(float f) { pl.exhaustion += f; }
  * grace after a hit (only more damage gets through), armour takes 4% a point */
 void player_hurt(float amount, int kind) {
   if (pl.dead || amount <= 0) return;
-  if (pl.mode && kind != DMG_VOID) return;   /* creative and spectator: nothing hurts but the void */
+  /* Player.isInvulnerableTo: the spectator is invulnerable (abilities.invulnerable), the
+   * creative only against everything but the void: fall out of the world and it takes you,
+   * as in Minecraft. /kill is its own kind: it goes through invulnerability, as its damage
+   * does there (DamageTypeTags.bypassesInvulnerability). */
+  if (pl.mode == 2 && kind != DMG_KILL) return;   /* spectator: nothing hurts it */
+  if (pl.mode == 1 && kind != DMG_VOID) return;   /* creative: nothing hurts but the void */
   if (pl.invuln > 10) {
     if (amount <= pl.last_damage) return;
     float a = amount;
@@ -873,7 +878,7 @@ static void hazards(float fell_from) {
   for (int f = 2; f < 6; f++)
     if (world_get(ifloor(pl.x + NX[f] * 0.31f), ifloor(pl.y + 0.5f), ifloor(pl.z + NZ[f] * 0.31f)) == B_CACTUS)
       player_hurt(1, DMG_CACTUS);
-  if (pl.y < -64) player_hurt(4, DMG_VOID);
+  if (pl.y < (float)VOID_Y) player_hurt(4, DMG_VOID);   /* Entity.checkBelowWorld: under the world */
 }
 
 /* ---------------------------------------------------------------- spectator */
@@ -907,7 +912,7 @@ static void spectate_tick(uint32_t keys, uint32_t pressed) {
   if (keys & K_SNEAK) pl.vy -= 0.15f;
   move_flying(strafe, fwd, pl.sprinting ? 0.1f : 0.05f);
   pl.x += pl.vx, pl.y += pl.vy, pl.z += pl.vz;
-  if (pl.y < 0.5f) pl.y = 0.5f, pl.vy = 0;                          /* the bottom of the world */
+  /* (no floor to stop at: the spectator flies down into the void under the world) */
   if (pl.y > (float)(WORLD_H + 24)) pl.y = (float)(WORLD_H + 24), pl.vy = 0;   /* above the clouds */
   pl.vx *= 0.91f, pl.vy *= 0.6f, pl.vz *= 0.91f;
   pl.on_ground = false;

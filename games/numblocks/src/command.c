@@ -338,8 +338,8 @@ static void cmd_tp(char **a, int n) {
 static void cmd_kill(char **a, int n) {
   if (n > 0) player(a[0]);
   if (failed) return;
-  /* EntityPlayer.onKillCommand: out of the world */
-  player_hurt(3.4e38f, DMG_VOID);
+  /* EntityPlayer.onKillCommand: out of the world (it kills even a spectator, as /kill does) */
+  player_hurt(3.4e38f, DMG_KILL);
   ok("Killed %s", PLAYER, 0);
 }
 

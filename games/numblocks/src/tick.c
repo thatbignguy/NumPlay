@@ -56,6 +56,11 @@ static bool open_to(int water, int b) {
   return m == M_CROSS || m == M_TORCH || m == M_FLAT || m == M_LAYER || m == M_VINE;   /* (and fire) */
 }
 
+/* what a liquid has under it: at the bottom of the world the void, which it does not fall
+ * into - a liquid stops at the world's floor as it does at its top (Minecraft drains it into
+ * the void; there is nothing here under the world to drain it into) */
+static int below(int x, int y, int z) { return y > 0 ? world_get(x, y - 1, z) : B_BEDROCK; }
+
 static void set(int x, int y, int z, int b) {
   world_set(x, y, z, b);
   neighbours_changed(x, y, z);
@@ -94,7 +99,7 @@ static int slope_dist(int water, int x, int y, int z, int dist, int from, int ma
     int nx = x + NX[f], nz = z + NZ[f];
     int b = world_get(nx, y, nz);
     if ((blk_flags[b] & BF_SOLID) || (same(water, b) && level_of(b) == 0)) continue;
-    if (open_to(water, world_get(nx, y - 1, nz)) || same(water, world_get(nx, y - 1, nz))) return dist;
+    if (open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))) return dist;
     if (dist < max) {
       int d = slope_dist(water, nx, y, nz, dist + 1, f, max);
       if (d < best) best = d;
@@ -126,8 +131,8 @@ static void fluid_update(int x, int y, int z) {
     if (same(water, above)) nl = 8;   /* falling */
     /* two sources beside it and something under: a new source (infinite water) */
     if (water && sources >= 2) {
-      int under = world_get(x, y - 1, z);
-      if ((blk_flags[under] & BF_SOLID) || (is_water(under) && level_of(under) == 0)) nl = 0;
+      int u = below(x, y, z);
+      if ((blk_flags[u] & BF_SOLID) || (is_water(u) && level_of(u) == 0)) nl = 0;
     }
     if (nl != level) {
       if (nl < 0) {
@@ -139,7 +144,7 @@ static void fluid_update(int x, int y, int z) {
     }
   }
   /* down first, then sideways towards the nearest way down */
-  int under = world_get(x, y - 1, z);
+  int under = below(x, y, z);
   if (y > 0 && open_to(water, under)) {
     if (!water && is_water(under)) set(x, y - 1, z, B_STONE);
     else flow_into(water, x, y - 1, z, 8);
@@ -154,7 +159,7 @@ static void fluid_update(int x, int y, int z) {
       int n = world_get(nx, y, nz);
       dist[f - 2] = 1000;
       if ((blk_flags[n] & BF_SOLID) || (same(water, n) && level_of(n) == 0)) continue;
-      dist[f - 2] = open_to(water, world_get(nx, y - 1, nz)) || same(water, world_get(nx, y - 1, nz))
+      dist[f - 2] = open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))
                         ? 0
                         : slope_dist(water, nx, y, nz, 1, f, max);
       if (dist[f - 2] < best) best = dist[f - 2];

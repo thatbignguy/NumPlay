@@ -447,7 +447,7 @@ bool world_loaded(int x, int y, int z) {
 }
 
 int world_get(int x, int y, int z) {
-  if (y < 0) return B_BEDROCK;
+  if (y < 0) return B_AIR;   /* under the world is the void, as in Minecraft below its lowest blocks */
   if (!world_loaded(x, y, z)) return B_AIR;
   if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return B_STONE;   /* not made yet: nothing goes in */
   return vc[VC_I(x - vc_x0, y - vc_y0, z - vc_z0)];

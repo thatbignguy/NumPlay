@@ -1,3 +1,35 @@
+## 1.4.0
+**A void opens under the world — fall out of it and it kills you in Survival and Creative alike, a spectator flies down into it unharmed — and the game mode switcher opens on the next mode round its cycle**
+- There is a void under the world now, as in Minecraft under its lowest block: what was solid
+  rock under `y = 0` is empty, so a player who breaks the bedrock floor out from under
+  themselves (Creative breaks it at once) falls past the end of the world and takes the 4
+  damage a tick `Entity.checkBelowWorld` gives below 64 blocks under it. Health goes 20, 16,
+  12, 8, 4, 0 over the five ticks the 10-tick grace between hits lets through, so it is the
+  slow death Minecraft gives rather than the instant one before it. Spectator is immune to
+  it (`Player.isInvulnerableTo`) and flies on down; `/kill` kills a spectator, as it does
+  there, so it is its own damage kind rather than the void's.
+- The pictures come with it: a camera under the world used to see sky whichever way it
+  looked, because the rays gave up below the cache's bottom. They come up in through it now,
+  as the ones above the cache come down in through its top, so the rock overhead shows, and
+  the underside of the world's lowest layer is lit by the void's full sky light, which is the
+  default value Minecraft's light layer gives outside the world, so it reads as the lit
+  bedrock it is. Under the world the cells are drawn trace by trace rather than from the
+  plane their samples agree on: that plane can be the ceiling of a hole a nearer face of
+  stands in front of, and only a ray knows which comes first — the fast fills would have drawn
+  the rock across the hole's walls. The adaptive picture is checked against `play_ref`'s full
+  trace either way: it agrees to the pixel, in the void and in the world above, before and
+  after alike (`bench_render.py`'s checksums are unchanged).
+- A liquid stops at the world's floor as it does at its top: water on the bedrock spreads
+  sideways as it did, rather than draining into the void as Minecraft's does, because there
+  is nothing here under the world for it to drain into.
+- `sin + cos` opened the switcher on Creative from Survival and on Survival from Creative, so
+  from Creative alone the third mode stood one press of cos away, and the other two could not
+  reach it in one press. It now opens on the mode after the one you are in, as Minecraft's
+  does, so letting go of sin (or OK) takes you round the cycle: Creative, Survival, Spectator,
+  Creative. cos still moves the outline one on from there, and Back still leaves nothing
+  changed. Tests: the switcher from each of the three modes, and from Survival two cos presses
+  round to Survival again.
+
 ## 1.3.17
 **Dungeons are found two to three times as often as 1.3.16's, and a dungeon is the same whichever way the world is walked**
 - The dungeon tries of a population that passed were remembered in eight bits, so the

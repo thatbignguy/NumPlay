@@ -320,6 +320,13 @@ int main(void) {
         Camera c = {8.5f, 71.62f, 8.5f, yaw, (float)p};
         render_frame(&c, 6000);
       }
+    /* and from the void under the world, at every turn: the rays going up come in
+     * through the bottom of the cache (the ones going down find only the void) */
+    for (int p = -90; p <= 90; p += 90)
+      for (float yaw = -180; yaw < 180; yaw += 7.5f) {
+        Camera c = {8.5f, -6.38f, 8.5f, yaw, (float)p};
+        render_frame(&c, 6000);
+      }
     alarm(0);
     plat_remove_prefix("ut6");
   }
@@ -340,6 +347,58 @@ int main(void) {
     for (; t < 60 && !(pl.on_ground && pl.y >= g); t++) player_tick(K_FWD | K_JUMP, t == 0 ? K_JUMP : 0);
     CHECK(pl.on_ground && pl.y >= g && pl.z > 10);
     plat_remove_prefix("ut7");
+  }
+  {
+    /* the void under the world: nothing under its bedrock, and 4 damage a tick from 64
+     * blocks below the world (Entity.checkBelowWorld), which kills survival and creative
+     * alike; /kill goes on killing a spectator, which the void does not touch. */
+    world_new(0, "utvoid");
+    int y = 12;
+    world_follow(8, y, 8);   /* (low, so the cache holds the whole shaft down to the bedrock) */
+    for (int z = 2; z <= 14; z++)
+      for (int x = 2; x <= 14; x++) {
+        world_set(x, y, z, B_AIR);   /* the room the player is in */
+        for (int k = 1; k <= 8; k++) world_set(x, y - k, z, B_STONE);
+        world_set(x, 0, z, B_BEDROCK);   /* the floor of the world */
+      }
+    CHECK(world_get(8, 0, 8) == B_BEDROCK && world_get(8, -1, 8) == B_AIR && world_get(8, -64, 8) == B_AIR);
+    for (int k = 0; k < y; k++) world_set(8, k, 8, B_AIR);   /* a shaft through the bedrock */
+    memset(ents, 0, sizeof ents);
+    opt.difficulty = 2;
+    /* a tick in the void, 4 of it, and none of it a tick higher up */
+    memset(&pl, 0, sizeof pl);
+    pl.x = 8.5f, pl.z = 8.5f, pl.y = (float)(VOID_Y + 1), pl.health = 20, pl.food = 20, pl.mode = 0;
+    player_tick(0, 0);
+    CHECK(pl.health == 20 && pl.y > (float)VOID_Y);
+    pl.y = (float)VOID_Y - 1, pl.health = 20, pl.invuln = 0, pl.last_damage = 0;
+    player_tick(0, 0);
+    CHECK(pl.health == 16 && !pl.dead);
+    /* falling out of the world kills, in survival and in creative: nothing catches you there */
+    for (int m = 0; m <= 1; m++) {
+      memset(&pl, 0, sizeof pl);
+      pl.x = 8.5f, pl.z = 8.5f, pl.y = (float)y, pl.health = 20, pl.food = 20, pl.mode = (uint8_t)m;
+      int t = 0;
+      for (; t < 400 && !pl.dead; t++) player_tick(0, 0);
+      CHECK(t < 400 && pl.dead && pl.health == 0 && pl.y < (float)VOID_Y);
+    }
+    /* the spectator flies down into the void and nothing there hurts it; /kill still does */
+    memset(&pl, 0, sizeof pl);
+    pl.x = 8.5f, pl.z = 8.5f, pl.y = (float)(VOID_Y - 4), pl.health = 20, pl.mode = 2, pl.flying = true;
+    for (int t = 0; t < 10; t++) player_tick(0, 0);
+    CHECK(pl.health == 20 && !pl.dead && pl.y < (float)VOID_Y);
+    player_hurt(4, DMG_VOID);
+    CHECK(pl.health == 20 && !pl.dead);
+    player_hurt(3.4e38f, DMG_KILL);
+    CHECK(pl.dead);
+    /* the picture from under the world, up and down at every turn: no ray may get stuck */
+    alarm(60);
+    for (int p = -90; p <= 90; p += 90)
+      for (float yaw = -180; yaw < 180; yaw += 45.0f) {
+        Camera c = {8.5f, -3.38f, 8.5f, yaw, (float)p};
+        render_frame(&c, 6000);
+      }
+    alarm(0);
+    plat_remove_prefix("utvoid");
   }
   {
     /* sprinting (EntityPlayerSP): with the sprint key; it lasts while forward is held */
@@ -728,8 +787,8 @@ int main(void) {
     mode_open();
     CHECK(gui == GUI_NONE && pl.mode == 0);   /* no cheats: the message, not the screen */
     world_cheats = true;
-    /* in Creative it opens on Survival: Minecraft opens on Creative if in any other
-     * mode, and on Survival if in Creative */
+    /* in Creative it opens on Survival, the next one round the cycle (Creative,
+     * Survival, Spectator, back to Creative) */
     pl.mode = 1;
     mode_open();
     CHECK(gui == GUI_MODE);
@@ -746,14 +805,18 @@ int main(void) {
     mode_open();
     mode_use();
     CHECK(gui == GUI_NONE && pl.mode == 1);
-    /* and in Survival it opens on Creative, so confirming switches to Creative */
+    /* in Survival it opens on Spectator, the next one round the cycle */
     pl.mode = 0, pl.flying = true;
     mode_open();
     mode_use();
-    CHECK(gui == GUI_NONE && pl.mode == 1);
-    /* in Survival again: confirming brings flying to an end */
+    CHECK(gui == GUI_NONE && pl.mode == 2 && pl.flying);
+    /* in Survival again: cos goes on to Creative ... */
     pl.mode = 0, pl.flying = true;
     mode_open(), mode_next(), mode_use();
+    CHECK(gui == GUI_NONE && pl.mode == 1 && pl.flying);
+    /* ... and round again, where confirming brings flying to an end */
+    pl.mode = 0, pl.flying = true;
+    mode_open(), mode_next(), mode_next(), mode_use();
     CHECK(gui == GUI_NONE && pl.mode == 0 && !pl.flying);
     gui = GUI_NONE;
     /* and the mode is kept with the world */
@@ -787,14 +850,15 @@ int main(void) {
     z0 = pl.z;
     for (int t = 0; t < 20; t++) player_tick(K_FWD, t == 0 ? K_FWD : 0);
     CHECK(pl.z - z0 > 1.0f && pl.y == sy);
-    /* the bottom of the world and the top of it: it stops at both */
+    /* the void under the world: it flies down into it, and nothing there hurts it
+     * (Player.isInvulnerableTo); the top of the world still stops it */
     for (int t = 0; t < 600; t++) player_tick(K_SNEAK, 0);
-    CHECK(pl.y >= 0.5f && pl.y < 1.0f);
+    CHECK(pl.y < (float)VOID_Y && pl.health == 20 && !pl.dead);
     for (int t = 0; t < 900; t++) player_tick(K_JUMP, 0);
     CHECK(pl.y > WORLD_H + 20 && pl.y <= WORLD_H + 24);
     /* nothing hurts a spectator */
     pl.health = 20;
-    player_hurt(5, DMG_GENERIC), player_hurt(5, DMG_FALL), player_hurt(5, DMG_LAVA);
+    player_hurt(5, DMG_GENERIC), player_hurt(5, DMG_FALL), player_hurt(5, DMG_LAVA), player_hurt(4, DMG_VOID);
     CHECK(pl.health == 20 && !pl.dead);
     /* nothing is in reach: no block is mined or placed, none is outlined */
     player_look(pl.x, pl.y, pl.z, 0, 0);

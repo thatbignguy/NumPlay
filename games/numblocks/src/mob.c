@@ -1121,5 +1121,5 @@ void mob_tick(Entity *e) {
       e->delay = (int16_t)(20 + dist / 15 * 40);
     }
   }
-  if (e->y < -64) e->type = E_NONE;
+  if (e->y < (float)VOID_Y) e->type = E_NONE;   /* fell into the void */
 }

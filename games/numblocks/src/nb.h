@@ -19,7 +19,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.3.17"
+#define NB_VERSION "1.4.0"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -90,6 +90,11 @@ float gen_temp_noise(int x, int z);   /* BiomeGenBase.temperatureNoise at (x / 8
 #define VCZ 40
 #define VCY 24
 #define WORLD_H 128
+/* Under the world is the void (as in Minecraft, below the lowest block there is): nothing
+ * stands there, and 64 below the bottom of the world what is in it starts to take damage
+ * (Entity.checkBelowWorld, minBuildHeight - 64). Everything that goes under the world
+ * falls to here: the player (player.c), the mobs and the dropped items (mob.c, entity.c). */
+#define VOID_Y (-64)
 extern uint8_t vc[VCY * VCZ * VCX];      /* blocks: index (y * VCZ + z) * VCX + x */
 extern uint8_t vl[VCY * VCZ * VCX];      /* light: sky light (low 4 bits), block light (high 4 bits) */
 extern uint8_t vbiome[VCZ * VCX];        /* biome of each column */
@@ -190,7 +195,7 @@ void player_set_mode(int m);   /* /gamemode, or the game mode switcher: 0 surviv
 static inline Stack *held(void) { return &pl.inv[pl.slot]; }
 void player_hurt(float amount, int kind);   /* kind: DMG_* */
 enum { DMG_GENERIC, DMG_FALL, DMG_DROWN, DMG_LAVA, DMG_FIRE, DMG_STARVE, DMG_WALL, DMG_VOID, DMG_MOB, DMG_ARROW,
-       DMG_EXPLOSION, DMG_CACTUS, DMG_LIGHTNING, DMG_MAGIC };
+       DMG_EXPLOSION, DMG_CACTUS, DMG_LIGHTNING, DMG_MAGIC, DMG_KILL };
 void player_add_xp(int n);
 void player_swing(void);   /* the arm swings (hand.c) */
 void hand_tick(void);

@@ -513,8 +513,8 @@ static const int mode_of[N_MODES] = {1, 0, 2};   /* the mode of each slot: Creat
 static const char *const mode_name[N_MODES] = {"Creative", "Survival", "Spectator"};
 static uint8_t mode_sel;                      /* the slot outlined */
 
-/* Minecraft opens it on Creative if in any other mode, and on Survival if in
- * Creative */
+/* Minecraft's switcher opens on the mode after the one you are in, so F3 + F4 and OK walks
+ * the cycle round: Creative, Survival, Spectator, back to Creative */
 static int slot_of(int m) { return m == 1 ? 0 : m == 2 ? 2 : 1; }   /* the slot of a game mode */
 
 void mode_open(void) {
@@ -524,7 +524,7 @@ void mode_open(void) {
     chat_add("You do not have permission to use this command", CHAT_RED);
     return;
   }
-  mode_sel = slot_of(pl.mode == 1 ? 0 : 1);   /* the other mode */
+  mode_sel = (uint8_t)((slot_of(pl.mode) + 1) % N_MODES);   /* the next one round */
   gui = GUI_MODE;
 }
 

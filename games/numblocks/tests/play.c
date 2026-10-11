@@ -6,11 +6,13 @@
  *        [--distance 1..2]   (render distance, default: the saved option, 2 chunks)
  *        [--fancy]           (graphics: Fancy, see-through leaves; the default is what the options say, Fast)
  *        [--bright 0..15]    (the Brightness setting: 0 Moody, 15 Bright; default: the saved option)
+ *        [--trace]       (a line a frame: the screen, the position, health, whether it is dead)
  *        [--flat]       (a superflat world)
  *        [--spectator]  (spectator mode: flying through the blocks, nothing to touch)
  *        [--spectate N] (with --mobs: the spectator's camera is the N-th mob's, 0..7)
  *        [--tree]       (an oak in front of the player, with the spectator's head in its canopy)
  *        [--cave]       (a sealed stone room with no light in it, for what the dark is)
+ *        [--void]       (a shaft dug through the bedrock under the player, who hangs in the void below it)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
@@ -50,7 +52,7 @@ int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
-  int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1;
+  int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -69,6 +71,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--flat")) flat = 1;
     else if (!strcmp(argv[i], "--tree")) tree = 1;
     else if (!strcmp(argv[i], "--cave")) cave = 1;
+    else if (!strcmp(argv[i], "--void")) void_world = 1;
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
@@ -83,6 +86,7 @@ int main(int argc, char **argv) {
       if (bright >= 0 && bright <= 15) opt.brightness = (uint8_t)bright;
     }
     else if (!strcmp(argv[i], "--time") && i + 1 < argc) start_time = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "--trace")) trace = 1;
     else if (!strcmp(argv[i], "--seed") && i + 1 < argc) {
       extern int64_t start_seed;
       start_seed = strtoll(argv[++i], NULL, 10);
@@ -223,6 +227,17 @@ int main(int argc, char **argv) {
     cave_by = fy + 1;
     opt.difficulty = 0;
   }
+  if (void_world) {
+    /* the hole a player digs: a 3 x 3 shaft through the bedrock under them (the bedrock
+     * floor of the world included), with the player hanging in the void below it, where
+     * the world above has to show through and around the hole */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 1; z <= pz + 1; z++)
+      for (int x = px - 1; x <= px + 1; x++)
+        for (int y = 0; y < fy; y++) world_set(x, y, z, B_AIR);
+    pl.x = px + 0.5f, pl.z = pz + 0.5f, pl.y = (float)fy - 8.5f, pl.vy = 0;
+    if (pl.mode) pl.flying = true;   /* (creative and spectator hang there; survival falls) */
+  }
   if (torches) {
     /* torches around, for the night (on the cave's floor when there is one, in front of
      * the player, so a lit room can be seen against an unlit one at any brightness) */
@@ -265,6 +280,8 @@ int main(int argc, char **argv) {
     if (!game_frame()) break;
     double fms = (clock() - f0) * 1000.0 / CLOCKS_PER_SEC;
     if (fms > slowest) slowest = fms, slowest_at = f;
+    if (trace) printf("%4d gui %2d mode %d %8.2f %8.2f %8.2f health %5.1f%s\n", f, gui, pl.mode, pl.x, pl.y,
+                      pl.z, pl.health, pl.dead ? " DEAD" : "");
     for (const char *s = shots; *s;) {
       if (atoi(s) == f) {
         char p[512];
@@ -281,6 +298,7 @@ int main(int argc, char **argv) {
   extern unsigned long st_dis, st_k0, st_fpfail, st_fpok, st_sky;
   printf("between per frame: %.0f disagree, %.0f kind0, %.0f face fail, %.0f face ok, %.0f sky\n", (double)st_dis / frames, (double)st_k0 / frames, (double)st_fpfail / frames, (double)st_fpok / frames, (double)st_sky / frames);
   printf("per pixel: %.1f steps, %.2f texels, %.2f jumps\n", (double)st_steps / st_pixels, (double)st_texels / st_pixels, (double)st_jumps / st_pixels);
+  printf("player: mode %d, %.1f %.1f %.1f, health %.1f, dead %d\n", pl.mode, pl.x, pl.y, pl.z, pl.health, pl.dead);
   printf("init %.1f ms, %.2f ms a frame (host), the slowest %.1f ms (frame %d)\n", init_ms,
          (clock() - c0) * 1000.0 / CLOCKS_PER_SEC / frames, slowest, slowest_at);
   return 0;
