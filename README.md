@@ -4,7 +4,7 @@
 
 <h1 align="center">NumPlay / Custom Numblocks</h1>
 
-<h3 align="center">Numplay, but with a more advanced version of numblocks, and a hidden version.</h3>
+<h3 align="center">Numplay, but with a more advanced and disguised version of numblocks.</h3>
 
 <p align="center">
   <b>17 free games for your NumWorks calculator, in one app.</b><br>
@@ -26,9 +26,8 @@
   <a href="#how-to-install"><b>How to install</b></a> &nbsp;·&nbsp; <a href="docs/play.md"><b>How to play</b></a> &nbsp;·&nbsp; <a href="#on-a-real-calculator"><b>See it on a real calculator</b></a>
 </p>
 
-## Recommended apps
+<h2 align="center">Recommended apps</h2>
 
-Two apps worth starting with: the whole collection, and the NumBlocks build that hides.
 
 <table>
   <tr>
@@ -37,9 +36,11 @@ Two apps worth starting with: the whole collection, and the NumBlocks build that
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
-    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa">numblocks-interest.nwa</a></b><br>Only NumBlocks: mine, craft, survive — hidden inside the <b>Interest</b> app, so it opens as Interest and NumBlocks is in there. Too big to share the calculator with NumPlay: install it on its own.</td>
+    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa">numblocks-interest.nwa</a></b><br>Mine, craft, survive, but hidden inside the <b>Interest</b> app, it opens as Interest and you press <code>var</code> to enter Numblocks.</td>
   </tr>
 </table>
+
+<h3 align="center">Showcase</h3>
 
 <p align="center">
   <img src="docs/media/launcher.gif" width="640" alt="The NumPlay launcher on a NumWorks calculator, scrolling through its games">
