@@ -1,4 +1,4 @@
-> **Champion Island is a [NumPlay](../../README.md) game that comes on its own.** It fills the calculator's whole app space, so it can't sit next to NumPlay. Get `ChampionIsland.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **Champion Island is a [NumPlay](../../README.md) game that comes on its own.** It fills the calculator's whole app space, so it can't sit next to NumPlay. Get `ChampionIsland.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 <p align="center">
   <img src="docs/icon.png" width="84" alt="Champion Island icon">
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/ChampionIsland.nwa"><b>Download ChampionIsland.nwa</b></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/ChampionIsland.nwa"><b>Download ChampionIsland.nwa</b></a>
   &nbsp;·&nbsp; <a href="#controls">Controls</a>
 </p>
 

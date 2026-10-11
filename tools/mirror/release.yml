@@ -25,6 +25,6 @@ jobs:
             echo "$tag is already released"
             exit 0
           fi
-          gh release download "$tag" --repo Mason363/NumPlay --pattern "{{ASSET}}" --dir "$RUNNER_TEMP"
+          gh release download "$tag" --repo thatbignguy/NumPlay --pattern "{{ASSET}}" --dir "$RUNNER_TEMP"
           gh release create "$tag" "$RUNNER_TEMP/{{ASSET}}" --repo "$GITHUB_REPOSITORY" --verify-tag --title "{{NAME}} $tag" --notes \
-            "{{ASSET}} from [NumPlay $tag](https://github.com/Mason363/NumPlay/releases/tag/$tag): the same file, built and tested with every game there. How to install it: [the install guide](https://github.com/Mason363/NumPlay#how-to-install)."
+            "{{ASSET}} from [NumPlay $tag](https://github.com/thatbignguy/NumPlay/releases/tag/$tag): the same file, built and tested with every game there. How to install it: [the install guide](https://github.com/thatbignguy/NumPlay#how-to-install)."

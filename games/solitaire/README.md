@@ -43,6 +43,6 @@ The look follows **Google Solitaire** (Google Search, 2016 onwards). This is an 
 
 It is written in C for NumPlay, inspired by Tatone26's Solitaire in [Numworks-games](https://github.com/Tatone26/Numworks-games/tree/main/apps/solitaire) (All the Apps), with no code copied from it. It keeps that version's Difficulty option (how many cards you draw) and adds the deal and win animations, the scoring, the clock, Undo, Hint, the automatic finish and statistics. The scoring and the bouncing cards come from Microsoft's Windows Solitaire (Wes Cherry).
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `Solitaire.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `Solitaire.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 Build: `make` (needs `arm-none-eabi-gcc` and Node.js for nwlink).

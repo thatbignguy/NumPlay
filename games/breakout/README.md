@@ -28,6 +28,6 @@ Google's Block Breaker, the brick breaker you get when you search for "block bre
 
 The look and the power-ups follow **Google's Block Breaker** (Google Search, 2025), itself a tribute to Atari's Breakout (1976). This is an independent fan version, drawn from shapes (no images from Google), and it isn't affiliated with or endorsed by Google.
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `BlockBreaker.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `BlockBreaker.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 Build: `make` (needs `arm-none-eabi-gcc` and Node.js for nwlink).

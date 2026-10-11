@@ -40,6 +40,6 @@ It is written in C for NumPlay, inspired by **[Tatone26](https://github.com/Tato
 
 Snake itself goes back to the arcade game Blockade (Gremlin, 1976) and was made famous by Nokia's phones.
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `Snake.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `Snake.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 Build: `make` (needs `arm-none-eabi-gcc` and Node.js for nwlink).

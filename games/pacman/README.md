@@ -31,6 +31,6 @@ It is written in C for NumPlay, inspired by Tatone26's version in [Numworks-game
 - The first intermission, the attract screen with the ghosts' names, and 60 frames a second that redraw only what moves.
 - About 14 KB, with every picture drawn by code or packed at 2 bits a pixel.
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `PacMan.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `PacMan.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 Build: `make` (needs `arm-none-eabi-gcc` and Node.js for nwlink).

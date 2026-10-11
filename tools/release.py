@@ -18,7 +18,7 @@ import os
 import re
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-REPO = "https://github.com/Mason363/NumPlay"
+REPO = "https://github.com/thatbignguy/NumPlay"
 # in games.json, but not games
 EXTRAS = {"numvisuals"}
 # games too big to fit next to NumPlay on the calculator: only on their own, in a section of their own

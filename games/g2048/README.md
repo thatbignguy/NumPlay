@@ -35,6 +35,6 @@ This version is written in C for NumPlay, inspired by **[Tatone26](https://githu
 - the game in progress and the best score saved for each size;
 - sizes from 3×3 to 6×6 (7×7 and 8×8 left out: their numbers would be too small to read).
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `2048.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `2048.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 Build: `make` (needs `arm-none-eabi-gcc` and Node.js for nwlink).

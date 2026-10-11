@@ -37,7 +37,7 @@ import sys
 import tempfile
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-REPO = "https://github.com/Mason363/NumPlay"
+REPO = "https://github.com/thatbignguy/NumPlay"
 RELEASE_TEMPLATE = os.path.join(ROOT, "tools", "mirror", "release.yml")
 
 # what NumPlay's own .gitignore covers for a game that the game's doesn't

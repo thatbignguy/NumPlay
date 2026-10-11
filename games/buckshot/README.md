@@ -1,4 +1,4 @@
-> **Buckshot Roulette is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `BuckshotRoulette.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **Buckshot Roulette is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `BuckshotRoulette.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 <p align="center">
   <img src="docs/icon.png" width="84" alt="Buckshot Roulette icon">
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/BuckshotRoulette.nwa"><b>Download BuckshotRoulette.nwa</b></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/BuckshotRoulette.nwa"><b>Download BuckshotRoulette.nwa</b></a>
   &nbsp;·&nbsp; <a href="#controls">Controls</a>
 </p>
 

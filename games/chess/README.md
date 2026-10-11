@@ -1,4 +1,4 @@
-> **NumChess is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `NumChess.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **NumChess is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `NumChess.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 <p align="center">
   <img src="docs/icon.png" width="84" alt="NumChess icon">
@@ -12,12 +12,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest"><img src="https://img.shields.io/github/v/release/Mason363/NumPlay?label=release&color=81b64c" alt="Latest release"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest"><img src="https://img.shields.io/github/v/release/thatbignguy/NumPlay?label=release&color=81b64c" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/installed%20size-20%20KB-3a3835" alt="Installed size: 20 KB">
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumChess.nwa"><b>Download NumChess.nwa</b></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumChess.nwa"><b>Download NumChess.nwa</b></a>
   &nbsp;·&nbsp; <a href="#install">Install</a>
   &nbsp;·&nbsp; <a href="#controls">Controls</a>
   &nbsp;·&nbsp; <a href="#build">Build</a>
@@ -132,7 +132,7 @@ All the rules are included: castling, en passant, underpromotion, and draws by s
 
 ## Install
 
-1. Download **[NumChess.nwa](https://github.com/Mason363/NumPlay/releases/latest/download/NumChess.nwa)** from the [latest NumPlay release](https://github.com/Mason363/NumPlay/releases/latest).
+1. Download **[NumChess.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/NumChess.nwa)** from the [latest NumPlay release](https://github.com/thatbignguy/NumPlay/releases/latest).
 2. Plug the calculator into your computer and open **[my.numworks.com/apps](https://my.numworks.com/apps)** in Chrome or Edge.
 3. Upload `NumChess.nwa`. **Chess** appears at the end of the calculator's home screen.
 

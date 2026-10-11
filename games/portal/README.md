@@ -1,4 +1,4 @@
-> **Portal Returns is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `PortalReturns.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **Portal Returns is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `PortalReturns.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 <p align="center">
   <img src="docs/icon.png" width="84" alt="Portal Returns icon">
@@ -12,12 +12,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest"><img src="https://img.shields.io/github/v/release/Mason363/NumPlay?label=release&color=1c83e0" alt="Latest release"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest"><img src="https://img.shields.io/github/v/release/thatbignguy/NumPlay?label=release&color=1c83e0" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/installed%20size-35%20KB-4a4952" alt="Installed size: 35 KB">
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/PortalReturns.nwa"><b>Download PortalReturns.nwa</b></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/PortalReturns.nwa"><b>Download PortalReturns.nwa</b></a>
   &nbsp;·&nbsp; <a href="#controls">Controls</a>
   &nbsp;·&nbsp; <a href="#install">Install</a>
   &nbsp;·&nbsp; <a href="#credits">Credits</a>
@@ -68,7 +68,7 @@ The number pad works like on the TI: each key fires a portal in its direction.
 
 ## Install
 
-1. Download **[PortalReturns.nwa](https://github.com/Mason363/NumPlay/releases/latest/download/PortalReturns.nwa)** from the [latest NumPlay release](https://github.com/Mason363/NumPlay/releases/latest).
+1. Download **[PortalReturns.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/PortalReturns.nwa)** from the [latest NumPlay release](https://github.com/thatbignguy/NumPlay/releases/latest).
 2. Plug the calculator into your computer and open **[my.numworks.com/apps](https://my.numworks.com/apps)** in Chrome or Edge.
 3. Upload `PortalReturns.nwa`. **Portal** appears at the end of the calculator's home screen.
 

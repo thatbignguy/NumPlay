@@ -68,7 +68,7 @@
     "shots": [
       "docs/shot.png"
     ],
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/balatro"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/balatro"
   },
   {
     "id": "buckshot",
@@ -84,7 +84,7 @@
     "shots": [
       "docs/shot.png"
     ],
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/buckshot"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/buckshot"
   },
   {
     "id": "portal",
@@ -100,7 +100,7 @@
     "shots": [
       "docs/shot.png"
     ],
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/portal"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/portal"
   },
   {
     "id": "tetris",
@@ -150,7 +150,7 @@
       "docs/shot.png"
     ],
     "app": "FlappyBird.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/flappybird"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/flappybird"
   },
   {
     "id": "pacman",
@@ -167,7 +167,7 @@
       "docs/shot.png"
     ],
     "app": "PacMan.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/pacman"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/pacman"
   },
   {
     "id": "snake",
@@ -184,7 +184,7 @@
       "docs/shot.png"
     ],
     "app": "Snake.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/snake"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/snake"
   },
   {
     "id": "connectfour",
@@ -201,7 +201,7 @@
       "docs/shot.png"
     ],
     "app": "ConnectFour.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/connectfour"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/connectfour"
   },
   {
     "id": "solitaire",
@@ -218,7 +218,7 @@
       "docs/shot.png"
     ],
     "app": "Solitaire.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/solitaire"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/solitaire"
   },
   {
     "id": "g2048",
@@ -235,7 +235,7 @@
       "docs/shot.png"
     ],
     "app": "2048.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/g2048"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/g2048"
   },
   {
     "id": "minesweeper",
@@ -252,7 +252,7 @@
       "docs/shot.png"
     ],
     "app": "Minesweeper.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/minesweeper"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/minesweeper"
   },
   {
     "id": "breakout",
@@ -269,7 +269,7 @@
       "docs/shot.png"
     ],
     "app": "BlockBreaker.nwa",
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/breakout"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/breakout"
   },
   {
     "id": "numvisuals",
@@ -286,6 +286,6 @@
       "docs/shot.png"
     ],
     "colors": 48,
-    "repo": "https://github.com/Mason363/NumPlay/tree/main/games/numvisuals"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/numvisuals"
   }
 ]

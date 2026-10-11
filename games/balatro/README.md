@@ -1,4 +1,4 @@
-> **Balatro is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `Balatro.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **Balatro is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `Balatro.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 <p align="center">
   <img src="src/icon.png" width="84" alt="Balatro icon">
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/Balatro.nwa"><b>Download Balatro.nwa</b></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Balatro.nwa"><b>Download Balatro.nwa</b></a>
   &nbsp;·&nbsp; <a href="#controls">Controls</a>
   &nbsp;·&nbsp; <a href="#credits">Credits</a>
 </p>
@@ -66,7 +66,7 @@ The game speed can be changed in Options. "How to Play" in Options lists the key
 
 ## Install
 
-1. Download **[Balatro.nwa](https://github.com/Mason363/NumPlay/releases/latest/download/Balatro.nwa)** from the [latest NumPlay release](https://github.com/Mason363/NumPlay/releases/latest).
+1. Download **[Balatro.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/Balatro.nwa)** from the [latest NumPlay release](https://github.com/thatbignguy/NumPlay/releases/latest).
 2. Plug the calculator into your computer and open **[my.numworks.com/apps](https://my.numworks.com/apps)** in Chrome or Edge.
 3. Upload `Balatro.nwa`.
 

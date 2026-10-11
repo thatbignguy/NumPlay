@@ -2,7 +2,9 @@
   <img src="docs/media/icon.png" width="96" alt="NumPlay icon">
 </p>
 
-<h1 align="center">NumPlay</h1>
+<h1 align="center">NumPlay / Custom Numblocks</h1>
+
+<h3 align="center">Numplay, but with a more advanced version of numblocks, and a hidden version.</h3>
 
 <p align="center">
   <b>17 free games for your NumWorks calculator, in one app.</b><br>
@@ -11,13 +13,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases"><img src="https://img.shields.io/github/downloads/Mason363/NumPlay/total?style=for-the-badge&label=downloads&color=7B43FF" alt="Total downloads"></a>
-  <a href="https://github.com/Mason363/NumPlay/stargazers"><img src="https://img.shields.io/github/stars/Mason363/NumPlay?style=for-the-badge&color=E3B341" alt="GitHub stars"></a>
-  <a href="https://github.com/Mason363/NumPlay/releases/latest"><img src="https://img.shields.io/github/v/release/Mason363/NumPlay?style=for-the-badge&label=version&color=2D9F4F" alt="Latest version"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases"><img src="https://img.shields.io/github/downloads/thatbignguy/NumPlay/total?style=for-the-badge&label=downloads&color=7B43FF" alt="Total downloads"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/stargazers"><img src="https://img.shields.io/github/stars/thatbignguy/NumPlay?style=for-the-badge&color=E3B341" alt="GitHub stars"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest"><img src="https://img.shields.io/github/v/release/thatbignguy/NumPlay?style=for-the-badge&label=version&color=2D9F4F" alt="Latest version"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay.nwa"><img src="https://img.shields.io/badge/Download-NumPlay.nwa-7B43FF?style=for-the-badge" alt="Download NumPlay.nwa"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay.nwa"><img src="https://img.shields.io/badge/Download-NumPlay.nwa-7B43FF?style=for-the-badge" alt="Download NumPlay.nwa"></a>
 </p>
 
 <p align="center">
@@ -40,7 +42,7 @@
 
 NumPlay is open source and completely free, and it took a lot of work to make. If you like it, please click **Star** at the top of this page. It only takes a second, and it helps other people find NumPlay.
 
-Want a game that isn't here? I'm open to requests: email me at [masonchen204@gmail.com](mailto:masonchen204@gmail.com).
+Want a game that isn't here? I'm open to requests: email me at [roberteinweger@gmail.com](mailto:roberteinweger@gmail.com).
 
 ## New: The Final Earth 2
 
@@ -56,7 +58,7 @@ Build a city on floating islands in space, right on your calculator.
 - **The game's look:** its own pictures, fonts, sky and islands, day and night.
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/FinalEarth2.nwa"><img src="https://img.shields.io/badge/Download-FinalEarth2.nwa-3E6FB5?style=for-the-badge" alt="Download FinalEarth2.nwa"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FinalEarth2.nwa"><img src="https://img.shields.io/badge/Download-FinalEarth2.nwa-3E6FB5?style=for-the-badge" alt="Download FinalEarth2.nwa"></a>
 </p>
 
 <p align="center">
@@ -80,7 +82,7 @@ Mine, craft and survive in a world like Minecraft 1.8, right on your calculator.
 - **Your worlds stay:** keep several, and they come back even after you install again.
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumBlocks.nwa"><img src="https://img.shields.io/badge/Download-NumBlocks.nwa-5B8C32?style=for-the-badge" alt="Download NumBlocks.nwa"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumBlocks.nwa"><img src="https://img.shields.io/badge/Download-NumBlocks.nwa-5B8C32?style=for-the-badge" alt="Download NumBlocks.nwa"></a>
 </p>
 
 <p align="center">
@@ -103,7 +105,7 @@ Explore Hallownest as the Knight, right on your calculator.
 - **Everything to find:** geo, charms, mask shards, vessel fragments, grubs, the map and the stag stations.
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/HollowKnight.nwa"><img src="https://img.shields.io/badge/Download-HollowKnight.nwa-4A5A7A?style=for-the-badge" alt="Download HollowKnight.nwa"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/HollowKnight.nwa"><img src="https://img.shields.io/badge/Download-HollowKnight.nwa-4A5A7A?style=for-the-badge" alt="Download HollowKnight.nwa"></a>
 </p>
 
 <p align="center">
@@ -126,7 +128,7 @@ Climb Celeste Mountain with Madeline, right on your calculator.
 - **Everything to find:** strawberries, crystal hearts, cassettes and the Summit's gems.
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/Celeste.nwa"><img src="https://img.shields.io/badge/Download-Celeste.nwa-AC3232?style=for-the-badge" alt="Download Celeste.nwa"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Celeste.nwa"><img src="https://img.shields.io/badge/Download-Celeste.nwa-AC3232?style=for-the-badge" alt="Download Celeste.nwa"></a>
 </p>
 
 <p align="center">
@@ -168,15 +170,15 @@ Click a file to download it. Not sure which one? Take the first.
 <table>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><b><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay.nwa">NumPlay.nwa</a></b><br><b>All 16 games and NumVisuals in one app. Start here!</b></td>
+    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay.nwa">NumPlay.nwa</a></b><br><b>All 16 games and NumVisuals in one app. Start here!</b></td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon-invisible.png" width="64" alt="A blank white icon"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-Invisible.nwa">NumPlay-Invisible.nwa</a><br>The same app, hidden. Its icon is plain white, like the calculator's home screen, and it has no name, so it looks like an empty spot.</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Invisible.nwa">NumPlay-Invisible.nwa</a><br>The same app, hidden. Its icon is plain white, like the calculator's home screen, and it has no name, so it looks like an empty spot.</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon-matrices.png" width="64" alt="A Matrices icon in the calculator's style"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a><br>The same app, in disguise. It looks like a math app called <b>Matrices</b>, next to the calculator's own apps.</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a><br>The same app, in disguise. It looks like a math app called <b>Matrices</b>, next to the calculator's own apps.</td>
   </tr>
   <tr>
     <td></td>
@@ -184,103 +186,103 @@ Click a file to download it. Not sure which one? Take the first.
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-French.nwa">NumPlay-French.nwa</a><br>NumPlay en français : tous les jeux, en français.</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-French.nwa">NumPlay-French.nwa</a><br>NumPlay en français : tous les jeux, en français.</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-Chinese.nwa">NumPlay-Chinese.nwa</a><br>NumPlay 中文版：所有游戏，简体中文。</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Chinese.nwa">NumPlay-Chinese.nwa</a><br>NumPlay 中文版：所有游戏，简体中文。</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-Upsilon.nwa">NumPlay-Upsilon.nwa</a><br>For calculators running <b>Upsilon</b>: the 13 games that fit in the memory Upsilon gives apps. See <a href="#on-upsilon">On Upsilon</a>.</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Upsilon.nwa">NumPlay-Upsilon.nwa</a><br>For calculators running <b>Upsilon</b>: the 13 games that fit in the memory Upsilon gives apps. See <a href="#on-upsilon">On Upsilon</a>.</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numdash.png" width="112" alt="NumDash"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumDash.nwa">NumDash.nwa</a><br>Only NumDash: jump to the beat</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumDash.nwa">NumDash.nwa</a><br>Only NumDash: jump to the beat</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_crossyroad.png" width="112" alt="Crossy Road"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/CrossyRoad.nwa">CrossyRoad.nwa</a><br>Only Crossy Road: hop, dodge, survive</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/CrossyRoad.nwa">CrossyRoad.nwa</a><br>Only Crossy Road: hop, dodge, survive</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumBlocks.nwa">NumBlocks.nwa</a><br>Only NumBlocks: mine, craft, survive (<a href="games/numblocks/README.md">more</a>)</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumBlocks.nwa">NumBlocks.nwa</a><br>Only NumBlocks: mine, craft, survive (<a href="games/numblocks/README.md">more</a>)</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_celeste.png" width="112" alt="Celeste"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/Celeste.nwa">Celeste.nwa</a><br>Celeste: the whole climb up Celeste Mountain. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/celeste/README.md">more</a>)</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Celeste.nwa">Celeste.nwa</a><br>Celeste: the whole climb up Celeste Mountain. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/celeste/README.md">more</a>)</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_hollowknight.png" width="112" alt="Hollow Knight"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/HollowKnight.nwa">HollowKnight.nwa</a><br>Hollow Knight: from King's Pass to Hornet in Greenpath. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/hollowknight/README.md">more</a>)</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/HollowKnight.nwa">HollowKnight.nwa</a><br>Hollow Knight: from King's Pass to Hornet in Greenpath. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/hollowknight/README.md">more</a>)</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_finalearth2.png" width="112" alt="The Final Earth 2"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/FinalEarth2.nwa">FinalEarth2.nwa</a><br>The Final Earth 2: build a city on floating islands in space. It's too big to fit next to NumPlay, so it comes on its own (<a href="games/finalearth2/README.md">more</a>)</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FinalEarth2.nwa">FinalEarth2.nwa</a><br>The Final Earth 2: build a city on floating islands in space. It's too big to fit next to NumPlay, so it comes on its own (<a href="games/finalearth2/README.md">more</a>)</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numdrive.png" width="112" alt="NumDrive"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumDrive.nwa">NumDrive.nwa</a><br>Only NumDrive: drive, flip, finish</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumDrive.nwa">NumDrive.nwa</a><br>Only NumDrive: drive, flip, finish</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_balatro.png" width="112" alt="Balatro"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/Balatro.nwa">Balatro.nwa</a><br>Only Balatro: poker hands, wild jokers</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Balatro.nwa">Balatro.nwa</a><br>Only Balatro: poker hands, wild jokers</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_buckshot.png" width="112" alt="Buckshot Roulette"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/BuckshotRoulette.nwa">BuckshotRoulette.nwa</a><br>Only Buckshot Roulette: you, the Dealer, one shotgun</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/BuckshotRoulette.nwa">BuckshotRoulette.nwa</a><br>Only Buckshot Roulette: you, the Dealer, one shotgun</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_championisland.png" width="112" alt="Champion Island"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/ChampionIsland.nwa">ChampionIsland.nwa</a><br>Champion Island: the whole island and its seven sports. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/championisland/README.md">more</a>)</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/ChampionIsland.nwa">ChampionIsland.nwa</a><br>Champion Island: the whole island and its seven sports. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/championisland/README.md">more</a>)</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_portal.png" width="112" alt="Portal Returns"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/PortalReturns.nwa">PortalReturns.nwa</a><br>Only Portal Returns: think with portals</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/PortalReturns.nwa">PortalReturns.nwa</a><br>Only Portal Returns: think with portals</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_tetris.png" width="112" alt="Tetris"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/Tetris.nwa">Tetris.nwa</a><br>Only Tetris: stack and clear lines</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Tetris.nwa">Tetris.nwa</a><br>Only Tetris: stack and clear lines</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_chess.png" width="112" alt="Chess"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumChess.nwa">NumChess.nwa</a><br>Only Chess: bots, puzzles, 2 players</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumChess.nwa">NumChess.nwa</a><br>Only Chess: bots, puzzles, 2 players</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_flappybird.png" width="112" alt="Flappy Bird"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/FlappyBird.nwa">FlappyBird.nwa</a><br>Only Flappy Bird: flap through the pipes</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FlappyBird.nwa">FlappyBird.nwa</a><br>Only Flappy Bird: flap through the pipes</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_pacman.png" width="112" alt="Pac-Man"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/PacMan.nwa">PacMan.nwa</a><br>Only Pac-Man: eat dots, dodge ghosts</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/PacMan.nwa">PacMan.nwa</a><br>Only Pac-Man: eat dots, dodge ghosts</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_snake.png" width="112" alt="Snake"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/Snake.nwa">Snake.nwa</a><br>Only Snake: Google's snake, with its 12 modes</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Snake.nwa">Snake.nwa</a><br>Only Snake: Google's snake, with its 12 modes</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_connectfour.png" width="112" alt="Connect Four"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/ConnectFour.nwa">ConnectFour.nwa</a><br>Only Connect Four: four in a row wins, against a friend or the computer</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/ConnectFour.nwa">ConnectFour.nwa</a><br>Only Connect Four: four in a row wins, against a friend or the computer</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_solitaire.png" width="112" alt="Solitaire"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/Solitaire.nwa">Solitaire.nwa</a><br>Only Solitaire: the classic card game, the way Google plays it</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Solitaire.nwa">Solitaire.nwa</a><br>Only Solitaire: the classic card game, the way Google plays it</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_g2048.png" width="112" alt="2048"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/2048.nwa">2048.nwa</a><br>Only 2048: slide, merge, reach 2048</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/2048.nwa">2048.nwa</a><br>Only 2048: slide, merge, reach 2048</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_minesweeper.png" width="112" alt="Minesweeper"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/Minesweeper.nwa">Minesweeper.nwa</a><br>Only Minesweeper: clear the field, flag the mines</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Minesweeper.nwa">Minesweeper.nwa</a><br>Only Minesweeper: clear the field, flag the mines</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_breakout.png" width="112" alt="Block Breaker"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/BlockBreaker.nwa">BlockBreaker.nwa</a><br>Only Block Breaker: break every brick, set off the power-ups</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/BlockBreaker.nwa">BlockBreaker.nwa</a><br>Only Block Breaker: break every brick, set off the power-ups</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numvisuals.png" width="112" alt="NumVisuals"></td>
-    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumVisuals.nwa">NumVisuals.nwa</a><br>Only NumVisuals: backgrounds, clocks, timers</td>
+    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumVisuals.nwa">NumVisuals.nwa</a><br>Only NumVisuals: backgrounds, clocks, timers</td>
   </tr>
 </table>
 
@@ -433,6 +435,8 @@ Upsilon support is new. If it doesn't work on your calculator, please [email me]
 ## License
 
 NumPlay is licensed under the [GNU General Public License v3.0](LICENSE). Copyright (c) 2026 Mason Chen.
+
+This repository is a **fork** of [Mason363's NumPlay](https://github.com/Mason363/NumPlay). Copyright (c) 2026 Robert Einweger ([thatbignguy](https://github.com/thatbignguy)) for the changes made in this fork.
 
 Code and fonts from others keep their own licenses: the `UNLICENSE` files in the games' folders and the [LICENSES](LICENSES) folder. The names, artwork and music of the games NumPlay is inspired by belong to their makers and are not covered by it.
 

@@ -27,6 +27,6 @@ After a game, OK starts the next one, like clicking the smiley.
 
 Minesweeper was written by Robert Donner and Curt Johnson for Microsoft Windows (1990). This version was made from scratch for NumPlay, after the look of the Windows 95 game.
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `Minesweeper.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `Minesweeper.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 Build: `make` (needs `arm-none-eabi-gcc` and Node.js for nwlink).

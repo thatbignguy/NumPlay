@@ -1,4 +1,4 @@
-> **The Final Earth 2 is a [NumPlay](../../README.md) game that comes on its own.** It is too big to fit next to NumPlay on the calculator. Get `FinalEarth2.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **The Final Earth 2 is a [NumPlay](../../README.md) game that comes on its own.** It is too big to fit next to NumPlay on the calculator. Get `FinalEarth2.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 <p align="center">
   <img src="src/icon.png" width="84" alt="The Final Earth 2 icon">
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/FinalEarth2.nwa"><b>Download FinalEarth2.nwa</b></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FinalEarth2.nwa"><b>Download FinalEarth2.nwa</b></a>
   &nbsp;·&nbsp; <a href="#controls">Controls</a>
 </p>
 

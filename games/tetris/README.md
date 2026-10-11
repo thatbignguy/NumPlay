@@ -1,4 +1,4 @@
-> **Tetris is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `Tetris.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **Tetris is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `Tetris.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 # Tetris
 

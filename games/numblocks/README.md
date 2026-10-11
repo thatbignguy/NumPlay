@@ -43,7 +43,7 @@ Spectator, as `/gamemode spectator` or the switcher's third slot, is Minecraft's
 
 ## Get it
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `NumBlocks.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `NumBlocks.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 ## Credits
 

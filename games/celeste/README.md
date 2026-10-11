@@ -1,4 +1,4 @@
-> **Celeste is a [NumPlay](../../README.md) game that comes on its own.** It fills the calculator's whole app space, so it can't sit next to NumPlay. Get `Celeste.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **Celeste is a [NumPlay](../../README.md) game that comes on its own.** It fills the calculator's whole app space, so it can't sit next to NumPlay. Get `Celeste.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 <p align="center">
   <img src="src/icon.png" width="84" alt="Celeste icon">
@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/Celeste.nwa"><b>Download Celeste.nwa</b></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Celeste.nwa"><b>Download Celeste.nwa</b></a>
   &nbsp;·&nbsp; <a href="#controls">Controls</a>
 </p>
 

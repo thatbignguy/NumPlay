@@ -22,7 +22,7 @@ Tap to flap, slip between the pipes, and beat your best. It looks and plays like
 
 Your best scores (one for Classic, one for Custom) and your settings are kept in `flappy.sav`.
 
-It comes inside [NumPlay](https://github.com/Mason363/NumPlay), or on its own as `FlappyBird.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `FlappyBird.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 ## Credits
 

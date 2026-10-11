@@ -1,4 +1,4 @@
-> **Crossy Road is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `CrossyRoad.nwa` from the [latest release](https://github.com/Mason363/NumPlay/releases/latest).
+> **Crossy Road is part of [NumPlay](../../README.md)**, every NumWorks game in one app. Get it with all the others, or on its own as `CrossyRoad.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
 
 # CrossyWorks
 
@@ -15,7 +15,7 @@ Hop as far as you can. Dodge cars, trucks and trains, ride logs and lily pads ac
 
 ## Install
 
-1. Download [`CrossyRoad.nwa`](https://github.com/Mason363/NumPlay/releases/latest/download/CrossyRoad.nwa) from the [latest NumPlay release](https://github.com/Mason363/NumPlay/releases/latest).
+1. Download [`CrossyRoad.nwa`](https://github.com/thatbignguy/NumPlay/releases/latest/download/CrossyRoad.nwa) from the [latest NumPlay release](https://github.com/thatbignguy/NumPlay/releases/latest).
 2. Plug in your calculator and open [my.numworks.com/apps](https://my.numworks.com/apps).
 3. Add the file and send it to the calculator.
 
