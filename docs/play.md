@@ -7,13 +7,14 @@
 | **Left / Right** (or 4 / 6) | Pick a game |
 | **OK** or **EXE** (or 5) | Play |
 | **Back** | Leave a game's main menu to come back here. On the carousel, quit NumPlay |
+| **⌫** (backspace) | A moving background behind the carousel: Aurora, Sunset Drive, Plasma, Pastel, Lava Lamp, Ocean, then none again. NumPlay remembers it |
 | **Home** | Quit, from anywhere |
 
 The last card, **Settings**, can:
 
 - **Reset** a game's progress, or every game's at once: hold **OK** on the red button to confirm (levels you made are kept)
 - **Uninstall** the games you don't play, to free up space
-- **Start as Matrices**: NumPlay opens as a plain matrix calculator. Your secret way in opens the games: pick the x,n,t key, var, Toolbox, π, √, or *Examples* in the Toolbox menu. A small gray hint in the corner names it (turn it off with **Show a hint**)
+- **Start as Matrices**: NumPlay opens as a plain matrix calculator. Your secret way in opens the games: pick the x,n,t key, var, Toolbox, π, √, *Examples* in the Toolbox menu, or the Konami code (up, up, down, down, left, right, left, right). A small gray hint in the corner names it (turn it off with **Show a hint**)
 
 Your progress is also copied into a Python script, `numplay_saves.py`, so updating NumPlay doesn't erase it. Leave it there; if it gets deleted, NumPlay writes it again.
 
@@ -50,7 +51,7 @@ Keep moving, or the eagle gets you. Coins add up across every run and stay saved
 
 ## NumBlocks
 
-<img src="media/numblocks.gif" width="320" align="right" alt="NumBlocks: chopping a birch tree, then building a pillar of planks">
+<img src="media/numblocks.gif" width="320" align="right" alt="NumBlocks: the inventory, TNT, water and lava">
 
 | Key | What it does |
 | --- | --- |
@@ -112,6 +113,29 @@ Celeste comes as its own app, `Celeste.nwa`: it is too big to share the calculat
 | **Home** | Save and quit |
 
 Choose Climb, then a chapter, then Start. Madeline can dash once in the air (twice later on), and grab and climb walls until she gets tired. In menus, **OK** or **EXE** confirms and **Back** goes back. The first time you open Celeste it shows these keys; you can change them in Options, then Keyboard Config. Home saves and quits, and Climb then offers Continue. Your progress is also copied into `celeste_saves.py`, so installing the app again doesn't erase it. The game's cheat code works too: in the Prologue's hidden room, left of the start, press left, right, var, toolbox, up, up, down, left, toolbox and OK.
+
+<br clear="right">
+
+## The Final Earth 2
+
+<img src="media/finalearth2.gif" width="320" align="right" alt="The Final Earth 2: building a house on a city in free play">
+
+The Final Earth 2 comes as its own app, `FinalEarth2.nwa`: it is too big to share the calculator with NumPlay.
+
+| Key | What it does |
+| --- | --- |
+| **Arrows** | Move the cursor, or the focus in menus and windows |
+| **shift** + **arrows** | Move the view faster |
+| **OK** | Open what is under the cursor, choose, build here |
+| **Back** | Close, stop building, open the game menu |
+| **toolbox** | Open or close the build menu |
+| **var** | Go to the buttons and materials at the bottom right, and back |
+| **alpha** | Pause |
+| **+** and **-** | Zoom in and out |
+| **⌫** | Destroy the building under the cursor |
+| **Home** | Save and quit |
+
+Choose a scenario or a free play map. Build woodcutters and stone mines for materials, farms for food and houses for your citizens; buildings stack on top of each other. In the build menu, left and right go through the buildings, up and down change the category, and **OK** picks one; then **OK** builds where the cursor is, and **Back** goes back to the menu. Each goal of a scenario tells you what to do next, and **?** shows it again. On the speed button, **OK** switches between normal and double speed, and **shift** with **OK** goes through all five speeds. Home saves and quits, and the title then offers Continue. Your city is also copied into `finalearth2_saves.py`, so installing the app again doesn't erase it.
 
 <br clear="right">
 

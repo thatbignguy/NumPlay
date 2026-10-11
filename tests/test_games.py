@@ -117,6 +117,9 @@ GAMES = {
                      presses((2500, "ok"), (4500, "ok"), (5500, "ok"), (6500, "ok")) + every(18000, 22000, 600, "right", 400),
                      25000,
                      presses((2500, "ok"), (4500, "ok")) + every(9000, 11000, 600, "left", 400), 14000),
+    # Press OK to Play: the first scenario, its first goal closed, the city runs; then Continue
+    "finalearth2": ("FinalEarth2.nwa", "finalearth2.sav", presses((2000, "ok"), (3000, "ok")), 9000,
+                    presses((2000, "ok")), 6000),
     # a level, its message, then play; then back to the level select
     "portal": ("PortalReturns.nwa", "portal.sav",
                presses((1500, "ok"), (2500, "ok"), (3500, "ok")) + every(4000, 7000, 400, "right", 300), 8000,
@@ -144,7 +147,7 @@ SEEDS = {
 # NumWorks installer keeps): before the second session, as after installing
 # the app again, only the scripts are left, and the save must come back
 COPIES = {"championisland": "champion_saves.py", "numblocks": "numblocks_saves.py", "celeste": "celeste_saves.py",
-          "hollowknight": "hollowknight_saves.py"}
+          "hollowknight": "hollowknight_saves.py", "finalearth2": "finalearth2_saves.py"}
 CHECKS = {
     # the island remembers where Lucky was; after the reinstall, from the copy
     "championisland": (lambda v: v[:3] == b"CI1" and b"PLAYER_LOC" in v,) * 2,
@@ -153,6 +156,8 @@ CHECKS = {
     "celeste": (lambda v: v[:4] == b"SLEC" and v[1072] == 1 and struct.unpack_from("<I", v, 1096)[0] > 0,
                 lambda v: v[:4] == b"SLEC" and v[1072] == 1 and struct.unpack_from("<I", v, 1096)[0] > 60),
     "chess": (lambda v: v == SEEDS["chess"],) * 2,  # read back and kept
+    # a city saved ("FE2S", version 1); after the reinstall, from the copy, it goes on and is saved again
+    "finalearth2": (lambda v: v[:4] == b"FE2S" and v[4] == 1,) * 2,
     # a game saved ("HKSV", then the play time at 152); after the reinstall, from the copy, it goes on
     "hollowknight": (lambda v: v[:4] == b"HKSV" and struct.unpack_from("<f", v, 152)[0] > 0,
                      lambda v: v[:4] == b"HKSV" and struct.unpack_from("<f", v, 152)[0] > 10),

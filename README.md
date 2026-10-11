@@ -6,7 +6,8 @@
 
 <p align="center">
   <b>17 free games for your NumWorks calculator, in one app.</b><br>
-  Plus <b>Hollow Knight</b>, <b>Celeste</b> and <b>Champion Island</b>, three big games that come as apps of their own.
+  Plus <b>The Final Earth 2</b>, <b>Hollow Knight</b>, <b>Celeste</b> and <b>Champion Island</b>, four big games that come as apps of their own.<br>
+  For the N0110, N0115 and N0120, in English, <a href="#in-french-and-chinese">French and Chinese</a>, and for <a href="#on-upsilon">Upsilon</a>.
 </p>
 
 <p align="center">
@@ -28,7 +29,7 @@
 </p>
 
 <p align="center">
-  <b>New: <a href="#new-hollow-knight">Hollow Knight</a></b>, from King's Pass to Hornet in Greenpath. &nbsp;<b>And <a href="#new-numblocks">NumBlocks</a></b>, a world like Minecraft 1.8.
+  <b>New: <a href="#new-the-final-earth-2">The Final Earth 2</a></b>, a city on floating islands in space. &nbsp;<b>And <a href="#new-hollow-knight">Hollow Knight</a></b>, from King's Pass to Hornet in Greenpath.
 </p>
 
 <p align="center">
@@ -41,10 +42,33 @@ NumPlay is open source and completely free, and it took a lot of work to make. I
 
 Want a game that isn't here? I'm open to requests: email me at [masonchen204@gmail.com](mailto:masonchen204@gmail.com).
 
+## New: The Final Earth 2
+
+<p align="center">
+  <img src="docs/media/finalearth2.gif" width="640" alt="The Final Earth 2: building a house on a city in free play, then its window and the happiness window">
+</p>
+
+Build a city on floating islands in space, right on your calculator.
+
+- **Every scenario and free play map** of the free version, with their goals and stories.
+- **87 buildings:** houses, farms, labs, factories, teleporters, parks and the alien buildings, with their upgrades.
+- **Citizens live their lives:** they work, go to school, look for fun, have children and grow old.
+- **The game's look:** its own pictures, fonts, sky and islands, day and night.
+
+<p align="center">
+  <a href="https://github.com/Mason363/NumPlay/releases/latest/download/FinalEarth2.nwa"><img src="https://img.shields.io/badge/Download-FinalEarth2.nwa-3E6FB5?style=for-the-badge" alt="Download FinalEarth2.nwa"></a>
+</p>
+
+<p align="center">
+  It's too big to fit next to NumPlay, so it comes on its own. &nbsp;<a href="games/finalearth2/README.md"><b>More about The Final Earth 2</b></a> &nbsp;·&nbsp; <a href="docs/play.md#the-final-earth-2"><b>How to play</b></a>
+</p>
+
+
+
 ## New: NumBlocks
 
 <p align="center">
-  <img src="docs/media/numblocks.gif" width="640" alt="NumBlocks: chopping a birch tree, then building a pillar of planks and looking out over the forest">
+  <img src="docs/media/numblocks.gif" width="640" alt="NumBlocks: walking across a meadow, the inventory, TNT blowing a crater, water poured into it and lava flowing towards it">
 </p>
 
 Mine, craft and survive in a world like Minecraft 1.8, right on your calculator.
@@ -52,6 +76,7 @@ Mine, craft and survive in a world like Minecraft 1.8, right on your calculator.
 - **Endless worlds:** the same biomes, caves and trees as Minecraft 1.8.8, for any seed.
 - **Survival:** chop trees, craft tools, build a shelter, and fight zombies, skeletons, creepers and spiders at night.
 - **Creative:** fly around and build with every block.
+- **TNT, water and lava:** blow craters, and watch water and lava flow (and turn to stone where they meet).
 - **Your worlds stay:** keep several, and they come back even after you install again.
 
 <p align="center">
@@ -158,6 +183,18 @@ Click a file to download it. Not sure which one? Take the first.
     <td><img src="docs/media/home_invisible.png" width="240" alt="The calculator's home screen with NumPlay-Invisible installed: the spot after Settings looks empty"> <img src="docs/media/home_matrices.png" width="240" alt="The calculator's home screen with NumPlay-Matrices installed, next to the calculator's own apps"><br><sub>On the home screen: the invisible one is really there, in the empty spot after Settings. The Matrices one sits among the calculator's own apps.</sub></td>
   </tr>
   <tr>
+    <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
+    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-French.nwa">NumPlay-French.nwa</a><br>NumPlay en français : tous les jeux, en français.</td>
+  </tr>
+  <tr>
+    <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
+    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-Chinese.nwa">NumPlay-Chinese.nwa</a><br>NumPlay 中文版：所有游戏，简体中文。</td>
+  </tr>
+  <tr>
+    <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
+    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumPlay-Upsilon.nwa">NumPlay-Upsilon.nwa</a><br>For calculators running <b>Upsilon</b>: the 13 games that fit in the memory Upsilon gives apps. See <a href="#on-upsilon">On Upsilon</a>.</td>
+  </tr>
+  <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numdash.png" width="112" alt="NumDash"></td>
     <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/NumDash.nwa">NumDash.nwa</a><br>Only NumDash: jump to the beat</td>
   </tr>
@@ -176,6 +213,10 @@ Click a file to download it. Not sure which one? Take the first.
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_hollowknight.png" width="112" alt="Hollow Knight"></td>
     <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/HollowKnight.nwa">HollowKnight.nwa</a><br>Hollow Knight: from King's Pass to Hornet in Greenpath. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/hollowknight/README.md">more</a>)</td>
+  </tr>
+  <tr>
+    <td width="120" align="center"><img src="docs/media/thumb_finalearth2.png" width="112" alt="The Final Earth 2"></td>
+    <td><a href="https://github.com/Mason363/NumPlay/releases/latest/download/FinalEarth2.nwa">FinalEarth2.nwa</a><br>The Final Earth 2: build a city on floating islands in space. It's too big to fit next to NumPlay, so it comes on its own (<a href="games/finalearth2/README.md">more</a>)</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numdrive.png" width="112" alt="NumDrive"></td>
@@ -263,6 +304,50 @@ You need your calculator, its USB cable, and a computer with **Google Chrome** o
 >
 > Nothing happens when you plug it in? Try another cable: some only charge.
 
+### Which calculators
+
+| Calculator | Software | What runs |
+| --- | --- | --- |
+| N0120 | Epsilon 23.2 or newer (the calculator's own software) | Everything |
+| N0110, N0115 | Epsilon 23.2 or newer | Everything. These models are about 2.5 times slower, so the big games (The Final Earth 2, Hollow Knight, Celeste, NumDrive, NumBlocks, Champion Island) show fewer frames per second, but they keep their speed. |
+| N0110, N0115 | Upsilon | NumPlay-Upsilon.nwa: 13 games. See [On Upsilon](#on-upsilon). |
+| Any | Custom software built from Epsilon 25.2's source | Everything, The Final Earth 2, Celeste, Hollow Knight and Champion Island too. These builds can give apps less memory (133 KB): on one that gives even less, a game that needs more than there is says how much on its card. |
+
+To see your calculator's model and software, open **Settings**, then **About**. To update the software, go to [my.numworks.com](https://my.numworks.com) with the calculator plugged in.
+
+### In French and Chinese
+
+**NumPlay-French.nwa** and **NumPlay-Chinese.nwa** are NumPlay with every game in French or in Chinese (simplified). Install them like NumPlay.nwa, instead of it. Your progress is the same in every language.
+
+A few things stay in English: logos and words drawn into pictures, level names, the calculator's key names, NumBlocks' commands, and Portal Returns' chamber stories. The Final Earth 2, Celeste, Hollow Knight and Champion Island come in English only.
+
+### On Upsilon
+
+Upsilon is custom software for the N0110 and N0115. It gives apps less memory than the calculator's own software, so **NumPlay-Upsilon.nwa** has the 13 games that fit: Crossy Road, Portal Returns, Tetris, Chess, Flappy Bird, Pac-Man, Snake, Connect Four, Solitaire, 2048, Minesweeper, Block Breaker and NumVisuals.
+
+The NumWorks website doesn't install apps on Upsilon (it shows 0 KB free), and the "Local file" button of Upsilon's own app page only copies a file onto the calculator. Install it with `nwlink`, NumWorks' command-line tool, instead:
+
+1. Install [Node.js](https://nodejs.org) on your computer.
+2. Plug in the calculator and turn it on.
+3. In a terminal, in the folder where you downloaded the file, run: `npx nwlink install-nwa NumPlay-Upsilon.nwa`
+
+Upsilon support is new. If it doesn't work on your calculator, please [email me](mailto:masonchen204@gmail.com) what happens.
+
+### Keeping your saves
+
+- Your progress is saved in the calculator's memory, as files. Turning the calculator off keeps them.
+- **Installing apps erases these files**, all but the Python scripts. That's why NumPlay keeps a copy of every save in a Python script, `numplay_saves.py`: open NumPlay once after installing, and your progress comes back. NumBlocks on its own does the same with `numblocks_saves.py`. Don't delete these scripts.
+- **A restart erases every file**, scripts included: pressing the reset button on the back, or the calculator crashing and starting over. Nothing can bring progress back after that. If your calculator restarts by itself while you play, please [email me](mailto:masonchen204@gmail.com) which game and what you were doing, so I can fix it.
+- The calculator holds 42 KB of files in all. A big NumBlocks world can fill it, and then NumPlay has no room for its copy. Delete worlds you don't play anymore, or Python scripts you don't need, to make room.
+
+### The app doesn't show up after installing
+
+- **The calculator restarts once after installing**: it shows the NumWorks logo, then asks for your language. That's normal. Your apps are at the end of the home screen after that.
+- **Celeste, Hollow Knight and Champion Island each fill the whole space for apps.** Install one of them alone, without NumPlay and without each other: if you pick more than fits, they don't install.
+- **The Final Earth 2 doesn't fit next to NumPlay.** Install it without NumPlay.
+- **Installing replaces the apps you installed before.** To keep one, add it again with the new one.
+- Check your calculator's software is **Epsilon 23.2 or newer** (Settings, then About), and update it at [my.numworks.com](https://my.numworks.com) if not.
+
 ## Gameplay
 
 <table>
@@ -271,7 +356,7 @@ You need your calculator, its USB cable, and a computer with **Google Chrome** o
     <td><img src="docs/media/crossyroad.gif" alt="Crossy Road gameplay"></td>
   </tr>
   <tr>
-    <td><img src="docs/media/numblocks.gif" alt="NumBlocks: chopping a birch tree, then building a pillar of planks"></td>
+    <td><img src="docs/media/numblocks.gif" alt="NumBlocks: the inventory, TNT, water and lava"></td>
     <td><img src="docs/media/numblocks_night.gif" alt="NumBlocks: sunset, then a zombie walks up and is beaten with an iron sword"></td>
   </tr>
   <tr>
@@ -281,6 +366,10 @@ You need your calculator, its USB cable, and a computer with **Google Chrome** o
   <tr>
     <td><img src="docs/media/hollowknight.gif" alt="Hollow Knight: the Knight in King's Pass, against the False Knight and Hornet"></td>
     <td><img src="games/hollowknight/docs/greenpath.png" width="100%" alt="Hollow Knight: Greenpath"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/finalearth2.gif" alt="The Final Earth 2: building a house on a city in free play, then its window and the happiness window"></td>
+    <td><img src="games/finalearth2/docs/night.png" width="100%" alt="The Final Earth 2: a city at night"></td>
   </tr>
   <tr>
     <td><img src="docs/media/numdrive.gif" alt="NumDrive gameplay"></td>
@@ -330,11 +419,16 @@ You need your calculator, its USB cable, and a computer with **Google Chrome** o
 - **Minecraft** by Mojang inspired NumBlocks, which uses Minecraft 1.8.8's textures, font and screens and makes its worlds the way Minecraft 1.8.8 does.
 - **Celeste** inspired NumPlay's Celeste, which uses the game's own pictures, maps, texts and fonts. Not affiliated with Maddy Makes Games.
 - **Hollow Knight** inspired NumPlay's Hollow Knight, which uses the game's own pictures, animations, maps, texts and fonts. Not affiliated with Team Cherry.
+- **[The Final Earth 2](https://store.steampowered.com/app/1180130/The_Final_Earth_2/)** by [Florian van Strien](https://florianvanstrien.nl) inspired NumPlay's The Final Earth 2, which uses the game's own pictures, fonts and texts, with additional sprites by LukXD99. Not affiliated with him.
 - **Buckshot Roulette** by Mike Klubnika inspired NumPlay's Buckshot Roulette, whose scenes are rendered from the game through the Open Buckshot Roulette project (1503Dev). Fonts: Fake Receipt by Ray Larabie and Dot Matrix by Dionaea.
 - The **Doodle Champion Island Games** (2021) inspired Champion Island, which uses the doodle's own pictures, maps and texts from the [Google-Doodle-Champion-Island](https://github.com/potherca-blog/Google-Doodle-Champion-Island) archive by potherca-blog, and the **PixelMplus** font by Itou Hiroki ([license](LICENSES/PixelMplus.txt)).
 - **[Portal Returns](https://www.cemetech.net/downloads/files/1313/x1313)** by MateoConLechuga for the TI-84 Plus CE, with sprites by CKH4 and Portal Prelude chambers ported by Unicorn from BuilderBoy's original.
 - The **Nunito** and **Rammetto One** fonts, under the SIL Open Font License ([LICENSES](LICENSES)).
 - **reversal_lava63**, a beta tester who plays NumPlay's apps on a real calculator and reports what's wrong.
+- **[Gabriel](https://github.com/tomcalif9-stack)**, who made the home screen's moving backgrounds, translated NumPlay into French first, and tests it on Upsilon and an N0115.
+- Everyone who reported a bug: **NEE** ([reversallava63](https://github.com/reversallava63)), **Gabriel**, **[briac134](https://github.com/briac134)**, **[Raphanobie](https://github.com/Raphanobie)**, **[zbigzo](https://github.com/zbigzo)**, **Yacine**, **Ewnet Tewodros**, **PelicanMan75**, **[Spykube](https://github.com/Spykube)** and **[axio-m](https://github.com/axio-m)**. Thank you!
+- The **Fusion Pixel** font by TakWolf (with glyphs from **Ark Pixel**), under the SIL Open Font License ([license](LICENSES/OFL-1.1-Fusion-Pixel.txt)), for the Chinese letters.
+- **[Upsilon](https://github.com/UpsilonNumworks/Upsilon)**, the custom software NumPlay-Upsilon.nwa runs on.
 
 ## License
 
@@ -342,4 +436,4 @@ NumPlay is licensed under the [GNU General Public License v3.0](LICENSE). Copyri
 
 Code and fonts from others keep their own licenses: the `UNLICENSE` files in the games' folders and the [LICENSES](LICENSES) folder. The names, artwork and music of the games NumPlay is inspired by belong to their makers and are not covered by it.
 
-<sub>Unofficial fan games, not affiliated with NumWorks, RobTop Games (Geometry Dash), Hipster Whale (Crossy Road), the makers of Drive Mad, LocalThunk or Playstack (Balatro), Mike Klubnika or Critical Reflex (Buckshot Roulette), Mojang or Microsoft (Minecraft), Maddy Makes Games (Celeste), Team Cherry (Hollow Knight), MateoConLechuga (Portal Returns), Valve (Portal), .GEARS (Flappy Bird), Bandai Namco (Pac-Man), Hasbro (Connect Four), Google (Snake, Solitaire, Block Breaker, Doodle Champion Island Games), STUDIO4°C or Microsoft (Minesweeper). Tetris is a trademark of The Tetris Company, Minecraft of Mojang Synergies AB, Pac-Man of Bandai Namco and Connect Four of Hasbro.</sub>
+<sub>Unofficial fan games, not affiliated with NumWorks, RobTop Games (Geometry Dash), Hipster Whale (Crossy Road), the makers of Drive Mad, LocalThunk or Playstack (Balatro), Mike Klubnika or Critical Reflex (Buckshot Roulette), Mojang or Microsoft (Minecraft), Maddy Makes Games (Celeste), Team Cherry (Hollow Knight), Florian van Strien (The Final Earth 2), MateoConLechuga (Portal Returns), Valve (Portal), .GEARS (Flappy Bird), Bandai Namco (Pac-Man), Hasbro (Connect Four), Google (Snake, Solitaire, Block Breaker, Doodle Champion Island Games), STUDIO4°C or Microsoft (Minesweeper). Tetris is a trademark of The Tetris Company, Minecraft of Mojang Synergies AB, Pac-Man of Bandai Namco and Connect Four of Hasbro.</sub>

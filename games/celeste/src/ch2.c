@@ -716,8 +716,8 @@ static bool switches_finished_check(void) {
     if (g_ents[i].cls == &TOUCHSWITCH && g_ents[i].dead != 1) touch_finish(&g_ents[i]);
   return true;
 }
-/* Switch.Check: the first switch is finished */
-static bool switch_check(void) {
+/* Switch.Check: the first switch is finished (the switch gates', and Mirror Temple's TouchSwitches gates': ch5.c) */
+bool level_switch_check(void) {
   for (int i = 0; i < g_nents; i++)
     if (g_ents[i].cls == &TOUCHSWITCH && g_ents[i].dead != 1) return ST(&g_ents[i], Touch)->finished;
   return false;
@@ -735,6 +735,15 @@ static void touch_turn_on(Ent *e) {
   switches_finished_check();
 }
 static void touch_on_player(Ent *e, Player *p) { (void)p, touch_turn_on(e); }
+/* the touch switches a circle reaches (their Collider, 16 x 16): a seeker's regeneration blast turns them on */
+void level_touch_switches_in_circle(V2 c, float r) {
+  for (int i = 0; i < g_nents; i++) {
+    Ent *e = &g_ents[i];
+    if (e->cls != &TOUCHSWITCH || e->dead == 1) continue;
+    float nx = clampf(c.x, e->x - 8, e->x + 8), ny = clampf(c.y, e->y - 8, e->y + 8);
+    if ((nx - c.x) * (nx - c.x) + (ny - c.y) * (ny - c.y) < r * r) touch_turn_on(e);
+  }
+}
 static void touch_awake(Ent *e) {   /* Switch.EntityAdded: CheckLevelFlag -> StartFinished */
   Touch *t = ST(e, Touch);
   char f[48];
@@ -853,7 +862,7 @@ static void gate_update(Ent *e) {
   if (g->wait > 0) g->wait -= DT;
   else switch (g->step) {
       case 0:   /* while (!Switch.Check) */
-        if (!switch_check()) break;
+        if (!level_switch_check()) break;
         if (g->persistent) {
           char f[48];
           switch_flag_name(f, room_of(e));
@@ -1284,13 +1293,14 @@ static void lspr_update(LSpr *s) {
   if (s->anim == LA_LOOKRIGHT || s->anim == LA_LOOKLEFT) s->anim = LA_LOOKING;   /* goto */
   s->frame = 0;
 }
+#define LOOK_NODES 28   /* the summit's lookout (7A's g-03) has the most */
 typedef struct {
   LSpr spr;
   Talk talk;
   V2 cam, speed, cam_start, cam_start_center, last_dir;
   float wait, node_pct, t;
   int16_t hud;
-  int16_t nodes[8][2];
+  int16_t nodes[LOOK_NODES][2];
   Walk walk;
   Step zs;                /* the summit's Level.ZoomTo */
   uint8_t nnodes, node, step, interacting, summit, only_y, at_top;
@@ -1537,7 +1547,7 @@ static void new_lookout(const EData *d) {
     look_tex[0][i] = tex(path2(p, "objects/lookout/lookout", NULL, i));
     look_tex[1][i] = tex(path2(p, "objects/lookout/nobackpack", NULL, i));
   }
-  l->nnodes = (uint8_t)(d->nnodes < 8 ? d->nnodes : 8);
+  l->nnodes = (uint8_t)(d->nnodes < LOOK_NODES ? d->nnodes : LOOK_NODES);
   for (int i = 0; i < l->nnodes; i++) {
     V2 n = ed_node(d, i);
     l->nodes[i][0] = (int16_t)n.x, l->nodes[i][1] = (int16_t)n.y;

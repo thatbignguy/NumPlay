@@ -45,6 +45,11 @@ uint32_t perf_max __attribute__((used));      /* the slowest frame's work, ms (a
 uint32_t perf_slow __attribute__((used));     /* frames (after the first second) over 33 ms of work */
 
 int main(void) {
+  /* the display tree and the sprite decoder's ring, here on the stack: some calculator software gives apps less RAM */
+  Node nodes_mem[NODE_MAX];
+  uint8_t ring_mem[LZMA_DICT] __attribute__((aligned(4)));
+  node_set_memory(nodes_mem);
+  spr_set_ring(ring_mem);
   plat_begin();
 #ifdef BENCH_STREAMS
   /* decode speed of every big image: perf_frames = raw KB, perf_ms = time */
@@ -67,9 +72,15 @@ int main(void) {
 #endif
   ci_init();
   uint32_t next = plat_millis();
+  bool slow = plat_slow();
   while (game_running) {
     uint32_t t0 = plat_millis();
     game_tick();
+    /* (an N0110 or N0115, a frame behind: one more tick before drawing, so the game keeps its speed) */
+    if (slow && game_running && (int32_t)(t0 - next) > 1000 / FPS) {
+      game_tick();
+      next += 1000 / FPS + (game.ticks % 3 == 0 ? 1 : 0);
+    }
     if (!game_running) break;
     game_draw();
     perf_frames++;

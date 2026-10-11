@@ -34,6 +34,7 @@ void np_wait_release(void);
  * launcher's buffers while no game runs */
 extern uint8_t np_arena[];
 extern const uint32_t np_arena_size;
+uint32_t np_arena_room(void);     /* the arena and the RAM after it, up to the end of the app's */
 void *np_alloc(uint32_t size);    /* bump allocator in the arena */
 void np_alloc_reset(void);
 
@@ -68,6 +69,7 @@ extern const int np_game_count;
 
 bool np_game_installed(int i);
 uint32_t np_game_size(int i);            /* bytes of flash */
+uint32_t np_game_ram_missing(int i);  /* the bytes of RAM a game needs more than there is, or 0 */
 void np_game_run(int i);
 
 /* ---- storage (storage.c): Epsilon's record file system */
@@ -77,7 +79,7 @@ uint32_t np_storage_record_size(const char *name);
 bool np_reset_game(int game);
 
 /* NumPlay's own settings, in the file numplay.set */
-enum { NP_SECRET_XNT, NP_SECRET_VAR, NP_SECRET_TOOLBOX, NP_SECRET_PI, NP_SECRET_SQRT, NP_SECRET_MENU, NP_SECRET_COUNT };
+enum { NP_SECRET_XNT, NP_SECRET_VAR, NP_SECRET_TOOLBOX, NP_SECRET_PI, NP_SECRET_SQRT, NP_SECRET_MENU, NP_SECRET_KONAMI, NP_SECRET_COUNT };
 typedef struct {
   bool disguise;  /* start as Matrices, a calculator app; NumPlay opens through the secret */
   uint8_t secret; /* NP_SECRET_* */
@@ -85,6 +87,8 @@ typedef struct {
 } np_config_t;
 void np_config_load(np_config_t *c);
 bool np_config_save(const np_config_t *c);
+bool np_bg_load(int *mode);   /* the home screen's live background chosen last; false when none was saved */
+bool np_bg_save(int mode);
 /* A copy of every save in numplay_saves.py, a Python script: the only kind of
    file the NumWorks installer keeps when NumPlay is updated. */
 void np_progress_backup(void);

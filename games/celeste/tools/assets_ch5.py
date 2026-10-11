@@ -54,7 +54,10 @@ def _swap(e):
 NEEDS = {"templeGate": _gate, "dashSwitchH": _dash_switch, "dashSwitchV": _dash_switch, "swapBlock": _swap}
 
 # the story (CS05_TheoPhone): the phone the interact trigger of ch5_theo_phone puts down
-VARIANTS = {"interactTrigger": ("event", {"ch5_theo_phone": ["tex:characters/theo/phone"]})}
+# the spikes of the temple's other side are tentacles (Spikes.AddTentacle): the sprite bank, only where a room has them
+_TENTACLES = ("type", {"tentacles": ["bank:tentacles"]})
+VARIANTS = {"interactTrigger": ("event", {"ch5_theo_phone": ["tex:characters/theo/phone"]}),
+            "spikesUp": _TENTACLES, "spikesDown": _TENTACLES, "spikesLeft": _TENTACLES, "spikesRight": _TENTACLES}
 
 
 

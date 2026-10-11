@@ -106,6 +106,8 @@ int main(int argc, char **argv) {
 #ifdef ARMTEST
   environ = argv + 1; /* semihosting has no environment: pass KEY=VALUE arguments */
 #endif
+  uint16_t strip[SCREEN_W * STRIP_H] __attribute__((aligned(4)));
+  render_set_buffer(strip);
   plat_begin();
   if (!world_init()) return plat_end(1);
   save_load();
@@ -122,7 +124,7 @@ int main(int argc, char **argv) {
   bool dirty = true, qyes = false;
   uint64_t prev = 0;
   uint32_t last = plat_millis();
-  int acc = 0;
+  int acc = 0, max_steps = plat_slow() ? 6 : 3;
   for (;;) {
     uint64_t k = plat_keys();
     uint64_t hit = k & ~prev;
@@ -140,7 +142,8 @@ int main(int argc, char **argv) {
     last = now;
     steps = acc / 50;
     if (steps < 1) steps = 1;
-    if (steps > 3) steps = 3, acc = 0;
+    /* (an N0110 or N0115 draws fewer frames: more steps each, so the game keeps its speed) */
+    if (steps > max_steps) steps = max_steps, acc = 0;
     acc -= steps * 50;
     if (acc < 0) acc = 0;
 #else

@@ -2,6 +2,8 @@
  * its neighbours peek in from the sides, and the card cycles through the
  * game's screenshots. The last card opens the settings. */
 #include "ui.h"
+#include "live.h"
+#include "../../games/common/np_text.h"
 
 #define CARD_W 200
 #define CARD_H 152
@@ -37,8 +39,24 @@ static uint32_t item_color(int game, int which) {
   return which == 0 ? g->top : which == 1 ? g->bottom : g->accent;
 }
 
-static const char *item_title(int game) { return game < 0 ? "Settings" : np_games[game].title; }
-static const char *item_tagline(int game) { return game < 0 ? "Reset, uninstall, more" : np_games[game].tagline; }
+static const char *item_title(int game) { return game < 0 ? T("Settings") : np_games[game].title; }
+/* under the name, the tagline; or, when the calculator's software gives apps too little RAM for the
+ * game, how much it lacks */
+static const char *item_tagline(int game) {
+  if (game < 0) return T("Reset, uninstall, more");
+  uint32_t missing = np_game_ram_missing(game);
+  if (!missing) return np_games[game].tagline;
+  static char line[96];
+  char digits[8];
+  int n = 0;
+  for (uint32_t kb = (missing + 1023) / 1024; kb || !n; kb /= 10) digits[n++] = (char)('0' + kb % 10);
+  char *o = line;
+  for (const char *s = T("Needs "); *s;) *o++ = *s++;
+  while (n) *o++ = digits[--n];
+  for (const char *s = T(" KB more memory"); *s;) *o++ = *s++;
+  *o = 0;
+  return line;
+}
 
 static float absf(float v) { return v < 0 ? -v : v; }
 
@@ -96,8 +114,8 @@ static void draw_card(home_t *h, int k, float d) {
     gfx_clip_x1 = SCREEN_W;
   }
   gfx_corners(ix, iy, iiw, iih, ir, frame_color);
-  /* play badge on the selected game */
-  if (k == h->sel && game >= 0 && h->badge > 0 && z == 0) {
+  /* play badge on the selected game (not on one there isn't the RAM for) */
+  if (k == h->sel && game >= 0 && h->badge > 0 && z == 0 && !np_game_ram_missing(game)) {
     float b = ui_ease_out(h->badge);
     int r = (int)(15 * b);
     int bx = x + iw - 14, by = y + ih - 14;
@@ -119,11 +137,15 @@ static void scene(void *ctx) {
   t = NP_CLAMP(t, 0, 256);
   uint32_t top = gfx_lerp888(item_color(h->item[a], 0), item_color(h->item[b], 0), t);
   uint32_t bottom = gfx_lerp888(item_color(h->item[a], 1), item_color(h->item[b], 1), t);
-  gfx_vgrad(0, 0, SCREEN_W, SCREEN_H, top, bottom);
-  /* a faint dot grid gives the background some texture */
-  for (int y = (gfx_y0 + 15) / 16 * 16 + 8 - 16; y < gfx_y1; y += 16) {
-    if (y < gfx_y0) continue;
-    for (int x = 8; x < SCREEN_W; x += 16) gfx_fill_alpha(x, y, 2, 1, 0xFFFF, 22);
+  if (live_active()) { /* a moving background (Backspace), Gabriel's port of NumVisuals' */
+    live_strip();
+  } else {
+    gfx_vgrad(0, 0, SCREEN_W, SCREEN_H, top, bottom);
+    /* a faint dot grid gives the background some texture */
+    for (int y = (gfx_y0 + 15) / 16 * 16 + 8 - 16; y < gfx_y1; y += 16) {
+      if (y < gfx_y0) continue;
+      for (int x = 8; x < SCREEN_W; x += 16) gfx_fill_alpha(x, y, 2, 1, 0xFFFF, 22);
+    }
   }
 
   float z = ui_ease_in_out(h->zoom);
@@ -186,8 +208,15 @@ static int build_items(home_t *h) {
   return h->n;
 }
 
+static bool bg_loaded;
+
 int np_home(int *selected, bool returning) {
   ui_init();
+  if (!bg_loaded) { /* once per run: the background chosen last time */
+    bg_loaded = true;
+    int m;
+    if (np_bg_load(&m)) live_set(m);
+  }
   home_t h = {0};
   build_items(&h);
   /* the game played last, or else the first game there is: never Settings,
@@ -224,7 +253,12 @@ int np_home(int *selected, bool returning) {
         h.shot_time = 0;
         h.badge = 0;
       }
-      if (pressed & K_OK) result = h.item[h.sel];
+      if ((pressed & K_OK) && (h.item[h.sel] < 0 || !np_game_ram_missing(h.item[h.sel]))) result = h.item[h.sel];
+      if (pressed & K_BACKSPACE) { /* the next background, then none */
+        live_next();
+        np_bg_save(live_mode());
+        dirty = true;
+      }
       if (pressed & (K_HOME | K_BACK)) return -2;
     }
     /* motion */
@@ -277,7 +311,9 @@ int np_home(int *selected, bool returning) {
         }
       }
     }
+    if (live_active()) dirty = true; /* the background moves: every frame */
     if (dirty) {
+      live_frame(now);
       ui_frame(scene, &h);
       dirty = bar_dirty = false;
     } else if (bar_dirty) {

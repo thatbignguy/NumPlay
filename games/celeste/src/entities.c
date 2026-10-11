@@ -196,6 +196,7 @@ typedef struct {
   uint8_t dir, n, cassette, on;   /* cassette: on a cassette block (its colors, enabled or disabled: cassette_tint) */
   uint16_t tex;
   int16_t gox, goy;               /* and its group's origin (SetOrigins), from the spikes */
+  uint8_t tentacles, half;        /* the "tentacles" type: n tentacles of 16 pixels, and half: one more at the end */
 } Spikes;
 static void spikes_on_player(Ent *e, Player *p) {
   Spikes *s = ST(e, Spikes);
@@ -218,8 +219,43 @@ static bool spikes_riding(Ent *e, Ent *p) {
   }
   return collide_ent_at(e, e->x + dx, e->y + dy, p) && !collide_ent_at(e, e->x, e->y, p);
 }
+/* Spikes.AddTentacle: the "tentacles" type (the Mirror Temple's other side) draws a tentacle sprite each 16 pixels, and
+ * one more at the end of an odd number of 8; each plays one of the bank's three loops from its own frame, turned to face
+ * out of the wall, mirrored or not (picked at random in the game: here from where it is, so nothing is kept) */
+static uint32_t tentacle_hash(uint32_t x) {
+  x ^= x >> 16, x *= 0x7FEB352Du, x ^= x >> 15, x *= 0x846CA68Bu, x ^= x >> 16;
+  return x;
+}
+static void tentacles_render(Ent *e, Spikes *s) {
+  static const float rot[] = {[DIR_UP] = 0, [DIR_DOWN] = PI_F, [DIR_LEFT] = PI_F * 1.5f, [DIR_RIGHT] = PI_F * 0.5f};
+  for (int k = 0; k < s->n + s->half; k++) {
+    float i = k < s->n ? (float)k : s->n - 0.5f;
+    uint32_t h = tentacle_hash((uint32_t)(int)e->x * 73856093u ^ (uint32_t)(int)e->y * 19349663u ^ (uint32_t)k * 83492791u);
+    Sprite sp;
+    spr_init(&sp, SB_tentacles);
+    spr_play(&sp, A_tentacles_0 + (int)(h % 3), true);
+    int nf = spr_frames(&sp);
+    if (nf > 0) spr_play_offset(&sp, sp.anim, (int)((h >> 8) % (uint32_t)nf + (uint32_t)(g_level.time_active / 0.08f)) % nf);
+    sp.flipx = (h >> 4) & 1;   /* Scale.X = -1 or 1 */
+    sp.rot = rot[s->dir];
+    if (s->cassette) sp.tint = cassette_tint(ent_platform(e), s->on);
+    float x = e->x, y = e->y;
+    switch (s->dir) {
+      case DIR_UP: x += (i + .5f) * 16, y += 1; break;
+      case DIR_DOWN: x += (i + .5f) * 16, y -= 1; break;
+      case DIR_RIGHT: y += (i + .5f) * 16, x -= 1; break;
+      case DIR_LEFT: y += (i + .5f) * 16, x += 1; break;
+    }
+    spr_draw(&sp, x + e->shakex, y + e->shakey);
+  }
+}
+
 static void spikes_render(Ent *e) {
   Spikes *s = ST(e, Spikes);
+  if (s->tentacles) {
+    tentacles_render(e, s);
+    return;
+  }
   Tex t;
   if (!tex_get(s->tex, &t)) return;
   for (int j = 0; j < s->n; j++) {
@@ -259,6 +295,7 @@ static const EntClass SPIKES = {.size = sizeof(Spikes), .name = "spikes", .rende
                                 .kind = KIND_PCOLLIDE | KIND_STATICMOVER | KIND_SPIKES,
                                 .more = &(const EntMore){.sm_riding = spikes_riding,
                                                          .sm_shake = spikes_sm_shake, .sm_enable = spikes_sm_enable}};
+bool spikes_ledge(const Ent *e) { return e->cls == &SPIKES && ST(e, Spikes)->dir != DIR_DOWN; }
 
 static void new_spikes(const EData *d, int dir) {
   int size;
@@ -282,6 +319,10 @@ static void new_spikes(const EData *d, int dir) {
   static const char *names[] = {"default", "outline", "cliffside", "reflection"};
   static const char *dirs[] = {"up", "down", "left", "right"};
   const char *t = (*type && strcmp(type, "default")) ? type : names[area_spike()];
+  if (!strcmp(t, "tentacles")) {   /* (Spikes.Added) */
+    s->tentacles = 1, s->n = (uint8_t)(size / 16), s->half = (size / 8) % 2;
+    return;
+  }
   char path[48], tmp[24];
   path2(tmp, t, "_", -1);
   path2(path, "danger/spikes/", path2(tmp + 12 - 12, tmp, dirs[dir], -1), 0);
@@ -1155,16 +1196,101 @@ static void beam_update(Ent *e) {
   }
   b->alpha = approach(b->alpha, target, DT);
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC push_options
+#pragma GCC optimize("O2")   /* drawn every frame, over the whole view */
+#endif
+/* add565 (gfx.c): a saturating add */
+static inline __attribute__((always_inline)) uint16_t beam_add(uint16_t d, uint16_t s) {
+  uint32_t x = (d | (uint32_t)d << 16) & 0x07E0F81Fu, y = (s | (uint32_t)s << 16) & 0x07E0F81Fu;
+  uint32_t t = x + y, ov = t & 0x08010020u;
+  uint32_t lo = ov & 0x00010020u, hi = ov & 0x08000000u;
+  t |= (lo - (lo >> 5)) | (hi - (hi >> 6));
+  t &= 0x07E0F81Fu;
+  return (uint16_t)(t | t >> 16);
+}
+/* stripes of util/lightbeam stretched along the beam, every 4 px across it, drawn by one layer, not one affine blit
+ * each: those blits each worked out the texture's whole palette again for their alpha, and each pixel's place with
+ * floats (the Golden Ridge's big beam: 40 stripes over the whole view, the frame took twice as long). Turned a
+ * quarter turn at a time (every map's beams), a stripe is texels along one axis and 4 px across the other: the same
+ * pixels, its texels' colors faded as the blits' palettes (GF_ADD: the premultiplied color tinted, times the alpha,
+ * added). Other turns: the blits, from here. */
+static void beam_layer(uint16_t *strip, int sy0, int sy1, void *ctx) {
+  Ent *e = ctx;
+  Beam *b = ST(e, Beam);
+  Tex t;
+  if (!tex_get(T_util_lightbeam, &t)) return;
+  const float sxs = b->h / 80.f, sys = 4, oy = 0.5f, rot = b->rot + PI_F / 2;
+  int q = (int)floorf(rot / (PI_F / 2) + 0.5f);
+  bool axis = fabsf(rot - q * (PI_F / 2)) < 1e-3f && t.h == 1 && t.w <= 256 && t.scale <= 1 && sxs > 0;
+  q &= 3;
+  uint8_t idx[256];
+  int n;
+  const uint16_t *pal = pal_colors(t.pal, &n);
+  if (axis) tex_row(&t, 0, idx);
+  /* texture x (u) runs along view y for odd quarter turns, along x for even ones, its sign sp; texture y (v) across;
+   * pixel (along p, across c) at p * pstride + c * cstride in the strip, rows from sy0 */
+  bool along_y = q & 1;
+  float sp = q <= 1 ? 1.f : -1.f, sc = q == 0 || q == 3 ? 1.f : -1.f, isx = 1 / sxs, isy = 1 / sys;
+  int pstride = along_y ? VIEW_W : 1, cstride = along_y ? 1 : VIEW_W;
+  int pclip_lo = along_y ? sy0 : 0, pclip_hi = along_y ? sy1 : VIEW_W, cclip_lo = along_y ? 0 : sy0, cclip_hi = along_y ? VIEW_W : sy1;
+  float cr = cosf(b->rot), sr = sinf(b->rot);
+  /* how far from the origin the texels can be along, and the row across (a trimmed texture's offsets too) */
+  float reach_p = sxs * (fabsf((float)t.ox) + t.w + 1) + 1, reach_c = sys * (fabsf((float)t.oy) + 2) + 2;
+  for (float x = 0; x < b->w; x += 4) {
+    /* gfx_tex_ex's place (e + (cos, sin)(rot) * (x - w / 2)) */
+    float px = e->x + cr * (x - b->w / 2), py = e->y + sr * (x - b->w / 2);
+    float apx = floorf(px + 0.5f) - g_camx, apy = floorf(py + 0.5f) - g_camy;
+    float a0 = along_y ? apy : apx, c0 = along_y ? apx : apy;   /* the origin along and across */
+    /* along: the texels (u = floor(a * isx) - ox0, from 0 to w); across: the 4 px whose v is the texture's row
+     * (floor(c * isy + oy) - oy0 == 0) */
+    int p_lo = (int)floorf(a0 - reach_p), p_hi = (int)ceilf(a0 + reach_p);
+    int c_lo = (int)floorf(c0 - reach_c), c_hi = (int)ceilf(c0 + reach_c);
+    if (p_lo < pclip_lo) p_lo = pclip_lo;
+    if (p_hi > pclip_hi) p_hi = pclip_hi;
+    if (c_lo < cclip_lo) c_lo = cclip_lo;
+    if (c_hi > cclip_hi) c_hi = cclip_hi;
+    if (axis && (p_lo >= p_hi || c_lo >= c_hi)) continue;
+    uint8_t al = (uint8_t)(b->alpha * 0.5f * (sinf(b->t * 2 + x * 0.2f) * 0.25f + 0.75f) * 120);
+    if (!al) continue;
+    if (!axis) {
+      blit_tex_ex(strip, sy0, sy1, T_util_lightbeam, px, py, 0, oy, sxs, sys, rot, 0xFFF7, al, GF_ADD);
+      continue;
+    }
+    int ga = al + (al >> 7), ca = c_hi, cb = c_lo;
+    for (int c = c_lo; c < c_hi; c++)
+      if ((int)floorf(sc * (c + 0.5f - c0) * isy + oy) - t.oy == 0) ca = c < ca ? c : ca, cb = c + 1;
+    if (ca >= cb) continue;
+    int last = -1;
+    uint16_t col = 0;
+    for (int p = p_lo; p < p_hi; p++) {
+      int u = (int)floorf(sp * (p + 0.5f - a0) * isx) - t.ox;
+      if ((unsigned)u >= t.w || !idx[u]) continue;
+      if (idx[u] != last) {   /* prep's tables: tinted by 0xFFF7 (r, g as they are, b * 24 / 32), faded by ga */
+        uint16_t v = idx[u] <= n ? pal[idx[u] - 1] : 0;
+        last = idx[u];
+        col = (uint16_t)(((v >> 11) * ga) >> 8 << 11 | (((v >> 5) & 63) * ga) >> 8 << 5 | ((((v & 31) * 24) >> 5) * ga) >> 8);
+      }
+      uint16_t *d = strip + (p * pstride + ca * cstride - sy0 * VIEW_W);
+      for (int c = ca; c < cb; c++, d += cstride) *d = beam_add(*d, col);
+    }
+  }
+}
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC pop_options
+#endif
 static void beam_render(Ent *e) {
   Beam *b = ST(e, Beam);
-  float a = b->alpha * 0.5f;
-  /* stripes of util/lightbeam stretched along the beam */
-  for (float x = 0; x < b->w; x += 4) {
-    float k = sinf(b->t * 2 + x * 0.2f) * 0.25f + 0.75f;
-    float px = e->x + cosf(b->rot + PI_F / 2) * 0 + cosf(b->rot) * (x - b->w / 2);
-    float py = e->y + sinf(b->rot) * (x - b->w / 2);
-    gfx_tex_ex(T_util_lightbeam, px, py, 0, 0.5f, b->h / 80.f, 4, b->rot + PI_F / 2, 0xFFF7, (uint8_t)(a * k * 120), GF_ADD);
+  Tex t;
+  if (!tex_get(T_util_lightbeam, &t)) return;   /* (loaded now: nothing loads while strips are drawn) */
+  /* the view rows the beam can cross: its corners, a stripe's 4 px around, and room for the camera's shake */
+  float c = cosf(b->rot), s = sinf(b->rot), lo = 1e9f, hi = -1e9f;
+  for (int i = 0; i < 4; i++) {
+    float across = i & 1 ? b->w / 2 + 4 : -b->w / 2 - 4, along = i & 2 ? b->h + 4 : -4;
+    float y = e->y + s * across + c * along;
+    lo = fminf(lo, y), hi = fmaxf(hi, y);
   }
+  gfx_custom(beam_layer, e, (int)floorf(lo - g_level.cam.y) - 8, (int)ceilf(hi - g_level.cam.y) + 8);
 }
 static const EntClass BEAM = {.size = sizeof(Beam), .name = "lightbeam", .update = beam_update, .render = beam_render};
 

@@ -1,3 +1,15 @@
+## 1.4.1
+**The world generator's summary cache left the RAM it used to sit in for the stack, so NumBlocks needs 13 KB less of it and fits where it did not**
+- The summary cache (`sumc`, 25 entries of a chunk's column summaries) was a `static SumEntry[NSUM]`
+  in `.bss`, 13 KB of the app's RAM. It is a pointer now, pointed at a buffer on `main`'s stack
+  before `plat_begin()` (`gen_set_cache`, `games/numblocks/src/main.c`), and the calculator is known
+  to give apps 32 KB of stack apart from their RAM.
+- NumBlocks' RAM went from 133340 to 120144 bytes, under the 133652 bytes custom builds of Epsilon
+  25.2 give apps. On the calculator `sumc` is that stack buffer; on the host build it stays a static
+  array (`#ifdef HOST`), so tests and screenshots are unchanged — the same frames, the same worlds.
+- Ported from upstream commit `d5228d5`, which did the same there. The rest of that commit (a strip's
+  colours and depths on `render_frame`'s stack) was already here in 1.4.0.
+
 ## 1.4.0
 **A void opens under the world — fall out of it and it kills you in Survival and Creative alike, a spectator flies down into it unharmed — and the game mode switcher opens on the next mode round its cycle**
 - There is a void under the world now, as in Minecraft under its lowest block: what was solid

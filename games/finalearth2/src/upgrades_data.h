@@ -1,0 +1,139 @@
+/* The Final Earth 2: upgrade numbers and the classes' lists (made by tools/gen_upgrades.py). */
+#ifndef FE_UPGRADES_DATA_H
+#define FE_UPGRADES_DATA_H
+enum {
+  U_Flowers = 0,
+  U_MachinePartsFactoryEfficiency = 1,
+  U_StoneUsingFactoryDisabled = 2,
+  U_RefinedStoneUsingFactoryDisabled = 3,
+  U_MachinePartsFactoryTurbo = 4,
+  U_CensusData = 5,
+  U_NightMayor = 6,
+  U_RefinedMetalsFactoryHack = 7,
+  U_FactoryWorking = 8,
+  U_LabWorking = 9,
+  U_LabDisabled = 10,
+  U_FarmingResearch = 11,
+  U_TreePlantationResearch = 12,
+  U_BetterPickaxes = 13,
+  U_AIMining = 14,
+  U_DieShrink = 15,
+  U_BetterLightShow = 16,
+  U_MedicalEducation = 17,
+  U_AIAssistedDiagnosis = 18,
+  U_StoneTeleporterRemote = 19,
+  U_BiggerTV = 20,
+  U_ModernHomePlant = 21,
+  U_HeatedBed = 22,
+  U_SmartChairs = 23,
+  U_ModernConveniences = 24,
+  U_WorkshopKnowledge = 25,
+  U_WorkshopMachineParts = 26,
+  U_StarDatabase = 27,
+  U_SofterBeds = 28,
+  U_SmartLights = 29,
+  U_LivingComputer = 30,
+  U_BetterTools = 31,
+  U_MisdirectorNormal = 32,
+  U_MisdirectorAlways = 33,
+  U_MisdirectorMostlyDisabled = 34,
+  U_MisdirectorDisabled = 35,
+  U_IndoorPond = 36,
+  U_CHProduceStone = 37,
+  U_CHProduceWood = 38,
+  U_CHProduceFood = 39,
+  U_PickaxeTech = 40,
+  U_FossilScanner = 41,
+  U_UltimateScrewdriver = 42,
+  U_AutomaticWaterManagement = 43,
+  U_CulinaryHerbs = 44,
+  U_MedicalHerbs = 45,
+  U_ComfortableCouch = 46,
+  U_SmartSpeaker = 47,
+  U_SoundProofing = 48,
+  U_RefinedMetalFactoryEfficiency = 49,
+  U_TheMachineUpgrade = 50,
+  U_UniverseMapping = 51,
+  U_OptimizedChipLayouts = 52,
+  U_MedicalMachineLearning = 53,
+  U_WoodenLiving = 54,
+  U_SpaciousLiving = 55,
+  U_SlimyLiving = 56,
+  U_SecretiveLiving = 57,
+  U_MechanicalLiving = 58,
+  U_SuperSpaciousLiving = 59,
+  U_BirthControl = 60,
+  U_BuildingRecycling = 61,
+  U_BuildingRecycling2 = 62,
+  U_BuildingRecycling3 = 63,
+  U_ChipBinning = 64,
+  U_EcoFarmUpgrade = 65,
+  U_GeneEditing = 66,
+  U_LibraryAllowDuplicates = 67,
+  U_ConnectedMachines = 68,
+  U_FoodRationing = 69,
+  U_SmallerClasses = 70,
+  U_MandatoryOvertime = 71,
+  U_COUNT = 72
+};
+
+/* a class's upgrade's bit in Perm.upgrades, and its modes' numbers (Perm.mode) */
+#define UB_NormalHouse_Flowers 0
+#define UB_AlienHouse_LivingComputer 0
+#define UB_ModernRusticHome_ModernConveniences 0
+#define UB_ComfortableHouse_ComfortableCouch 0
+#define UB_ComfortableHouse_SmartSpeaker 1
+#define UB_MechanicalHouse_HeatedBed 0
+#define UB_SpaciousHouse_SmartLights 0
+#define UB_SpaciousHouse_SofterBeds 1
+#define UB_CuttingEdgeHome_BiggerTV 0
+#define UB_CuttingEdgeHome_ModernHomePlant 1
+#define UB_CuttingEdgeHome_SmartChairs 2
+#define UB_Loft_SoundProofing 0
+#define UB_TinkerersHome_BetterTools 0
+#define UB_FarmHouse_IndoorPond 0
+#define MODE_FarmHouse_CHProduceFood 0
+#define MODE_FarmHouse_CHProduceStone 1
+#define MODE_FarmHouse_CHProduceWood 2
+#define UB_StoneMine_BetterPickaxes 0
+#define UB_StoneMine_AIMining 1
+#define UB_MachinePartsFactory_MachinePartsFactoryEfficiency 0
+#define MODE_MachinePartsFactory_FactoryWorking 0
+#define MODE_MachinePartsFactory_MachinePartsFactoryTurbo 1
+#define MODE_MachinePartsFactory_StoneUsingFactoryDisabled 2
+#define UB_Laboratory_FarmingResearch 0
+#define UB_Laboratory_TreePlantationResearch 1
+#define UB_TreePlantation_AutomaticWaterManagement 0
+#define UB_StoneTeleporter_StoneTeleporterRemote 0
+#define UB_RefinedMetalFactory_RefinedMetalFactoryEfficiency 0
+#define MODE_RefinedMetalFactory_FactoryWorking 0
+#define MODE_RefinedMetalFactory_RefinedMetalsFactoryHack 1
+#define MODE_RefinedMetalFactory_StoneUsingFactoryDisabled 2
+#define UB_ComputerChipFactory_DieShrink 0
+#define MODE_ComputerChipFactory_FactoryWorking 0
+#define MODE_ComputerChipFactory_RefinedStoneUsingFactoryDisabled 1
+#define UB_ExperimentationLab_UltimateScrewdriver 0
+#define MODE_ExperimentationLab_LabWorking 0
+#define MODE_ExperimentationLab_LabDisabled 1
+#define MODE_HerbGarden_CulinaryHerbs 0
+#define MODE_HerbGarden_MedicalHerbs 1
+#define UB_MedicalClinic_MedicalEducation 0
+#define UB_MedicalClinic_AIAssistedDiagnosis 1
+#define UB_FactoryPub_RefinedMetalFactoryEfficiency 0
+#define MODE_FactoryPub_FactoryWorking 0
+#define MODE_FactoryPub_RefinedMetalsFactoryHack 1
+#define MODE_FactoryPub_StoneUsingFactoryDisabled 2
+#define UB_NightClub_BetterLightShow 0
+#define MODE_Workshop_WorkshopMachineParts 0
+#define MODE_Workshop_WorkshopKnowledge 1
+#define UB_Observatory_StarDatabase 0
+#define MODE_CityHall_CensusData 0
+#define MODE_CityHall_NightMayor 1
+#define UB_StoneResearchCenter_PickaxeTech 0
+#define UB_StoneResearchCenter_FossilScanner 1
+#define MODE_Misdirector_MisdirectorNormal 0
+#define MODE_Misdirector_MisdirectorAlways 1
+#define MODE_Misdirector_MisdirectorMostlyDisabled 2
+#define MODE_Misdirector_MisdirectorDisabled 3
+#define UB_TheMachine_TheMachineUpgrade 0
+#endif
