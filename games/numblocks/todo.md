@@ -11,6 +11,111 @@ what "done" means. Order matters only where noted.
 - [x] **[7] A brightness setting** — 0 (Moody) to 15 (Bright) as a slider in
       the graphics settings: 0 keeps the pitch-black caves, 15 lets you see in
       the dark. (In 1.3.14.)
+- [ ] **Make skeletons look at you when they are shooting at you**
+- [ ] **Fix biome: unkown glitch**
+- [ ] **Make default brightness 6**
+- [ ] **Fix generation/world bugs** — sand and gravel hang in the air after
+      generation until a block update makes them fall; water and lava sit still
+      until a block update makes them flow; and any other terrain/generation
+      issues found along the way.
+
+---
+
+## Fix generation/world bugs
+
+**What.** Three related problems, all stemming from the same root cause: the
+world generator places blocks but never triggers the reactions that should
+follow.
+
+1. **Sand and gravel hang in the air.** After a chunk is generated, sand and
+   gravel blocks float unsupported until something else changes a nearby block
+   (a block break, a placement, etc.). Only then does `neighbours_changed()`
+   notice and make them fall. This is most visible on beaches, in caves, and
+   under overhangs.
+
+2. **Water and lava do not flow.** Liquids placed during generation (in
+   caves, ravines, lakes, springs) sit frozen until a block update triggers
+   `fluid_schedule()` via `neighbours_changed()`. They should start flowing
+   on their own once the chunk is generated.
+
+3. **Other terrain/generation issues.** Any additional bugs found while
+   investigating the above — e.g. incorrect block placement during
+   generation, missing decorators, or lighting issues.
+
+**Where.**
+
+- `src/player.c:293-309` — `neighbours_changed()` is the function that
+  triggers both sand falling and liquid scheduling. It checks the 6
+  neighbours of a changed block: if a liquid neighbour exists, it calls
+  `fluid_schedule()`; if a sand/gravel neighbour is unsupported, it drops it.
+
+- `src/tick.c:24-32` — `fluid_schedule()` adds a liquid block to the
+  `pend[]` array (max 160 entries). The liquid updates on its scheduled tick
+  via `fluid_update()`.
+
+- `src/player.c:300-307` — sand/gravel falling logic inside
+  `neighbours_changed()`: checks if the block below is `replaceable()`, then
+  drops the sand straight down to the lowest available spot.
+
+- `src/world.c:153-323` — chunk generation via `fill_chunk()`. This is where
+  terrain is placed. After generation, no `neighbours_changed()` call is
+  made, so sand and liquids never get their initial update.
+
+- `src/gen.c` — the generator itself. Springs are placed at line 5056
+  (`spring()`), which places water/lava source blocks and flowing blocks
+  but does not schedule them.
+
+**Notes / the work.**
+
+- **Sand falling.** The fix is to call `neighbours_changed()` (or a lighter
+  version) on sand/gravel blocks after they are placed during generation.
+  However, doing this for every sand block in a chunk would be expensive.
+  Options:
+  - After generating a chunk, scan it once for unsupported sand/gravel and
+    drop them in a single pass. This is O(n) per chunk but only runs once
+    at generation time.
+  - Alternatively, defer: when a chunk is first loaded/rendered, run a
+    single pass to fix any floating sand. This spreads the cost across
+    frames.
+
+- **Liquid flowing.** Same approach: after generating a chunk, call
+  `fluid_schedule()` on every liquid block (or at least every source block
+  and every block with air below it). The `pend[]` array already caps at
+  160, so excess liquids will simply be skipped until their neighbours
+  change — acceptable.
+
+- **Keeping RAM/CPU low.** The key insight from the user's note is that
+  caves should get their block update "when the player renders it in."
+  This suggests a lazy approach: rather than fixing everything at
+  generation time, mark chunks as "needs update" and process them when
+  they enter the render distance. This avoids the cost of scanning every
+  chunk at generation time and only pays for chunks the player actually
+  sees.
+
+  Implementation idea: when a chunk is generated, set a flag. When the
+  chunk is first rendered (in `fill_chunk()` or the render loop), run a
+  single pass: for each sand/gravel with air below, drop it; for each
+  liquid with air below or beside it, call `fluid_schedule()`. Clear the
+  flag. This is O(n) but only once per chunk, and only for visible chunks.
+
+- **Other issues.** While investigating, check:
+  - Are there blocks that should be decorators (flowers, grass, trees)
+    that are not being placed?
+  - Are springs creating infinite water sources correctly?
+  - Do cave liquids interact correctly with each other (lava + water =
+    obsidian/cobblestone)?
+  - Are there any blocks that should fall but are not sand/gravel?
+
+**Done when.**
+
+- Sand and gravel do not float after generation — they either fall during
+  generation or when the chunk is first rendered, without a visible pause.
+- Water and lava flow naturally after generation without waiting for a
+  separate block update.
+- The fix does not cause noticeable frame drops (amortized or lazy).
+- `make test` passes, `make build && make check` still fits in budget.
+- `./build/play --frames …` frames show sand fallen and liquids flowing
+  in newly generated chunks without player interaction.
 
 ---
 

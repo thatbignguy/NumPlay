@@ -3,7 +3,7 @@
 
     python3 tools/pack.py CLIENT_JAR
     python3 tools/pack.py --modern MODERN_TEX_DIR CLIENT_JAR
-    python3 tools/pack.py [--modern MODERN_TEX_DIR] CLIENT_JAR --eggs EGG_TEX_DIR
+    python3 tools/pack.py [--modern MODERN_TEX_DIR] CLIENT_JAR [--eggs EXTRA_TEX_DIR]
 
 CLIENT_JAR is the official 1.8.8 client (client.jar, from Mojang's launcher
 servers); only its pictures are read. With --modern, block/item/entity/font/
@@ -12,7 +12,9 @@ environment/colormap pictures come from an extracted modern client instead
 what has no modern equivalent (bed block textures, most GUI/HUD sprites).
 With --eggs, an extra modern root is looked in for what the modern set has
 none of neither: the per-mob spawn eggs (1.21.5's <mob>_spawn_egg.png, which
-a 1.20.1 client has none of).
+a 1.20.1 client has none of). Nothing passes it by default (no such root is
+kept in this repository): run `make data` with EGG_TEX set to a directory
+holding the per-mob eggs to pack those pictures.
 Every texture is 16 x 16 with its own
 palette of up to 16 colours (4 bits a texel): tinted ones (grass, leaves,
 water) keep their grey levels, and the game multiplies them by the biome's

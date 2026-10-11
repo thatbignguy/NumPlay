@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NumBlocks Agent Controller</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">numblocks&nbsp;<span>agentctl</span></div>
+  <div id="status-pills" class="pills"></div>
+  <div class="spacer"></div>
+  <label class="auto-merge" title="Automatically start the merger when an agent finishes">
+    <input type="checkbox" id="auto-merge"> auto-merge
+  </label>
+  <button id="new-task" class="btn primary" title="Start a new isolated agent">+ New task</button>
+</header>
+
+<div id="layout">
+  <aside id="sidebar">
+    <div id="task-list"></div>
+    <div id="sidebar-empty">no tasks yet</div>
+  </aside>
+
+  <main id="main">
+    <div id="empty-state">
+      <h1>NumBlocks Agent Controller</h1>
+      <p>Every task gets its own copy of <code>games/numblocks</code> in
+         <code>games/numblocks-agents/</code>. The agent works only there; when it
+         finishes, a merger agent folds the changes into the main tree, verifies
+         the build, bumps the version and commits.</p>
+      <p><strong>+ New task</strong> to start one.</p>
+    </div>
+
+    <section id="detail" hidden>
+      <div id="detail-head">
+        <div class="detail-title">
+          <span id="detail-id" class="mono"></span>
+          <span id="detail-status" class="chip"></span>
+          <span id="detail-busy" class="chip subtle" hidden>busy</span>
+        </div>
+        <div id="detail-task"></div>
+        <div id="detail-meta" class="muted mono"></div>
+      </div>
+
+      <div id="actions">
+        <form id="message-form">
+          <input id="message-input" type="text" placeholder="Send a follow-up message to the agent…" autocomplete="off">
+          <button class="btn" type="submit">Send</button>
+        </form>
+        <div class="action-buttons">
+          <button id="btn-merge" class="btn">Merge now</button>
+          <button id="btn-cancel" class="btn danger">Cancel</button>
+          <button id="btn-delete" class="btn danger subtle-btn">Delete</button>
+        </div>
+      </div>
+
+      <nav id="tabs">
+        <button data-tab="log" class="active">Log</button>
+        <button data-tab="changes">Changes</button>
+        <button data-tab="shots">Shots</button>
+        <button data-tab="result">Result</button>
+        <button data-tab="merge">Merge</button>
+      </nav>
+
+      <div id="panels">
+        <div data-panel="log" class="panel">
+          <div class="panel-bar">
+            <label><input type="checkbox" id="log-autoscroll" checked> follow</label>
+            <label>view
+              <select id="log-kind">
+                <option value="agent">agent</option>
+                <option value="merger">merger</option>
+              </select>
+            </label>
+            <label><input type="checkbox" id="log-raw"> raw json</label>
+          </div>
+          <pre id="log" class="mono"></pre>
+        </div>
+        <div data-panel="changes" class="panel" hidden><pre id="diff" class="mono"></pre></div>
+        <div data-panel="shots" class="panel" hidden><div id="shots" class="shots"></div></div>
+        <div data-panel="result" class="panel" hidden><pre id="result" class="doc"></pre></div>
+        <div data-panel="merge" class="panel" hidden><pre id="merge-doc" class="doc"></pre></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="modal-backdrop" hidden>
+  <form id="spawn-form">
+    <h2>New agent task</h2>
+    <p class="muted">The agent gets a fresh copy of games/numblocks and works only
+      there. It never touches the main tree; the merger does that when it finishes.</p>
+    <textarea id="spawn-task" rows="6" placeholder="Make rain darken the sky at night…" required></textarea>
+    <label class="field">model
+      <select id="spawn-model"></select>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn" id="spawn-cancel">Cancel</button>
+      <button type="submit" class="btn primary">Start agent</button>
+    </div>
+  </form>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
