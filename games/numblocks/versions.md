@@ -1,3 +1,24 @@
+## 1.3.17
+**Dungeons are found two to three times as often as 1.3.16's, and a dungeon is the same whichever way the world is walked**
+- The dungeon tries of a population that passed were remembered in eight bits, so the
+  ninth and later ones were forgotten: a population replayed by the chunks it writes
+  into stopped making their dungeons, and the world came to depend on the order its
+  chunks were generated in (the same place held different dungeons, and different
+  blocks, walked into from one side than from the other). They are kept in the
+  thirty-two bits their number asks for, and the memo says so with a static assert,
+  so the tries cannot outgrow it again.
+- Thirty-two tries a chunk where 1.3.16 made twenty-four (Minecraft makes eight): two
+  to three times as many dungeons as 1.3.16 gave, four or so times what the game had
+  before them. A monster spawner is the one thing a dungeon has that nothing else
+  makes, and they were too rare to find.
+- Two tests that leaned on the world: the hall of the cow that watches the player
+  stands in the dark with monsters about it, and a creeper's blast could take the
+  floor from under the cow (the test is about the watching, so the world's own
+  spawning is off while it runs); and the cache that slides up a step at a time is
+  now compared with one made at the destination where the two windows overlap, as
+  the climb flies and arriving at once does not yet know to, so they can come to rest
+  in different bands without holding anything different.
+
 ## 1.3.16
 **Dungeons are found twice as often, and a monster spawner's mobs come out about three times as fast**
 - WorldGenDungeons is tried eight times a chunk in Minecraft, and eight times a chunk here;
