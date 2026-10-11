@@ -26,6 +26,21 @@
   <a href="#how-to-install"><b>How to install</b></a> &nbsp;·&nbsp; <a href="docs/play.md"><b>How to play</b></a> &nbsp;·&nbsp; <a href="#on-a-real-calculator"><b>See it on a real calculator</b></a>
 </p>
 
+## Recommended apps
+
+Two apps worth starting with: the whole collection, and the NumBlocks build that hides.
+
+<table>
+  <tr>
+    <td width="120" align="center"><img src="docs/media/icon-matrices.png" width="64" alt="A Matrices icon in the calculator's style"></td>
+    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a></b><br>All games inside NumPlay except NumBlocks, disguised as a math app called <b>Matrices</b>, sitting next to the calculator's own apps.</td>
+  </tr>
+  <tr>
+    <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
+    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa">numblocks-interest.nwa</a></b><br>Only NumBlocks: mine, craft, survive — hidden inside the <b>Interest</b> app, so it opens as Interest and NumBlocks is in there. Too big to share the calculator with NumPlay: install it on its own.</td>
+  </tr>
+</table>
+
 <p align="center">
   <img src="docs/media/launcher.gif" width="640" alt="The NumPlay launcher on a NumWorks calculator, scrolling through its games">
 </p>
