@@ -3512,7 +3512,8 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
  * per population and a known failure only makes its draws. */
 typedef struct {
     int px, pz;
-    uint8_t valid, lakes, dungeons; /* bit set: lake (0 water, 1 lava) placed, dungeon attempt passed */
+    uint8_t valid, lakes; /* bit set: lake (0 water, 1 lava) placed */
+    uint32_t dungeons;    /* bit set: dungeon attempt passed (a bit for each of the twenty-four made) */
 } PopMemo;
 #define NPMEMO 16
 static PopMemo pmemo[NPMEMO];
@@ -5321,7 +5322,11 @@ static void populate(int px, int pz, int biome) {
         int x = PK + RI(16) + 8, y = RI(RI(248) + 8), z = PL + RI(16) + 8;
         if (y < SEA || RI(10) == 0) lake(B_LAVA, x, y, z);
     }
-    for (int i = 0; i < 8; i++) {
+    /* WorldGenDungeons is tried eight times per chunk in Minecraft; twenty-four here, as a
+     * dungeon is the one place a monster spawner comes from and they were too rare to find.
+     * Twice as many tries does not make twice as many dungeons: the ones of a population
+     * that pass dig the ground out from under the later tries' floor and ceiling test */
+    for (int i = 0; i < 24; i++) {
         int x = PK + RI(16) + 8, y = RI(256), z = PL + RI(16) + 8;
         dung_idx = i;
         dungeon(x, y, z);

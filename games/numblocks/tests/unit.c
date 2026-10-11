@@ -1206,6 +1206,45 @@ int main(void) {
     delete_world(2);
   }
   {
+    /* a dungeon's spawner as world generation leaves it: placed, and set to the mob its own
+     * draw made of it (spawners_made, WorldGenDungeons.a). Its first mob is out well within
+     * a minute, and about three to the minute after it, where the one try in sixteen a
+     * second it had made the first take a minute or two to come */
+    extern uint32_t game_time;
+    new_world(2, 5, 0, false, WT_DEFAULT, "DungeonSpawner", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int y = (int)floorf(pl.y), px = (int)floorf(pl.x), pz = (int)floorf(pl.z);
+    for (int z = pz - 4; z <= pz + 8; z++)
+      for (int x = px - 4; x <= px + 8; x++) {
+        world_set(x, y - 1, z, B_GRASS);
+        for (int k = 0; k < 6; k++) world_set(x, y + k, z, B_AIR);
+      }
+    int sx = px + 3, sy = y + 4, sz = pz + 3;
+    world_set(sx, sy, sz, B_MOB_SPAWNER);
+    spawners_clear();
+    spawners_made(sx, sy, sz, 3);   /* a spider: the draw that makes one of the four */
+    opt.difficulty = 2;             /* (spawners make monsters only on a world with monsters) */
+    memset(ents, 0, sizeof ents);
+    game_time = 6000;   /* (daylight on the grass: only a spawner's monsters, natural ones want the dark) */
+    int events = 0, prev = 0, first_at = -1;
+    for (int t = 0; t < 1200; t++) {
+      pl.health = 20, pl.dead = false, ents_tick(), game_time++;
+      int n = 0;
+      for (int i = 0; i < N_ENT; i++)
+        if (ents[i].type == E_SPIDER && fabsf(ents[i].x - (sx + 0.5f)) < 8 && fabsf(ents[i].z - (sz + 0.5f)) < 8) n++;
+      if (n > prev) {
+        events += n - prev;
+        if (first_at < 0) first_at = t;
+      }
+      prev = n;
+    }
+    CHECK(first_at >= 0 && first_at < 900);   /* the first within three quarters of a minute of ticks */
+    CHECK(events >= 10);                      /* and the ones after it: ten in a minute, where the one
+                                               * try in sixteen a second it had gave six */
+    delete_world(2);
+  }
+  {
     /* keys saved as they first were (Back mining, OK placing) become OK mining, Back placing; set ones stay */
     keys_reset();
     CHECK(opt.keys[A_ATTACK] == 4 && opt.keys[A_USE] == 5);

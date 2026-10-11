@@ -1,3 +1,17 @@
+## 1.3.16
+**Dungeons are found twice as often, and a monster spawner's mobs come out about three times as fast**
+- WorldGenDungeons is tried eight times a chunk in Minecraft, and eight times a chunk here;
+  a dungeon is the one place a monster spawner comes from, and they were too rare to find.
+  Twenty-four tries a chunk give about twice as many dungeons (not twice the tries: the ones
+  of a population that pass dig the ground out from under the floor and ceiling test of the
+  tries after them). The population's memo keeps a bit for each of the twenty-four, so a
+  population replayed by the chunks it writes into still makes the same dungeons.
+- A spawner near the player tries about once in six a second, where it was once in sixteen:
+  the first mob is out within seconds rather than the minute or two it took, and the ones
+  after it keep coming (the world still keeps at most six of a kind about one, and the try
+  stays the short one the spawners here have always had against MobSpawner's 200 to 800
+  ticks, now shorter still).
+
 ## 1.3.15
 **Brightness comes in at 8, its top stop is a little dimmer, and it sits alone under the Video Settings' pairs**
 - The Brightness slider of 1.3.14 comes in at 8, just over the middle of Moody to

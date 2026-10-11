@@ -325,7 +325,7 @@ static bool spawner_spot(int x, int y, int z, int type) {
   return light_there(x, y, z) > 8 && world_get(x, y - 1, z) == B_GRASS;   /* (an animal's rules) */
 }
 
-/* the spawners near the player do their work: once a second, about one try in 16 for each
+/* the spawners near the player do their work: once a second, about one try in 6 for each
  * (MobSpawner's 200 to 800 ticks between, short here: there are few of them, and the world
  * keeps at most six of a kind about one anyway). The blocks are all of them: 40 x 40 x 24 = 38 400
  * bytes looked over in one pass, a fraction of a frame, once a second. The same pass notes
@@ -342,7 +342,7 @@ void spawners_spawn(void) {
     if (vc[i] != B_MOB_SPAWNER) continue;
     int x = vc_x0 + i % VCX, t = i / VCX, z = vc_z0 + t % VCZ, y = vc_y0 + t / VCZ;
     note(x, y, z, -1);   /* (ones nobody has set: noted for the picture) */
-    if (rnd(16)) continue;
+    if (rnd(6)) continue;
     int dx = x - px, dz = z - pz;
     if (dx * dx + dz * dz > 256) continue;   /* (no player near it) */
     int mob = spawner_mob_at(x, y, z);
