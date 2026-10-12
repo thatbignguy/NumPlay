@@ -14,12 +14,13 @@
 #include <string.h>
 #include "blocks.h"
 #include "data.h"
+#include "states.h"   /* the 9-bit block states: the cache's accessors */
 #include "gen.h"     /* the generator's scratch (GEN_SCRATCH, gen_scratch) */
 #include "hand.h"    /* the hand's model for a frame, on render_frame's stack */
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.4.2"
+#define NB_VERSION "1.4.3"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -95,11 +96,20 @@ float gen_temp_noise(int x, int z);   /* BiomeGenBase.temperatureNoise at (x / 8
  * (Entity.checkBelowWorld, minBuildHeight - 64). Everything that goes under the world
  * falls to here: the player (player.c), the mobs and the dropped items (mob.c, entity.c). */
 #define VOID_Y (-64)
-extern uint8_t vc[VCY * VCZ * VCX];      /* blocks: index (y * VCZ + z) * VCX + x */
+/* Block states are 9 bits each (blocks.h's NSTATES), and 8 cells are exactly 9 bytes:
+ * the cache's slides (world.c's recenter) move whole multiples of 8 cells, so they stay
+ * byte-aligned. (A 32-bit load reads 4 bytes: the last cells run into 3 bytes of tail
+ * padding the arrays carry: see states.h for the accessors.) */
+#define VC_CELLS (VCY * VCZ * VCX)
+#define VC_BYTES ((VC_CELLS * 9 + 7) / 8 + 4)
+extern uint8_t vc[VC_BYTES];         /* blocks: index (y * VCZ + z) * VCX + x, 9 bits each */
 extern uint8_t vl[VCY * VCZ * VCX];      /* light: sky light (low 4 bits), block light (high 4 bits) */
 extern uint8_t vbiome[VCZ * VCX];        /* biome of each column */
 extern int vc_x0, vc_y0, vc_z0;          /* world position of vc[0] */
 #define VC_I(x, y, z) (((y) * VCZ + (z)) * VCX + (x))
+/* the block cache: the module's own shortcuts over the accessors */
+static inline int vc_get(int i) { return b9_get(vc, i); }
+static inline void vc_set(int i, int b) { b9_set(vc, i, b); }
 /* 4 x 4 x 4 regions of the cache: 0 all air, 2 only water and air, 1 anything else (rays skip
  * the empty ones, and once in water, which sees through both, the water ones) */
 #define MCX (VCX / 4)

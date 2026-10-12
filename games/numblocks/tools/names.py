@@ -48,7 +48,7 @@ lit_redstone_lamp double_wooden_slab oak_slab cocoa sandstone_stairs emerald_ore
 tripwire emerald_block spruce_stairs birch_stairs jungle_stairs command_block beacon cobblestone_wall
 flower_pot carrots potatoes wooden_button skull anvil trapped_chest light_weighted_pressure_plate
 heavy_weighted_pressure_plate unpowered_comparator powered_comparator daylight_detector redstone_block
-quartz_ore hopper quartz_block quartz_stairs activator_rail dropper white_terracotta stained_glass_pane
+nether_quartz_ore hopper quartz_block quartz_stairs activator_rail dropper white_terracotta stained_glass_pane
 acacia_leaves acacia_log acacia_stairs dark_oak_stairs slime barrier iron_trapdoor prismarine sea_lantern
 hay_block carpet terracotta coal_block packed_ice sunflower standing_banner wall_banner
 daylight_detector_inverted red_sandstone red_sandstone_stairs double_stone_slab2 stone_slab2
@@ -156,7 +156,7 @@ def main():
     have_block = set(s['id'] for s in blocks.S)
     item_block = set()
     for i, s in enumerate(blocks.S):
-        if items.tab_of(i) is None:
+        if items.tab_of(i, True) is None:
             continue
         give.append(((s['id'] << 4) | (0 if s['id'] in FACING_ONLY else s['meta'] & 15), i, modern_of(s['name'])))
         item_block.add(s['id'])

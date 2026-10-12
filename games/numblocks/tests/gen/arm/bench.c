@@ -25,14 +25,14 @@
 volatile uint32_t phase;
 volatile uint32_t sums[64];
 volatile int32_t spawn[3];
-static uint8_t out[H * 256];
+static uint8_t out[H * 256 / 8 * 9 + 4];   /* a slab: 9 bits a state (states.h) */
 
 static int k;
 static void slab(int cx, int cz) {
     cx += OX, cz += OZ;
     gen_slab(cx, cz, Y0, H, out);
     uint32_t s = 0;
-    for (unsigned i = 0; i < sizeof out; i++) s = s * 31 + out[i];
+    for (unsigned i = 0; i < sizeof out; i++) s = s * 31 + out[i];   /* the packed bytes are the checksum */
     for (int i = 0; i < 256; i++) s = s * 31 + (uint32_t)gen_top(cx * 16 + (i & 15), cz * 16 + (i >> 4));
     if (k < 64) sums[k] = s;
     k++;
@@ -41,7 +41,9 @@ static void slab(int cx, int cz) {
 
 int main(void) {
     uint8_t gs[GEN_SCRATCH];
+    static uint8_t sumc_buf[GEN_CACHE_BYTES];   /* the summary cache: on main's stack in the game */
     gen_scratch(gs);
+    gen_set_cache(sumc_buf);
     gen_init(SEED);
     phase = 1;
     /* world load: 4 x 3 chunks */

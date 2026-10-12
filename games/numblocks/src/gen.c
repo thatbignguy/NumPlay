@@ -104,6 +104,14 @@
 #include <string.h>
 
 #include "blocks.h"
+#include "states.h"   /* the 9-bit block states: the slab's and the columns' accessors */
+#ifdef DBGTERRAIN
+#include <stdio.h>
+void dbg_terrain(void);
+#define DBGTERRAIN dbg_terrain();
+#else
+#define DBGTERRAIN
+#endif
 #ifndef FLAT_DEFAULT
 #define FLAT_DEFAULT "2;7,2x3,2;1"
 #endif
@@ -1691,7 +1699,7 @@ typedef struct {
         struct {          /* surface pass, after the density */
             float surf[256];       /* surface depth noise, index z*16+x */
             uint8_t mperm[6][256]; /* mesa noises (built when a mesa column shows up) */
-            uint8_t col[256];
+            uint16_t col[256];   /* states are 9 bits each: 16 bits a cell */
         };
     };
     uint8_t cls[825];     /* per grid point: sign decided by bounds / noise needed / limits needed */
@@ -2034,7 +2042,7 @@ typedef struct {
     float temp;
 } SurfState;
 
-INLINE int surf_step(SurfState *s, uint8_t *col, int y) {
+INLINE int surf_step(SurfState *s, uint16_t *col, int y) {
     uint8_t blk = col[y];
     if (blk == B_AIR) {
         s->l = -1;
@@ -2071,7 +2079,7 @@ INLINE int surf_step(SurfState *s, uint8_t *col, int y) {
 /* highest non-air y of the column being built (column_density's result) */
 static int col_top;
 
-HOT static void build_default(uint8_t *col, const Biome *b, JRand *r, float noise, uint8_t top0, uint8_t fill0) {
+HOT static void build_default(uint16_t *col, const Biome *b, JRand *r, float noise, uint8_t top0, uint8_t fill0) {
     SurfState s;
     s.top0 = s.top = top0;
     s.fill0 = s.fill = fill0;
@@ -2097,10 +2105,6 @@ HOT static void build_default(uint8_t *col, const Biome *b, JRand *r, float nois
             if ((blk == B_STONE && s.l == 0) || blk == B_WATER) {
                 int y2 = y - 1;
                 /* 4 blocks at a time (col is word aligned) */
-                u32 w4 = blk * 0x01010101u, word;
-                while (y2 > 7 && (y2 & 3) != 3 && col[y2] == blk) y2--;
-                if ((y2 & 3) == 3)
-                    while (y2 > 7 && (memcpy(&word, col + y2 - 3, 4), word == w4)) y2 -= 4;
                 while (y2 > 4 && col[y2] == blk) y2--;
                 skip += (unsigned)(y - 1 - y2);
                 y = y2 + 1;
@@ -2146,7 +2150,7 @@ static float simplex_oct_point(int n, uint8_t (*P)[256], i32 xi, float xf, i32 z
     return sum;
 }
 
-static void build_mesa(uint8_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
+static void build_mesa(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
     mesa_prepare();
     float d1 = 0.0f;
     if (b->mode & 1) { /* bryce */
@@ -2224,7 +2228,7 @@ static void build_mesa(uint8_t *col, const Biome *b, JRand *r, int bx, int bz, f
     (void)top;
 }
 
-static void build_surface(uint8_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
+static void build_surface(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
     uint8_t top = b->top, fill = b->filler;
     switch (b->surf) {
     case S_HILLS:
@@ -2281,7 +2285,7 @@ static void build_surface(uint8_t *col, const Biome *b, JRand *r, int bx, int bz
 INLINE int is_liquid_top(int blk) { return blk == B_WATER || blk == B_ICE || blk == B_LILY_PAD || blk == B_LAVA; }
 
 /* column summary of the undecorated, cave-less terrain (see ColSum) */
-HOT static void column_summary(const uint8_t *col, ColSum *s) {
+HOT static void column_summary(const uint16_t *col, ColSum *s) {
     int y = col_top + 2 < 255 ? col_top + 2 : 255; /* builders add at most a lily pad above it */
     while (y > 0 && col[y] == B_AIR) y--;
     int lily = 0;
@@ -2339,7 +2343,7 @@ static void column_signs(void) {
  * two ends have the same sign are filled at once (the interpolated values between them keep
  * it: their distance to 0 is at least an eighth of an end's, far above rounding); levels are
  * interpolated only for the other cells. Returns the highest non-air y. */
-HOT static int column_density(int x, int z, uint8_t *col) {
+HOT static int column_density(int x, int z, uint16_t *col) {
     const float *g = U->t.grid;
     int gx = x >> 2, gz = z >> 2;
     float fx = (float)(x & 3) * 0.25f, fz = (float)(z & 3) * 0.25f;
@@ -2352,17 +2356,17 @@ HOT static int column_density(int x, int z, uint8_t *col) {
     for (int k2 = 0; k2 < 32; k2++) {
         int y = k2 * 8;
         if (sg[k2] == 1 && sg[k2 + 1] == 1) {
-            memset(col + y, B_STONE, 8);
+            for (int q = 0; q < 8; q++) col[y + q] = B_STONE;
             top = y + 7;
             continue;
         }
         if (sg[k2] == 2 && sg[k2 + 1] == 2) {
             if (y >= SEA) {
-                memset(col + y, B_AIR, 8);
+                for (int q = 0; q < 8; q++) col[y + q] = B_AIR;
                 continue;
             }
             if (y + 8 <= SEA) {
-                memset(col + y, B_WATER, 8);
+                for (int q = 0; q < 8; q++) col[y + q] = B_WATER;
                 top = y + 7;
                 continue;
             }
@@ -2385,17 +2389,17 @@ HOT static int column_density(int x, int z, uint8_t *col) {
         v0 = v1;
         have = k2 + 1;
         if (base > 0.0f && v1 > 0.0f) {
-            memset(col + y, B_STONE, 8);
+            for (int q = 0; q < 8; q++) col[y + q] = B_STONE;
             top = y + 7;
             continue;
         }
         if (base <= 0.0f && v1 <= 0.0f) {
             if (y >= SEA) {
-                memset(col + y, B_AIR, 8);
+                for (int q = 0; q < 8; q++) col[y + q] = B_AIR;
                 continue;
             }
             if (y + 8 <= SEA) {
-                memset(col + y, B_WATER, 8);
+                for (int q = 0; q < 8; q++) col[y + q] = B_WATER;
                 top = y + 7;
                 continue;
             }
@@ -2419,7 +2423,7 @@ HOT static void chunk_terrain(int cx, int cz, uint8_t *out, int y0, int h, ColSu
     chunk_surface_noise(cx, cz);
     JRand r;
     jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL));
-    uint8_t *col = U->t.col;
+    uint16_t *col = U->t.col;
     for (int z = 0; z < 16; z++)
         for (int x = 0; x < 16; x++) {
             col_top = column_density(x, z, col);
@@ -2427,7 +2431,7 @@ HOT static void chunk_terrain(int cx, int cz, uint8_t *out, int y0, int h, ColSu
             build_surface(col, b, &r, cx * 16 + z, cz * 16 + x, U->t.surf[z * 16 + x]);
             if (sum) column_summary(col, &sum[x + z * 16]);
             if (out)
-                for (int y = 0; y < h; y++) out[y * 256 + z * 16 + x] = col[y0 + y];
+                for (int y = 0; y < h; y++) b9_set(out, y * 256 + z * 16 + x, col[y0 + y]);
         }
 }
 
@@ -2572,7 +2576,7 @@ INLINE int mask_index(int X, int Y, int Z) {
 HOT static uint8_t cv_get(int x, int y, int z) {
     if (y < 0 || y > 255) return B_AIR;
     if (cv->mode == CAVE_OUT) {
-        if (y >= cv->y0 && y < cv->y0 + cv->h) return cv->out[(y - cv->y0) * 256 + z * 16 + x];
+        if (y >= cv->y0 && y < cv->y0 + cv->h) return b9_get(cv->out, (y - cv->y0) * 256 + z * 16 + x);
         return sum_block(&cv->sum[x + z * 16], y);
     }
     int X = cv->tcx * 16 + x, Z = cv->tcz * 16 + z;
@@ -2596,7 +2600,7 @@ static int crep_dyn, crep_lo;
 HOT static void cv_set(int x, int y, int z, uint8_t b) {
     if (y < 0 || y > 255) return;
     if (cv->mode == CAVE_OUT) {
-        if (y >= cv->y0 && y < cv->y0 + cv->h) cv->out[(y - cv->y0) * 256 + z * 16 + x] = b;
+        if (y >= cv->y0 && y < cv->y0 + cv->h) b9_set(cv->out, (y - cv->y0) * 256 + z * 16 + x, b);
         if (cave_track_on) cave_track(x, y, z, b);
         return;
     }
@@ -2677,7 +2681,7 @@ static int water_col(int x, int z, int a, int b) {
     /* in the slab */
     lo = a > s0 ? a : s0, hi = b < s1 ? b : s1;
     for (int y = lo; y <= hi; y++) {
-        uint8_t blk = cv->out[(y - s0) * 256 + z * 16 + x];
+        uint8_t blk = (uint8_t)b9_get(cv->out, (y - s0) * 256 + z * 16 + x);
         if (blk == B_WATER || blk == B_FLOWING_WATER) return 1;
     }
     return 0;
@@ -3351,7 +3355,8 @@ static void c_lower_top(int i, int y) {
     const ColSum *s = &nb[1][1]->s[i];
     while (y > 0) {
         y--;
-        uint8_t b = (y >= c_y0 && y < c_y0 + c_h) ? c_out[(y - c_y0) * 256 + z * 16 + x] : sum_block(s, y);
+        uint8_t b = (y >= c_y0 && y < c_y0 + c_h) ? (uint8_t)b9_get(c_out, (y - c_y0) * 256 + z * 16 + x)
+                                                    : sum_block(s, y);
         if (b != B_AIR) break;
     }
     c_top[i] = (uint8_t)y;
@@ -3413,9 +3418,9 @@ static void put(int X, int Y, int Z, uint8_t b, int rule) {
     if (!put_skip_c && cx >= 0 && cx < 16 && cz >= 0 && cz < 16) {
         int i = cz * 16 + cx;
         if (Y >= c_y0 && Y < c_y0 + c_h) {
-            uint8_t *o = &c_out[(Y - c_y0) * 256 + i];
-            if (!rule_ok(rule, *o)) return;
-            *o = b;
+            int o = (Y - c_y0) * 256 + i;
+            if (!rule_ok(rule, b9_get(c_out, o))) return;
+            b9_set(c_out, o, b);
         }
         c_track(i, Y, b);
     }
@@ -3425,9 +3430,9 @@ static void put(int X, int Y, int Z, uint8_t b, int rule) {
 static void put_c(int X, int Y, int Z, uint8_t b, int rule) {
     int cx = X - c_cx * 16, cz = Z - c_cz * 16;
     if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || Y < c_y0 || Y >= c_y0 + c_h) return;
-    uint8_t *o = &c_out[(Y - c_y0) * 256 + cz * 16 + cx];
-    if (rule_ok(rule, *o)) {
-        *o = b;
+    int o = (Y - c_y0) * 256 + cz * 16 + cx;
+    if (rule_ok(rule, b9_get(c_out, o))) {
+        b9_set(c_out, o, b);
         c_track(cz * 16 + cx, Y, b);
     }
 }
@@ -3436,7 +3441,7 @@ static void put_c(int X, int Y, int Z, uint8_t b, int rule) {
 static uint8_t cget(int X, int Y, int Z) {
     int cx = X - c_cx * 16, cz = Z - c_cz * 16;
     if (cx >= 0 && cx < 16 && cz >= 0 && cz < 16 && Y >= c_y0 && Y < c_y0 + c_h)
-        return c_out[(Y - c_y0) * 256 + cz * 16 + cx];
+        return (uint8_t)b9_get(c_out, (Y - c_y0) * 256 + cz * 16 + cx);
     return vget(X, Y, Z);
 }
 
@@ -3814,15 +3819,15 @@ HOT static void minable(int X, int Y, int Z, int n, uint8_t blk) {
         for (int l1 = j; l1 <= i1; l1++) {
             float d12 = ((float)l1 + 0.5f - d6) / h, q12 = d12 * d12;
             if (q12 >= 1.0f) continue;
-            uint8_t *colp = c_out + ((bx + l1) & 15);
+            int colp = ((bx + l1) & 15);
             for (int i2 = k; i2 <= j1; i2++) {
                 float d13 = ((float)i2 + 0.5f - d7) / h, q = q12 + d13 * d13;
                 if (q >= 1.0f) continue;
-                uint8_t *row = colp + (i2 - c_y0) * 256;
+                int row = (i2 - c_y0) * 256 + colp;
                 for (int j2 = l; j2 <= k1; j2++)
                     if (q + q14[j2 - l] < 1.0f) {
-                        uint8_t *o = row + ((bz + j2) & 15) * 16;
-                        if (*o == B_STONE) *o = blk;
+                        int o = row + ((bz + j2) & 15) * 16;
+                        if (b9_get(c_out, o) == B_STONE) b9_set(c_out, o, blk);
                     }
             }
         }
@@ -3891,27 +3896,27 @@ static void tree_dirt(int x, int y, int z) {
 #define TOV_H 32
 static int tov_on, tov_x, tov_y, tov_z;
 
-static uint8_t tget(const uint8_t *tov, int x, int y, int z) {
+static uint16_t tget(const uint16_t *tov, int x, int y, int z) {
     if (tov_on) {
         int dx = x - tov_x + 3, dz = z - tov_z + 3, dy = y - tov_y;
         if (dx >= 0 && dx < TOV_W && dz >= 0 && dz < TOV_W && dy >= 0 && dy < TOV_H) {
-            uint8_t m = tov[(dy * TOV_W + dz) * TOV_W + dx];
+            uint16_t m = tov[(dy * TOV_W + dz) * TOV_W + dx];
             if (m) return (uint8_t)(m - 1);
         }
     }
     return vget(x, y, z);
 }
 
-static void tput(uint8_t *tov, int x, int y, int z, uint8_t b, int rule) {
+static void tput(uint16_t *tov, int x, int y, int z, uint8_t b, int rule) {
     if (tov_on) {
         int dx = x - tov_x + 3, dz = z - tov_z + 3, dy = y - tov_y;
         if (dx >= 0 && dx < TOV_W && dz >= 0 && dz < TOV_W && dy >= 0 && dy < TOV_H)
-            tov[(dy * TOV_W + dz) * TOV_W + dx] = (uint8_t)(b + 1);
+            tov[(dy * TOV_W + dz) * TOV_W + dx] = (uint16_t)(b + 1);
     }
     put(x, y, z, b, rule);
 }
 
-static void tov_begin(uint8_t *tov, int x, int y, int z) {
+static void tov_begin(uint16_t *tov, int x, int y, int z) {
     memset(tov, 0, TOV_W * TOV_W * TOV_H);
     tov_on = 1;
     tov_x = x;
@@ -3922,7 +3927,7 @@ static void tov_begin(uint8_t *tov, int x, int y, int z) {
 static const int8_t HDIR[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}}; /* N, E, S, W */
 
 /* hanging vine (WorldGenTrees.b / WorldGenSwampTree.a) */
-static void vine_hang(uint8_t *tov, int x, int y, int z) {
+static void vine_hang(uint16_t *tov, int x, int y, int z) {
     tput(tov, x, y, z, B_VINE, R_AIR);
     for (int i = 4; --y, tget(tov, x, y, z) == B_AIR && i > 0; --i) tput(tov, x, y, z, B_VINE, R_AIR);
 }
@@ -3957,7 +3962,7 @@ static int space_ok(int x, int z, int rmax, const int lo[3], int yhi, int kind) 
     return 1;
 }
 
-static int gen_trees(uint8_t *tov, int x, int y, int z, int c, uint8_t log, uint8_t leaf, int vines) {
+static int gen_trees(uint16_t *tov, int x, int y, int z, int c, uint8_t log, uint8_t leaf, int vines) {
     int i = RI(3) + c;
     if (y < 1 || y + i + 1 > 256) return 0;
     {
@@ -4106,7 +4111,7 @@ static int gen_taiga2(int x, int y, int z) {
     return 1;
 }
 
-static int gen_swamp_tree(uint8_t *tov, int x, int y, int z) {
+static int gen_swamp_tree(uint16_t *tov, int x, int y, int z) {
     int i = RI(4) + 5;
     while (IS_WATER(vget(x, y - 1, z))) y--;
     if (y < 1 || y + i + 1 > 256) return 0;
@@ -4674,7 +4679,7 @@ static TreeSel tree_select(const Biome *b) {
 
 /* generate() then, on success, the post step (podzol of mega spruces) */
 static void tree_grow(TreeSel t, int x, int y, int z) {
-    uint8_t tov[TOV_W * TOV_W * TOV_H];   /* this tree's blocks around its trunk: on the stack */
+    uint16_t tov[TOV_W * TOV_W * TOV_H];   /* this tree's blocks around its trunk: on the stack */
     int ok = 0;
     switch (t.type) {
     case TR_OAK: ok = gen_trees(tov, x, y, z, 4, B_LOG_OAK, B_LEAVES_OAK, 0); break;
@@ -4717,7 +4722,7 @@ static int soil_ok(int soil, uint8_t below, int shaded) {
 /* a plant placed after a view decision: into the view; into C if C agrees */
 static void put_plant(int x, int y, int z, uint8_t b, int soil) {
     if (in_c_range(x, y, z)) {
-        uint8_t cur = c_out[(y - c_y0) * 256 + (z - c_cz * 16) * 16 + (x - c_cx * 16)];
+        uint8_t cur = (uint8_t)b9_get(c_out, (y - c_y0) * 256 + (z - c_cz * 16) * 16 + (x - c_cx * 16));
         int shaded = y < c_top[(z & 15) * 16 + (x & 15)];
         uint8_t below = cget(x, y - 1, z);
         if (cur != B_AIR || !soil_ok(soil, below, shaded)) {
@@ -5388,7 +5393,12 @@ static void dungeon_book(void) {
 /* ======================================================================== */
 
 static int last_cx = 0x7fffffff, last_cz; /* chunk of the last gen_slab: c_top, c_b16 valid */
-static uint8_t col_tmp[256];
+static uint8_t col_tmp[256 / 8 * 9 + 4];   /* one row of the slab above: 9-bit states */
+#ifdef DBGTERRAIN
+#include <stdio.h>
+unsigned long dbg_terrain_sum;
+void dbg_terrain(void) { dbg_terrain_sum = 0; for (int i = 0; i < c_h * 256; i++) dbg_terrain_sum = dbg_terrain_sum * 31 + (unsigned long)b9_get(c_out, i); }
+#endif
 
 /* who takes the mob of a monster spawner world generation places (gen.h) */
 void (*gen_spawner_hook)(int x, int y, int z, int mob) = 0;
@@ -5951,7 +5961,10 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     if (y0 + h > 128) h = 128 - y0;
     if (h <= 0) return;
     if (g_flat) {
-        for (int y = 0; y < h; y++) memset(out + y * 256, flat_block(y0 + y), 256);
+        for (int y = 0; y < h; y++) {
+            int b = flat_block(y0 + y);
+            for (int i = 0; i < 256; i++) b9_set(out, y * 256 + i, b);
+        }
         return;
     }
     c_out = out;
@@ -5974,6 +5987,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
         c_sl[i] = (uint8_t)cs_top(&e->s[i]);
     }
     nb[1][1] = e;
+    DBGTERRAIN
     /* caves and ravines */
     slab_caves(cx, cz, e->s, out, y0, h);
     /* the 3x3 summaries */

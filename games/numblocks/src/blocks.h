@@ -256,8 +256,18 @@ enum {
   B_DOOR_OAK_LOWER_W_OPEN = 249,   /* 64:6 */
   B_DOOR_OAK_LOWER_N_OPEN = 250,   /* 64:7 */
   B_FIRE = 251,   /* 51:0 */
-  B_COUNT = 252
+  B_NETHERRACK = 252,   /* 87:0 */
+  B_SOUL_SAND = 253,   /* 88:0 */
+  B_NETHER_QUARTZ_ORE = 254,   /* 153:0 */
+  B_QUARTZ_BLOCK = 255,   /* 155:0 */
+  B_PORTAL = 256,   /* 90:0 */
+  B_COUNT = 257
 };
+
+/* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the
+ * slab buffers, the edit records), so B_COUNT states are defined and NSTATES is
+ * what the per-state tables are sized for */
+#define NSTATES 512
 
 enum { M_NONE, M_CUBE, M_CROSS, M_LIQUID, M_TORCH, M_SLAB, M_LAYER, M_CACTUS, M_LEAVES, M_GLASS, M_FLAT, M_VINE, M_PANE, M_FENCE, M_DOOR, M_LADDER, M_STAIRS, M_CHEST, M_BED };
 enum { T_NONE, T_PICKAXE, T_AXE, T_SHOVEL, T_SHEARS, T_SWORD };

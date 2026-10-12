@@ -16,8 +16,14 @@ Each state is a Minecraft 1.8.8 block id and metadata. Fields:
   hard      hardness (seconds-ish, as Block.c(...) in the game; -1 unbreakable)
   tool      the tool that mines it fastest: pickaxe, axe, shovel, shears, sword, None
   level     the pickaxe level needed to get a drop (0 wood, 1 stone, 2 iron, 3 diamond)
+
+The states are packed 9 bits each (see nb.h): B_COUNT of them are defined, and NSTATES
+is the number of ids the packing and the tables are sized for.
 """
 import sys
+
+# the block-state ids the game's packing uses: 9 bits each (vc, the edit records)
+NSTATES = 512
 
 S = []
 
@@ -233,8 +239,17 @@ for v, d in [(1, 'S'), (2, 'W'), (3, 'N'), (4, 'E_OPEN'), (5, 'S_OPEN'), (6, 'W_
     b(f'DOOR_OAK_LOWER_{d}', 64, v, model='door', tex='door_wood_lower', hard=3.0, tool='axe')
 # (new blocks go last: worlds keep blocks by their place in this list)
 b('FIRE', 51, 0, model='cross', tex='fire_layer_0', light=15, hard=0)
+# --- the nether's blocks (modern Nether Wastes): the terrain block, the slow sand, the
+# quartz pair and the portal. The portal is not solid (you walk through it, as in
+# Minecraft), lights what is about it, and stops no light.
+b('NETHERRACK', 87, 0, tex='netherrack', hard=0.4, tool='pickaxe')
+b('SOUL_SAND', 88, 0, tex='soul_sand', hard=0.5, tool='shovel')
+b('NETHER_QUARTZ_ORE', 153, 0, tex='nether_quartz_ore', hard=3.0, tool='pickaxe')
+b('QUARTZ_BLOCK', 155, 0, tex=tsb('quartz_block_top', 'quartz_block_side', 'quartz_block_bottom'), hard=0.8,
+  tool='pickaxe')
+b('PORTAL', 90, 0, model='cross', tex='nether_portal', light=11, hard=-1)
 
-assert len(S) <= 255, len(S)
+assert len(S) <= NSTATES, len(S)
 
 MODELS = ['none', 'cube', 'cross', 'liquid', 'torch', 'slab', 'layer', 'cactus', 'leaves', 'glass', 'flat', 'vine',
           'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed']
@@ -247,7 +262,11 @@ def header():
            'enum {']
     for i, s in enumerate(S):
         out.append(f'  B_{s["name"]} = {i},   /* {s["id"]}:{s["meta"]} */')
-    out += [f'  B_COUNT = {len(S)}', '};', '']
+    out += [f'  B_COUNT = {len(S)}', '};', '',
+            "/* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the",
+            ' * slab buffers, the edit records), so B_COUNT states are defined and NSTATES is',
+            ' * what the per-state tables are sized for */',
+            f'#define NSTATES {NSTATES}', '']
     out.append('enum { ' + ', '.join(f'M_{m.upper()}' for m in MODELS) + ' };')
     out.append('enum { T_NONE, ' + ', '.join(f'T_{t.upper()}' for t in TOOLS[1:]) + ' };')
     out += ['', '#endif', '']

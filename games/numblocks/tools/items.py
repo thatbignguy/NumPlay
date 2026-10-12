@@ -148,6 +148,9 @@ MOBS = (('zombie', 'Zombie', 54), ('skeleton', 'Skeleton', 51), ('creeper', 'Cre
 for m, lab, _mc_id in MOBS:
     item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64)
 
+# (new items go last: their ids are what the saves keep)
+item('QUARTZ', 'Nether Quartz', 'quartz')
+
 INAMES = [x['name'] for x in I]
 assert len(set(INAMES)) == len(INAMES)
 
@@ -181,6 +184,8 @@ LABELS = {
     'HAY_BALE': 'Hay Bale', 'COAL_BLOCK': 'Block of Coal', 'PACKED_ICE': 'Packed Ice', 'SUNFLOWER_LOWER': 'Sunflower',
     'LILAC_LOWER': 'Lilac', 'DOUBLE_GRASS_LOWER': 'Tall Grass', 'LARGE_FERN_LOWER': 'Large Fern',
     'ROSE_BUSH_LOWER': 'Rose Bush', 'PEONY_LOWER': 'Peony', 'RED_SANDSTONE': 'Red Sandstone', 'GLOWSTONE': 'Glowstone',
+    'NETHERRACK': 'Netherrack', 'SOUL_SAND': 'Soul Sand', 'NETHER_QUARTZ_ORE': 'Nether Quartz Ore',
+    'QUARTZ_BLOCK': 'Block of Quartz',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
@@ -198,7 +203,7 @@ for c, l in zip(COLORS, CLAB):
     LABELS[f'STAINED_CLAY_{c}'] = f'{l} Terracotta'
 
 # block states that stand for another one in the inventory
-ITEM_OF = {'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
+ITEM_OF = {'PORTAL': None,   # the nether portal: the game's own, never an item'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
            'COBBLESTONE_STAIRS_W': 'COBBLESTONE_STAIRS', 'COBBLESTONE_STAIRS_S': 'COBBLESTONE_STAIRS',
            'COBBLESTONE_STAIRS_N': 'COBBLESTONE_STAIRS', 'GRASS_SNOWED': 'GRASS', 'FURNACE_LIT': 'FURNACE', 'TORCH_E': 'TORCH', 'TORCH_W': 'TORCH',
            'TORCH_S': 'TORCH', 'TORCH_N': 'TORCH', 'FARMLAND_WET': 'FARMLAND', 'DOOR_OAK_LOWER': 'I:WOODEN_DOOR',
@@ -356,6 +361,8 @@ shaped('SNOW_LAYER', 6, ['###'], {'#': 'SNOW'})
 shaped('CLAY', 1, ['##', '##'], {'#': 'CLAY_BALL'})
 shaped('BRICKS', 1, ['##', '##'], {'#': 'BRICK'})
 shaped('GLOWSTONE', 1, ['##', '##'], {'#': 'GLOWSTONE_DUST'})
+shaped('QUARTZ_BLOCK', 1, ['##', '##'], {'#': 'QUARTZ'})   # 4 quartz items to a block, as modern does
+shaped('QUARTZ', 4, ['#'], {'#': 'QUARTZ_BLOCK'})
 shaped('WOOL_WHITE', 1, ['##', '##'], {'#': 'STRING'})
 shaped('TNT', 1, ['X#X', '#X#', 'X#X'], {'X': 'GUNPOWDER', '#': 'SAND'})
 shaped('COBBLESTONE_SLAB', 6, ['###'], {'#': 'COBBLESTONE'})
@@ -438,42 +445,44 @@ DECO = ('SAPLING_', 'LEAVES_', 'DEAD_SHRUB', 'TALL_GRASS', 'FERN', 'DEAD_BUSH', 
         'ROSE_BUSH_LOWER', 'PEONY_LOWER')
 
 
-def tab_of(iid):
-    """the tabs an item is in: a natural block is in Natural Blocks and in Building Blocks"""
-    if iid < 256:
-        n = BNAMES[iid]
-        if ITEM_OF.get(n, n) != n or n not in LABELS:
-            return None   # not in the creative inventory
-        if n in FUNC:
-            return (T_FUNC,)
-        if n in NATURAL_ONLY:
-            return (T_NATURAL,)
-        if n in NATURAL:
-            return (T_NATURAL, T_BLOCK)
-        if n in ('BROWN_MUSHROOM_CAP', 'RED_MUSHROOM_CAP'):
-            return None
-        if n in ('COBBLESTONE_WALL',):
-            return (T_BLOCK,)   # a building block, not decoration
-        if any(n.startswith(d) or n.endswith(d) or n == d for d in DECO):
-            return (T_DECO,)
-        return (T_BLOCK,)
-    it = I[iid - 256]
-    k = it['kind']
-    if k == 'spawn_egg':
-        return (T_MOBS,)
-    if k in ('sword', 'bow', 'helmet', 'chestplate', 'leggings', 'boots') or it['name'] == 'ARROW':
-        return (T_COMBAT,)
-    if k in ('pickaxe', 'axe', 'shovel', 'hoe', 'shears', 'flint_and_steel', 'fishing_rod') or \
-            it['name'] in ('COMPASS', 'CLOCK'):
-        return (T_TOOL,)
-    if k in ('food', 'stew'):
-        return (T_FOOD,)
-    if k in ('bucket', 'water_bucket', 'lava_bucket', 'milk_bucket') or it['name'] in ('PAPER', 'BOOK', 'SNOWBALL',
-                                                                                     'SLIME_BALL'):
-        return (T_MISC,)
-    if it['name'] in ('WOODEN_DOOR', 'BED'):
-        return (T_FUNC,)   # you do something with a door or a bed; they are not decoration
-    return (T_MAT,)
+def tab_of(iid, block=False):
+    """the tabs an item is in: a natural block is in Natural Blocks and in Building Blocks.
+    `block` says the id is a block state (the states 256 and up are items' ids too: a
+    caller walking the block states passes it, so the highest state is still a block)"""
+    if iid >= 256 and not block:
+        it = I[iid - 256]
+        k = it['kind']
+        if k == 'spawn_egg':
+            return (T_MOBS,)
+        if k in ('sword', 'bow', 'helmet', 'chestplate', 'leggings', 'boots') or it['name'] == 'ARROW':
+            return (T_COMBAT,)
+        if k in ('pickaxe', 'axe', 'shovel', 'hoe', 'shears', 'flint_and_steel', 'fishing_rod') or \
+                it['name'] in ('COMPASS', 'CLOCK'):
+            return (T_TOOL,)
+        if k in ('food', 'stew'):
+            return (T_FOOD,)
+        if k in ('bucket', 'water_bucket', 'lava_bucket', 'milk_bucket') or it['name'] in ('PAPER', 'BOOK', 'SNOWBALL',
+                                                                                         'SLIME_BALL'):
+            return (T_MISC,)
+        if it['name'] in ('WOODEN_DOOR', 'BED'):
+            return (T_FUNC,)   # you do something with a door or a bed; they are not decoration
+        return (T_MAT,)
+    n = BNAMES[iid]
+    if ITEM_OF.get(n, n) != n or n not in LABELS:
+        return None   # not in the creative inventory
+    if n in FUNC:
+        return (T_FUNC,)
+    if n in NATURAL_ONLY:
+        return (T_NATURAL,)
+    if n in NATURAL:
+        return (T_NATURAL, T_BLOCK)
+    if n in ('BROWN_MUSHROOM_CAP', 'RED_MUSHROOM_CAP'):
+        return None
+    if n in ('COBBLESTONE_WALL',):
+        return (T_BLOCK,)   # a building block, not decoration
+    if any(n.startswith(d) or n.endswith(d) or n == d for d in DECO):
+        return (T_DECO,)
+    return (T_BLOCK,)
 
 
 # a tab's order inside itself: the definition order (blocks first, then items), except the ores

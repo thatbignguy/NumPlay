@@ -106,13 +106,14 @@ static int top_at(int x, int z) {
 }
 
 int main(void) {
+  static uint8_t sumc_buf[GEN_CACHE_BYTES];   /* the summary cache: on main's stack in the game */
+  gen_set_cache(sumc_buf);
   memset(&opt, 0, sizeof opt);
   opt.fancy = FANCY;
   opt.clouds = 1;
   opt.difficulty = 2;
   world_type = WT_DEFAULT;
-  world_new(SEED, "nb9");
-  /* settle the cache around a spot on the ground */
+  world_new(SEED, "nb9");  /* settle the cache around a spot on the ground */
   float px = 8.5f, pz = 8.5f;
   int gt = top_at(8, 8);
   float py = (float)gt + 2;

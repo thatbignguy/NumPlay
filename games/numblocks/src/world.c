@@ -7,7 +7,7 @@
 #include "nb.h"
 #include "edits.h"
 
-uint8_t vc[VCY * VCZ * VCX];
+uint8_t vc[VC_BYTES];
 uint8_t vl[VCY * VCZ * VCX];
 uint8_t vbiome[VCZ * VCX];
 uint8_t vtop[VCZ * VCX];
@@ -16,9 +16,11 @@ static uint8_t vgtop[VCZ * VCX];    /* per column: the generator's highest block
 int vc_x0, vc_y0, vc_z0;
 static bool vc_valid;
 
-/* one chunk of the generator's output; also the edit log's merge buffer */
-static uint32_t slab32[16 * 16 * VCY / 4];
+/* one chunk of the generator's output; also the edit log's merge buffer. States are 9
+ * bits each, as in the cache (16 x 16 x VCY cells = 6912 B) */
+static uint32_t slab32[16 * 16 * VCY / 8 * 9 / 4 + 1];
 #define slab ((uint8_t *)slab32)
+#define SLAB_CELLS (16 * 16 * VCY)
 
 static inline int floordiv(int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }
 static inline int ifloor(float v) { int i = (int)v; return v < (float)i ? i - 1 : i; }
@@ -50,7 +52,7 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
       int top = vtop[z * VCX + x] - vc_y0;   /* local y of the first sky-lit cell */
       int lvl = 15;
       for (int y = VCY - 1; y >= y0; y--) {
-        int i = VC_I(x, y, z), b = vc[i];
+        int i = VC_I(x, y, z), b = vc_get(i);
         if (y < top) lvl = 0;
         else if (b != B_AIR) {
           lvl -= opacity(b);
@@ -81,7 +83,7 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
           for (int x = xs; x != xe; x += xi) {
             int i = VC_I(x, y, z), cur = vl[i];
             if ((cur & 15) == 15 && !blk) continue;
-            int op = opacity(vc[i]);
+            int op = opacity(vc_get(i));
             if (op >= 15) continue;
             /* the brightest neighbours (sky and block light apart), less what this cell takes */
             int ms = 0, mb = 0;
@@ -141,9 +143,10 @@ static void mac_box(int x0, int y0, int z0, int x1, int y1, int z1) {
         bool water = true;
         for (int y = my * 4; y < my * 4 + 4; y++)
           for (int z = mz * 4; z < mz * 4 + 4; z++) {
-            const uint8_t *r = &vc[VC_I(mx * 4, y, z)];
-            any |= (uint8_t)(r[0] | r[1] | r[2] | r[3]);
-            for (int k = 0; k < 4; k++) water = water && (r[k] == B_AIR || is_water(r[k]));
+            int r = VC_I(mx * 4, y, z);
+            int b0 = vc_get(r), b1 = vc_get(r + 1), b2 = vc_get(r + 2), b3 = vc_get(r + 3);
+            any |= (uint8_t)(b0 | b1 | b2 | b3);
+            for (int k = 0; k < 4; k++) water = water && (vc_get(r + k) == B_AIR || is_water(vc_get(r + k)));
           }
         vmac_set((my * MCZ + mz) * MCX + mx, !any ? 0 : water ? 2 : 1);
       }
@@ -158,7 +161,8 @@ static void mac_box(int x0, int y0, int z0, int x1, int y1, int z1) {
 #define BIT(set, i) ((set)[(i) >> 3] >> ((i) & 7) & 1)
 static void fill_chunk(int cx, int cz, const uint8_t *keep, int oy, int ylo, int yhi, bool air) {
   int h = yhi - ylo;
-  if (air) memset(slab, B_AIR, (size_t)h * 256);   /* (rows above all it generates: only the edits) */
+  if (air)
+    memset(slab, 0, (size_t)h * 256 / 8 * 9);   /* (rows above all it generates: only the edits; air is 0, so the bits zero) */
   else gen_slab(cx, cz, vc_y0 + ylo, h, slab);
   edits_apply(cx, cz, vc_y0 + ylo, h, slab);
   for (int z = 0; z < 16; z++) {
@@ -172,7 +176,7 @@ static void fill_chunk(int cx, int cz, const uint8_t *keep, int oy, int ylo, int
       for (int y = ylo; y < yhi; y++) {
         /* cells the old cache had are kept (their content is the same) */
         if (old_col && y + vc_y0 - oy >= 0 && y + vc_y0 - oy < VCY) continue;
-        vc[VC_I(lx, y, lz)] = slab[((y - ylo) * 16 + z) * 16 + x];
+        vc_set(VC_I(lx, y, lz), b9_get(slab, ((y - ylo) * 16 + z) * 16 + x));
       }
       if (!old_col) {
         vbiome[col] = (uint8_t)gen_biome(cx * 16 + x, cz * 16 + z);
@@ -180,7 +184,7 @@ static void fill_chunk(int cx, int cz, const uint8_t *keep, int oy, int ylo, int
         vgtop[col] = (uint8_t)gt;
         /* the sky light's top is the highest block that stops light: snow layers, flowers, tall
          * grass on top let it all through (else they and what they stand on were lit too dark) */
-        for (int ly = gt - vc_y0; ly >= 0 && ly < VCY && opacity(vc[VC_I(lx, ly, lz)]) == 0; ly--) lt--;
+        for (int ly = gt - vc_y0; ly >= 0 && ly < VCY && opacity(vc_get(VC_I(lx, ly, lz))) == 0; ly--) lt--;
         int t = edits_top(cx * 16 + x, cz * 16 + z, lt + 1);
         vtop[col] = (uint8_t)(t < 0 ? 0 : t > 255 ? 255 : t);
       }
@@ -223,14 +227,14 @@ static void stand_in(bool any, int oy, int px, int pz) {
     if (!vpend_get(col) || !any || !BIT(kept, col)) continue;
     int lx = col % VCX, lz = col / VCX;
     if (lo > 0 && lo < VCY) {
-      int b = vc[VC_I(lx, lo, lz)];
+      int b = vc_get(VC_I(lx, lo, lz));
       if (!(blk_flags[b] & BF_SOLID)) b = B_STONE;
-      for (int y = 0; y < lo; y++) vc[VC_I(lx, y, lz)] = (uint8_t)b;
+      for (int y = 0; y < lo; y++) vc_set(VC_I(lx, y, lz), b);
     }
     if (hi > 0 && hi < VCY) {
-      int b = vc[VC_I(lx, hi - 1, lz)];
+      int b = vc_get(VC_I(lx, hi - 1, lz));
       if (!(blk_flags[b] & BF_OPAQUE)) b = B_AIR;
-      for (int y = hi; y < VCY; y++) vc[VC_I(lx, y, lz)] = (uint8_t)(y + vc_y0 <= vgtop[col] ? b : B_AIR);
+      for (int y = hi; y < VCY; y++) vc_set(VC_I(lx, y, lz), y + vc_y0 <= vgtop[col] ? b : B_AIR);
     }
   }
   int mx = px - vc_x0, mz = pz - vc_z0;   /* (the player's column: always made at once) */
@@ -246,7 +250,7 @@ static void stand_in(bool any, int oy, int px, int pz) {
       else break;
     }
     int s = sz * VCX + sx;
-    for (int y = 0; y < VCY; y++) vc[VC_I(lx, y, lz)] = vc[VC_I(sx, y, sz)];
+    for (int y = 0; y < VCY; y++) vc_set(VC_I(lx, y, lz), vc_get(VC_I(sx, y, sz)));
     vtop[col] = vtop[s], vbiome[col] = vbiome[s], vgtop[col] = vgtop[s];
   }
 }
@@ -268,7 +272,9 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
         int sy = y + dy, sz = z + dz;
         if (sy < 0 || sy >= VCY || sz < 0 || sz >= VCZ) continue;
         int x0 = dx >= 0 ? 0 : -dx, x1 = dx >= 0 ? VCX - dx : VCX;
-        if (x0 < x1) memmove(&vc[VC_I(x0, y, z)], &vc[VC_I(x0 + dx, sy, sz)], (size_t)(x1 - x0));
+        /* the slide moves whole multiples of 8 cells (9 bytes each): byte-aligned */
+        if (x0 < x1)
+          memmove(vc + (VC_I(x0, y, z) >> 3) * 9, vc + (VC_I(x0 + dx, sy, sz) >> 3) * 9, (size_t)(x1 - x0) / 8 * 9);
       }
     for (int z = zs; z != ze; z += zi)
       for (int x = xs; x != xe; x += xi) {
@@ -450,21 +456,21 @@ int world_get(int x, int y, int z) {
   if (y < 0) return B_AIR;   /* under the world is the void, as in Minecraft below its lowest blocks */
   if (!world_loaded(x, y, z)) return B_AIR;
   if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return B_STONE;   /* not made yet: nothing goes in */
-  return vc[VC_I(x - vc_x0, y - vc_y0, z - vc_z0)];
+  return vc_get(VC_I(x - vc_x0, y - vc_y0, z - vc_z0));
 }
 
 void world_set(int x, int y, int z, int b) {
   if (!world_loaded(x, y, z) || y < 0 || y >= WORLD_H) return;
   if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return;
   int lx = x - vc_x0, ly = y - vc_y0, lz = z - vc_z0;
-  vc[VC_I(lx, ly, lz)] = (uint8_t)b;
+  vc_set(VC_I(lx, ly, lz), b);
   edits_put(x, y, z, b);
   /* the column's sky top, then the light around */
   int col = lz * VCX + lx, t = vtop[col];
   if (opacity(b) >= 15 && y + 1 > t) vtop[col] = (uint8_t)(y + 1);
   else if (y + 1 == t && opacity(b) < 15) {
     int ny = y;
-    while (ny > vc_y0 && opacity(vc[VC_I(lx, ny - vc_y0 - 1, lz)]) < 15) ny--;
+    while (ny > vc_y0 && opacity(vc_get(VC_I(lx, ny - vc_y0 - 1, lz))) < 15) ny--;
     vtop[col] = (uint8_t)(ny > vc_y0 ? ny : 0);
   }
   light_mark(lx - 15, ly - 15, lz - 15, lx + 16, VCY, lz + 16);
@@ -487,9 +493,9 @@ int world_rain_top(int x, int z) {
   if (vpend_get(col)) return 255;
   if (t > vc_y0 + VCY) return t;
   for (int y = VCY - 1; y >= 0 && y + vc_y0 >= t; y--)
-    if (stops_rain(vc[VC_I(lx, y, lz)])) return y + vc_y0 + 1;
+    if (stops_rain(vc_get(VC_I(lx, y, lz)))) return y + vc_y0 + 1;
   return t;
 }
 
 /* the chunk buffer, free while a frame is drawn (the rain uses it) */
-void *world_scratch(uint32_t n) { return n <= sizeof slab32 ? slab32 : NULL; }
+void *world_scratch(uint32_t n) { return n <= sizeof slab32 ? (void *)slab32 : NULL; }

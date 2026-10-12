@@ -1,3 +1,18 @@
+## 1.4.3
+**Block states are 9 bits each now, so there is room for 512 of them: the nether's blocks have somewhere to live**
+- The block cache, the chunk slab, the generator's columns and the edit records hold 9 bits a state
+  (states.h's b9_get/b9_set over 8-cell runs, which stay byte-aligned: the cache's slides move whole
+  multiples of 8 cells, so they are plain memmoves of 9 bytes to 8 cells). B_COUNT still says how many
+  states are defined (252); NSTATES says what the tables and the packing are sized for (512), so the
+  per-state tables in data.c are padded out to it and the new states go at the end, where the ids stay.
+- The edit log's entry is position (19 bits) | block (9 bits) at the top, so a record entry is still
+  4 bytes; the records a world saved before this (NBW1..4) are re-encoded 9-bit when it is loaded.
+- The RAM the game uses went from 115200 to 121332 bytes (the cache 38400 to 43204, the chunk slab 6144
+  to 6916, the generator's column buffer and its one-row slab, and render's liquid[]/shape_top[] at
+  NSTATES): about 6 KB more, still well under the 153676 the calculator gives. The frames cost 2.9%
+  more (bench_render.py: 449.3 to 462.5 ms for its 18 frames), and their pixel checksums are identical,
+  as are the generator's checksums and spawn point.
+
 ## 1.4.2
 **Dungeons are ten times as many as 1.3.17's, and about one chunk in six has a sealed room of its own**
 - Ninety-six dungeon tries a chunk where Minecraft makes eight and 1.3.17 made thirty-two: three

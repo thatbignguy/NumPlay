@@ -819,13 +819,20 @@ def main():
     out.append('};')
     out.append(f'const uint8_t tex_flags[{len(names)}] = {{' + ','.join(str(f) for f in flags) + '};')
     out.append('')
-    out.append(f'const uint8_t blk_tex[B_COUNT][6] = {{')
+    NST = blocks.NSTATES   # the per-state tables: 9 bits a state (see blocks.h)
+    def pad(rows, fill='0'):
+        """the table's rows, padded to NSTATES (the states past B_COUNT are none)"""
+        return rows + [fill] * (NST - len(rows))
+
+    out.append(f'const uint8_t blk_tex[NSTATES][6] = {{')
     for s in blocks.S:
         out.append('  {' + ','.join(str(v) for v in faces(s, names)) + '},   /* ' + s['name'] + ' */')
+    out.append('  ' + ', '.join('{0,0,0,0,0,0}' for _ in range(NST - len(blocks.S))) + '   /* unused states */')
     out.append('};')
     models = blocks.MODELS
-    out.append('const uint8_t blk_model[B_COUNT] = {' + ','.join(str(models.index(s['model'])) for s in blocks.S) + '};')
-    out.append('const uint8_t blk_light[B_COUNT] = {' + ','.join(str(s['light']) for s in blocks.S) + '};')
+    out.append('const uint8_t blk_model[NSTATES] = {' + ','.join(pad([str(models.index(s['model'])) for s in blocks.S])) +
+               '};')
+    out.append('const uint8_t blk_light[NSTATES] = {' + ','.join(pad([str(s['light']) for s in blocks.S])) + '};')
     # shapes
     nb, bx = [], []
     for st in blocks.S:
@@ -833,14 +840,14 @@ def main():
         nb.append(len(b))
         b = (b + [(0, 0, 0, 0, 0, 0)] * 2)[:2]
         bx.append('{' + ','.join('{' + ','.join(str(v) for v in box) + '}' for box in b) + '}')
-    out.append('const uint8_t blk_nbox[B_COUNT] = {' + ','.join(str(v) for v in nb) + '};')
-    out.append('const int8_t blk_box[B_COUNT][2][6] = {' + ','.join(bx) + '};')
+    out.append('const uint8_t blk_nbox[NSTATES] = {' + ','.join(pad([str(v) for v in nb])) + '};')
+    out.append('const int8_t blk_box[NSTATES][2][6] = {' + ','.join(pad(bx, '{{0,0,0,0,0,0},{0,0,0,0,0,0}}')) + '};')
     # a front (furnaces, pumpkins, chests: turned to the open side) or a bed's end
     fr = []
     for st in blocks.S:
         t = st['tex']
         fr.append(names.index(t['front']) if isinstance(t, dict) and 'front' in t else 0)
-    out.append('const uint8_t blk_front[B_COUNT] = {' + ','.join(str(v) for v in fr) + '};')
+    out.append('const uint8_t blk_front[NSTATES] = {' + ','.join(pad([str(v) for v in fr])) + '};')
     fl = []
     for s in blocks.S:
         f = TINT[s['tint']]
@@ -850,16 +857,16 @@ def main():
                           'chest', 'bed'):
             f |= BF_SOLID
         fl.append(f)
-    out.append('const uint8_t blk_flags[B_COUNT] = {' + ','.join(str(v) for v in fl) + '};')
-    out.append('const uint8_t blk_tool[B_COUNT] = {' + ','.join(str(blocks.TOOLS.index(s['tool'])) for s in blocks.S) +
-               '};')
-    out.append('const uint8_t blk_level[B_COUNT] = {' + ','.join(str(s['level']) for s in blocks.S) + '};')
+    out.append('const uint8_t blk_flags[NSTATES] = {' + ','.join(pad([str(v) for v in fl])) + '};')
+    out.append('const uint8_t blk_tool[NSTATES] = {' +
+               ','.join(pad([str(blocks.TOOLS.index(s['tool'])) for s in blocks.S])) + '};')
+    out.append('const uint8_t blk_level[NSTATES] = {' + ','.join(pad([str(s['level']) for s in blocks.S])) + '};')
     # hardness in twentieths (255: unbreakable)
-    out.append('const uint8_t blk_hard[B_COUNT] = {' +
-               ','.join(str(255 if s['hard'] < 0 or s['hard'] >= 12.7 else int(round(s['hard'] * 20)))
-                        for s in blocks.S) + '};')
-    out.append('const uint8_t blk_id[B_COUNT] = {' + ','.join(str(s['id']) for s in blocks.S) + '};')
-    out.append('const uint8_t blk_meta[B_COUNT] = {' + ','.join(str(s['meta']) for s in blocks.S) + '};')
+    out.append('const uint8_t blk_hard[NSTATES] = {' +
+               ','.join(pad([str(255 if s['hard'] < 0 or s['hard'] >= 12.7 else int(round(s['hard'] * 20)))
+                            for s in blocks.S])) + '};')
+    out.append('const uint8_t blk_id[NSTATES] = {' + ','.join(pad([str(s['id']) for s in blocks.S])) + '};')
+    out.append('const uint8_t blk_meta[NSTATES] = {' + ','.join(pad([str(s['meta']) for s in blocks.S])) + '};')
     # NOTE for the superflat customizer (gen.c flat_parse_block): a preset layer may name any
     # block by these same Minecraft numeric ids, as id or id:meta (e.g. 1 stone, 2 grass, 3 dirt,
     # 7 bedrock, 12 sand, 20 glass, 44 smooth stone slab, 159:14 red terracotta, 172 terracotta).
@@ -918,17 +925,18 @@ def main():
             k += 1
         else:
             icon_of.append(0xFFFF)
-    out.append('const uint16_t blk_icon[B_COUNT] = {' + ','.join(str(v) for v in icon_of) + '};')
+    out.append('const uint16_t blk_icon[NSTATES] = {' + ','.join(pad([str(v) for v in icon_of], '0xFFFF')) + '};')
     # items: the block state a block counts as, then each item's tables
     def bi(n):
         v = items.block_item(n)
         return 0xFFFF if v is None else v
-    out.append('const uint16_t blk_item[B_COUNT] = {' + ','.join(str(bi(st['name'])) for st in blocks.S) + '};')
-    out.append('const uint16_t blk_fuel[B_COUNT] = {' +
-               ','.join(str(items.fuel_of(i)) for i in range(len(blocks.S))) + '};')
-    out.append('const char *const blk_label[B_COUNT] = {' +
-               ','.join('"' + items.LABELS[st['name']] + '"' if st['name'] in items.LABELS else '0'
-                        for st in blocks.S) + '};')
+    out.append('const uint16_t blk_item[NSTATES] = {' + ','.join(pad([str(bi(st['name'])) for st in blocks.S], '0xFFFF')) +
+               '};')
+    out.append('const uint16_t blk_fuel[NSTATES] = {' +
+               ','.join(pad([str(items.fuel_of(i)) for i in range(len(blocks.S))])) + '};')
+    out.append('const char *const blk_label[NSTATES] = {' +
+               ','.join(pad(['"' + items.LABELS[st['name']] + '"' if st['name'] in items.LABELS else '0'
+                            for st in blocks.S], '0')) + '};')
     I = items.I
     out.append('const char *const it_label[N_ITEMS] = {' + ','.join('"' + it['label'] + '"' for it in I) + '};')
     out.append('const uint16_t it_icon[N_ITEMS] = {' + ','.join(str(first_item + k) for k in range(len(I))) + '};')
@@ -989,7 +997,7 @@ def main():
     # the creative inventory: each tab's items, in id order (blocks, then items)
     tab_lists = [[] for _ in items.TABS]
     for iid in list(range(len(blocks.S))) + [256 + k for k in range(len(items.I))]:
-        tabs = items.tab_of(iid)
+        tabs = items.tab_of(iid, iid < len(blocks.S))
         if tabs:
             for t in tabs:
                 tab_lists[t].append(iid)
@@ -1081,12 +1089,12 @@ def main():
          '/* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */',
          'extern const uint8_t tex_px[NTEX][128];', 'extern const uint16_t tex_pal[NTEX][16];',
          'extern const uint8_t tex_flags[NTEX];', '',
-         '/* faces: -Y +Y -Z +Z -X +X */', 'extern const uint8_t blk_tex[B_COUNT][6];',
-         'extern const uint8_t blk_model[B_COUNT], blk_light[B_COUNT], blk_flags[B_COUNT], blk_tool[B_COUNT];',
-         'extern const uint8_t blk_nbox[B_COUNT];   /* how many boxes it is made of (0: a whole cube) */',
-         'extern const int8_t blk_box[B_COUNT][2][6];   /* the boxes, sixteenths: x0 y0 z0 x1 y1 z1 */',
-         'extern const uint8_t blk_front[B_COUNT];   /* the texture of its front (0: none) */',
-         'extern const uint8_t blk_level[B_COUNT], blk_hard[B_COUNT], blk_id[B_COUNT], blk_meta[B_COUNT];',
+         '/* faces: -Y +Y -Z +Z -X +X */', 'extern const uint8_t blk_tex[NSTATES][6];',
+         'extern const uint8_t blk_model[NSTATES], blk_light[NSTATES], blk_flags[NSTATES], blk_tool[NSTATES];',
+         'extern const uint8_t blk_nbox[NSTATES];   /* how many boxes it is made of (0: a whole cube) */',
+         'extern const int8_t blk_box[NSTATES][2][6];   /* the boxes, sixteenths: x0 y0 z0 x1 y1 z1 */',
+         'extern const uint8_t blk_front[NSTATES];   /* the texture of its front (0: none) */',
+         'extern const uint8_t blk_level[NSTATES], blk_hard[NSTATES], blk_id[NSTATES], blk_meta[NSTATES];',
          '/* blk_flags: bits 0-2 the tint (1 grass, 2 foliage, 3 spruce, 4 birch, 5 water, 6 lily pad) */',
          'extern const uint16_t biome_grass[256], biome_foliage[256], biome_water[256];',
          'extern const int8_t biome_temp[256];   /* temperature x 50 */',
@@ -1097,15 +1105,15 @@ def main():
     for i, n in enumerate(names):
         h.append(f'#define TX_{n.upper().replace("@", "")} {i}')
     h += ['', 'extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];', 'extern const uint32_t spr_off[];',
-          'extern const uint16_t spr_pal[][16];', 'extern const uint16_t blk_icon[B_COUNT];   /* sprite of its icon */']
+          'extern const uint16_t spr_pal[][16];', 'extern const uint16_t blk_icon[NSTATES];   /* sprite of its icon */']
     for i, sp in enumerate(SPRITES):
         h.append(f'#define SP_{sp[0].upper()} {i}')
     for i, n in enumerate(extra):
         h.append(f'#define SP_{n.upper()} {first_gui + i}')
     h += ['', '#include "items.h"',
-          'extern const uint16_t blk_item[B_COUNT];   /* the item a block state counts as (0xFFFF: none) */',
-          'extern const uint16_t blk_fuel[B_COUNT];   /* ticks it burns in a furnace */',
-          'extern const char *const blk_label[B_COUNT], *const it_label[N_ITEMS];',
+          'extern const uint16_t blk_item[NSTATES];   /* the item a block state counts as (0xFFFF: none) */',
+          'extern const uint16_t blk_fuel[NSTATES];   /* ticks it burns in a furnace */',
+          'extern const char *const blk_label[NSTATES], *const it_label[N_ITEMS];',
           'extern const uint16_t it_icon[N_ITEMS], it_dur[N_ITEMS], it_fuel[N_ITEMS];',
           '/* it_tier: the tool or armour material; it_a: attack damage, armour points or food;'
           ' it_b: saturation x 10 */',

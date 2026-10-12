@@ -339,7 +339,7 @@ void spawners_spawn(void) {
     else spawners[i] = spawners[--n_spawners];
   }
   for (int i = 0; i < VCY * VCZ * VCX; i++) {
-    if (vc[i] != B_MOB_SPAWNER) continue;
+    if (vc_get(i) != B_MOB_SPAWNER) continue;
     int x = vc_x0 + i % VCX, t = i / VCX, z = vc_z0 + t % VCZ, y = vc_y0 + t / VCZ;
     note(x, y, z, -1);   /* (ones nobody has set: noted for the picture) */
     if (rnd(6)) continue;

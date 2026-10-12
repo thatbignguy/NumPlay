@@ -488,7 +488,7 @@ int main(void) {
      * aired) holds the same blocks and light as one made there at once. The two can come to
      * rest in different bands (the climb flies, arriving at once does not yet know to), so
      * what they hold of the world is compared where the two windows overlap */
-    static uint8_t a[VCY * VCZ * VCX], l[VCY * VCZ * VCX];
+    static uint8_t a[VC_BYTES], l[VCY * VCZ * VCX];   /* the cache is packed: 9 bits a state */
     int ay = 0;
     for (int k = 0; k < 2; k++) {
       world_new(77, "ut9");
@@ -502,10 +502,13 @@ int main(void) {
       if (k == 0) memcpy(a, vc, sizeof a), memcpy(l, vl, sizeof l), ay = vc_y0;
     }
     int lo = ay > vc_y0 ? ay : vc_y0, hi = VCY + (ay < vc_y0 ? ay : vc_y0), bad = 0;
-    for (int wy = lo; wy < hi; wy++) {
-      bad += memcmp(a + (wy - ay) * VCZ * VCX, vc + (wy - vc_y0) * VCZ * VCX, VCZ * VCX) != 0;
-      bad += memcmp(l + (wy - ay) * VCZ * VCX, vl + (wy - vc_y0) * VCZ * VCX, VCZ * VCX) != 0;
-    }
+    for (int wy = lo; wy < hi; wy++)
+      for (int z = 0; z < VCZ; z++)
+        for (int x = 0; x < VCX; x++) {
+          int i = z * VCX + x;
+          bad += b9_get(a, (wy - ay) * VCZ * VCX + i) != vc_get((wy - vc_y0) * VCZ * VCX + i);
+          bad += l[(wy - ay) * VCZ * VCX + i] != vl[(wy - vc_y0) * VCZ * VCX + i];
+        }
     CHECK(hi > lo && bad == 0);
     /* and coming down from high up (the new rows in the air made as air): as the generator makes them */
     world_new(77, "ut9");
@@ -514,7 +517,7 @@ int main(void) {
         world_follow(8, (float)y, 8);
         while (world_pending()) world_follow(8, (float)y, 8);
       }
-    static uint8_t g[16 * 16 * VCY];
+    static uint8_t g[16 * 16 * VCY / 8 * 9 + 4];   /* a chunk slab: 9 bits a state */
     uint8_t gs[GEN_SCRATCH];
     gen_scratch(gs);
     int off = 0;
@@ -525,7 +528,8 @@ int main(void) {
           for (int z = 0; z < 16; z++)
             for (int x = 0; x < 16; x++) {
               int lx = cx * 16 + x - vc_x0, lz = cz * 16 + z - vc_z0;
-              if (lx >= 0 && lx < VCX && lz >= 0 && lz < VCZ) off += vc[VC_I(lx, y, lz)] != g[(y * 16 + z) * 16 + x];
+              if (lx >= 0 && lx < VCX && lz >= 0 && lz < VCZ)
+                off += vc_get(VC_I(lx, y, lz)) != b9_get(g, (y * 16 + z) * 16 + x);
             }
       }
     CHECK(off == 0);
