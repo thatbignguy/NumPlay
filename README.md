@@ -35,7 +35,7 @@
     <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a></b><br>All games inside NumPlay, disguised as a math app called <b>Matrices</b>, sitting next to the calculator's own apps.</td>
   </tr>
   <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
+    <td width="120" align="center"><img src="docs/media/icon-interest.png" width="64" alt="Interest"></td>
     <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa">numblocks-interest.nwa</a></b><br>Mine, craft, survive, but hidden inside the <b>Interest</b> app, it opens as Interest and you press <code>var</code> to enter Numblocks.</td>
   </tr>
 </table>
