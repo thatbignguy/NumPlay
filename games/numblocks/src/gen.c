@@ -5486,7 +5486,7 @@ static void nether_octave(const Octave *oc, int o, int cx, int cz, float *acc, u
 }
 
 static void quartz_vein(JRand *r, int cx, int cz, int n);
-static void glow_blob(JRand *r, int cx, int cz, int n);
+static void glow_blob(JRand *r, int cx, int cz);
 
 /* the nether's chunk (cx, cz), rows [y0, y0 + h) to the slab (9 bits a state) */
 static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
@@ -5586,15 +5586,14 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
             c_top[z * 16 + x] = (uint8_t)top;
             c_sl[z * 16 + x] = (uint8_t)top;
         }
-    /* the quartz veins: fifty of four to fourteen blocks, y 10..117 (1.8 had
-     * about twenty of four to eleven; this is two to three times as much, in
-     * veins up to fourteen like modern's) */
-    for (int i = 0; i < 50; i++)
-        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 4 + jr_int_i(&r, 11));
-    /* glowstone hanging off the ceiling, only in the open: each try finds the
-     * highest open ceiling in its column and grows a blob under it */
-    for (int i = 0; i < 14; i++)
-        glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 3 + jr_int_i(&r, 4));
+    /* the quartz veins: sixty-five of eight to twenty blocks, y 10..117 (1.8 had
+     * about twenty of four to eleven; this is bigger veins, more often) */
+    for (int i = 0; i < 65; i++)
+        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 8 + jr_int_i(&r, 13));
+    /* glowstone clumps hanging off the ceiling, only in the open: each try finds
+     * the highest open ceiling in its column and grows a clump under it */
+    for (int i = 0; i < 10; i++)
+        glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16));
     memset(sum_pin, 0, sizeof sum_pin);
     last_cx = cx;
     last_cz = cz;
@@ -5616,12 +5615,21 @@ static void quartz_vein(JRand *r, int cx, int cz, int n) {
     }
 }
 
-/* the glowstone: a blob hanging off the ceiling in the open (WorldGenGlowStone1's
- * shape, simplified). The column is scanned down from the top for the highest
- * air with rock over it; without open air under rock there is no blob. Past
- * the first block the blob only needs open air: it hangs off the rock and off
- * itself, the way the vanilla cluster does. */
-static void glow_blob(JRand *r, int cx, int cz, int n) {
+/* the slab's block at chunk-local (x, y, z), or -1 past its window (the
+ * glowstone clump's reads at the chunk and window edges) */
+static int glow_at(int x, int y, int z) {
+    if (x < 0 || x > 15 || z < 0 || z > 15 || y < c_y0 || y >= c_y0 + c_h) return -1;
+    return b9_get(c_out, (y - c_y0) * 256 + z * 16 + x);
+}
+
+/* the glowstone: a clump hanging off the ceiling in the open (WorldGenGlowStone1's
+ * shape). The column is scanned down from the top for the highest air with rock
+ * over it; without open air under rock there is no clump. Past the first block
+ * the clump grows the vanilla way: random offsets around the start, a block
+ * only where air with exactly one glowstone neighbour, so it branches into a
+ * hanging clump instead of walking off as a staircase. Offsets are taken from
+ * the start each try (not a walk), and downward (vanilla's -rand.nextInt(12)). */
+static void glow_blob(JRand *r, int cx, int cz) {
     if (cx < 0 || cx > 15 || cz < 0 || cz > 15) return;
     int top = 122;
     if (top >= c_y0 + c_h - 1) top = c_y0 + c_h - 2;
@@ -5637,15 +5645,22 @@ static void glow_blob(JRand *r, int cx, int cz, int n) {
         }
     }
     if (y < 0) return;
-    for (int i = 0; i < n; i++) {
-        if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < c_y0 || y + 1 >= c_y0 + c_h) break;
-        int o = (y - c_y0) * 256 + cz * 16 + cx;
-        if (b9_get(c_out, o) != B_AIR) break;   /* only in the open */
-        b9_set(c_out, o, B_GLOWSTONE);
-        int d = jr_int_i(r, 4);
-        cx += d == 0 ? 1 : d == 1 ? -1 : 0;
-        cz += d == 2 ? 1 : d == 3 ? -1 : 0;
-        y += jr_int_i(r, 3) == 0 ? 1 : -1;
+    int sx = cx, sy = y, sz = cz;
+    b9_set(c_out, (y - c_y0) * 256 + cz * 16 + cx, B_GLOWSTONE);
+    for (int i = 0; i < 800; i++) {
+        int dx = jr_int_i(r, 8) - jr_int_i(r, 8);
+        int dy = -jr_int_i(r, 12);
+        int dz = jr_int_i(r, 8) - jr_int_i(r, 8);
+        int tx = sx + dx, ty = sy + dy, tz = sz + dz;
+        if (glow_at(tx, ty, tz) != B_AIR) continue;
+        int nbs = 0;
+        if (glow_at(tx + 1, ty, tz) == B_GLOWSTONE && ++nbs > 1) continue;
+        if (glow_at(tx - 1, ty, tz) == B_GLOWSTONE && ++nbs > 1) continue;
+        if (glow_at(tx, ty + 1, tz) == B_GLOWSTONE && ++nbs > 1) continue;
+        if (glow_at(tx, ty - 1, tz) == B_GLOWSTONE && ++nbs > 1) continue;
+        if (glow_at(tx, ty, tz + 1) == B_GLOWSTONE && ++nbs > 1) continue;
+        if (glow_at(tx, ty, tz - 1) == B_GLOWSTONE && ++nbs > 1) continue;
+        if (nbs == 1) b9_set(c_out, (ty - c_y0) * 256 + tz * 16 + tx, B_GLOWSTONE);
     }
 }
 

@@ -3,9 +3,14 @@
  *
  * The frame is vanilla's: either axis, at least 2 x 3 of air inside an obsidian
  * rectangle 4 x 5 (the corners free), lit with flint and steel. Standing in it
- * for a few seconds travels: to the nether at the portal's position divided by
- * eight, back through the portal the world remembers (or at the position times
- * eight), and the far side's portal is made where there is none. */
+ * for a few seconds travels like vanilla: the other dimension at the 1:8
+ * mapping (overworld / 8 to the nether, nether * 8 to the overworld), to the
+ * nearest portal around there, or to a new portal made at the mapped position
+ * where there is none. Portals pair this way: each side finds the other's
+ * closest, so two portals stay linked instead of sharing one. The search only
+ * covers the loaded cache (40 x 40 x 24 around the arrival, ~20 blocks out:
+ * vanilla looks 128, which does not fit), so very close portals still share
+ * and very far ones always pair one-to-one. */
 #include <math.h>
 #include "nb.h"
 #pragma GCC optimize("Os")   /* (not where the time goes: small) */
@@ -130,15 +135,14 @@ void portal_broken(int x, int y, int z) {
   portal_clear(x, y, z - 1);
 }
 
-/* Lighting the frame the player stands in (flint and steel): true if one lit */
+/* Lighting the frame the player stands in (flint and steel): true if one lit.
+ * (Linking needs nothing remembered: each travel maps 1:8 and takes the
+ * nearest portal there, so a lit portal pairs with whatever is closest on the
+ * far side.) */
 bool portal_light_here(int x, int y, int z) {
   int ox, oy, oz, axis, w, h;
   if (!portal_frame(x, y, z, &ox, &oy, &oz, &axis, &w, &h)) return false;
   portal_fill(ox, oy, oz, axis, w, h);
-  if (world_dim == DIM_OVER) {
-    /* the portal the player leaves by leads back here */
-    nb_ret_x = ox, nb_ret_y = oy, nb_ret_z = oz, nb_ret_ok = true;
-  }
   return true;
 }
 
@@ -186,49 +190,68 @@ static void portal_build(int x, int y, int z, int axis) {
   portal_axis = axis;
 }
 
-/* The portal on the far side: one there if the chunks around have one, else
- * one made at the position. */
+/* The portal on the far side: the nearest one the loaded cache has around the
+ * mapped position (x, y, z), else one made there. Vanilla searches 128 blocks;
+ * the cache only holds 40 x 40 x 24, so this is the nearest within ~20 blocks.
+ * The nearest wins (not the first scanned), so each portal pairs with the
+ * closest on the other side instead of every portal sharing the first-made. */
 static void portal_far(int x, int y, int z, int axis) {
-  for (int dz = -8; dz <= 8; dz++)
-    for (int dx = -8; dx <= 8; dx++) {
-      int bx = x + dx, bz = z + dz;
-      for (int by = 34; by < 118; by++)
-        if (is_portal(world_get(bx, by, bz))) {
-          pl.x = bx + 0.5f, pl.y = (float)by, pl.z = bz + 0.5f;
-          pl.vx = pl.vy = pl.vz = 0.0f;
-          return;
-        }
+  int found = 0, best_x = x, best_y = y, best_z = z, best_d = 0;
+  for (int lz = 0; lz < VCZ; lz++)
+    for (int lx = 0; lx < VCX; lx++)
+      for (int ly = 0; ly < VCY; ly++) {
+        int bx = vc_x0 + lx, by = vc_y0 + ly, bz = vc_z0 + lz;
+        if (!is_portal(world_get(bx, by, bz))) continue;
+        int dx = bx - x, dy = by - y, dz = bz - z;
+        int d = dx * dx + dy * dy + dz * dz;
+        if (!found || d < best_d) found = 1, best_d = d, best_x = bx, best_y = by, best_z = bz;
+      }
+  if (found) {
+    /* the bottom of this portal's column: standing on its floor, not halfway up */
+    int bx = best_x, by = best_y, bz = best_z;
+    for (int k = 0; k < 5; k++) {
+      if (!is_portal(world_get(bx, by - 1, bz))) break;
+      by--;
     }
+    pl.x = bx + 0.5f, pl.y = (float)by, pl.z = bz + 0.5f;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    /* its axis, from its shape (a neighbour along X runs along X, NS): the next
+     * travel builds with it */
+    if (is_portal(world_get(bx + 1, by, bz)) || is_portal(world_get(bx - 1, by, bz))) portal_axis = 0;
+    else if (is_portal(world_get(bx, by, bz + 1)) || is_portal(world_get(bx, by, bz - 1))) portal_axis = 1;
+    else portal_axis = axis;
+    /* the cache around the arrival (not the mapped spot a dozen blocks off):
+     * what is built next lands in a loaded cache */
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    return;
+  }
   portal_build(x, y, z, axis);
 }
 
-/* Travelling: to the other dimension, at the portal's mapped position */
+/* floor division by 8 (vanilla's coord mapping, right for negatives too) */
+static inline int div8(int v) { return v >= 0 ? v / 8 : -((-v + 7) / 8); }
+
+/* Travelling: to the other dimension at vanilla's 1:8 mapping, both ways */
 static void portal_travel(void) {
   int axis = portal_axis;
   int px = (int)floorf(pl.x), py = (int)floorf(pl.y), pz = (int)floorf(pl.z);
-  int dx = px >= 0 ? px / 8 : -((-px + 7) / 8);
-  int dz = pz >= 0 ? pz / 8 : -((-pz + 7) / 8);
   if (world_dim == DIM_OVER) {
     /* vanilla's mapping: a nether coordinate is an eighth of the overworld's */
-    nb_ret_x = px, nb_ret_y = py, nb_ret_z = pz, nb_ret_ok = true;
+    int dx = div8(px), dz = div8(pz), dy = py >= 32 && py <= 118 ? py : 40;
     world_switch_dim(DIM_NETHER);
-    pl.x = dx + 0.5f, pl.y = (float)py, pl.z = dz + 0.5f;
+    pl.x = dx + 0.5f, pl.y = (float)dy, pl.z = dz + 0.5f;
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
-    portal_far(dx, py >= 32 && py <= 118 ? py : 40, dz, axis);
+    portal_far(dx, dy, dz, axis);
   } else {
-    int tx, ty, tz;
-    if (nb_ret_ok) {
-      tx = nb_ret_x, ty = nb_ret_y, tz = nb_ret_z;   /* the portal the player came through */
-    } else {
-      tx = px * 8, ty = py, tz = pz * 8;   /* (none remembered: the mapped position) */
-    }
+    /* and back: eight overworld blocks to one of the nether's */
+    int tx = px * 8, tz = pz * 8, ty = py >= 32 && py <= 118 ? py : 64;
     world_switch_dim(DIM_OVER);
     pl.x = tx + 0.5f, pl.y = (float)ty, pl.z = tz + 0.5f;
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
-    portal_far(tx, ty >= 32 && ty <= 118 ? ty : 64, tz, axis);
-    nb_ret_ok = false;   /* the return position is used once: arriving home */
+    portal_far(tx, ty, tz, axis);
   }
   portal_cool = PORTAL_COOL;
   portal_time = 0;

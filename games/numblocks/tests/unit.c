@@ -1426,7 +1426,6 @@ int main(void) {
     CHECK(pl.hit_face >= 0 && world_get(pl.hit_x, pl.hit_y, pl.hit_z) == B_OBSIDIAN);
     player_tick(K_USE, K_USE);
     CHECK(world_get(fx + 1, fy + 1, fz) == B_PORTAL_NS && world_get(fx + 2, fy + 3, fz) == B_PORTAL_NS);
-    CHECK(nb_ret_ok && nb_ret_x == fx + 1 && nb_ret_y == fy + 1 && nb_ret_z == fz);
     /* standing in it: a few seconds, and the nether */
     memset(ents, 0, sizeof ents);
     pl.yaw = 0;
@@ -1507,6 +1506,140 @@ int main(void) {
       CHECK(world_get(hx, fy + 2, hz + 1) != B_PORTAL_NS);
     }
     plat_remove_prefix("utp");
+  }
+  {
+    /* portals link in pairs at 1:8 both ways: a second nether portal at 0,10
+     * arrives at 0,80 in the overworld (not back at the first), and a second
+     * overworld portal gets its own nether portal that leads back to it */
+    world_new(12, "utlink");
+    pl.mode = 1, pl.dead = false, pl.health = 20, pl.flying = true;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    for (int t = 0; t < 100; t++) player_tick(0, 0);   /* (the last test's cooldown) */
+    pl.x = 0.5f, pl.y = 70.0f, pl.z = 0.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    /* overworld A at (0,70,0), along X */
+    int A_x = 0, A_y = 70, A_z = 0;
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 5; j++) {
+        bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+        world_set(A_x + i, A_y + j, A_z, inner ? B_AIR : B_OBSIDIAN);
+      }
+    CHECK(portal_light_here(A_x + 1, A_y + 1, A_z));
+    pl.x = A_x + 1.5f, pl.y = (float)A_y + 1, pl.z = A_z + 0.5f;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    for (int t = 0; t < 10 && world_dim == DIM_OVER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_NETHER);
+    /* nether A' near (0,70,0) */
+    int NA_x = 0, NA_z = 0, NA_found = 0;
+    {
+      int best = 0;
+      for (int lz = 0; lz < VCZ; lz++)
+        for (int lx = 0; lx < VCX; lx++)
+          for (int ly = 0; ly < VCY; ly++) {
+            int bx = vc_x0 + lx, by = vc_y0 + ly, bz = vc_z0 + lz;
+            if (!is_portal(world_get(bx, by, bz))) continue;
+            int dx = bx - 0, dy = by - 70, dz = bz - 0, d = dx * dx + dy * dy + dz * dz;
+            if (!NA_found || d < best) NA_found = 1, best = d, NA_x = bx, NA_z = bz;
+          }
+    }
+    CHECK(NA_found && abs(NA_x - 0) <= 6 && abs(NA_z - 0) <= 6);
+    for (int t = 0; t < 80; t++) player_tick(0, 0);   /* (the arrival cooldown) */
+    /* nether B' at (-1,70,10), along X: ten nether blocks south of A', its
+     * inside at x 0 (0*8) so the overworld side lands at x 0 */
+    int B2_x = -1, B2_y = 70, B2_z = 10;
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 5; j++) {
+        bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+        world_set(B2_x + i, B2_y + j, B2_z, inner ? B_AIR : B_OBSIDIAN);
+      }
+    CHECK(portal_light_here(B2_x + 1, B2_y + 1, B2_z));
+    pl.x = B2_x + 1.5f, pl.y = (float)B2_y + 1, pl.z = B2_z + 0.5f;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    for (int t = 0; t < 10 && world_dim == DIM_NETHER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_OVER);
+    /* at 0,80 (ten times eight): linked to B', not back at A (0,0) */
+    {
+      int ox = (int)floorf(pl.x), oz = (int)floorf(pl.z);
+      CHECK(abs(ox - 0) <= 6 && abs(oz - 80) <= 6);
+      CHECK(abs(oz - A_z) > 40);
+    }
+    for (int t = 0; t < 80; t++) player_tick(0, 0);
+    /* overworld B at (200,70,0): far enough for its own nether portal */
+    pl.x = 200.5f, pl.y = 70.0f, pl.z = 0.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int B_x = 200, B_y = 70, B_z = 0;
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 5; j++) {
+        bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+        world_set(B_x + i, B_y + j, B_z, inner ? B_AIR : B_OBSIDIAN);
+      }
+    CHECK(portal_light_here(B_x + 1, B_y + 1, B_z));
+    pl.x = B_x + 1.5f, pl.y = (float)B_y + 1, pl.z = B_z + 0.5f;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    for (int t = 0; t < 10 && world_dim == DIM_OVER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_NETHER);
+    /* its nether portal near (25,70,0), far from A' (0,70,0) */
+    {
+      int nx = (int)floorf(pl.x), nz = (int)floorf(pl.z);
+      CHECK(abs(nx - 25) <= 6 && abs(nz - 0) <= 6);
+      CHECK(abs(nx - NA_x) > 15);
+    }
+    for (int t = 0; t < 80; t++) player_tick(0, 0);
+    /* into its portal, and back: to B (200,0), not to A (0,0) */
+    {
+      int found = 0, fx2 = 0, fy2 = 0, fz2 = 0, best = 0;
+      for (int lz = 0; lz < VCZ; lz++)
+        for (int lx = 0; lx < VCX; lx++)
+          for (int ly = 0; ly < VCY; ly++) {
+            int bx = vc_x0 + lx, by = vc_y0 + ly, bz = vc_z0 + lz;
+            if (!is_portal(world_get(bx, by, bz))) continue;
+            int dx = bx - 25, dy = by - 70, dz = bz - 0, d = dx * dx + dy * dy + dz * dz;
+            if (!found || d < best) found = 1, best = d, fx2 = bx, fy2 = by, fz2 = bz;
+          }
+      CHECK(found);
+      if (found) {
+        pl.x = fx2 + 0.5f, pl.y = (float)fy2, pl.z = fz2 + 0.5f;
+        pl.vx = pl.vy = pl.vz = 0.0f;
+      }
+    }
+    for (int t = 0; t < 10 && world_dim == DIM_NETHER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_OVER);
+    {
+      int ox = (int)floorf(pl.x), oz = (int)floorf(pl.z);
+      CHECK(abs(ox - 200) <= 8 && abs(oz - 0) <= 8);
+    }
+    plat_remove_prefix("utlink");
+  }
+  {
+    /* glowstone grows as clumps hanging off the ceiling: face-touching blocks,
+     * branching (not a diagonal staircase where nothing face-touches) */
+    world_new(13, "utglow");
+    world_switch_dim(DIM_NETHER);
+    world_follow(8, 108, 8);
+    while (world_pending()) world_follow(8, 108, 8);
+    int total = 0, with_nb = 0, max_nb = 0;
+    for (int lz = 0; lz < VCZ; lz++)
+      for (int lx = 0; lx < VCX; lx++)
+        for (int ly = 0; ly < VCY; ly++) {
+          int bx = vc_x0 + lx, by = vc_y0 + ly, bz = vc_z0 + lz;
+          if (world_get(bx, by, bz) != B_GLOWSTONE) continue;
+          total++;
+          int nbs = 0;
+          if (world_get(bx + 1, by, bz) == B_GLOWSTONE) nbs++;
+          if (world_get(bx - 1, by, bz) == B_GLOWSTONE) nbs++;
+          if (world_get(bx, by + 1, bz) == B_GLOWSTONE) nbs++;
+          if (world_get(bx, by - 1, bz) == B_GLOWSTONE) nbs++;
+          if (world_get(bx, by, bz + 1) == B_GLOWSTONE) nbs++;
+          if (world_get(bx, by, bz - 1) == B_GLOWSTONE) nbs++;
+          if (nbs >= 1) with_nb++;
+          if (nbs > max_nb) max_nb = nbs;
+        }
+    CHECK(total > 20);
+    CHECK(with_nb * 2 >= total);   /* at least half face-touch another */
+    CHECK(max_nb >= 2);            /* branching, not a lone trail */
+    plat_remove_prefix("utglow");
   }
   {
     /* a world saved before the states were 9 bits: its records, written back in the old

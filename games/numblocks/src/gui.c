@@ -107,13 +107,15 @@ static void tint_rect(int x, int y, int w, int h, uint16_t k, int a) {
 /* GuiIngame.renderPortal: standing in a portal covers the screen with the
  * portal's own swirl, thicker until you go through (not a flat purple wash:
  * the nether portal texture, tiled large, scrolling and wobbling as it does
- * in Minecraft, blended over the world by the wait's progress). */
+ * in Minecraft, blended over the world by the wait's progress). The blend
+ * never goes fully opaque: even at the end, just before travelling, the
+ * world shows through (28/32, almost opaque). */
 static void portal_overlay(int y0, int rows, int anim) {
   int tex = blk_tex[B_PORTAL_NS][0];
   const uint8_t *px = tex_px[tex];
   const uint16_t *pal = tex_pal[tex];
-  int a = anim * 32 / 24;
-  if (a > 32) a = 32;
+  int a = anim * 28 / 24;
+  if (a > 28) a = 28;
   if (a <= 0) return;
   int t = (int)(frame_no >> 1);
   for (int r = 0; r < rows; r++) {

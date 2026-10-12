@@ -1,3 +1,24 @@
+## 1.5.2
+**Portals link in pairs at 1:8 both ways, and glowstone grows in clumps, not staircases**
+- Portals pair one-to-one like Minecraft's: both directions map 1:8 (overworld / 8
+  to the nether, nether * 8 to the overworld) and arrive at the nearest portal
+  around the mapped spot, building a new one where there is none - so a second
+  nether portal at 0,10 lands at 0,80 in the overworld instead of coming back
+  through the first. The single remembered return position is gone (old saves
+  still load; their stored return is simply ignored). The search covers the
+  loaded 40 x 40 x 24 cache (~20 blocks out: vanilla looks 128, which does not
+  fit), and arriving at a found portal recenters the cache on it.
+- Glowstone grows the vanilla way (WorldGenGlowStone1): a starter under rock,
+  then random offsets around it with a block only on air with exactly one
+  glowstone neighbour, so it branches into hanging clumps. Before it was a
+  random walk stepping sideways and down every block - a diagonal staircase
+  whose blocks never face-touched. A nether chunk is 1.64 M insns / 7.6 ms
+  (was 1.07 M / 4.9 ms), still inside the 5-15 ms budget.
+- Quartz comes in sixty-five veins of eight to twenty blocks (1.8 had about
+  twenty of four to eleven).
+- The portal overlay never goes fully opaque: even at the end of the wait the
+  world shows through (28/32, almost opaque).
+
 ## 1.5.1
 **The far portal lands on both sides, and a nether save reloads in the nether**
 - The portal the far side builds comes with a floor on both sides now: two obsidian
