@@ -109,6 +109,11 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
               if (blk) mb = MX(MX(MX(a >> 4, b >> 4), MX(d >> 4, e >> 4)), MX(f >> 4, g >> 4));
 #undef MX
             } else {
+              /* Under the world's lowest layer is the void, which Minecraft's sky light layer
+               * reads 15 outside the world: a cell of the bottom row takes light from below as
+               * from any neighbour, so a hole in the floor is lit from it (14) rather than
+               * pitch black, as the intact underside is lit by its 15 (face_lit) */
+              if (y == 0 && vc_y0 == 0 && world_dim == DIM_OVER) ms = 15;
               int n[6] = {x > 0 ? i - 1 : -1, x < VCX - 1 ? i + 1 : -1, z > 0 ? i - VCX : -1,
                           z < VCZ - 1 ? i + VCX : -1, y < VCY - 1 ? i + VCX * VCZ : -1, y > 0 ? i - VCX * VCZ : -1};
               for (int k = 0; k < 6; k++)

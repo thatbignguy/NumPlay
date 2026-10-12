@@ -1,3 +1,27 @@
+## 1.5.6
+**A hole under the world and over the nether's roof renders right**
+- A block over a broken floor block was drawn at the broken block's own depth -
+  a ghost standing in the hole's way, one block lower than the real block, which
+  you only got past by walking through it. `trace()`'s below-world ray start took
+  the plane the ray starts on instead of the next one up: `(y - oy)` where it is
+  `(y + by - oy)`, so the first vertical step entered the cell above without
+  spending a block of distance.
+- A face at the cache's edge lights the way the tracer lights it: `face_pixel()`
+  and `plane_fill()` lit a face whose front cell lies outside the cache at 15
+  (full sky) where `face_lit` lights it by the face's own cell, which read as a
+  darker square with a lighter 2-px outline on the nether's ceiling. Both use the
+  tracer's rule now (15 kept only for the world-bottom void face).
+- The void's light also reaches the light data: the bottom row of the cache takes
+  light from below (`light_box`, world.c), as Minecraft's out-of-world layer
+  reads 15, so a hole in the overworld's floor is a lit pit (light 14) instead of
+  pitch black. Overworld only - the nether's model has no sky light.
+- Ordinary views are untouched: the 18 documented `bench_render.py` frames
+  (--fancy --rain --mobs) are byte-identical with and without (checksums), the
+  deepest stack 20008 -> 20016 B; the below-world repro (bedrock at y=0, the
+  camera in the void below looking up) draws the hole lit, and the adaptive
+  picture equals the full trace there (0 wrong pixels). `make test` passes and
+  `make build && make check` fits (BSS 121941, unchanged).
+
 ## 1.5.5
 **The nether's build limit is 200: its roof is open air to build on, not a cap**
 - The nether is 200 blocks tall now (the overworld's 128, and the 72 the ceiling

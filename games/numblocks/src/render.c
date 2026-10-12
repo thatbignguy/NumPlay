@@ -733,7 +733,10 @@ static uint16_t trace(float dx, float dy, float dz) {
       if ((unsigned)x0 < VCX && (unsigned)z0 < VCZ && (unsigned)bot < VCY) {
         x = x0, y = bot, z = z0;
         t = tj = t0, jf = 0;
-        tx = (x + bx - ox) * ivx, ty = (y - oy) * ivy, tz = (z + bz - oz) * ivz;
+        /* ty is the next plane up, the cell's top (y + 1): the plane the ray starts on (y)
+         * would step into the cell above at the broken block's own depth, so every face
+         * over a hole in the bottom layer was drawn a block too near */
+        tx = (x + bx - ox) * ivx, ty = (y + by - oy) * ivy, tz = (z + bz - oz) * ivz;
         i = VC_I(x, y, z), mi = MC_I(x, y, z);
       } else if (cam_i < 0)
         goto out;
@@ -887,7 +890,8 @@ static int face_pixel(float dx, float dy, float dz, int plane, int f, bool wet) 
        * spectator's head in the rock: only what is solid stands in its way) */
       if (vc_get(fi) != B_AIR && !(wet && is_water(vc_get(fi))) && !(xray && !(blk_flags[vc_get(fi)] & BF_OPAQUE))) return -1;
       light = vl[fi];
-    }
+    } else if (!(f == 0 && y == 0 && vc_y0 == 0))
+      light = vl[i];   /* (outside the cache: as face_lit lights it, not the sky's 15) */
   } else light = vl[i];
   int u, v;
   switch (f) {
@@ -1110,7 +1114,8 @@ static __attribute__((unused)) void plane_fill(uint16_t (*cb)[RW], float (*zb)[R
               goto miss;
             }
             light = vl[fi];
-          }
+          } else if (!(f == 0 && c[1] == 0 && vc_y0 == 0))
+            light = vl[i];   /* (outside the cache: as face_lit lights it, not the sky's 15) */
         }
         tex = blk_front[bk] ? face_tex(bk, f, c[0], c[1], c[2]) : blk_tex[bk][f];
         fl = tex_flags[tex];
