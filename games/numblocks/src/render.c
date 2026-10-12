@@ -195,7 +195,20 @@ static inline int texel_rgb(int b, int tex, int u, int v, int col, int *r, int *
 }
 
 /* ---------------------------------------------------------------- the sky */
+/* the nether: no time of day, no weather, no celestial bodies. The red *is* the
+ * sky: the fog's colour is what a ray runs out of the world into, and where the
+ * rays run out of it the fog has already turned everything the same red, so the
+ * horizon dissolves into red haze in every direction (Java's Nether fog #330808) */
+#define NETHER_R 51
+#define NETHER_G 8
+#define NETHER_B 8
+static bool dim_nether(void) { return world_dim == DIM_NETHER; }
+
 static __attribute__((noinline)) uint16_t sky(float dx, float dy, float dz, float len) {
+  if (dim_nether()) {
+    if (under_water) return pack(NETHER_R / 4, NETHER_G / 3, NETHER_B / 2 + 40);
+    return pack(NETHER_R, NETHER_G, NETHER_B);
+  }
   float e = dy / len;   /* elevation, -1..1 */
   /* horizon (fog colour) to the sky's colour above; below the horizon, fog */
   int gi = e <= 0 ? 0 : e >= 0.4f ? 128 : (int)(e * 320);
@@ -2323,6 +2336,24 @@ void render_frame(const Camera *c, uint32_t tod) {
   float day = cosf(ang * 6.2831853f) * 2 + 0.5f;
   if (day < 0) day = 0;
   if (day > 1) day = 1;
+  if (dim_nether()) {
+    /* the nether: no time of day, no weather, no celestial bodies. The sky and the
+     * fog are the same red, and the fog closes from 10 blocks out (modern Nether
+     * wastes), full by the render distance: shorter than the overworld's, which is
+     * also a speed win. With no sky light there is no sun to dim it either, so the
+     * light tables are set once and for all (the block-light table is the sun's) */
+    setup_light(1.0f);
+    sky_r = fog_r = NETHER_R, sky_g = fog_g = NETHER_G, sky_b = fog_b = NETHER_B;
+    ss_a = 0;
+    star_k = 0;
+    sun_a = 0;
+    cloud_r = NETHER_R, cloud_g = NETHER_G, cloud_b = NETHER_B;
+    cur_max_t = view_dist();
+    fog1 = fminf(cur_max_t, view_reach());
+    cur_max_t = fog1;
+    fog0 = fog1 > 10.0f ? 10.0f : fog1 * 0.75f;
+    goto nether_sky_done;
+  }
   /* World.getSunBrightness: dimmer in rain, dimmer still in a storm */
   float rs = rain_str, ts = thunder_str * rain_str;
   float sunb = 1 - (cosf(ang * 6.2831853f) * 2 + 0.2f);
@@ -2436,6 +2467,7 @@ void render_frame(const Camera *c, uint32_t tod) {
   fog1 = fminf(cur_max_t, view_reach());
   cur_max_t = fog1;
   fog0 = fog1 * 0.75f;
+nether_sky_done:;
   cam_x = (int)floorf(ox), cam_y = (int)floorf(oy), cam_z = (int)floorf(oz);
   cam_i = (unsigned)cam_x < VCX && (unsigned)cam_y < VCY && (unsigned)cam_z < VCZ ? VC_I(cam_x, cam_y, cam_z) : -1;
   cam_b = cam_i < 0 ? B_AIR : vc_get(cam_i);

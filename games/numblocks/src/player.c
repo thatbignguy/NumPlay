@@ -757,6 +757,13 @@ static void use(uint32_t pressed) {
         world_set(x, y, z, B_AIR);
         neighbours_changed(x, y, z);
         tnt_light(x, y, z, 80);
+      } else if (b == B_OBSIDIAN) {
+        /* ItemFlintAndSteel.onItemUse on obsidian: the nether portal's frame
+         * lights (the cell the obsidian faces is the frame's air) */
+        int f = pl.hit_face, fx = x + NX[f], fy = y + NY[f], fz = z + NZ[f];
+        if (!portal_light_here(fx, fy, fz) && world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < WORLD_H &&
+            fire_can_stay(fx, fy, fz))
+          fire_set(fx, fy, fz, 0);
       } else {
         /* ItemFlintAndSteel.onItemUse: fire in the air against the face (BlockFire.onBlockAdded: out at once
          * where it cannot stay) */
@@ -1039,6 +1046,7 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   pl.bob += (want - pl.bob) * 0.4f;
   if (pl.mode == 0) exhaust(moved * (pl.in_water ? 0.015f : pl.sprinting ? 0.1f : 0.0f));
   hazards(y0);
+  portal_tick();
   effects_tick();
   if (pl.mode == 0) food_tick();
   if (pl.dead) return;
@@ -1090,6 +1098,7 @@ void player_tick(uint32_t keys, uint32_t pressed) {
         if (b == B_COAL_ORE) player_add_xp(rnd(3));
         else if (b == B_DIAMOND_ORE || b == B_EMERALD_ORE) player_add_xp(3 + rnd(5));
         else if (b == B_LAPIS_ORE) player_add_xp(2 + rnd(4));
+        else if (b == B_NETHER_QUARTZ_ORE) player_add_xp(rnd(2));
         else if (b == B_REDSTONE_ORE) player_add_xp(1 + rnd(5));
         /* tools wear: 1 a block (swords 2), not for blocks that break at once */
         int k = item_kind(h);

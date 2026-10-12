@@ -1,3 +1,31 @@
+## 1.4.4
+**The nether: netherrack everywhere, caverns, a lava sea and a red sky - and a portal to get there and back**
+- A second generator in gen.c: one density over the whole 128-block column (two noise fields on a
+  coarse 4 x 8 x 4 cell grid, thresholded, a cell's blocks filled whole when its corners agree),
+  netherrack where it is solid, a lava sea filling everything at y <= 31, a rough bedrock floor and
+  ceiling, glowstone hanging under the ceiling, the soul sand and gravel patches modern puts around
+  the sea and 1.8's twenty quartz veins of four to eleven blocks. No caves, no population, no
+  structures, one biome (1.8's Hell, id 8) and no biome layers at all. The octaves are the
+  overworld's, reseeded from the world seed mixed with a constant, so the second dimension costs no
+  RAM of its own.
+- The five new blocks: netherrack, soul sand, nether quartz ore (which drops the quartz item, as
+  1.8's does), the block of quartz (crafted from four quartz items) and the nether portal, which
+  lights what is near it, stops no light and is walked through.
+- The dimension is the world's (world_dim, world_switch_dim): one cache, shared, refilled with the
+  other generator when the player crosses, and its own edit records ("nb1r-3_12.nbe" beside
+  "nb1n-3_12.nbe"). The save is NBW5: the dimension and the nether's return position; worlds from
+  before have their records re-encoded 9-bit once when they load.
+- The screen: the nether's red #330808 is both the sky and the fog, closing from 10 blocks out to
+  the render distance, with no sun, moon, stars or clouds and no time of day or weather - cheaper
+  than the overworld's frame, not dearer. The ticks: no sky light (only the blocks' own light
+  spreads), no weather, no snow or ice, no mobs.
+- The portal: the obsidian frame lit with flint and steel, standing in it for a few seconds, and
+  the 1:8 mapping - with the portal on the far side made where there is none, and a floor to stand
+  on when you arrive.
+- Measured (bench.py, the M7): a nether chunk is 1.07 M insns, 4.9 ms, where an overworld one is
+  25.80 M, 119.4 ms; the overworld's pixel checksums and the generator's are unchanged. The game's
+  RAM is 121426 bytes (from 115200), still well inside what the calculator gives.
+
 ## 1.4.3
 **Block states are 9 bits each now, so there is room for 512 of them: the nether's blocks have somewhere to live**
 - The block cache, the chunk slab, the generator's columns and the edit records hold 9 bits a state

@@ -276,7 +276,7 @@ static void debug_overlay(void) {
   /* built once a frame (hud runs once a strip, ~30 times): the player and the
    * time stay put mid-frame, so every strip draws the same strings */
   static uint32_t built_for = (uint32_t)-1;
-  static char lxyz[64], lblock[64], lface[64], lbio[48], llight[48], lfps[48];
+  static char lxyz[64], lblock[64], lface[64], lbio[48], llight[48], lfps[48], ldim[48];
   if (built_for != frame_no) {
     built_for = frame_no;
     extern uint32_t game_time;
@@ -304,7 +304,9 @@ static void debug_overlay(void) {
     fmt3(pl.z, zs);
     fmt1(yaw, yaws);
     fmt1(pl.pitch, pitchs);
-    char *p;
+    char *p = ldim;   /* the dimension, under the world's type: the nether is one */
+    memcpy(p, "Dimension: ", 11), p += 11;
+    strcpy(p, world_dim == DIM_NETHER ? "Nether" : "Overworld");
     p = lxyz;
     memcpy(p, "XYZ: ", 5), p += 5;
     strcpy(p, xs), p += strlen(xs);
@@ -386,6 +388,8 @@ static void debug_overlay(void) {
   text(lbio, 2, y, 0xFFFF, true);
   y += 9;
   text(llight, 2, y, 0xFFFF, true);
+  y += 9;
+  text(ldim, 2, y, 0xFFFF, true);
   y += 9;
   text(lfps, 2, y, 0xFFFF, true);
 }

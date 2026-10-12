@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.4.3"
+#define NB_VERSION "1.4.4"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -127,6 +127,7 @@ static inline int light_at(int i) { return vl[i] & 15; }          /* sky light *
 static inline int block_light_at(int i) { return vl[i] >> 4; }   /* torches, lava, glowstone... */
 
 void world_new(int64_t seed, const char *name);   /* name: the save's record prefix */
+void world_switch_dim(int dim);   /* to the other dimension: the whole volume again */
 void world_follow(float x, float y, float z);   /* keeps the cache around (x, y, z) */
 void world_spawn(int *x, int *y, int *z);   /* the world's spawn point (the generator's own choice) */
 int world_get(int x, int y, int z);            /* B_AIR outside the cache, B_BEDROCK below 0 */
@@ -285,6 +286,10 @@ Entity *entity_looked_at(float reach, float block_t);   /* the mob under the cro
 extern float tick_frac;
 
 void player_respawn(void);
+/* the nether portal (portal.c): lighting the frame the player stands in, and the
+ * tick that travels after standing in one for a few seconds */
+bool portal_light_here(int x, int y, int z);
+void portal_tick(void);
 
 /* ---------------------------------------------------------------- liquids and growing (tick.c) */
 void fluid_schedule(int x, int y, int z);   /* a liquid there may move */
@@ -362,6 +367,12 @@ extern Options opt;
 extern int64_t world_seed;
 enum { WT_DEFAULT, WT_FLAT };
 extern uint8_t world_type;   /* the world type (WT_*): Default, or Superflat */
+/* the dimension the world is in (save.c): the overworld, or the nether */
+enum { DIM_OVER, DIM_NETHER };
+extern uint8_t world_dim;
+/* where the nether's portal leads back to (the overworld), saved with the world */
+extern int32_t nb_ret_x, nb_ret_y, nb_ret_z;
+extern bool nb_ret_ok;
 extern char world_preset[FLAT_MAX + 1];   /* the world's flat preset (default when Default type) */
 /* Worlds: up to MAX_WORLDS, each in a slot (1..MAX_WORLDS) whose records start "nb<slot>" */
 #define MAX_WORLDS 9

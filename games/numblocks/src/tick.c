@@ -448,6 +448,7 @@ float celestial(uint32_t t) {
 
 /* World.calculateSkylightSubtracted: 0 by day, 11 at night, more in rain and storms */
 int sky_sub(void) {
+  if (world_dim == DIM_NETHER) return 0;   /* no day, no night, no rain dimming it */
   float f = 1 - (cosf(celestial(game_time) * 6.2831853f) * 2 + 0.5f);
   f = f < 0 ? 0 : f > 1 ? 1 : f;
   f = (1 - f) * (1 - rain_str * 5 / 16) * (1 - thunder_str * rain_str * 5 / 16);
@@ -582,9 +583,11 @@ static void freeze_tick(void) {
 }
 
 void world_tick(void) {
-  weather_tick();
-  bolt_tick();
-  freeze_tick();
+  if (world_dim != DIM_NETHER) {   /* the nether has no weather at all */
+    weather_tick();
+    bolt_tick();
+    freeze_tick();
+  }
   fluids_tick();
   /* about 3 a section: the cache is VCX x VCY x VCZ blocks */
   int n = VCX * VCY * VCZ * 3 / 4096;

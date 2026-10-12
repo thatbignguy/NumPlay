@@ -8,6 +8,10 @@
 
 /* Starts a world: seed as a Java long (what /seed prints). Call before anything else. */
 void gen_init(int64_t seed);
+/* The dimension the generator makes: 0 the overworld, 1 the nether (nb.h's DIM_*).
+ * The octaves are reseeded (from a derived seed in the nether), and what the other
+ * dimension cached is dropped, so the two never mix. */
+void gen_set_dim(int dim);
 #define GEN_CACHE_BYTES (25 * 528)   /* the summary cache: on main's stack on the calculator (gen_set_cache) */
 void gen_set_cache(void *mem);
 

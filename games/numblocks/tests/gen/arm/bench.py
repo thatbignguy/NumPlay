@@ -32,6 +32,9 @@ SEED = opt("--seed", 12345)
 OX = opt("--ox", 0)
 OZ = opt("--oz", 0)
 NO_SPAWN = "--no-spawn" in sys.argv
+NETHER = "--nether" in sys.argv
+if NETHER:
+    sys.argv.remove("--nether")
 LINES = sys.argv[sys.argv.index("--lines") + 1] if "--lines" in sys.argv else None
 if LINES:
     args = [a for a in args if a != LINES]
@@ -46,7 +49,8 @@ if "--game-flags" in sys.argv:  # the game's build of gen.c
 subprocess.check_call(["arm-none-eabi-gcc", *CFLAGS, "-nostartfiles", "--specs=nano.specs", "--specs=nosys.specs",
                        "-T", os.path.join(HERE, "bench.ld"), "-Wl,--gc-sections",
                        os.path.join(HERE, "bench.c"), os.path.join(SRC, "gen.c"), "-lm", "-o", ELF,
-                       f"-DY0={Y0}", f"-DH={H}", f"-DSEED={SEED}LL", f"-DOX={OX}", f"-DOZ={OZ}"] + (["-DNO_SPAWN"] if NO_SPAWN else []))
+                       f"-DY0={Y0}", f"-DH={H}", f"-DSEED={SEED}LL", f"-DOX={OX}", f"-DOZ={OZ}",
+                       f"-DDIM={1 if NETHER else 0}"] + (["-DNO_SPAWN"] if NO_SPAWN else []))
 OBJ = os.path.join(OUT, "gen_arm.o")
 subprocess.check_call(["arm-none-eabi-gcc", *CFLAGS, "-c", os.path.join(SRC, "gen.c"), "-o", OBJ])
 print("gen.c alone:")

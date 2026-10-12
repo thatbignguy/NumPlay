@@ -390,7 +390,9 @@ void ents_tick(void) {
   static int spawn_wait;
   if (++spawn_wait >= 20) {
     spawn_wait = 0;
-    if (rule(GR_MOB_SPAWNING)) mobs_spawn();
-    spawners_spawn();
+    if (world_dim != DIM_NETHER) {   /* the nether spawns nothing of its own */
+      if (rule(GR_MOB_SPAWNING)) mobs_spawn();
+      spawners_spawn();
+    }
   }
 }

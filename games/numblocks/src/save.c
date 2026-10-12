@@ -17,6 +17,7 @@
 Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 8};
 int64_t world_seed;
 uint8_t world_type;
+uint8_t world_dim;   /* the dimension (DIM_*): the overworld, or the nether */
 char world_preset[FLAT_MAX + 1] = FLAT_DEFAULT;
 
 /* the record's head: version 1 had no name (it was "New World") */
@@ -40,12 +41,21 @@ typedef struct {
   Head h3;
   char flat_preset[FLAT_MAX + 1];   /* version 4: superflat preset (default for older worlds) */
 } Head4;
+typedef struct {
+  Head4 h4;
+  uint8_t dim, pad;                  /* the dimension the player is in (DIM_*) */
+  int32_t ret_x, ret_y, ret_z;      /* where the nether's portal leads back to (0,0,0: none) */
+} Head5;
 
 extern uint32_t game_time;
 void *tiles_data(uint32_t *len);
 
 uint8_t game_rules = GR_DEFAULT;
 bool world_cheats, lan_open, lan_cheats;
+/* where the portal the player came through leads back to (the overworld), and
+ * whether the world has one at all: the nether's return position */
+int32_t nb_ret_x, nb_ret_y, nb_ret_z;
+bool nb_ret_ok;
 static int slot = 1;                   /* the world being played */
 static char cur_name[WORLD_NAME + 1];  /* its name */
 static uint32_t cur_played;
@@ -75,12 +85,13 @@ static void copy_preset(char *d, const char *s) {
 }
 
 /* a slot's record, read as the latest head (a version 1 record named "New World"); NULL: none */
-static const uint8_t *read_head(int s, Head4 *h, uint32_t *len, uint32_t *head_len) {
+static const uint8_t *read_head(int s, Head4 *h, uint8_t *dim, int32_t ret[3], uint32_t *len, uint32_t *head_len) {
   char rec[8];
   record_of(s, rec);
   const uint8_t *d = plat_load(rec, len);
   if (!d || *len < sizeof(Head1)) return NULL;
   memset(h, 0, sizeof *h);
+  *dim = 0, ret[0] = ret[1] = ret[2] = 0;
   copy_preset(h->flat_preset, FLAT_DEFAULT);
   if (!memcmp(d, "NBW1", 4)) {
     memcpy(&h->h3.h2.h, d, sizeof(Head1));
@@ -97,6 +108,15 @@ static const uint8_t *read_head(int s, Head4 *h, uint32_t *len, uint32_t *head_l
     h->flat_preset[FLAT_MAX] = 0;
     if (!flat_validate(h->flat_preset, NULL, 0)) copy_preset(h->flat_preset, FLAT_DEFAULT);
     *head_len = sizeof(Head4);
+  } else if (!memcmp(d, "NBW5", 4) && *len >= sizeof(Head5)) {
+    Head5 h5;
+    memcpy(&h5, d, sizeof h5);
+    *h = h5.h4;
+    h->flat_preset[FLAT_MAX] = 0;
+    if (!flat_validate(h->flat_preset, NULL, 0)) copy_preset(h->flat_preset, FLAT_DEFAULT);
+    *dim = h5.dim;
+    memcpy(ret, &h5.ret_x, sizeof ret);
+    *head_len = sizeof(Head5);
   } else
     return NULL;
   h->h3.h2.name[WORLD_NAME] = 0;
@@ -111,8 +131,10 @@ static const uint8_t *read_head(int s, Head4 *h, uint32_t *len, uint32_t *head_l
 
 bool world_info(int s, WorldInfo *w) {
   Head4 h;
+  uint8_t dim;
+  int32_t ret[3];
   uint32_t len, hl;
-  const uint8_t *d = read_head(s, &h, &len, &hl);
+  const uint8_t *d = read_head(s, &h, &dim, ret, &len, &hl);
   if (!d) return false;
   Player p;
   memcpy(&p, d + hl, sizeof p);
@@ -161,13 +183,15 @@ bool save_world(void) {
   bool ok = edits_flush();
   uint32_t tl;
   void *t = tiles_data(&tl);
-  Head4 h;
+  Head5 h;
   memset(&h, 0, sizeof h);
-  h.h3.h2.h = (Head1){{'N', 'B', 'W', '4'}, (uint16_t)sizeof pl, (uint16_t)tl, world_seed, game_time, weather};
-  copy_name(h.h3.h2.name, cur_name);
-  h.h3.h2.played = cur_played;
-  h.h3.cheats = world_cheats, h.h3.rules = game_rules, h.h3.type = world_type;
-  copy_preset(h.flat_preset, world_preset);
+  h.h4.h3.h2.h = (Head1){{'N', 'B', 'W', '5'}, (uint16_t)sizeof pl, (uint16_t)tl, world_seed, game_time, weather};
+  copy_name(h.h4.h3.h2.name, cur_name);
+  h.h4.h3.h2.played = cur_played;
+  h.h4.h3.cheats = world_cheats, h.h4.h3.rules = game_rules, h.h4.h3.type = world_type;
+  copy_preset(h.h4.flat_preset, world_preset);
+  h.dim = world_dim;
+  h.ret_x = nb_ret_x, h.ret_y = nb_ret_y, h.ret_z = nb_ret_z;
   /* one record: the head, the player, the tiles (written from a buffer made in the merge
    * scratch) and, after them, the monster spawners that have been set */
   uint32_t sp = (uint32_t)spawners_save(NULL);
@@ -195,8 +219,10 @@ static void played(int s) {
 
 bool load_world(int s) {
   Head4 h;
+  uint8_t dim;
+  int32_t ret[3];
   uint32_t len, hl, tl;
-  const uint8_t *d = read_head(s, &h, &len, &hl);
+  const uint8_t *d = read_head(s, &h, &dim, ret, &len, &hl);
   void *t = tiles_data(&tl);
   /* the spawners are the bytes after the tiles: a count, then 10 for each (0 for a world
    * saved before spawners could be set) */
@@ -209,6 +235,8 @@ bool load_world(int s) {
   game_time = h.h3.h2.h.time;
   world_cheats = h.h3.cheats, lan_open = lan_cheats = false, game_rules = h.h3.rules, world_type = h.h3.type;
   copy_preset(world_preset, h.flat_preset);
+  world_dim = dim;   /* the dimension the player was in */
+  nb_ret_x = ret[0], nb_ret_y = ret[1], nb_ret_z = ret[2], nb_ret_ok = (ret[0] | ret[1] | ret[2]) != 0;
   /* World.calculateInitialWeather */
   weather = h.h3.h2.h.weather;
   rain_str = weather.raining ? 1 : 0;
@@ -220,6 +248,11 @@ bool load_world(int s) {
   char pre[4];
   prefix_of(s, pre);
   world_new(world_seed, pre);
+  if (hl < sizeof(Head5)) {
+    /* a world from before the states were 9 bits: its records are re-encoded once
+     * (the record is written as NBW5 from now on, which says it has been) */
+    edits_convert();
+  }
   if (s != opt.last_world || h.h3.h2.played != opt.plays) played(s);
   return true;
 }
@@ -249,17 +282,26 @@ void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char 
 
 bool rename_world(int s, const char *name) {
   Head4 h;
+  uint8_t dim;
+  int32_t ret[3];
   uint32_t len, hl;
-  const uint8_t *d = read_head(s, &h, &len, &hl);
+  const uint8_t *d = read_head(s, &h, &dim, ret, &len, &hl);
   if (!d) return false;
-  /* the record again with the new head (made in the merge scratch, as saving does) */
-  uint32_t body = len - hl, n = sizeof h + body;
+  /* the record again with the new head (made in the merge scratch, as saving does).
+   * An older record gains the current head, which is what brings the dimension
+   * and the return position with it */
+  Head5 h5;
+  memset(&h5, 0, sizeof h5);
+  h5.h4 = h;
+  memcpy(h5.h4.h3.h2.h.magic, "NBW5", 4);
+  h5.dim = dim;
+  memcpy(&h5.ret_x, ret, sizeof ret);
+  copy_name(h5.h4.h3.h2.name, name);
+  uint32_t body = len - hl, n = sizeof h5 + body;
   uint8_t *b = (uint8_t *)edits_scratch(n);
   if (!b) return false;
-  memcpy(b + sizeof h, d + hl, body);   /* (first: the scratch may be where nothing else is) */
-  memcpy(h.h3.h2.h.magic, "NBW4", 4);
-  copy_name(h.h3.h2.name, name);
-  memcpy(b, &h, sizeof h);
+  memcpy(b + sizeof h5, d + hl, body);   /* (first: the scratch may be where nothing else is) */
+  memcpy(b, &h5, sizeof h5);
   char rec[8];
   record_of(s, rec);
   bool ok = plat_save(rec, b, n);

@@ -13,10 +13,14 @@
  *        [--tree]       (an oak in front of the player, with the spectator's head in its canopy)
  *        [--cave]       (a sealed stone room with no light in it, for what the dark is)
  *        [--void]       (a shaft dug through the bedrock under the player, who hangs in the void below it)
+ *        [--nether]     (the world is the nether's: netherrack, lava sea, red sky)
+ *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
+ *                         the player stands in it and travels when the wait is over)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -53,6 +57,7 @@ int main(int argc, char **argv) {
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
+  int nether = 0, portal = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -73,6 +78,8 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--cave")) cave = 1;
     else if (!strcmp(argv[i], "--void")) void_world = 1;
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
+    else if (!strcmp(argv[i], "--nether")) nether = 1;
+    else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
     else if (!strcmp(argv[i], "--build")) build = 1;
@@ -117,6 +124,51 @@ int main(int argc, char **argv) {
   start_in_world = !title_screen;
   start_type = flat ? WT_FLAT : WT_DEFAULT;
   game_init();
+  if (nether) {
+    /* the nether: the player stands where there is room (the lava and the glowstone
+     * are what lights it, so a glowstone goes over the spot), looking down at the
+     * terrain */
+    world_switch_dim(DIM_NETHER);
+    pl.y = 40;   /* (the cache is 24 blocks tall: this one covers the lava sea's shore) */
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int px = (int)floorf(pl.x), pz = (int)floorf(pl.z), best = -1, bx = px, bz = pz;
+    for (int dz = -14; dz <= 14 && best < 0; dz++)
+      for (int dx = -14; dx <= 14 && best < 0; dx++) {
+        int x = px + dx, z = pz + dz;
+        for (int y = 45; y >= 33; y--)
+          if (world_get(x, y, z) != B_AIR && world_get(x, y + 1, z) == B_AIR && world_get(x, y + 2, z) == B_AIR) {
+            best = y, bx = x, bz = z;
+            break;
+          }
+      }
+    if (best >= 0) {
+      pl.x = bx + 0.5f, pl.z = bz + 0.5f, pl.y = (float)(best + 1), pl.pitch = -24, pl.yaw = 35;
+      for (int k = 0; k < 4; k++) world_set(bx + (k & 1) * 2 - 1, best + 3, bz + (k >> 1) * 2 - 1, B_GLOWSTONE);
+    }
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    if (best >= 0) {
+      int i = VC_I(bx - vc_x0, best + 3 - vc_y0, bz - vc_z0);
+      fprintf(stderr, "nether: spot %d %d %d glowstone light %d (vl %d)\n", bx, best + 1, bz, vl[i] >> 4, vl[i]);
+    }
+    camera_reset();
+  }
+  if (portal) {
+    /* a portal frame in front of the player (an obsidian rectangle 4 x 5 with a
+     * 2 x 3 air inside), the player standing in its air with flint and steel,
+     * looking at the frame's side column */
+    int fx = (int)floorf(pl.x) - 2, fy = (int)floorf(pl.y), fz = (int)floorf(pl.z) + 3;
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 5; j++) {
+        bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+        world_set(fx + i, fy + j, fz, inner ? B_AIR : B_OBSIDIAN);
+      }
+    pl.x = fx + 1.5f, pl.z = fz + 0.5f, pl.y = (float)fy + 1;   /* in the frame's air */
+    pl.inv[0] = (Stack){I_FLINT_AND_STEEL, 1};
+    pl.slot = 0;
+    pl.yaw = 90, pl.pitch = 0;
+  }
   if (give) {
     /* a test kit: tools, blocks, food, armour */
     static const int kit[][2] = {{I_IRON_PICKAXE, 1}, {I_DIAMOND_SWORD, 1}, {B_COBBLESTONE, 64}, {B_PLANKS_OAK, 23},
@@ -280,8 +332,9 @@ int main(int argc, char **argv) {
     if (!game_frame()) break;
     double fms = (clock() - f0) * 1000.0 / CLOCKS_PER_SEC;
     if (fms > slowest) slowest = fms, slowest_at = f;
-    if (trace) printf("%4d gui %2d mode %d %8.2f %8.2f %8.2f health %5.1f%s\n", f, gui, pl.mode, pl.x, pl.y,
-                      pl.z, pl.health, pl.dead ? " DEAD" : "");
+    if (trace)
+      printf("%4d gui %2d mode %d dim %d %8.2f %8.2f %8.2f health %5.1f%s\n", f, gui, pl.mode, world_dim, pl.x, pl.y,
+             pl.z, pl.health, pl.dead ? " DEAD" : "");
     for (const char *s = shots; *s;) {
       if (atoi(s) == f) {
         char p[512];

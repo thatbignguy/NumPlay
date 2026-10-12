@@ -21,6 +21,9 @@
 #ifndef H
 #define H 24
 #endif
+#ifndef DIM
+#define DIM 0
+#endif
 
 volatile uint32_t phase;
 volatile uint32_t sums[64];
@@ -45,6 +48,7 @@ int main(void) {
     gen_scratch(gs);
     gen_set_cache(sumc_buf);
     gen_init(SEED);
+    gen_set_dim(DIM);   /* 0 the overworld, 1 the nether */
     phase = 1;
     /* world load: 4 x 3 chunks */
     for (int cz = -2; cz <= 0; cz++)

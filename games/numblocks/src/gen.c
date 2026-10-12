@@ -105,13 +105,6 @@
 
 #include "blocks.h"
 #include "states.h"   /* the 9-bit block states: the slab's and the columns' accessors */
-#ifdef DBGTERRAIN
-#include <stdio.h>
-void dbg_terrain(void);
-#define DBGTERRAIN dbg_terrain();
-#else
-#define DBGTERRAIN
-#endif
 #ifndef FLAT_DEFAULT
 #define FLAT_DEFAULT "2;7,2x3,2;1"
 #endif
@@ -543,7 +536,7 @@ enum {
     BI_DEEP_OCEAN = 24, BI_STONE_BEACH = 25, BI_COLD_BEACH = 26, BI_BIRCH = 27, BI_BIRCH_HILLS = 28,
     BI_ROOFED = 29, BI_COLD_TAIGA = 30, BI_COLD_TAIGA_HILLS = 31, BI_MEGA_TAIGA = 32, BI_MEGA_TAIGA_HILLS = 33,
     BI_EH_PLUS = 34, BI_SAVANNA = 35, BI_SAVANNA_PLATEAU = 36, BI_MESA = 37, BI_MESA_PLATEAU_F = 38,
-    BI_MESA_PLATEAU = 39
+    BI_MESA_PLATEAU = 39, BI_HELL = 8   /* 1.8's Hell: the nether's */
 };
 
 /* Biome class (getClass(), with BiomeBaseSub reporting its parent's class) */
@@ -1515,6 +1508,28 @@ HOT static void perlin3_octave(const uint8_t *P, float *acc, const uint8_t *need
             }
         }
     }
+}
+
+/* one point of one octave, on its own (the nether's grid sampler): the same
+ * point maths as perlin3_octave's inner loop, at the Q32 coordinates given */
+INLINE float perlin_pt(const uint8_t *P, u64 X, u64 Y, u64 Z) {
+    int xc, yc, zc;
+    float xf, yf, zf;
+    coord_split(X, &xc, &xf);
+    coord_split(Y, &yc, &yf);
+    coord_split(Z, &zc, &zf);
+    float ux = fade(xf), uy = fade(yf), uz = fade(zf);
+    float fx = xf, fy = yf, fz = zf, gx1 = xf - 1, gy1 = yf - 1, gz1 = zf - 1;
+    int l1 = xc, pa = P[l1], pb = P[(l1 + 1) & 255];
+    int j4 = zc, i5 = yc;
+    int j5 = pa + i5, l5 = P[(j5 + 1) & 255] + j4;
+    int i6 = pb + i5, i2 = P[i6 & 255] + j4, j6 = P[(i6 + 1) & 255] + j4;
+    int k5 = P[j5 & 255] + j4;
+    float d16 = lerp(ux, grad3(P[k5 & 255], fx, fy, fz), grad3(P[i2 & 255], gx1, fy, fz));
+    float d7 = lerp(ux, grad3(P[l5 & 255], fx, gy1, fz), grad3(P[j6 & 255], gx1, gy1, fz));
+    float d17 = lerp(ux, grad3(P[(k5 + 1) & 255], fx, fy, gz1), grad3(P[(i2 + 1) & 255], gx1, fy, gz1));
+    float d8 = lerp(ux, grad3(P[(l5 + 1) & 255], fx, gy1, gz1), grad3(P[(j6 + 1) & 255], gx1, gy1, gz1));
+    return lerp(uz, lerp(uy, d16, d7), lerp(uy, d17, d8));
 }
 
 /* per grid column, the range [lo, hi] of y whose points have one of the bits (lo > hi: none);
@@ -5393,12 +5408,222 @@ static void dungeon_book(void) {
 /* ======================================================================== */
 
 static int last_cx = 0x7fffffff, last_cz; /* chunk of the last gen_slab: c_top, c_b16 valid */
+/* ======================================================================== */
+/* The nether: Nether Wastes terrain, one density over the whole column        */
+/* ======================================================================== */
+/* Unlike the overworld there is no height field and no sea level: one noise
+ * over the whole 128-block column, thresholded (> 0 -> netherrack, else air),
+ * with a lava sea filling what is at y <= 31, a rough bedrock floor and ceiling,
+ * glowstone on the ceiling, and the quartz veins 1.8 put in the nether. The
+ * octaves are the overworld's statics, reseeded from the world seed mixed with
+ * a constant (a documented deviation from vanilla's own chain), so the second
+ * dimension costs no RAM of its own. */
+
+/* the dimension: 0 overworld, 1 nether (nb.h's DIM_*) */
+static int g_dim;
+
+/* the nether's seed: the world seed mixed, so its terrain is not the overworld's */
+static i64 nether_seed(i64 s) {
+    u64 v = (u64)s;
+    v ^= v >> 33;
+    v *= 0xFF51AFD7ED558CCDULL;
+    v ^= v >> 33;
+    v *= 0xC4B31B2F4B5CB593ULL;
+    v ^= v >> 33;
+    return (i64)(v ^ 0x6E65746865ULL);   /* "nethe" */
+}
+
+/* ChunkProviderGenerate's noise octave states from a seed (the same draws
+ * whatever dimension they are for), kept in the shared Octave statics */
+static void octaves_seed(i64 seed) {
+    JRand r;
+    jr_seed(&r, seed);
+    for (int i = 0; i < 16; i++) oc_min[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 16; i++) oc_max[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 8; i++) oc_main[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 4; i++) oc_surf[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 10; i++) perm_skip(&r); /* scale noise (unused) */
+    for (int i = 0; i < 16; i++) oc_depth[i].st = r.s, perm_skip(&r);
+}
+
+void gen_set_dim(int dim) {
+    g_dim = dim ? 1 : 0;
+    octaves_seed(g_dim ? nether_seed(g_seed) : g_seed);
+    /* nothing cached is this dimension's: the other one's columns would do */
+    last_cx = bc_cx = 0x7fffffff;
+    bg_ok = 0;
+}
+
+/* the density above which a block is netherrack (the threshold that leaves the
+ * caverns: about two fifths of the column is air between the sea and the ceiling) */
+#define NETHER_DENS_MIN (-0.12f)
+
+/* the nether's grid: 4 blocks across and 8 high a cell, 5 x 17 x 5 cells a chunk */
+#define NGC 5
+#define NGH 17
+#define NGCELLS (NGC * NGH * NGC)
+
+/* one point of one octave of one field, at a grid cell of the chunk: the perlin
+ * value, added into the field (the same point maths as perlin3_octave's). The
+ * horizontal and the vertical scale are separate: the caverns' height is what
+ * makes it read as nether rather than as hills */
+static void nether_octave(const Octave *oc, int o, int cx, int cz, float *acc, u64 sxz, u64 sy, float amp) {
+    i64 off[3];
+    perm_build(oc[o].st, U->t.perm, off);
+    u64 sc = sxz >> o, vc = sy >> o;
+    for (int k = 0; k < NGC; k++) {
+        u64 Z = ((u64)(cz * 16 + k * 4) * sc) + (u64)off[2];
+        for (int j = 0; j < NGH; j++) {
+            u64 Y = ((u64)(j * 8) * vc) + (u64)off[1];
+            float *dst = acc + (j * NGC + k) * NGC;
+            for (int i = 0; i < NGC; i++) {
+                u64 X = ((u64)(cx * 16 + i * 4) * sc) + (u64)off[0];
+                dst[i] += perlin_pt(U->t.perm, X, Y, Z) * amp;
+            }
+        }
+    }
+}
+
+static void quartz_vein(JRand *r, int cx, int cz, int n);
+static void glow_blob(JRand *r, int cx, int cz, int n);
+
+/* the nether's chunk (cx, cz), rows [y0, y0 + h) to the slab (9 bits a state) */
+static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
+    TerrainScratch *T = &U->t;
+    float *A = T->grid, *B = T->acc;
+    uint8_t *cls = T->cls;
+    memset(A, 0, NGCELLS * sizeof(float));
+    memset(B, 0, NGCELLS * sizeof(float));
+    /* field A: the big masses (48-block cells down to 6), field B: the detail that
+     * opens the caverns between them */
+    nether_octave(&oc_min[0], 0, cx, cz, A, FX(1.0f / 40.0f), FX(1.0f / 18.0f), 1.0f);
+    nether_octave(&oc_min[1], 1, cx, cz, A, FX(1.0f / 40.0f), FX(1.0f / 18.0f), 0.5f);
+    nether_octave(&oc_min[2], 2, cx, cz, A, FX(1.0f / 40.0f), FX(1.0f / 18.0f), 0.25f);
+    nether_octave(&oc_max[0], 0, cx, cz, B, FX(1.0f / 12.0f), FX(1.0f / 7.0f), 0.5f);
+    nether_octave(&oc_max[1], 1, cx, cz, B, FX(1.0f / 12.0f), FX(1.0f / 7.0f), 0.25f);
+    /* the density per grid point (the two fields added once) */
+    for (int c = 0; c < NGCELLS; c++) A[c] += B[c];
+    /* per grid cell (4 x 8 x 4 blocks): 1 the eight corners around it are all
+     * netherrack, 2 all air, 0 mixed (a mixed cell's blocks are decided one by
+     * one; the runs that agree are filled whole, as column_density's are) */
+    for (int c = 0; c < NGCELLS; c++) cls[c] = A[c] > NETHER_DENS_MIN ? 1 : 2;
+    for (int k = 0; k < NGC - 1; k++)
+        for (int j = 0; j < NGH - 1; j++)
+            for (int i = 0; i < NGC - 1; i++) {
+                int solid = cls[(j * NGC + k) * NGC + i] & 1;
+                solid += cls[(j * NGC + k + 1) * NGC + i] & 1;
+                solid += cls[((j + 1) * NGC + k) * NGC + i] & 1;
+                solid += cls[((j + 1) * NGC + k + 1) * NGC + i] & 1;
+                solid += cls[(j * NGC + k) * NGC + i + 1] & 1;
+                solid += cls[(j * NGC + k + 1) * NGC + i + 1] & 1;
+                solid += cls[((j + 1) * NGC + k) * NGC + i + 1] & 1;
+                solid += cls[((j + 1) * NGC + k + 1) * NGC + i + 1] & 1;
+                cls[(j * (NGC - 1) + k) * (NGC - 1) + i] = (uint8_t)(solid == 8 ? 1 : solid == 0 ? 2 : 0);
+            }
+    JRand r;
+    jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x4E42ULL);
+    uint16_t *col = T->col;
+    for (int z = 0; z < 16; z++)
+        for (int x = 0; x < 16; x++) {
+            int X = cx * 16 + x, Z = cz * 16 + z;
+            /* the column: whole cells where the corners agree, and the density
+             * interpolated (x, then z, then y: the x and z lerps are the same for
+             * all eight blocks of a level) where they do not */
+            int ci = x >> 2, ck = z >> 2, top = 0;
+            float fx = (float)(x & 3) * 0.25f, fz = (float)(z & 3) * 0.25f;
+            for (int j = 0; j < NGH - 1; j++) {
+                int cl = cls[(j * (NGC - 1) + ck) * (NGC - 1) + ci];
+                int y = j * 8;
+                if (cl == 1) {
+                    for (int q = 0; q < 8; q++) col[y + q] = B_NETHERRACK;
+                    top = y + 7;
+                    continue;
+                }
+                if (cl == 2) {
+                    for (int q = 0; q < 8; q++) col[y + q] = B_AIR;
+                    continue;
+                }
+                const float *p0 = A + (j * NGC + ck) * NGC + ci;
+                const float *p1 = A + ((j + 1) * NGC + ck) * NGC + ci;
+                float d0 = lerp(fx, p0[0], p0[1]), d1 = lerp(fx, p0[NGC], p0[NGC + 1]);
+                float d2 = lerp(fx, p1[0], p1[1]), d3 = lerp(fx, p1[NGC], p1[NGC + 1]);
+                float e0 = lerp(fz, d0, d1), e1 = lerp(fz, d2, d3);
+                float base = e0, step = (e1 - e0) * 0.125f;
+                for (int q = 0; q < 8; q++) {
+                    col[y + q] = base > NETHER_DENS_MIN ? B_NETHERRACK : B_AIR;
+                    if (col[y + q] != B_AIR) top = y + q;
+                    base += step;
+                }
+            }
+            /* the lava sea: everything at y <= 31 that is air is lava */
+            for (int y = 0; y <= 31; y++)
+                if (col[y] == B_AIR) col[y] = B_LAVA;
+            /* the bedrock floor and ceiling, each as rough as 1.8's */
+            {
+                int f = jr_int_i(&r, 5), c = jr_int_i(&r, 5);
+                for (int y = 0; y <= f; y++) col[y] = B_BEDROCK;
+                for (int y = 127 - c; y < 128; y++) col[y] = B_BEDROCK;
+                if (127 - c > top) top = 127 - c;
+            }
+            /* soul sand and gravel around the lava sea, where the surface noise
+             * says so (modern's patches, made of the same low-frequency noise) */
+            {
+                float p = grass_noise_div(X, Z, 24);
+                if (p > 0.45f || p < -0.45f) {
+                    uint8_t patch = p > 0.0f ? B_SOUL_SAND : B_GRAVEL;
+                    for (int y = 29; y <= 31; y++)
+                        if (col[y] == B_NETHERRACK && col[y + 1] != B_NETHERRACK) col[y] = patch;
+                }
+            }
+            if (out)
+                for (int y = 0; y < h; y++) b9_set(out, y * 256 + z * 16 + x, col[y0 + y]);
+            c_top[z * 16 + x] = (uint8_t)top;
+            c_sl[z * 16 + x] = (uint8_t)top;
+        }
+    /* the quartz veins: about twenty of four to eleven blocks, y 10..117 */
+    for (int i = 0; i < 20; i++)
+        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 4 + jr_int_i(&r, 8));
+    /* glowstone hanging off the ceiling (a blob where a column has air under
+     * rock near the top: not every chunk has one) */
+    for (int i = 0; i < 40; i++)
+        glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 2 + jr_int_i(&r, 4));
+    memset(sum_pin, 0, sizeof sum_pin);
+    last_cx = cx;
+    last_cz = cz;
+}
+
+/* the vein: a small blob among the netherrack (WorldGenMinable's shape) */
+static void quartz_vein(JRand *r, int cx, int cz, int n) {
+    int y = 10 + jr_int_i(r, 108);
+    for (int i = 0; i < n; i++) {
+        if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < 0 || y + 1 >= c_h) break;
+        int o = y * 256 + cz * 16 + cx;
+        if (b9_get(c_out, o) == B_NETHERRACK) b9_set(c_out, o, B_NETHER_QUARTZ_ORE);
+        /* the next block of the vein: a step in a random direction, mostly down */
+        int d = jr_int_i(r, 6);
+        cx += d == 4 ? 1 : d == 5 ? -1 : 0;
+        cz += d == 2 ? 1 : d == 3 ? -1 : 0;
+        y += d == 0 ? -1 : d == 1 && i * 2 < n ? 1 : 0;
+    }
+}
+
+/* the glowstone: a few blocks off the ceiling (WorldGenGlowStone1's shape) */
+static void glow_blob(JRand *r, int cx, int cz, int n) {
+    int y = 100 + jr_int_i(r, 23);
+    for (int i = 0; i < n; i++) {
+        if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < 0 || y >= c_h) break;
+        int o = y * 256 + cz * 16 + cx;
+        if (b9_get(c_out, o) != B_AIR || b9_get(c_out, o - 256) == B_AIR) break;   /* hangs */
+        b9_set(c_out, o, B_GLOWSTONE);
+        int d = jr_int_i(r, 4);
+        cx += d == 0 ? 1 : d == 1 ? -1 : 0;
+        cz += d == 2 ? 1 : d == 3 ? -1 : 0;
+        y += jr_int_i(r, 3) == 0 ? 1 : -1;
+    }
+}
+
+
 static uint8_t col_tmp[256 / 8 * 9 + 4];   /* one row of the slab above: 9-bit states */
-#ifdef DBGTERRAIN
-#include <stdio.h>
-unsigned long dbg_terrain_sum;
-void dbg_terrain(void) { dbg_terrain_sum = 0; for (int i = 0; i < c_h * 256; i++) dbg_terrain_sum = dbg_terrain_sum * 31 + (unsigned long)b9_get(c_out, i); }
-#endif
 
 /* who takes the mob of a monster spawner world generation places (gen.h) */
 void (*gen_spawner_hook)(int x, int y, int z, int mob) = 0;
@@ -5420,15 +5645,12 @@ void gen_init(int64_t seed) {
     for (int i = 0; i < NBIOMES; i++) biome_index[BIOMES[i].id] = (uint8_t)i;
     for (int i = 0; i < NLSEEDS; i++) lay_wseed[i] = layer_world(LSEEDS[i]);
     vor_c = layer_world(10);
-    /* ChunkProviderGenerate's noise generators */
+    /* ChunkProviderGenerate's noise generators (octaves_seed: shared with the nether) */
+    octaves_seed(seed);
+    /* the dimension the world is in: the overworld until the world says otherwise */
+    g_dim = 0;
     JRand r;
     jr_seed(&r, seed);
-    for (int i = 0; i < 16; i++) oc_min[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 16; i++) oc_max[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 8; i++) oc_main[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 4; i++) oc_surf[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 10; i++) perm_skip(&r); /* scale noise (unused) */
-    for (int i = 0; i < 16; i++) oc_depth[i].st = r.s, perm_skip(&r);
     SC_LIMIT = FX(684.412f);
     SC_MAINXZ = FX(684.412f / 80.0f);
     SC_MAINY = FX(684.412f / 160.0f);
@@ -5605,6 +5827,10 @@ static const struct { const char *name; uint8_t block; } flat_names[] = {
   {"blackterracotta", B_STAINED_CLAY_BLACK}, {"blackclay", B_STAINED_CLAY_BLACK},
   {"hayblock", B_HAY_BALE}, {"haybale", B_HAY_BALE},
   {"coalblock", B_COAL_BLOCK}, {"redsandstone", B_RED_SANDSTONE}, {"glowstone", B_GLOWSTONE},
+  /* the nether's (a superflat nether, for looking at them) */
+  {"netherrack", B_NETHERRACK}, {"soulsand", B_SOUL_SAND}, {"netherquartzore", B_NETHER_QUARTZ_ORE},
+  {"quartzore", B_NETHER_QUARTZ_ORE}, {"quartzblock", B_QUARTZ_BLOCK}, {"blockofquartz", B_QUARTZ_BLOCK},
+  {"portal", B_PORTAL}, {"netherportal", B_PORTAL},
 };
 
 static int flat_tolower(int c) { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; }
@@ -5943,7 +6169,7 @@ static int flat_block(int y) {
 }
 
 int gen_prepare(int cx, int cz) {
-    if (g_flat) return 0;
+    if (g_dim || g_flat) return 0;
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++)
             if ((dx || dz) && !sum_find(cx + dx, cz + dz)) {
@@ -5960,6 +6186,17 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     }
     if (y0 + h > 128) h = 128 - y0;
     if (h <= 0) return;
+    if (g_dim) {
+        /* the nether's chunk needs the same slab state (c_out and its window):
+         * its veins and glowstone write into the slab directly */
+        c_out = out;
+        c_y0 = y0;
+        c_h = h;
+        c_cx = cx;
+        c_cz = cz;
+        nether_slab(cx, cz, y0, h, out);
+        return;
+    }
     if (g_flat) {
         for (int y = 0; y < h; y++) {
             int b = flat_block(y0 + y);
@@ -5987,7 +6224,6 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
         c_sl[i] = (uint8_t)cs_top(&e->s[i]);
     }
     nb[1][1] = e;
-    DBGTERRAIN
     /* caves and ravines */
     slab_caves(cx, cz, e->s, out, y0, h);
     /* the 3x3 summaries */
@@ -6011,6 +6247,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
 }
 
 int gen_biome(int x, int z) {
+    if (g_dim) return BI_HELL;   /* one biome: no GenLayers and no Voronoi at all */
     if (g_flat) return flat_biome;
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx == last_cx && cz == last_cz) return c_b16[i];
@@ -6039,6 +6276,14 @@ static int can_spawn(int x, int z) {
 void gen_spawn(int *px, int *py, int *pz) {
     JRand r;
     jr_seed(&r, g_seed);
+    if (g_dim) {
+        /* anywhere within 256, above the lava sea: the portal that brings the
+         * player here puts them somewhere safe of its own */
+        *px = -256 + jr_int(&r, 513);
+        *pz = -256 + jr_int(&r, 513);
+        *py = 40;
+        return;
+    }
     if (g_flat) {
         /* WorldChunkManagerHell.findBiomePosition(0, 0, 256): anywhere within 256, all of it grass */
         *px = -256 + jr_int(&r, 513);

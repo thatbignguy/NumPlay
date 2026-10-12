@@ -42,8 +42,11 @@ void edits_setup(const char *world, uint32_t *buf, uint32_t n) {
 }
 bool edits_full(void) { return full; }
 
-/* the dimension the player's changes go to: the world's (DIM_OVER, DIM_NETHER) */
+/* the dimension the player's changes go to: the world's (DIM_OVER, DIM_NETHER).
+ * The journal is flushed first: its entries are this dimension's (they are written
+ * to its records), so they never travel to the other one's */
 void edits_set_dim(int dim) {
+  if (nj) edits_flush();
   edit_dim = dim ? 'n' : 'r';
   cache_ok = false;
 }

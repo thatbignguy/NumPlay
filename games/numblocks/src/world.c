@@ -49,6 +49,15 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
   if (y1 > VCY) y1 = VCY;
   for (int z = z0; z < z1; z++)
     for (int x = x0; x < x1; x++) {
+      /* the nether has no sky (not even a lit one): its light is the blocks' alone,
+       * so the sky pass is skipped and only block light spreads */
+      if (world_dim == DIM_NETHER) {
+        for (int y = VCY - 1; y >= y0; y--) {
+          int i = VC_I(x, y, z), b = vc_get(i);
+          if (y < y1) vl[i] = (uint8_t)(blk_light[b] << 4);
+        }
+        continue;
+      }
       int top = vtop[z * VCX + x] - vc_y0;   /* local y of the first sky-lit cell */
       int lvl = 15;
       for (int y = VCY - 1; y >= y0; y--) {
@@ -345,9 +354,12 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
 }
 
 void world_new(int64_t seed, const char *name) {
+  world_dim = DIM_OVER;   /* a world made now starts in the overworld */
   if (world_type == WT_FLAT) gen_set_flat_preset(world_preset);
   else gen_set_flat(0);
   gen_init(seed);
+  gen_set_dim(world_dim);   /* the dimension's generator (one, shared with the overworld) */
+  edits_set_dim(world_dim);   /* and its records */
   gen_spawner_hook = spawners_made;   /* a dungeon's spawner gets its mob, and the world keeps it */
   edits_setup(name, slab32, sizeof slab32 / 4);
   edits_clear();
@@ -367,6 +379,21 @@ void world_spawn(int *x, int *y, int *z) {
 }
 
 static void world_follow_gen(float x, float y, float z);
+static int vc_dim;   /* the dimension the cache is filled for (world_dim's) */
+
+/* The dimension the world is in: the whole volume again, with the other
+ * dimension's generator (one cache, shared: the blocks the player left behind
+ * come back from the edit records when they return). */
+void world_switch_dim(int dim) {
+  world_dim = (uint8_t)dim;
+  gen_set_dim(dim);
+  edits_set_dim(dim);
+  npend = 0;
+  memset(vpend, 0, sizeof vpend);
+  vc_valid = false;
+  vc_dim = dim;
+  edits_forget();
+}
 
 /* Keeps the cache around (x, y, z). The generator's scratch rides along for the whole of the
  * move (gen.c: its passes never overlap, so one buffer serves them all): on this function's
@@ -403,6 +430,14 @@ static void prepare_ahead(int lx, int lz, int mx, int mz) {
 
 static void world_follow_gen(float x, float y, float z) {
   int px = ifloor(x), py = ifloor(y), pz = ifloor(z);
+  /* a new dimension: the whole volume again (nothing of the other one's is here) */
+  if (vc_dim != world_dim) {
+    vc_valid = false;
+    vc_dim = world_dim;
+    npend = 0;
+    memset(vpend, 0, sizeof vpend);
+    edits_forget();
+  }
   static int wfx, wfz;
   static bool wfgot;
   int lx = px - vc_x0, ly = py - vc_y0, lz = pz - vc_z0;
