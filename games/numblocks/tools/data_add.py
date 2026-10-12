@@ -119,6 +119,8 @@ def add_sprite(T, bs, pal, alpha):
     T['spr_h'].rows.append(16)
     T['spr_alpha'].rows.append(1 if alpha else 0)
     T['spr_pal'].rows.append([pack.rgb565(*c) for c in (pal + [(0, 0, 0)] * (16 - len(pal)))])
+    for name in ('spr_px', 'spr_off', 'spr_w', 'spr_h', 'spr_alpha', 'spr_pal'):
+        T[name].changed = True
     return len(T['spr_off'].rows) - 1
 
 
@@ -190,31 +192,29 @@ def main():
         T['blk_fuel'].add(items.fuel_of(i))
         T['blk_label'].add(items.LABELS[s['name']] if s['name'] in items.LABELS else '0')
 
-    # ---- the icons: a sprite for every new state that has one, then every new item
+    # ---- the icons: a sprite for every new state that has one, then every new item.
+    # New sprites go at the end (past the GUI sprites), so the old sprite indices
+    # (blk_icon, it_icon, SP_*) all stay valid: nothing already packed moves.
     for i in range(nstates, BCOUNT):
         s = blocks.S[i]
         if s['tex'] is None:
             continue
         bs, pal, alpha = pack.pack_sprite(pack.iso_icon(jar, s, None))
         T['blk_icon'].rows[i] = add_sprite(T, bs, pal, alpha)
+    T['blk_icon'].changed = True
     for k in range(nitems0, len(items.I)):
         it = items.I[k]
         bs, pal, alpha = pack.pack_sprite(pack.item_icon(jar, it))
-        T['it_label'].rows.append(it['label'])
-        T['it_icon'].rows.append(add_sprite(T, bs, pal, alpha))
-        T['it_kind'].rows.append(items.KINDS.index(it['kind']))
-        T['it_stack'].rows.append(it['stack'])
-        T['it_dur'].rows.append(it['dur'])
-        T['it_tier'].rows.append(it['tier'])
-        T['it_a'].rows.append(it['a'])
-        T['it_b'].rows.append(it['b'])
-        T['it_place'].rows.append(items.BNAMES.index(it['place']) if it['place'] else 255)
-        T['it_fuel'].rows.append(it['fuel'])
-    # every new block icon stands before the item icons: they all move up by that many
-    shift = len(T['spr_off'].rows) - nsprites0 - (len(items.I) - nitems0)
-    for k in range(nitems0):
-        T['it_icon'].rows[k] += shift
-    T['it_icon'].changed = True
+        T['it_label'].add(it['label'])
+        T['it_icon'].add(add_sprite(T, bs, pal, alpha))
+        T['it_kind'].add(items.KINDS.index(it['kind']))
+        T['it_stack'].add(it['stack'])
+        T['it_dur'].add(it['dur'])
+        T['it_tier'].add(it['tier'])
+        T['it_a'].add(it['a'])
+        T['it_b'].add(it['b'])
+        T['it_place'].add(items.BNAMES.index(it['place']) if it['place'] else 255)
+        T['it_fuel'].add(it['fuel'])
 
     # ---- the recipes
     rec = []

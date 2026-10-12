@@ -2713,6 +2713,10 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
     /* (Minecraft tilts the camera; a red flash says the same here) */
     tint_rect(0, y0, SCREEN_W, rows, RGB(0xFF, 0, 0), pl.hurt_time * 2 / 3);
   }
+  if (gui == GUI_NONE && portal_anim() > 0) {
+    /* standing in a portal: a purple overlay, worse until you go through */
+    tint_rect(0, y0, SCREEN_W, rows, RGB(0x70, 0x18, 0xD0), portal_anim());
+  }
   switch (gui) {
     case GUI_INVENTORY: case GUI_CRAFTING: case GUI_FURNACE: case GUI_CHEST: case GUI_CREATIVE:
       dark_background();

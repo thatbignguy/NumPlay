@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <math.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "nb.h"
 #include "edits.h"
 #include "gen.h"
@@ -1320,6 +1321,220 @@ int main(void) {
     CHECK(events >= 15);                      /* and the ones after it: a stream of them over the two
                                                * minutes, where the one try in sixteen a second it had
                                                * gave about a third as many */
+    delete_world(2);
+  }
+  {
+    /* the nether: netherrack, a lava sea at y <= 31, a rough bedrock floor and ceiling,
+     * one biome (1.8's Hell, 8) and no light of the sky's */
+    world_new(7, "utn");
+    world_switch_dim(DIM_NETHER);
+    world_follow(8, 40, 8);   /* (the window covers the lava sea and its shore) */
+    while (world_pending()) world_follow(8, 40, 8);
+    CHECK(world_dim == DIM_NETHER);
+    CHECK(gen_biome(8, 8) == 8 && gen_biome(-500, 900) == 8);
+    int nrack = 0, nlava = 0, nair = 0, nbed = 0, nsoul = 0, ngrav = 0, nother = 0;
+    int nquartz = 0, nglow = 0;
+    int ylo = vc_y0 > 0 ? vc_y0 : 0, yhi = vc_y0 + VCY < 32 ? vc_y0 + VCY : 32;   /* the rows it holds */
+    CHECK(yhi > ylo);
+    for (int z = 0; z < VCZ; z++)
+      for (int x = 0; x < VCX; x++)
+        for (int y = ylo; y < yhi; y++) {
+          int b = world_get(vc_x0 + x, y, vc_z0 + z);
+          if (b == B_NETHERRACK) nrack++;
+          else if (b == B_LAVA) nlava++;
+          else if (b == B_AIR) nair++;
+          else if (b == B_BEDROCK) nbed++;
+          else if (b == B_SOUL_SAND) nsoul++;
+          else if (b == B_GRAVEL) ngrav++;
+          else if (b == B_NETHER_QUARTZ_ORE) nquartz++;
+          else if (b == B_GLOWSTONE) nglow++;
+          else nother++;
+        }
+    CHECK(nother == 0 && nrack > 1000);   /* netherrack, and the patches and lava near the sea */
+    CHECK(nlava > 100);
+    CHECK(nair == 0);   /* the sea fills everything the density leaves at y <= 31 */
+    /* the nether's light runs two brighter: no block light below 2 anywhere */
+    {
+      int minlb = 15;
+      for (int z = 0; z < VCZ; z++)
+        for (int x = 0; x < VCX; x++)
+          for (int y = 0; y < VCY; y++) {
+            int lb = vl[VC_I(x, y, z)] >> 4;
+            if (lb < minlb) minlb = lb;
+          }
+      CHECK(minlb >= 2);
+    }
+    /* glowstone hangs off the ceiling: some in a high window */
+    world_follow(8, 108, 8);
+    while (world_pending()) world_follow(8, 108, 8);
+    {
+      int nglow = 0;
+      for (int z = 0; z < VCZ; z++)
+        for (int x = 0; x < VCX; x++)
+          for (int y = vc_y0; y < vc_y0 + VCY; y++)
+            if (world_get(vc_x0 + x, y, vc_z0 + z) == B_GLOWSTONE) nglow++;
+      CHECK(nglow > 0);
+    }
+    /* the ceiling: bedrock within a few blocks of 127 */
+    {
+      uint8_t gs[GEN_SCRATCH];   /* (gen_top away from the last chunk's runs the generator) */
+      memset(gs, 0, sizeof gs);
+      gen_scratch(gs);
+      for (int k = 0; k < 40; k++) {
+        int t = gen_top(k * 7 - 100, k * 13 - 60);
+        CHECK(t >= 123 && t <= 127);
+      }
+      gen_scratch(NULL);
+    }
+    /* and back: the overworld's own terrain again (the same seed, the same world) */
+    world_switch_dim(DIM_OVER);
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    int obio = vbiome[(8 - vc_z0) * VCX + 8 - vc_x0];
+    CHECK(obio != 8);   /* (the overworld's biome, as the cache has it) */
+    int over = 0, back = 0;
+    for (int z = 0; z < VCZ; z++)
+      for (int x = 0; x < VCX; x++)
+        for (int y = vc_y0; y < vc_y0 + VCY; y++) {
+          int b = world_get(vc_x0 + x, y, vc_z0 + z);
+          if (b == B_STONE || b == B_WATER || b == B_GRASS || b == B_DIRT || b == B_SAND || b == B_GRAVEL) over++;
+          if (b == B_NETHERRACK) back++;
+        }
+    CHECK(over > 100 && back == 0);   /* (a 1.8 world has ground in it; no netherrack) */
+    plat_remove_prefix("utn");
+  }
+  {
+    /* the portal: the frame lights with flint and steel, standing in it travels to the
+     * nether at the 1:8 mapping, the far side's portal is made where there is none,
+     * and coming back goes through the portal the player left by */
+    world_new(9, "utp");
+    pl.x = 8.5f, pl.y = 70.0f, pl.z = 8.5f;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int fx = (int)floorf(pl.x) - 2, fy = (int)floorf(pl.y), fz = (int)floorf(pl.z) + 3;
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 5; j++) {
+        bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+        world_set(fx + i, fy + j, fz, inner ? B_AIR : B_OBSIDIAN);
+      }
+    /* in its air, looking at the frame's side column: flint and steel lights it */
+    pl.x = fx + 1.5f, pl.z = fz + 0.5f, pl.y = (float)fy + 1;
+    pl.inv[0] = (Stack){I_FLINT_AND_STEEL, 1}, pl.slot = 0, pl.mode = 0, pl.dead = false, pl.health = 20;
+    pl.yaw = 90, pl.pitch = 0, pl.vx = pl.vy = pl.vz = 0;
+    player_look(pl.x, pl.y + 1.62f, pl.z, 90, 0);
+    CHECK(pl.hit_face >= 0 && world_get(pl.hit_x, pl.hit_y, pl.hit_z) == B_OBSIDIAN);
+    player_tick(K_USE, K_USE);
+    CHECK(world_get(fx + 1, fy + 1, fz) == B_PORTAL && world_get(fx + 2, fy + 3, fz) == B_PORTAL);
+    CHECK(nb_ret_ok && nb_ret_x == fx + 1 && nb_ret_y == fy + 1 && nb_ret_z == fz);
+    /* standing in it: a few seconds, and the nether */
+    memset(ents, 0, sizeof ents);
+    pl.yaw = 0;
+    for (int t = 0; t < 100 && world_dim == DIM_OVER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_NETHER);
+    int mx = (fx + 1) / 8, mz = fz / 8;
+    CHECK(mx != 0 || mz != 0);
+    CHECK(abs((int)floorf(pl.x) - mx) <= 2 && abs((int)floorf(pl.z) - mz) <= 2);
+    /* the portal is made on the far side, and standing in it comes back */
+    int found = 0;
+    for (int dz = -3; dz <= 3 && !found; dz++)
+      for (int dx = -3; dx <= 3 && !found; dx++)
+        for (int y = 20; y < 100 && !found; y++)
+          if (world_get(mx + dx, y, mz + dz) == B_PORTAL) {
+            pl.x = mx + dx + 0.5f, pl.z = mz + dz + 0.5f, pl.y = (float)y;
+            pl.vx = pl.vy = pl.vz = 0;
+            found = 1;
+          }
+    CHECK(found);
+    /* the far side's portal spawned whole: a full obsidian ring stands around it */
+    {
+      int nobs = 0;
+      int fx2 = (int)floorf(pl.x), fy2 = (int)floorf(pl.y), fz2 = (int)floorf(pl.z);
+      for (int dy = -2; dy <= 3; dy++)
+        for (int dz = -2; dz <= 2; dz++)
+          for (int dx = -2; dx <= 2; dx++)
+            if (world_get(fx2 + dx, fy2 + dy, fz2 + dz) == B_OBSIDIAN) nobs++;
+      CHECK(nobs >= 10);
+    }
+    for (int t = 0; t < 160 && world_dim == DIM_NETHER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_OVER);
+    /* back through the portal the player left by (or at its place) */
+    CHECK(fabsf(pl.x - (fx + 1.5f)) < 6.0f && fabsf(pl.z - (fz + 0.5f)) < 6.0f && abs((int)floorf(pl.y) - (fy + 1)) < 6);
+    /* breaking the frame breaks the whole interior: one obsidian out, no portal left */
+    {
+      int nportal = 0;
+      for (int j = 1; j <= 3; j++)
+        for (int i = 1; i <= 2; i++)
+          if (world_get(fx + i, fy + j, fz) == B_PORTAL) nportal++;
+      CHECK(nportal == 6);
+      CHECK(world_get(fx, fy + 1, fz) == B_OBSIDIAN);
+      break_block_at(fx, fy + 1, fz, false);
+      nportal = 0;
+      for (int j = 1; j <= 3; j++)
+        for (int i = 1; i <= 2; i++)
+          if (world_get(fx + i, fy + j, fz) == B_PORTAL) nportal++;
+      CHECK(nportal == 0);
+    }
+    /* blowing one up breaks it too: a second frame, lit, TNT next to it */
+    {
+      int gx = fx + 12;
+      for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 5; j++) {
+          bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+          world_set(gx + i, fy + j, fz, inner ? B_AIR : B_OBSIDIAN);
+        }
+      CHECK(portal_light_here(gx + 1, fy + 1, fz));
+      CHECK(world_get(gx + 1, fy + 2, fz) == B_PORTAL);
+      explode((float)gx + 1.5f, (float)fy + 2.0f, (float)fz, 4.0f, true);
+      int left = 0;
+      for (int j = 1; j <= 3; j++)
+        for (int i = 1; i <= 2; i++)
+          if (world_get(gx + i, fy + j, fz) == B_PORTAL) left++;
+      CHECK(left == 0);
+      CHECK(world_get(gx, fy + 1, fz) == B_OBSIDIAN);   /* (the frame stands: only the interior goes) */
+    }
+    plat_remove_prefix("utp");
+  }
+  {
+    /* a world saved before the states were 9 bits: its records, written back in the old
+     * shape, are re-encoded 9-bit (edits_convert) and read the same afterwards */
+    new_world(2, 11, 0, false, WT_DEFAULT, "Old", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int bx = (int)floorf(pl.x), by = (int)floorf(pl.y), bz = (int)floorf(pl.z);
+    world_set(bx, by, bz, B_GOLD_BLOCK);
+    world_set(bx + 1, by, bz, B_DIAMOND_BLOCK);
+    save_world();
+    /* the region's record, written back in the old 8-bit shape */
+    uint32_t len = 0;
+    char rec[40];
+    const uint8_t *r = NULL;
+    for (int i = 0; plat_record(i, rec, sizeof rec); i++)
+      if (!strncmp(rec, "nb2r", 4) && plat_load(rec, &len) && len == 8) {
+        r = plat_load(rec, &len);   /* two entries, 4 bytes each */
+        break;
+      }
+    CHECK(r != NULL);
+    uint32_t old[2];
+    for (int i = 0; i < 2; i++) {
+      uint32_t e;
+      memcpy(&e, r + 4 * i, 4);
+      e = (e & 0x7FFFF) | ((e >> 19) & 511) << 24;   /* the old shape: block on top */
+      old[i] = e;
+    }
+    plat_save(rec, old, sizeof old);
+    /* the world again: the slab is made from the records, so the old shape reads wrong ... */
+    load_world(2);
+    world_switch_dim(DIM_OVER);   /* (the whole volume again, from the records) */
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(bx, by, bz) != B_GOLD_BLOCK);
+    /* ... and the conversion puts it back */
+    edits_convert();
+    world_switch_dim(DIM_OVER);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(bx, by, bz) == B_GOLD_BLOCK && world_get(bx + 1, by, bz) == B_DIAMOND_BLOCK);
     delete_world(2);
   }
   {

@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.4.4"
+#define NB_VERSION "1.4.6"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -286,10 +286,16 @@ Entity *entity_looked_at(float reach, float block_t);   /* the mob under the cro
 extern float tick_frac;
 
 void player_respawn(void);
-/* the nether portal (portal.c): lighting the frame the player stands in, and the
- * tick that travels after standing in one for a few seconds */
+/* the nether portal (portal.c): lighting the frame the player stands in, the
+ * tick that travels after standing in one for a few seconds, and how far
+ * through the wait that is (the screen's purple overlay) */
 bool portal_light_here(int x, int y, int z);
 void portal_tick(void);
+int portal_anim(void);
+/* a block changed next to a portal block: without its whole frame it goes too */
+void portal_changed(int x, int y, int z);
+/* a portal block broken outright: the rest of its interior goes with it */
+void portal_broken(int x, int y, int z);
 
 /* ---------------------------------------------------------------- liquids and growing (tick.c) */
 void fluid_schedule(int x, int y, int z);   /* a liquid there may move */

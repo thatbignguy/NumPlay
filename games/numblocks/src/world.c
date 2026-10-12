@@ -50,11 +50,15 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
   for (int z = z0; z < z1; z++)
     for (int x = x0; x < x1; x++) {
       /* the nether has no sky (not even a lit one): its light is the blocks' alone,
-       * so the sky pass is skipped and only block light spreads */
+       * so the sky pass is skipped and only block light spreads. Without any sky
+       * the dark reads darker than the overworld's night, so everything glows two
+       * levels brighter (lava still stops at 15): the lava sea then reaches. */
       if (world_dim == DIM_NETHER) {
         for (int y = VCY - 1; y >= y0; y--) {
           int i = VC_I(x, y, z), b = vc_get(i);
-          if (y < y1) vl[i] = (uint8_t)(blk_light[b] << 4);
+          int lb = blk_light[b] + 2;
+          if (lb > 15) lb = 15;
+          if (y < y1) vl[i] = (uint8_t)(lb << 4);
         }
         continue;
       }

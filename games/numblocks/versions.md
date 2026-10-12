@@ -1,3 +1,29 @@
+## 1.4.6
+**The nether lit and finished: glowstone that generates, two brighter light, and portals that break**
+- Glowstone finally hangs off the ceiling: its blob writer indexed the slab in absolute rows
+  (nothing ever matched a 24-row window) and asked for rock *under* it instead of above. The
+  quartz veins had the same absolute-rows bug (only y 10..22 ever got ore); both are
+  window-relative now.
+- The nether's block light runs two levels brighter (lava still stops at 15), so the dark reads
+  and the lava sea reaches.
+- A portal breaks as one: breaking any of the frame's obsidian pops the whole interior through
+  the block update, mining a portal block takes the rest of its interior with it, and explosions
+  break portal blocks (they had no blast resistance handling) with the same flood. Portal blocks
+  are no longer washed away by liquids either.
+
+## 1.4.5
+**The portal finished: a purple overlay while you stand in it, creative goes at once, and the far side's portal always spawns whole**
+- Standing in a lit portal purples the screen, worse until you go through (the wait's progress,
+  0 to 24/32 over the 80 ticks); creative travels on the first tick, as in Minecraft.
+- The far side's portal is carved room first (an air pocket around its place), then given its whole
+  obsidian frame even inside solid rock - no more coming out entombed with frameless portal blocks.
+  Portal blocks no longer pop on the next block update (they asked the soil plants stand on for) and
+  liquids stop at them.
+- Fixed along the way: the creative icons' +5 shift (data_add.py moved old item icons but never
+  wrote the new sprites), the hang lighting anything but a whole frame (the scan is bounded at
+  21 x 21 now), the "portal" superflat alias truncating to air (uint8_t), and the nether return
+  position's z lost on save (sizeof on a decayed array).
+
 ## 1.4.4
 **The nether: netherrack everywhere, caverns, a lava sea and a red sky - and a portal to get there and back**
 - A second generator in gen.c: one density over the whole 128-block column (two noise fields on a

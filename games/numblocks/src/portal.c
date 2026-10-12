@@ -27,28 +27,33 @@ static inline int ax_get(int a, int i, int y, int r) { return world_get(a ? r : 
 
 /* The frame the player stands in (their feet in its air): vanilla's scan, both
  * axes. The width grows at this row, the height in whole rows of that width,
- * and the obsidian around it (the corners free). False: no frame here. */
+ * and the obsidian around it (the corners free). False: no frame here.
+ *
+ * Every scan is bounded (vanilla's largest portal is 21 x 21, and the frame is
+ * inside the world): outside the cache world_get reads as air, so an unbounded
+ * scan past a missing frame would walk off to infinity and hang the game. */
+#define PORTAL_MAX 21
 static bool portal_frame(int x, int y, int z, int *ox, int *oy, int *oz, int *axis, int *w, int *h) {
   for (int a = 0; a < 2; a++) {
     int lo = a ? z : x, hi = lo, y0 = y, y1 = y;
-    while (portal_open(ax_get(a, lo - 1, y, a ? x : z))) lo--;
-    while (portal_open(ax_get(a, hi + 1, y, a ? x : z))) hi++;
-    if (hi - lo + 1 < 2) continue;
-    for (;;) {
-      bool row = true;
+    for (int k = 0; k < PORTAL_MAX && portal_open(ax_get(a, lo - 1, y, a ? x : z)); k++) lo--;
+    for (int k = 0; k < PORTAL_MAX && portal_open(ax_get(a, hi + 1, y, a ? x : z)); k++) hi++;
+    if (hi - lo + 1 < 2 || hi - lo + 1 > PORTAL_MAX) continue;
+    for (int k = 0; k < PORTAL_MAX; k++) {
+      bool row = y0 > 0;
       for (int i = lo; i <= hi && row; i++)
         if (!portal_open(ax_get(a, i, y0 - 1, a ? x : z))) row = false;
       if (!row) break;
       y0--;
     }
-    for (;;) {
-      bool row = true;
+    for (int k = 0; k < PORTAL_MAX; k++) {
+      bool row = y1 + 1 < WORLD_H;
       for (int i = lo; i <= hi && row; i++)
         if (!portal_open(ax_get(a, i, y1 + 1, a ? x : z))) row = false;
       if (!row) break;
       y1++;
     }
-    if (y1 - y0 + 1 < 3) continue;
+    if (y1 - y0 + 1 < 3 || y1 - y0 + 1 > PORTAL_MAX) continue;
     bool ok = true;
     for (int j = y0 - 1; j <= y1 + 1 && ok; j++)
       for (int i = lo - 1; i <= hi + 1; i++) {
@@ -82,6 +87,46 @@ static void portal_fill(int ox, int oy, int oz, int axis, int w, int h) {
   portal_axis = axis;
 }
 
+/* The connected portal blocks around (x, y, z) go, framed or not (no drops:
+ * a broken portal leaves nothing). Bounded: interiors are small rectangles,
+ * and every cleared block returns at once, so the depth is the longest path
+ * through what is left (giant portals leave what is past it to the next
+ * update). */
+static int portal_depth;
+#define PORTAL_CLEAR_MAX 64
+static void portal_clear(int x, int y, int z) {
+  if (world_get(x, y, z) != B_PORTAL || portal_depth >= PORTAL_CLEAR_MAX) return;
+  portal_depth++;
+  world_set(x, y, z, B_AIR);
+  portal_clear(x + 1, y, z);
+  portal_clear(x - 1, y, z);
+  portal_clear(x, y + 1, z);
+  portal_clear(x, y - 1, z);
+  portal_clear(x, y, z + 1);
+  portal_clear(x, y, z - 1);
+  portal_depth--;
+}
+
+/* A portal block by a change: without its whole frame around it it goes too.
+ * Breaking or blowing up the frame brings the whole connected interior down. */
+void portal_changed(int x, int y, int z) {
+  if (world_get(x, y, z) != B_PORTAL) return;
+  int ox, oy, oz, axis, w, h;
+  if (portal_frame(x, y, z, &ox, &oy, &oz, &axis, &w, &h)) return;   /* still framed */
+  portal_clear(x, y, z);
+}
+
+/* A portal block broken outright (mined, blown up): the rest of the interior
+ * around (x, y, z) goes with it, framed or not. */
+void portal_broken(int x, int y, int z) {
+  portal_clear(x + 1, y, z);
+  portal_clear(x - 1, y, z);
+  portal_clear(x, y + 1, z);
+  portal_clear(x, y - 1, z);
+  portal_clear(x, y, z + 1);
+  portal_clear(x, y, z - 1);
+}
+
 /* Lighting the frame the player stands in (flint and steel): true if one lit */
 bool portal_light_here(int x, int y, int z) {
   int ox, oy, oz, axis, w, h;
@@ -94,20 +139,29 @@ bool portal_light_here(int x, int y, int z) {
   return true;
 }
 
-/* A portal at (x, y, z), made where there is none: the frame's obsidian is put
- * where it is missing, the interior is cleared and filled, and a floor is laid
- * in front so the player arriving has somewhere to stand. The portal is the
- * smallest there is: 2 x 3 of air in a 4 x 5 of obsidian. */
+/* A portal at (x, y, z), made where there is none: room carved around its
+ * place, the frame's obsidian put in whole, the interior cleared and filled,
+ * and a floor laid in front so the player arriving has somewhere to stand.
+ * The portal is the smallest there is: 2 x 3 of air in a 4 x 5 of obsidian.
+ *
+ * The arrival is often inside solid rock: without the carving the player
+ * comes out entombed in a wall, and a frame put in only where air was has
+ * holes in it (and what portal blocks there are have no frame to hang in). */
 static void portal_build(int x, int y, int z, int axis) {
   int ox = axis ? x : x - 1, oz = axis ? z - 1 : z;   /* the frame's near corner */
+  for (int i = -2; i <= 3; i++)
+    for (int j = 0; j <= 3; j++)
+      for (int k = -1; k <= 1; k++) {
+        int bx = axis ? ox + k : ox + i, by = y + j, bz = axis ? oz + i : oz + k;
+        if (world_get(bx, by, bz) != B_AIR) world_set(bx, by, bz, B_AIR);
+      }
   for (int i = -1; i <= 2; i++)
     for (int j = -1; j <= 3; j++) {
+      bool corner = (i == -1 || i == 2) && (j == -1 || j == 3);
       bool inner = i >= 0 && i <= 1 && j >= 0 && j <= 2;
+      if (corner || inner) continue;
       int bx = axis ? ox : ox + i, by = y + j, bz = axis ? oz + i : oz;
-      if (inner) {
-        if (world_get(bx, by, bz) != B_AIR) world_set(bx, by, bz, B_AIR);
-      } else if (world_get(bx, by, bz) == B_AIR)
-        world_set(bx, by, bz, B_OBSIDIAN);
+      if (world_get(bx, by, bz) != B_OBSIDIAN) world_set(bx, by, bz, B_OBSIDIAN);
     }
   portal_fill(ox, y, oz, axis, 2, 3);
   /* the floor in front of the portal's middle (one block out from its plane),
@@ -172,13 +226,22 @@ static void portal_travel(void) {
   portal_time = 0;
 }
 
-/* Every tick: standing in a portal waits a few seconds, then travels */
+/* Every tick: standing in a portal waits a few seconds, then travels
+ * (creative goes at once, as in Minecraft) */
 void portal_tick(void) {
   if (portal_cool > 0) portal_cool--;
   if (pl.mode == 2) return;   /* a spectator goes through the blocks, not the portal */
   int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
   if (portal_cool == 0 && world_get(x, y, z) == B_PORTAL) {
-    if (++portal_time >= PORTAL_WAIT) portal_travel();
+    if (++portal_time >= (pl.mode == 1 ? 1 : PORTAL_WAIT)) portal_travel();
   } else if (portal_time)
     portal_time--;
+}
+
+/* how far through the wait standing in a portal is, 0..24: the screen's
+ * purple overlay (nothing while travelling creative, which goes at once) */
+int portal_anim(void) {
+  if (portal_time <= 0) return 0;
+  int a = portal_time * 24 / PORTAL_WAIT;
+  return a > 24 ? 24 : a;
 }

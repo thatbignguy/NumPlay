@@ -5596,8 +5596,9 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
 static void quartz_vein(JRand *r, int cx, int cz, int n) {
     int y = 10 + jr_int_i(r, 108);
     for (int i = 0; i < n; i++) {
-        if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < 0 || y + 1 >= c_h) break;
-        int o = y * 256 + cz * 16 + cx;
+        /* (absolute y into the slab's window: out of it, another window has it) */
+        if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < c_y0 || y + 1 >= c_y0 + c_h) break;
+        int o = (y - c_y0) * 256 + cz * 16 + cx;
         if (b9_get(c_out, o) == B_NETHERRACK) b9_set(c_out, o, B_NETHER_QUARTZ_ORE);
         /* the next block of the vein: a step in a random direction, mostly down */
         int d = jr_int_i(r, 6);
@@ -5611,9 +5612,9 @@ static void quartz_vein(JRand *r, int cx, int cz, int n) {
 static void glow_blob(JRand *r, int cx, int cz, int n) {
     int y = 100 + jr_int_i(r, 23);
     for (int i = 0; i < n; i++) {
-        if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < 0 || y >= c_h) break;
-        int o = y * 256 + cz * 16 + cx;
-        if (b9_get(c_out, o) != B_AIR || b9_get(c_out, o - 256) == B_AIR) break;   /* hangs */
+        if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < c_y0 || y + 1 >= c_y0 + c_h) break;
+        int o = (y - c_y0) * 256 + cz * 16 + cx;
+        if (b9_get(c_out, o) != B_AIR || b9_get(c_out, o + 256) == B_AIR) break;   /* hangs off rock */
         b9_set(c_out, o, B_GLOWSTONE);
         int d = jr_int_i(r, 4);
         cx += d == 0 ? 1 : d == 1 ? -1 : 0;
@@ -5760,7 +5761,7 @@ static int flat_top = 3;   /* highest non-air layer (gen_top without a loop each
  * Legal numeric ids are any Minecraft id with a B_* state (blk_id[]/blk_meta[],
  * same ids tools/pack.py uses, e.g. 1 stone, 2 grass, 3 dirt, 7 bedrock, 12 sand,
  * 20 glass, 172 terracotta, 159:14 red terracotta). Unknown ids rejected. */
-static const struct { const char *name; uint8_t block; } flat_names[] = {
+static const struct { const char *name; uint16_t block; } flat_names[] = {
   {"air", B_AIR}, {"stone", B_STONE}, {"granite", B_GRANITE}, {"polishedgranite", B_POLISHED_GRANITE},
   {"diorite", B_DIORITE}, {"polisheddiorite", B_POLISHED_DIORITE}, {"andesite", B_ANDESITE},
   {"polishedandesite", B_POLISHED_ANDESITE}, {"grass", B_GRASS}, {"dirt", B_DIRT},

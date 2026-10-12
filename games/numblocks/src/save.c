@@ -115,7 +115,7 @@ static const uint8_t *read_head(int s, Head4 *h, uint8_t *dim, int32_t ret[3], u
     h->flat_preset[FLAT_MAX] = 0;
     if (!flat_validate(h->flat_preset, NULL, 0)) copy_preset(h->flat_preset, FLAT_DEFAULT);
     *dim = h5.dim;
-    memcpy(ret, &h5.ret_x, sizeof ret);
+    memcpy(ret, &h5.ret_x, 3 * sizeof(int32_t));   /* (ret is a parameter: sizeof it is the pointer's) */
     *head_len = sizeof(Head5);
   } else
     return NULL;

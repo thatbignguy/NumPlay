@@ -630,6 +630,14 @@ void explode(float x, float y, float z, float power, bool blocks) {
         float f = power * (0.7f + rndf() * 0.6f) - d * 0.9f;
         int bx = ifl(x) + dx, by = ifl(y) + dy, bz = ifl(z) + dz;
         int b = world_get(bx, by, bz);
+        if (b == B_PORTAL) {
+          /* (no blast resistance, and nothing to drop: the rest of its interior goes too) */
+          if (f > 0) {
+            world_set(bx, by, bz, B_AIR);
+            portal_broken(bx, by, bz);
+          }
+          continue;
+        }
         if (b == B_AIR || blk_model[b] == M_LIQUID || blk_hard[b] == 255 || b == B_OBSIDIAN) continue;
         float resist = blk_hard[b] / 20.0f * 5 / 5 + 0.3f;   /* (blast resistance, about the hardness) */
         if (f - resist * 0.3f <= 0) continue;

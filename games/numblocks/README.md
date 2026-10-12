@@ -7,6 +7,9 @@ Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1
 - **A real 1.8 world:** the same biomes, hills, caves, lakes and trees as Minecraft 1.8.8, for any seed. Or a superflat world to build on.
 - **Survival:** health, hunger, day and night, zombies, skeletons, creepers and spiders, and pigs, cows, sheep and chickens.
 - **Weather:** rain, snow and thunderstorms with lightning, as often as in 1.8.
+- **The Nether:** netherrack, caverns, a lava sea and a red sky. Build an obsidian frame, light it
+  with flint and steel, stand in it, and you are in the Nether Wastes: nether quartz to find, soul
+  sand and glowstone, and the portal to come back by.
 - **Crafting:** 129 items and all their 1.8 recipes, a furnace, chests, tools that wear out, armor.
 - **Fishing:** cast, wait for the bite, reel in fish, junk or treasure.
 - **Building:** 250 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
