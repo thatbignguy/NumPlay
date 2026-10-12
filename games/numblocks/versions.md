@@ -1,3 +1,24 @@
+## 1.5.9
+**A falling block placed with nothing under it drops at once**
+- A placement runs `neighbours_changed` on the cell it placed into, and that ran the fall only
+  for the six *neighbours* of the cell: a sand, gravel or concrete powder block set into the
+  air (against a wall's side, over a hole) hung where it was put until some change beside it
+  came along. The change itself is checked now (`falling`, `fall_if_loose`, `drop_fall`,
+  player.c): a falling block the change left loose - a placement, `/setblock`, a flow, a fire -
+  drops the moment it is there, exactly as a loose neighbour of a change does.
+- The concrete powder keeps its rule: placed beside water it sets where it is (the wet check
+  runs first), and a dry powder placed in the air drops and sets where it lands.
+- `make test` passes (the new test places sand, gravel and powder into the air the way
+  `place()` and `/setblock` do, and checks them on the floor below; the recorded-block test now
+  puts its powder on the ground, where the name is what is being checked) and
+  `make build && make check` fits (BSS 121941, unchanged; the .nwa grows 24 bytes of text,
+  517857 -> 517881). The documented frames are untouched (`bench_render.py --fancy --rain
+  --mobs`: the 18 checksums identical; `./build/play --frames 120 --mobs --torches --rain`
+  byte-identical), the device build runs (`tools/emu.py`: 780 frames, 37.1 fps, no violations;
+  `tests/test_numblocks_progress.py` passes) and `./build/play --place` frames show it: OK at
+  frame 25 places the sand against a pillar's side over the air, and the frame after it sits on
+  the grass below - the same keys on 1.5.8 leave it hanging in mid-air.
+
 ## 1.5.8
 **Generation's own blocks get their first update: sand and gravel no longer hang, and water and lava no longer stand, in a chunk that has just been made**
 - The generator places blocks; it does not tick them, so a chunk could hold sand and gravel

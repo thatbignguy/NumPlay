@@ -198,6 +198,43 @@ int main(void) {
     CHECK(world_get(bx - 1, by, bz) == B_FLOWING_WATER_4);     /* (and out along it, four steps) */
     plat_remove_prefix("uts2");
   }
+  {
+    /* a falling block placed with nothing under it drops the moment it is placed: the
+     * placement asks neighbours_changed of the cell it placed into, and that cell is now
+     * checked for what is under it too, not only its neighbours - before, sand set into
+     * the air hung there until something beside it changed */
+    world_new(12345, "utf");
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    int bx = 8, bz = 8, by = 72;
+    for (int z = bz - 1; z <= bz + 1; z++)
+      for (int x = bx - 1; x <= bx + 3; x++)
+        for (int y = by - 1; y <= by + 4; y++) world_set(x, y, z, y == by - 1 ? B_STONE : B_AIR);
+    /* set_block, as a placement runs it (world_set, then the cell's own update) */
+    world_set(bx, by + 3, bz, B_SAND);
+    neighbours_changed(bx, by + 3, bz);
+    CHECK(world_get(bx, by + 3, bz) == B_AIR && world_get(bx, by, bz) == B_SAND);
+    world_set(bx + 1, by + 3, bz, B_GRAVEL);
+    neighbours_changed(bx + 1, by + 3, bz);
+    CHECK(world_get(bx + 1, by + 3, bz) == B_AIR && world_get(bx + 1, by, bz) == B_GRAVEL);
+    /* a dry powder too; beside water it still sets where it is placed */
+    world_set(bx + 2, by + 3, bz, B_CONCRETE_POWDER_RED);
+    neighbours_changed(bx + 2, by + 3, bz);
+    CHECK(world_get(bx + 2, by + 3, bz) == B_AIR && world_get(bx + 2, by, bz) == B_CONCRETE_POWDER_RED);
+    world_set(bx + 3, by + 3, bz, B_WATER);
+    world_set(bx + 2, by + 3, bz, B_CONCRETE_POWDER_RED);
+    neighbours_changed(bx + 2, by + 3, bz);
+    CHECK(world_get(bx + 2, by + 3, bz) == B_CONCRETE_RED);
+    /* the command path runs the same update: a powder set into the air drops (as the
+     * command needs cheats, they are lent here and given back) */
+    bool was_cheats = world_cheats;
+    world_cheats = true;
+    pl.x = (float)(bx - 1) + 0.5f, pl.y = (float)by, pl.z = (float)bz + 0.5f;
+    command_run("/setblock ~ ~3 ~ black_concrete_powder");
+    CHECK(world_get(bx - 1, by + 3, bz) == B_AIR && world_get(bx - 1, by, bz) == B_CONCRETE_POWDER_BLACK);
+    world_cheats = was_cheats;
+    plat_remove_prefix("utf");
+  }
   /* two cows fed wheat make a calf (EntityAIMate) */
   {
     extern uint32_t game_time;
@@ -841,8 +878,10 @@ int main(void) {
     CHECK(world_get(sx, sy + 3, sz) == B_OAK_STAIRS);
     command_run("/setblock ~ ~3 ~ light_blue_concrete");
     CHECK(world_get(sx, sy + 3, sz) == B_CONCRETE_LIGHT_BLUE);
-    command_run("/setblock ~ ~3 ~ black_concrete_powder");
-    CHECK(world_get(sx, sy + 3, sz) == B_CONCRETE_POWDER_BLACK);
+    /* (a powder is a falling block: set in the air it drops at once, so it goes on the
+     * ground here, where the name is what is being checked) */
+    command_run("/setblock ~ ~ ~ black_concrete_powder");
+    CHECK(world_get(sx, sy, sz) == B_CONCRETE_POWDER_BLACK);
     /* /clear: a name clears the one item it names */
     memset(pl.inv, 0, sizeof pl.inv);
     command_run("/give @p red_wool 2");

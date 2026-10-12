@@ -299,12 +299,41 @@ static bool wet_at(int x, int y, int z) {
   return false;
 }
 
-/* a block changed at (x, y, z): what stood on it or hung on it may fall off */
+/* a block that falls when nothing holds it up (BlockFalling: sand, gravel, concrete powder) */
+static bool falling(int b) {
+  return b == B_SAND || b == B_RED_SAND || b == B_GRAVEL || is_concrete_powder(b);
+}
+
+/* the drop itself: straight down, at once, to the first block that is not replaceable (the
+ * world's floor at y = 0 is where it stops for good). The change runs its neighbours after,
+ * so what stood on the dropped block falls with it */
+static void drop_fall(int x, int y, int z, int b) {
+  int yy = y;
+  while (yy > 0 && replaceable(world_get(x, yy - 1, z))) yy--;
+  world_set(x, y, z, B_AIR);
+  world_set(x, yy, z, b);
+  /* (into water or beside it: concrete where it lands) */
+  if (is_concrete_powder(b) && wet_at(x, yy, z)) world_set(x, yy, z, concrete_of(b));
+  neighbours_changed(x, y, z);
+}
+
+/* a falling block at (x, y, z) with nothing under it */
+static void fall_if_loose(int x, int y, int z, int b) {
+  if (!falling(b) || y <= 0 || !replaceable(world_get(x, y - 1, z))) return;
+  drop_fall(x, y, z, b);
+}
+
+/* a block changed at (x, y, z): what stood on it or hung on it may fall off - and the
+ * change itself may be a block nothing holds up */
 void neighbours_changed(int x, int y, int z) {
   fluid_schedule(x, y, z);
-  /* the change itself: powder placed beside water (or a wet change left in its place) sets */
+  /* the change itself: powder placed beside water (or a wet change left in its place) sets,
+   * and a falling block placed with nothing under it drops here and now (the placement asks
+   * neighbours_changed of the cell it placed into; without this the sand set into the air
+   * hung there until some change beside it) */
   int here = world_get(x, y, z);
   if (is_concrete_powder(here) && wet_at(x, y, z)) world_set(x, y, z, concrete_of(here));
+  else fall_if_loose(x, y, z, here);
   for (int f = 0; f < 6; f++) {
     int nx = x + NX[f], ny = y + NY[f], nz = z + NZ[f];
     int b = world_get(nx, ny, nz);
@@ -319,16 +348,7 @@ void neighbours_changed(int x, int y, int z) {
       continue;
     }
     /* sand, gravel and concrete powder fall (straight down, at once) */
-    if ((b == B_SAND || b == B_RED_SAND || b == B_GRAVEL || is_concrete_powder(b)) && replaceable(world_get(nx, ny - 1, nz)) &&
-        ny > 0) {
-      int yy = ny;
-      while (yy > 0 && replaceable(world_get(nx, yy - 1, nz))) yy--;
-      world_set(nx, ny, nz, B_AIR);
-      world_set(nx, yy, nz, b);
-      /* (into water or beside it: concrete where it lands) */
-      if (is_concrete_powder(b) && wet_at(nx, yy, nz)) world_set(nx, yy, nz, concrete_of(b));
-      neighbours_changed(nx, ny, nz);
-    }
+    fall_if_loose(nx, ny, nz, b);
   }
 }
 
@@ -340,7 +360,7 @@ void neighbours_changed(int x, int y, int z) {
  * once the cache has moved and the ground below is there. */
 bool settle_fall(int x, int y, int z) {
   int b = world_get(x, y, z);
-  if (b != B_SAND && b != B_RED_SAND && b != B_GRAVEL) return false;
+  if (b != B_SAND && b != B_RED_SAND && b != B_GRAVEL) return false;   /* (the generator makes no powder) */
   if (y <= 0 || !world_loaded(x, y - 1, z) || !replaceable(world_get(x, y - 1, z))) return false;
   int yy = y;
   while (yy > 0 && world_loaded(x, yy - 1, z) && replaceable(world_get(x, yy - 1, z))) yy--;

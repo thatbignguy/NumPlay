@@ -26,6 +26,11 @@
  *                         leave blocks: the cache slides a little and back, and when the
  *                         chunks are made again the settle pass drops the sand and starts
  *                         the water - the frames show the sand down and the stream growing)
+ *        [--place]      (sand in hand before a stone pillar over the air: OK at frame 25
+ *                         places it against the side, and the block's own update - the cell
+ *                         it was placed into is checked for what is under it - drops it to
+ *                         the ground at once, where a build that only checked its
+ *                         neighbours leaves it hanging)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
  *
@@ -69,7 +74,7 @@ int main(int argc, char **argv) {
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -95,6 +100,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--roof")) roof = 1;
     else if (!strcmp(argv[i], "--concrete")) concrete = 1;
     else if (!strcmp(argv[i], "--settle")) settle = 1;
+    else if (!strcmp(argv[i], "--place")) placing = 1;
     else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
@@ -360,6 +366,31 @@ int main(int argc, char **argv) {
             world_get(sx, fy + 1, sz) == B_SAND ? "sand" : "NOT SAND", wx, fy + 2, wz,
             world_get(wx, fy + 2, wz) == B_WATER ? "a source" : "NOT A SOURCE", fy + 1,
             world_get(wx, fy + 1, wz) == B_FALLING_WATER ? "falling" : "not yet");
+  }
+  if (placing) {
+    /* A block placed in the air falls the moment it is placed: a placement runs
+     * neighbours_changed on the cell it placed into, and that cell is checked for what is
+     * under it too - not only its neighbours, which is all that was checked before, so the
+     * sand hung where it was put until something beside it changed. A cleared field with a
+     * stone pillar one block ahead; the player looks at the pillar's top block, the
+     * crosshair on its side over the air, the sand in hand, and OK at frame 25 places it:
+     * the frame after the placement has it on the grass under the crosshair. */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 3; z <= pz + 9; z++)
+      for (int x = px - 6; x <= px + 6; x++)
+        for (int y = fy - 1; y < fy + 6; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
+    for (int y = fy; y <= fy + 2; y++) world_set(px, y, pz + 3, B_STONE);
+    /* back a block, so the crosshair's block and the ground it drops onto are both in
+     * the picture (and the pillar stays inside the Creative reach, 5) */
+    pl.x = (float)px + 0.5f, pl.y = (float)fy, pl.z = (float)pz - 1.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    pl.mode = 1, pl.flying = false;
+    pl.inv[0] = (Stack){B_SAND, 64}, pl.slot = 0;
+    pl.yaw = 0, pl.pitch = -12;   /* (the pillar's top block ahead, its side over the air) */
+    camera_reset();
+    fprintf(stderr, "place: pillar %d %d %d..%d; OK at 25 puts the sand at %d %d %d, over the air\n", px, pz + 3, fy,
+            fy + 2, px, fy + 2, pz + 2);
   }
   if (mobs) {
     /* a row of every mob, 4 blocks ahead, facing the player, on a cleared grass field */
