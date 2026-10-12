@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Renders docs/media/social.png, the 1280x640 picture shown when the
 repository is shared (upload it in the repository's settings)."""
-import json
 import os
 import sys
 
@@ -15,18 +14,18 @@ import make_icon  # noqa: E402
 W, H = 1280, 640
 bg = Image.new("RGB", (W, H))
 px = bg.load()
-a, b = (40, 22, 110), (12, 10, 40)
+a, b = (16, 62, 58), (10, 22, 40)   # the icon's deep teal, into a night blue
 for y in range(H):
     for x in range(W):
         t = (x * 0.4 + y * 0.6) / (W * 0.4 + H * 0.6)
         px[x, y] = tuple(int(p + (q - p) * t) for p, q in zip(a, b))
 img = bg.convert("RGBA")
-games = {g["id"]: g for g in json.load(open(os.path.join(ROOT, "games", "games.json")))}
-shots = [("numdash", 1), ("crossyroad", 1), ("numdrive", 0), ("tetris", 1)]
+shots = ["numdash/docs/screenshots/gameplay.png", "crossyroad/screenshots/river.png", "numdrive/docs/shot1.png",
+         "tetris/docs/shot2.png"]
 cw, ch = 290, 218
-for k, (gid, i) in enumerate(shots):
+for k, shot in enumerate(shots):
     x, y = 650 + (k % 2) * (cw + 24), 90 + (k // 2) * (ch + 24)
-    im = Image.open(os.path.join(ROOT, "games", gid, games[gid]["shots"][i])).convert("RGB").resize((cw, ch), Image.LANCZOS)
+    im = Image.open(os.path.join(ROOT, "games", shot)).convert("RGB").resize((cw, ch), Image.LANCZOS)
     sh = Image.new("RGBA", (cw + 60, ch + 60), (0, 0, 0, 0))
     ImageDraw.Draw(sh).rounded_rectangle([30, 36, cw + 30, ch + 36], radius=18, fill=(0, 0, 0, 160))
     img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(12)), (x - 30, y - 30))
@@ -44,6 +43,6 @@ f2 = ImageFont.truetype(font, 36)
 f2.set_variation_by_axes([700])
 d = ImageDraw.Draw(img)
 d.text((64, 282), "NumPlay", font=f1, fill=(255, 255, 255))
-d.multiline_text((72, 410), "Every game for your\nNumWorks calculator,\nin one app.", font=f2, fill=(220, 215, 255),
+d.multiline_text((72, 410), "Every game for your\nNumWorks calculator,\nin one app.", font=f2, fill=(205, 232, 232),
                  spacing=8)
 img.convert("RGB").save(os.path.join(ROOT, "docs", "media", "social.png"), optimize=True)

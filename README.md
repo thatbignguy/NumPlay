@@ -7,32 +7,32 @@
 <h3 align="center">Numplay, but with a more advanced and disguised version of numblocks.</h3>
 
 <p align="center">
-  <b>17 free games for your NumWorks calculator, in one app.</b><br>
-  Plus <b>The Final Earth 2</b>, <b>Hollow Knight</b>, <b>Celeste</b> and <b>Champion Island</b>, four big games that come as apps of their own.<br>
-  For the N0110, N0115 and N0120, in English, <a href="#in-french-and-chinese">French and Chinese</a>, and for <a href="#on-upsilon">Upsilon</a>.
+  <b>16 free games for your NumWorks calculator, in one app.</b><br>
+  Plus six big games that install on their own (NumBlocks included, with the Nether and more). For the N0110, N0115 and N0120, in English, French and Chinese.
 </p>
 
 <p align="center">
-  <a href="https://github.com/thatbignguy/NumPlay/releases"><img src="https://img.shields.io/github/downloads/thatbignguy/NumPlay/total?style=for-the-badge&label=downloads&color=7B43FF" alt="Total downloads"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases"><img src="https://img.shields.io/github/downloads/thatbignguy/NumPlay/total?style=for-the-badge&label=downloads&color=1E7F74" alt="Total downloads"></a>
   <a href="https://github.com/thatbignguy/NumPlay/stargazers"><img src="https://img.shields.io/github/stars/thatbignguy/NumPlay?style=for-the-badge&color=E3B341" alt="GitHub stars"></a>
   <a href="https://github.com/thatbignguy/NumPlay/releases/latest"><img src="https://img.shields.io/github/v/release/thatbignguy/NumPlay?style=for-the-badge&label=version&color=2D9F4F" alt="Latest version"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay.nwa"><img src="https://img.shields.io/badge/Download-NumPlay.nwa-7B43FF?style=for-the-badge" alt="Download NumPlay.nwa"></a>
+  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay.nwa"><img src="https://img.shields.io/badge/Download-NumPlay.nwa-1E7F74?style=for-the-badge" alt="Download NumPlay.nwa"></a>
 </p>
 
 <p align="center">
-  <a href="#how-to-install"><b>How to install</b></a> &nbsp;·&nbsp; <a href="docs/play.md"><b>How to play</b></a> &nbsp;·&nbsp; <a href="#on-a-real-calculator"><b>See it on a real calculator</b></a>
+  <a href="#how-to-install"><b>How to install</b></a> &nbsp;·&nbsp; <a href="docs/play.md"><b>How to play</b></a> &nbsp;·&nbsp; <a href="https://github.com/thatbignguy/NumPlay/releases/latest"><b>All downloads</b></a> &nbsp;·&nbsp; <a href="#roadmap"><b>Roadmap</b></a>
 </p>
+
 
 <h2 align="center">Recommended apps</h2>
 
 
 <table>
   <tr>
-    <td width="120" align="center"><img src="docs/media/icon-matrices.png" width="64" alt="A Matrices icon in the calculator's style"></td>
-    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a></b><br>All games inside NumPlay except NumBlocks, disguised as a math app called <b>Matrices</b>, sitting next to the calculator's own apps.</td>
+    <td width="120" align="center"><img src="docs/media/icon-matrices.png" width="64" alt="A Matrices icon"></td>
+    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a></b><br>All games inside NumPlay, disguised as a math app called <b>Matrices</b>, sitting next to the calculator's own apps.</td>
   </tr>
   <tr>
     <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
@@ -43,276 +43,71 @@
 <h3 align="center">Showcase</h3>
 
 <p align="center">
-  <img src="docs/media/launcher.gif" width="640" alt="The NumPlay launcher on a NumWorks calculator, scrolling through its games">
+  <img src="docs/media/launcher.gif" width="560" alt="The NumPlay launcher on a NumWorks calculator, scrolling through its games">
 </p>
 
-<p align="center">
-  <b>New: <a href="#new-the-final-earth-2">The Final Earth 2</a></b>, a city on floating islands in space. &nbsp;<b>And <a href="#new-hollow-knight">Hollow Knight</a></b>, from King's Pass to Hornet in Greenpath.
-</p>
+⭐ **Enjoying NumPlay?** Give it a star at the top of this page: it takes a second and helps other people find it.<br>
+💡 **Want a game that isn't here?** Check the [roadmap](#roadmap) first, then email me at [roberteinweger@gmail.com](mailto:roberteinweger@gmail.com).
 
-<p align="center">
-  <sub>NumDash, Crossy Road, NumDrive, Balatro, Buckshot Roulette, Portal Returns, Tetris, Chess, Flappy Bird, Pac-Man, Snake, Connect Four, Solitaire, 2048, Minesweeper and Block Breaker, plus NumVisuals: moving backgrounds with a clock, a timer and more.</sub>
-</p>
+## Games in NumPlay
 
-## ⭐ Enjoying NumPlay? Give it a star
-
-NumPlay is open source and completely free, and it took a lot of work to make. If you like it, please click **Star** at the top of this page. It only takes a second, and it helps other people find NumPlay.
-
-Want a game that isn't here? I'm open to requests: email me at [roberteinweger@gmail.com](mailto:roberteinweger@gmail.com).
-
-## New: The Final Earth 2
-
-<p align="center">
-  <img src="docs/media/finalearth2.gif" width="640" alt="The Final Earth 2: building a house on a city in free play, then its window and the happiness window">
-</p>
-
-Build a city on floating islands in space, right on your calculator.
-
-- **Every scenario and free play map** of the free version, with their goals and stories.
-- **87 buildings:** houses, farms, labs, factories, teleporters, parks and the alien buildings, with their upgrades.
-- **Citizens live their lives:** they work, go to school, look for fun, have children and grow old.
-- **The game's look:** its own pictures, fonts, sky and islands, day and night.
-
-<p align="center">
-  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FinalEarth2.nwa"><img src="https://img.shields.io/badge/Download-FinalEarth2.nwa-3E6FB5?style=for-the-badge" alt="Download FinalEarth2.nwa"></a>
-</p>
-
-<p align="center">
-  It's too big to fit next to NumPlay, so it comes on its own. &nbsp;<a href="games/finalearth2/README.md"><b>More about The Final Earth 2</b></a> &nbsp;·&nbsp; <a href="docs/play.md#the-final-earth-2"><b>How to play</b></a>
-</p>
-
-
-
-## New: NumBlocks
-
-<p align="center">
-  <img src="docs/media/numblocks.gif" width="640" alt="NumBlocks: walking across a meadow, the inventory, TNT blowing a crater, water poured into it and lava flowing towards it">
-</p>
-
-Mine, craft and survive in a world like Minecraft 1.8, right on your calculator.
-
-- **Endless worlds:** the same biomes, caves and trees as Minecraft 1.8.8, for any seed.
-- **Survival:** chop trees, craft tools, build a shelter, and fight zombies, skeletons, creepers and spiders at night.
-- **Creative:** fly around and build with every block.
-- **TNT, water and lava:** blow craters, and watch water and lava flow (and turn to stone where they meet).
-- **Your worlds stay:** keep several, and they come back even after you install again.
-
-<p align="center">
-  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumBlocks.nwa"><img src="https://img.shields.io/badge/Download-NumBlocks.nwa-5B8C32?style=for-the-badge" alt="Download NumBlocks.nwa"></a>
-</p>
-
-<p align="center">
-  Too big to share the calculator with NumPlay: install NumBlocks.nwa on its own. &nbsp;<a href="games/numblocks/README.md"><b>More about NumBlocks</b></a> &nbsp;·&nbsp; <a href="docs/play.md#numblocks"><b>How to play</b></a>
-</p>
-
-
-
-## New: Hollow Knight
-
-<p align="center">
-  <img src="docs/media/hollowknight.gif" width="640" alt="Hollow Knight: the Knight in King's Pass, against the False Knight and Hornet">
-</p>
-
-Explore Hallownest as the Knight, right on your calculator.
-
-- **The start of the journey:** King's Pass, Dirtmouth, the Forgotten Crossroads and Greenpath, up to Hornet.
-- **The Knight moves like in the game:** the same jumps, nail slashes, pogos, dash, focus and Vengeful Spirit.
-- **Its bosses and people:** the False Knight, Gruz Mother and Hornet; Elderbug, Sly, Iselda, Cornifer and more.
-- **Everything to find:** geo, charms, mask shards, vessel fragments, grubs, the map and the stag stations.
-
-<p align="center">
-  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/HollowKnight.nwa"><img src="https://img.shields.io/badge/Download-HollowKnight.nwa-4A5A7A?style=for-the-badge" alt="Download HollowKnight.nwa"></a>
-</p>
-
-<p align="center">
-  It fills the calculator's app space, so it comes on its own. &nbsp;<a href="games/hollowknight/README.md"><b>More about Hollow Knight</b></a> &nbsp;·&nbsp; <a href="docs/play.md#hollow-knight"><b>How to play</b></a>
-</p>
-
-
-
-## New: Celeste
-
-<p align="center">
-  <img src="docs/media/celeste.gif" width="640" alt="Celeste: Madeline dashing through the Forsaken City, climbing Golden Ridge and the Summit">
-</p>
-
-Climb Celeste Mountain with Madeline, right on your calculator.
-
-- **The whole climb:** the Prologue, all eight chapters, the Epilogue, and every B-side and C-side.
-- **Madeline moves like in the game:** the same jumps, dashes, climbing and wall jumps.
-- **The story:** every conversation with Theo, Granny, Oshiro and Badeline, with their portraits.
-- **Everything to find:** strawberries, crystal hearts, cassettes and the Summit's gems.
-
-<p align="center">
-  <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Celeste.nwa"><img src="https://img.shields.io/badge/Download-Celeste.nwa-AC3232?style=for-the-badge" alt="Download Celeste.nwa"></a>
-</p>
-
-<p align="center">
-  It fills the calculator's app space, so it comes on its own. &nbsp;<a href="games/celeste/README.md"><b>More about Celeste</b></a> &nbsp;·&nbsp; <a href="docs/play.md#celeste"><b>How to play</b></a>
-</p>
-
-
-
-## On a real calculator
+All of these come in one app, **NumPlay.nwa**.
 
 <table>
   <tr>
-    <td><img src="docs/media/irl_numdash.gif" width="100%" alt="NumDash on a real NumWorks calculator"></td>
-    <td><img src="docs/media/irl_crossyroad.gif" width="100%" alt="Crossy Road on a real NumWorks calculator"></td>
-    <td><img src="docs/media/irl_numdrive.gif" width="100%" alt="NumDrive on a real NumWorks calculator"></td>
+    <td align="center" width="16%"><a href="games/numdash/README.md"><img src="docs/media/thumb_numdash.png" width="120" alt="NumDash"><br><b>NumDash</b></a></td>
+    <td align="center" width="16%"><a href="games/crossyroad/README.md"><img src="docs/media/thumb_crossyroad.png" width="120" alt="Crossy Road"><br><b>Crossy Road</b></a></td>
+    <td align="center" width="16%"><a href="games/numdrive/README.md"><img src="docs/media/thumb_numdrive.png" width="120" alt="NumDrive"><br><b>NumDrive</b></a></td>
+    <td align="center" width="16%"><a href="games/balatro/README.md"><img src="docs/media/thumb_balatro.png" width="120" alt="Balatro"><br><b>Balatro</b></a></td>
+    <td align="center" width="16%"><a href="games/buckshot/README.md"><img src="docs/media/thumb_buckshot.png" width="120" alt="Buckshot Roulette"><br><b>Buckshot Roulette</b></a></td>
+    <td align="center" width="16%"><a href="games/portal/README.md"><img src="docs/media/thumb_portal.png" width="120" alt="Portal Returns"><br><b>Portal Returns</b></a></td>
   </tr>
   <tr>
-    <td><img src="docs/media/irl_balatro.gif" width="100%" alt="Balatro on a real NumWorks calculator"></td>
-    <td><img src="docs/media/irl_buckshot.gif" width="100%" alt="Buckshot Roulette on a real NumWorks calculator"></td>
-    <td><img src="docs/media/irl_tetris.gif" width="100%" alt="Tetris on a real NumWorks calculator"></td>
+    <td align="center"><a href="games/tetris/README.md"><img src="docs/media/thumb_tetris.png" width="120" alt="Tetris"><br><b>Tetris</b></a></td>
+    <td align="center"><a href="games/chess/README.md"><img src="docs/media/thumb_chess.png" width="120" alt="Chess"><br><b>Chess</b></a></td>
+    <td align="center"><a href="games/flappybird/README.md"><img src="docs/media/thumb_flappybird.png" width="120" alt="Flappy Bird"><br><b>Flappy Bird</b></a></td>
+    <td align="center"><a href="games/pacman/README.md"><img src="docs/media/thumb_pacman.png" width="120" alt="Pac-Man"><br><b>Pac-Man</b></a></td>
+    <td align="center"><a href="games/snake/README.md"><img src="docs/media/thumb_snake.png" width="120" alt="Snake"><br><b>Snake</b></a></td>
+    <td align="center"><a href="games/connectfour/README.md"><img src="docs/media/thumb_connectfour.png" width="120" alt="Connect Four"><br><b>Connect Four</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="games/solitaire/README.md"><img src="docs/media/thumb_solitaire.png" width="120" alt="Solitaire"><br><b>Solitaire</b></a></td>
+    <td align="center"><a href="games/g2048/README.md"><img src="docs/media/thumb_g2048.png" width="120" alt="2048"><br><b>2048</b></a></td>
+    <td align="center"><a href="games/minesweeper/README.md"><img src="docs/media/thumb_minesweeper.png" width="120" alt="Minesweeper"><br><b>Minesweeper</b></a></td>
+    <td align="center"><a href="games/breakout/README.md"><img src="docs/media/thumb_breakout.png" width="120" alt="Block Breaker"><br><b>Block Breaker</b></a></td>
+    <td align="center"><a href="games/numvisuals/README.md"><img src="docs/media/thumb_numvisuals.png" width="120" alt="NumVisuals"><br><b>NumVisuals</b></a></td>
   </tr>
 </table>
 
-Filmed on my own calculator, no emulator.
+Want just one game? Each one also comes as its own file on the [downloads page](https://github.com/thatbignguy/NumPlay/releases/latest).
 
-## Go support the original games!
+NumBlocks is not inside NumPlay in this fork: it is too big to share the calculator with NumPlay, so it is a [big game of its own](#big-games-installed-on-their-own), with a [hidden Interest version](#recommended-apps).
 
-NumPlay is a fan project, made out of love for these games and for the NumWorks calculator. It is not meant to replace any of them. If you enjoy a game here, go play the original and support the people who made it.
+## Big games, installed on their own
 
-NumWorks also has a great community of people making games by hand, some of them over years. Go try their work too: [Numcraft](https://github.com/yannis300307/NumcraftRust), [Celeste Classic](https://github.com/BenchatonDev/Celeste-Numworks), [Tatone26's All the Apps](https://github.com/Tatone26/Numworks-games), the apps on [Nwagyu](https://nwagyu.org/guide/) and many more in [yannis300307's list](https://gist.github.com/yannis300307/9123136f90877107ec0d49ba96b303e5).
-
-
-
-
-## Download
-
-Click a file to download it. Not sure which one? Take the first.
+These are too big to fit next to NumPlay, so each one is its own app. Install it without NumPlay.
 
 <table>
   <tr>
-    <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><b><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay.nwa">NumPlay.nwa</a></b><br><b>All 16 games and NumVisuals in one app. Start here!</b></td>
+    <td align="center" width="33%"><a href="games/numpowder/README.md"><img src="docs/media/thumb_numpowder.png" width="200" alt="NumPowder"><br><b>NumPowder</b></a><br><sub>The Powder Toy: 175 materials to mix, melt, burn and blow up</sub><br><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPowder.nwa">Download</a></td>
+    <td align="center" width="33%"><a href="games/finalearth2/README.md"><img src="docs/media/thumb_finalearth2.png" width="200" alt="The Final Earth 2"><br><b>The Final Earth 2</b></a><br><sub>Build a city on floating islands in space</sub><br><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FinalEarth2.nwa">Download</a></td>
+    <td align="center" width="33%"><a href="games/hollowknight/README.md"><img src="docs/media/thumb_hollowknight.png" width="200" alt="Hollow Knight"><br><b>Hollow Knight</b></a><br><sub>From King's Pass to Hornet in Greenpath</sub><br><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/HollowKnight.nwa">Download</a></td>
   </tr>
   <tr>
-    <td width="120" align="center"><img src="docs/media/icon-invisible.png" width="64" alt="A blank white icon"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Invisible.nwa">NumPlay-Invisible.nwa</a><br>The same app, hidden. Its icon is plain white, like the calculator's home screen, and it has no name, so it looks like an empty spot.</td>
+    <td align="center"><a href="games/celeste/README.md"><img src="docs/media/thumb_celeste.png" width="200" alt="Celeste"><br><b>Celeste</b></a><br><sub>The whole climb, with every B-side and C-side</sub><br><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Celeste.nwa">Download</a></td>
+    <td align="center"><a href="games/championisland/README.md"><img src="docs/media/thumb_championisland.png" width="200" alt="Champion Island"><br><b>Champion Island</b></a><br><sub>The whole island and its seven sports</sub><br><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/ChampionIsland.nwa">Download</a></td>
+    <td align="center"><a href="games/numblocks/README.md"><img src="docs/media/thumb_numblocks.png" width="200" alt="NumBlocks"><br><b>NumBlocks</b></a><br><sub>Mine, craft, survive in a world like Minecraft 1.8 (this fork: with the Nether, Spectator and more)</sub><br><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumBlocks.nwa">Download</a> · <a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa">hidden as Interest</a></td>
   </tr>
   <tr>
-    <td width="120" align="center"><img src="docs/media/icon-matrices.png" width="64" alt="A Matrices icon in the calculator's style"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa">NumPlay-Matrices.nwa</a><br>The same app, in disguise. It looks like a math app called <b>Matrices</b>, next to the calculator's own apps.</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa">numblocks-interest.nwa</a><br>NumBlocks, hidden: it opens as the <b>Interest</b> app, and NumBlocks is inside. Too big to share the calculator with NumPlay: install it on its own.</td>
-  </tr>
-  <tr>
-    <td></td>
-    <td><img src="docs/media/home_invisible.png" width="240" alt="The calculator's home screen with NumPlay-Invisible installed: the spot after Settings looks empty"> <img src="docs/media/home_matrices.png" width="240" alt="The calculator's home screen with NumPlay-Matrices installed, next to the calculator's own apps"><br><sub>On the home screen: the invisible one is really there, in the empty spot after Settings. The Matrices one sits among the calculator's own apps.</sub></td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-French.nwa">NumPlay-French.nwa</a><br>NumPlay en français : tous les jeux, en français.</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Chinese.nwa">NumPlay-Chinese.nwa</a><br>NumPlay 中文版：所有游戏，简体中文。</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/icon.png" width="64" alt="NumPlay icon"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Upsilon.nwa">NumPlay-Upsilon.nwa</a><br>For calculators running <b>Upsilon</b>: the 13 games that fit in the memory Upsilon gives apps. See <a href="#on-upsilon">On Upsilon</a>.</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_numdash.png" width="112" alt="NumDash"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumDash.nwa">NumDash.nwa</a><br>Only NumDash: jump to the beat</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_crossyroad.png" width="112" alt="Crossy Road"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/CrossyRoad.nwa">CrossyRoad.nwa</a><br>Only Crossy Road: hop, dodge, survive</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_numblocks.png" width="112" alt="NumBlocks"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumBlocks.nwa">NumBlocks.nwa</a><br>Only NumBlocks: mine, craft, survive (<a href="games/numblocks/README.md">more</a>)</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_celeste.png" width="112" alt="Celeste"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Celeste.nwa">Celeste.nwa</a><br>Celeste: the whole climb up Celeste Mountain. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/celeste/README.md">more</a>)</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_hollowknight.png" width="112" alt="Hollow Knight"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/HollowKnight.nwa">HollowKnight.nwa</a><br>Hollow Knight: from King's Pass to Hornet in Greenpath. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/hollowknight/README.md">more</a>)</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_finalearth2.png" width="112" alt="The Final Earth 2"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FinalEarth2.nwa">FinalEarth2.nwa</a><br>The Final Earth 2: build a city on floating islands in space. It's too big to fit next to NumPlay, so it comes on its own (<a href="games/finalearth2/README.md">more</a>)</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_numdrive.png" width="112" alt="NumDrive"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumDrive.nwa">NumDrive.nwa</a><br>Only NumDrive: drive, flip, finish</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_balatro.png" width="112" alt="Balatro"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Balatro.nwa">Balatro.nwa</a><br>Only Balatro: poker hands, wild jokers</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_buckshot.png" width="112" alt="Buckshot Roulette"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/BuckshotRoulette.nwa">BuckshotRoulette.nwa</a><br>Only Buckshot Roulette: you, the Dealer, one shotgun</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_championisland.png" width="112" alt="Champion Island"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/ChampionIsland.nwa">ChampionIsland.nwa</a><br>Champion Island: the whole island and its seven sports. It fills the calculator's app space, so it comes on its own, not inside NumPlay (<a href="games/championisland/README.md">more</a>)</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_portal.png" width="112" alt="Portal Returns"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/PortalReturns.nwa">PortalReturns.nwa</a><br>Only Portal Returns: think with portals</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_tetris.png" width="112" alt="Tetris"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Tetris.nwa">Tetris.nwa</a><br>Only Tetris: stack and clear lines</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_chess.png" width="112" alt="Chess"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumChess.nwa">NumChess.nwa</a><br>Only Chess: bots, puzzles, 2 players</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_flappybird.png" width="112" alt="Flappy Bird"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/FlappyBird.nwa">FlappyBird.nwa</a><br>Only Flappy Bird: flap through the pipes</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_pacman.png" width="112" alt="Pac-Man"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/PacMan.nwa">PacMan.nwa</a><br>Only Pac-Man: eat dots, dodge ghosts</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_snake.png" width="112" alt="Snake"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Snake.nwa">Snake.nwa</a><br>Only Snake: Google's snake, with its 12 modes</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_connectfour.png" width="112" alt="Connect Four"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/ConnectFour.nwa">ConnectFour.nwa</a><br>Only Connect Four: four in a row wins, against a friend or the computer</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_solitaire.png" width="112" alt="Solitaire"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Solitaire.nwa">Solitaire.nwa</a><br>Only Solitaire: the classic card game, the way Google plays it</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_g2048.png" width="112" alt="2048"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/2048.nwa">2048.nwa</a><br>Only 2048: slide, merge, reach 2048</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_minesweeper.png" width="112" alt="Minesweeper"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/Minesweeper.nwa">Minesweeper.nwa</a><br>Only Minesweeper: clear the field, flag the mines</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_breakout.png" width="112" alt="Block Breaker"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/BlockBreaker.nwa">BlockBreaker.nwa</a><br>Only Block Breaker: break every brick, set off the power-ups</td>
-  </tr>
-  <tr>
-    <td width="120" align="center"><img src="docs/media/thumb_numvisuals.png" width="112" alt="NumVisuals"></td>
-    <td><a href="https://github.com/thatbignguy/NumPlay/releases/latest/download/NumVisuals.nwa">NumVisuals.nwa</a><br>Only NumVisuals: backgrounds, clocks, timers</td>
+    <td align="center" colspan="3"><a href="#roadmap"><b>More on the way</b></a><br><sub>Undertale's fights, The Binding of Isaac, Plants vs. Zombies, Doom and more: see the roadmap</sub></td>
   </tr>
 </table>
-
-The first three are the same app with the same games: only the icon and the name change. Your progress is saved on the calculator either way.
 
 ## How to install
 
 You need your calculator, its USB cable, and a computer with **Google Chrome** or **Microsoft Edge**. It takes about 2 minutes.
 
-1. **Download** a file from the table above. It goes to your Downloads folder.
+1. **Download** [NumPlay.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay.nwa), or one of the big games above.
 2. **Plug** your calculator into the computer and turn it on.
 3. **Go to** [my.numworks.com/apps](https://my.numworks.com/apps) and log in. No account? Sign up there, it's free.
 4. Click **Connect**, then pick your calculator in the small window that opens.
@@ -320,144 +115,170 @@ You need your calculator, its USB cable, and a computer with **Google Chrome** o
 6. **Play!** On your calculator, press the **Home** key (the little house), go to the end of the apps and open **NumPlay**.
 
 > [!TIP]
-> **Updating?** Install the new file the same way. Your progress comes back by itself: NumPlay keeps a copy of it in a Python script called `numplay_saves.py`, the one kind of file the website keeps. (This works for updates from version 1.2.1 on.)
->
-> Already have other apps from that website? It swaps them for the new ones, so add them again in step 5 to keep them. The calculator's own apps are never touched.
->
-> Nothing happens when you plug it in? Try another cable: some only charge.
+> **Updating?** Install the new file the same way: your progress comes back by itself. Already have other apps from that website? Add them again in step 5 to keep them.
 
-### Which calculators
+<details>
+<summary><b>Which calculators work</b></summary>
 
 | Calculator | Software | What runs |
 | --- | --- | --- |
 | N0120 | Epsilon 23.2 or newer (the calculator's own software) | Everything |
-| N0110, N0115 | Epsilon 23.2 or newer | Everything. These models are about 2.5 times slower, so the big games (The Final Earth 2, Hollow Knight, Celeste, NumDrive, NumBlocks, Champion Island) show fewer frames per second, but they keep their speed. |
-| N0110, N0115 | Upsilon | NumPlay-Upsilon.nwa: 13 games. See [On Upsilon](#on-upsilon). |
-| Any | Custom software built from Epsilon 25.2's source | Everything, The Final Earth 2, Celeste, Hollow Knight and Champion Island too. These builds can give apps less memory (133 KB): on one that gives even less, a game that needs more than there is says how much on its card. |
+| N0110, N0115 | Epsilon 23.2 or newer | Everything. These models are about 2.5 times slower, so the big games show fewer frames per second, but they keep their speed. |
+| N0110, N0115 | Upsilon | NumPlay-Upsilon.nwa: 13 games (see Other versions) |
+| Any | Custom software built from Epsilon 25.2's source | Everything. These builds can give apps less memory (133 KB): on one that gives even less, a game that needs more says how much on its card. |
 
 To see your calculator's model and software, open **Settings**, then **About**. To update the software, go to [my.numworks.com](https://my.numworks.com) with the calculator plugged in.
 
-### In French and Chinese
+</details>
 
-**NumPlay-French.nwa** and **NumPlay-Chinese.nwa** are NumPlay with every game in French or in Chinese (simplified). Install them like NumPlay.nwa, instead of it. Your progress is the same in every language.
+<details>
+<summary><b>Other versions: hidden, disguised, French, Chinese, Upsilon</b></summary>
 
-A few things stay in English: logos and words drawn into pictures, level names, the calculator's key names, NumBlocks' commands, and Portal Returns' chamber stories. The Final Earth 2, Celeste, Hollow Knight and Champion Island come in English only.
+| File | What it is |
+| --- | --- |
+| [NumPlay-Invisible.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Invisible.nwa) | The same app, hidden: a blank white icon with no name, so it looks like an empty spot on the home screen. |
+| [NumPlay-Matrices.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Matrices.nwa) | The same app, in disguise: it looks like a math app called **Matrices**. |
+| [NumPlay-French.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-French.nwa) | NumPlay en français : tous les jeux, en français. |
+| [NumPlay-Chinese.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Chinese.nwa) | NumPlay 中文版：所有游戏，简体中文。 |
+| [NumPlay-Upsilon.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/NumPlay-Upsilon.nwa) | For calculators running **Upsilon**: the 13 games that fit in the memory it gives apps. |
+| [numblocks-interest.nwa](https://github.com/thatbignguy/NumPlay/releases/latest/download/numblocks-interest.nwa) | NumBlocks, hidden: it opens as the **Interest** app, and NumBlocks is inside. Too big to share the calculator with NumPlay: install it on its own. |
 
-### On Upsilon
+<img src="docs/media/home_invisible.png" width="240" alt="The home screen with NumPlay-Invisible: the spot after Settings looks empty"> <img src="docs/media/home_matrices.png" width="240" alt="The home screen with NumPlay-Matrices among the calculator's own apps">
 
-Upsilon is custom software for the N0110 and N0115. It gives apps less memory than the calculator's own software, so **NumPlay-Upsilon.nwa** has the 13 games that fit: Crossy Road, Portal Returns, Tetris, Chess, Flappy Bird, Pac-Man, Snake, Connect Four, Solitaire, 2048, Minesweeper, Block Breaker and NumVisuals.
+Install any of them instead of NumPlay.nwa: your progress is the same in each. A few things stay in English in French and Chinese: words drawn into pictures, level names, key names, NumBlocks' commands and Portal Returns' stories. The big games come in English only.
 
-The NumWorks website doesn't install apps on Upsilon (it shows 0 KB free), and the "Local file" button of Upsilon's own app page only copies a file onto the calculator. Install it with `nwlink`, NumWorks' command-line tool, instead:
+**On Upsilon,** the NumWorks website doesn't install apps (it shows 0 KB free). Install [Node.js](https://nodejs.org), plug in the calculator, and run `npx nwlink install-nwa NumPlay-Upsilon.nwa` in the folder you downloaded it to.
 
-1. Install [Node.js](https://nodejs.org) on your computer.
-2. Plug in the calculator and turn it on.
-3. In a terminal, in the folder where you downloaded the file, run: `npx nwlink install-nwa NumPlay-Upsilon.nwa`
+</details>
 
-Upsilon support is new. If it doesn't work on your calculator, please [email me](mailto:roberteinweger@gmail.com) what happens.
+<details>
+<summary><b>Keeping your saves</b></summary>
 
-### Keeping your saves
+- Your progress is saved on the calculator as files. Turning it off keeps them.
+- **Installing apps erases these files**, all but the Python scripts. So NumPlay keeps a copy of every save in a Python script, `numplay_saves.py` (the big games have their own), and your progress comes back the first time you open the game. Don't delete these scripts.
+- **A restart erases every file**, scripts included: the reset button on the back, or a crash. If your calculator restarts by itself while you play, please [email me](mailto:roberteinweger@gmail.com) which game and what you were doing.
+- The calculator holds 42 KB of files in all. A big NumBlocks world can fill it: delete worlds or scripts you don't need to make room.
 
-- Your progress is saved in the calculator's memory, as files. Turning the calculator off keeps them.
-- **Installing apps erases these files**, all but the Python scripts. That's why NumPlay keeps a copy of every save in a Python script, `numplay_saves.py`: open NumPlay once after installing, and your progress comes back. NumBlocks on its own does the same with `numblocks_saves.py`. Don't delete these scripts.
-- **A restart erases every file**, scripts included: pressing the reset button on the back, or the calculator crashing and starting over. Nothing can bring progress back after that. If your calculator restarts by itself while you play, please [email me](mailto:roberteinweger@gmail.com) which game and what you were doing, so I can fix it.
-- The calculator holds 42 KB of files in all. A big NumBlocks world can fill it, and then NumPlay has no room for its copy. Delete worlds you don't play anymore, or Python scripts you don't need, to make room.
+</details>
 
-### The app doesn't show up after installing
+<details>
+<summary><b>The app doesn't show up after installing</b></summary>
 
-- **The calculator restarts once after installing**: it shows the NumWorks logo, then asks for your language. That's normal. Your apps are at the end of the home screen after that.
-- **Celeste, Hollow Knight and Champion Island each fill the whole space for apps.** Install one of them alone, without NumPlay and without each other: if you pick more than fits, they don't install.
-- **The Final Earth 2 doesn't fit next to NumPlay.** Install it without NumPlay.
+- **The calculator restarts once after installing:** it shows the NumWorks logo, then asks for your language. That's normal. Your apps are at the end of the home screen.
+- **Each big game installs alone,** without NumPlay and without the other big games: if you pick more than fits, they don't install.
 - **Installing replaces the apps you installed before.** To keep one, add it again with the new one.
-- Check your calculator's software is **Epsilon 23.2 or newer** (Settings, then About), and update it at [my.numworks.com](https://my.numworks.com) if not.
+- **Nothing happens when you plug it in?** Try another cable: some only charge.
+- Check your calculator's software is **Epsilon 23.2 or newer** (Settings, then About).
 
-## Gameplay
+</details>
+
+## On a real calculator
 
 <table>
   <tr>
-    <td><img src="docs/media/numdash.gif" alt="NumDash gameplay"></td>
-    <td><img src="docs/media/crossyroad.gif" alt="Crossy Road gameplay"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/numblocks.gif" alt="NumBlocks: the inventory, TNT, water and lava"></td>
-    <td><img src="docs/media/numblocks_night.gif" alt="NumBlocks: sunset, then a zombie walks up and is beaten with an iron sword"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/celeste.gif" alt="Celeste: Madeline dashing through the Forsaken City, climbing Golden Ridge and the Summit"></td>
-    <td><img src="games/celeste/docs/reflection.png" width="100%" alt="Celeste: Badeline fights back in Reflection"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/hollowknight.gif" alt="Hollow Knight: the Knight in King's Pass, against the False Knight and Hornet"></td>
-    <td><img src="games/hollowknight/docs/greenpath.png" width="100%" alt="Hollow Knight: Greenpath"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/finalearth2.gif" alt="The Final Earth 2: building a house on a city in free play, then its window and the happiness window"></td>
-    <td><img src="games/finalearth2/docs/night.png" width="100%" alt="The Final Earth 2: a city at night"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/numdrive.gif" alt="NumDrive gameplay"></td>
-    <td><img src="docs/media/balatro.gif" alt="Balatro: a Four of a Kind scoring with five Jokers"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/buckshot.gif" alt="Buckshot Roulette: a round against the Dealer"></td>
-    <td><img src="docs/media/portal.gif" alt="Portal Returns: falling through a portal and flying across a test chamber"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/championisland.gif" alt="Champion Island: Lucky crossing the island, then the island map"></td>
-    <td><img src="docs/media/championisland_sports.gif" alt="Champion Island: its seven sports"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/tetris.gif" alt="Tetris gameplay"></td>
-    <td><img src="docs/media/chess.gif" alt="Chess against a bot"></td>
-  </tr>
-  <tr>
-    <td><img src="docs/media/numvisuals.gif" alt="NumVisuals: picking a background, then a clock"></td>
-    <td><img src="games/flappybird/docs/shot.png" width="100%" alt="Flappy Bird"></td>
-  </tr>
-  <tr>
-    <td><img src="games/pacman/docs/shot.png" width="100%" alt="Pac-Man"></td>
-    <td><img src="games/snake/docs/shot.png" width="100%" alt="Snake"></td>
-  </tr>
-  <tr>
-    <td><img src="games/connectfour/docs/shot.png" width="100%" alt="Connect Four"></td>
-    <td><img src="games/solitaire/docs/shot.png" width="100%" alt="Solitaire"></td>
-  </tr>
-  <tr>
-    <td><img src="games/g2048/docs/shot.png" width="100%" alt="2048"></td>
-    <td><img src="games/minesweeper/docs/shot.png" width="100%" alt="Minesweeper"></td>
-  </tr>
-  <tr>
-    <td><img src="games/breakout/docs/shot.png" width="100%" alt="Block Breaker"></td>
-    <td><img src="docs/media/uninstall.gif" width="100%" alt="Uninstalling a game from NumPlay's settings to free up space"></td>
+    <td><img src="docs/media/irl_numdash.gif" width="100%" alt="NumDash on a real NumWorks calculator"></td>
+    <td><img src="docs/media/irl_crossyroad.gif" width="100%" alt="Crossy Road on a real NumWorks calculator"></td>
+    <td><img src="docs/media/irl_balatro.gif" width="100%" alt="Balatro on a real NumWorks calculator"></td>
   </tr>
 </table>
 
-## Acknowledgements
+Filmed on my own calculator, no emulator.
+
+## Roadmap
+
+- [x] Celeste
+- [x] Hollow Knight
+- [x] Minecraft 1.8 (NumBlocks)
+- [x] The Final Earth 2
+- [x] The Powder Toy (NumPowder)
+- [ ] Undertale (the fights)
+- [ ] The Binding of Isaac
+- [ ] Plants vs. Zombies
+- [ ] Doom
+- [ ] Five Nights at Freddy's
+- [ ] Pong and more two-player games
+- [ ] Block Blast
+- [ ] Cookie Clicker
+- [ ] Level Devil
+- [ ] Sonic the Hedgehog
+- [ ] Subway Surfers
+- [x] The Nether in NumBlocks (done in this fork)
+- [ ] The End in NumBlocks
+- [ ] Add support for Enlarged Extra Apps
+
+## Credits
+
+NumPlay is a fan project, made out of love for these games and for the NumWorks calculator. If you enjoy a game here, go play the original and support the people who made it. NumWorks also has a great community of people making games by hand: try [Numcraft](https://github.com/yannis300307/NumcraftRust), [Celeste Classic](https://github.com/BenchatonDev/Celeste-Numworks), [Tatone26's All the Apps](https://github.com/Tatone26/Numworks-games), the apps on [Nwagyu](https://nwagyu.org/guide/) and [yannis300307's list](https://gist.github.com/yannis300307/9123136f90877107ec0d49ba96b303e5).
 
 - **[Tatone26](https://github.com/Tatone26/Numworks-games)**'s **All the Apps** inspired NumPlay's list of classics. Flappy Bird, Pac-Man, Snake, Connect Four, Solitaire and 2048 are written in C for NumPlay and keep its options, with no code copied from it. Tetris is Tatone26's own, which they released into the public domain, adapted for NumPlay.
 - **[Gabriele Cirulli](https://github.com/gabrielecirulli/2048)** made 2048.
 - Snake, Solitaire and Block Breaker look and play like **Google's games** in Search. They are drawn from scratch; nothing is taken from Google.
 - **[gd3ds](https://github.com/AleFunky/gd3ds)** by AleFunky and friends, whose research into Geometry Dash made NumDash possible. Clubstep, Deadlocked and Dash also rely on [gdsolver](https://github.com/gdsolver/gdsolver)'s measurements of Geometry Dash 2.2, level data from [gmdkit](https://github.com/UHDanke/gmdkit) by HDanke and checks against [GDRWeb](https://github.com/iliasHDZ/GDRWeb) by IliasHDZ.
 - **Balatro** by LocalThunk inspired NumPlay's Balatro, which uses art adapted from the game and the **m6x11** font by Daniel Linssen.
-- **Minecraft** by Mojang inspired NumBlocks, which uses Minecraft 1.8.8's textures, font and screens and makes its worlds the way Minecraft 1.8.8 does.
+- **Minecraft** by Mojang inspired NumBlocks, which follows Minecraft 1.8.8 exactly: it makes its worlds the way Minecraft 1.8.8 does and uses its blocks, items, recipes, textures, font and screens.
 - **Celeste** inspired NumPlay's Celeste, which uses the game's own pictures, maps, texts and fonts. Not affiliated with Maddy Makes Games.
 - **Hollow Knight** inspired NumPlay's Hollow Knight, which uses the game's own pictures, animations, maps, texts and fonts. Not affiliated with Team Cherry.
+- **[The Powder Toy](https://powdertoy.co.uk)** inspired NumPowder, which ports its materials' behaviour, its font and its icons from [its source code](https://github.com/The-Powder-Toy/The-Powder-Toy) (GNU GPL v3.0), by Stanislaw K Skowronek, Simon Robertshaw and its contributors. Not affiliated with them.
 - **[The Final Earth 2](https://store.steampowered.com/app/1180130/The_Final_Earth_2/)** by [Florian van Strien](https://florianvanstrien.nl) inspired NumPlay's The Final Earth 2, which uses the game's own pictures, fonts and texts, with additional sprites by LukXD99. Not affiliated with him.
 - **Buckshot Roulette** by Mike Klubnika inspired NumPlay's Buckshot Roulette, whose scenes are rendered from the game through the Open Buckshot Roulette project (1503Dev). Fonts: Fake Receipt by Ray Larabie and Dot Matrix by Dionaea.
 - The **Doodle Champion Island Games** (2021) inspired Champion Island, which uses the doodle's own pictures, maps and texts from the [Google-Doodle-Champion-Island](https://github.com/potherca-blog/Google-Doodle-Champion-Island) archive by potherca-blog, and the **PixelMplus** font by Itou Hiroki ([license](LICENSES/PixelMplus.txt)).
 - **[Portal Returns](https://www.cemetech.net/downloads/files/1313/x1313)** by MateoConLechuga for the TI-84 Plus CE, with sprites by CKH4 and Portal Prelude chambers ported by Unicorn from BuilderBoy's original.
 - The **Nunito** and **Rammetto One** fonts, under the SIL Open Font License ([LICENSES](LICENSES)).
+- The **Fusion Pixel** font by TakWolf (with glyphs from **Ark Pixel**), under the SIL Open Font License ([license](LICENSES/OFL-1.1-Fusion-Pixel.txt)), for the Chinese letters.
+- **[Upsilon](https://github.com/UpsilonNumworks/Upsilon)**, the custom software NumPlay-Upsilon.nwa runs on.
 - **reversal_lava63**, a beta tester who plays NumPlay's apps on a real calculator and reports what's wrong.
 - **[Gabriel](https://github.com/tomcalif9-stack)**, who made the home screen's moving backgrounds, translated NumPlay into French first, and tests it on Upsilon and an N0115.
 - Everyone who reported a bug: **NEE** ([reversallava63](https://github.com/reversallava63)), **Gabriel**, **[briac134](https://github.com/briac134)**, **[Raphanobie](https://github.com/Raphanobie)**, **[zbigzo](https://github.com/zbigzo)**, **Yacine**, **Ewnet Tewodros**, **PelicanMan75**, **[Spykube](https://github.com/Spykube)** and **[axio-m](https://github.com/axio-m)**. Thank you!
-- The **Fusion Pixel** font by TakWolf (with glyphs from **Ark Pixel**), under the SIL Open Font License ([license](LICENSES/OFL-1.1-Fusion-Pixel.txt)), for the Chinese letters.
-- **[Upsilon](https://github.com/UpsilonNumworks/Upsilon)**, the custom software NumPlay-Upsilon.nwa runs on.
 
 ## License
 
 NumPlay is licensed under the [GNU General Public License v3.0](LICENSE). Copyright (c) 2026 Mason Chen.
 
-This repository is a **fork** of [Mason363's NumPlay](https://github.com/Mason363/NumPlay). Copyright (c) 2026 Robert Einweger ([thatbignguy](https://github.com/thatbignguy)) for the changes made in this fork.
+This repository is a **fork** of [Mason363's NumPlay](https://github.com/Mason363/NumPlay). Copyright (c) 2026 Robert Einweger ([thatbignguy](https://github.com/thatbignguy)) for the changes made in this fork. Code and fonts from others keep their own licenses: the `UNLICENSE` files in the games' folders and the [LICENSES](LICENSES) folder. The names, artwork and music of the games NumPlay is inspired by belong to their makers and are not covered by it.
 
-Code and fonts from others keep their own licenses: the `UNLICENSE` files in the games' folders and the [LICENSES](LICENSES) folder. The names, artwork and music of the games NumPlay is inspired by belong to their makers and are not covered by it.
+<sub>Unofficial fan games, not affiliated with NumWorks, RobTop Games (Geometry Dash), Hipster Whale (Crossy Road), the makers of Drive Mad, LocalThunk or Playstack (Balatro), Mike Klubnika or Critical Reflex (Buckshot Roulette), Mojang or Microsoft (Minecraft), Maddy Makes Games (Celeste), Team Cherry (Hollow Knight), Florian van Strien (The Final Earth 2), The Powder Toy's developers (The Powder Toy), MateoConLechuga (Portal Returns), Valve (Portal), .GEARS (Flappy Bird), Bandai Namco (Pac-Man), Hasbro (Connect Four), Google (Snake, Solitaire, Block Breaker, Doodle Champion Island Games), STUDIO4°C or Microsoft (Minesweeper). Tetris is a trademark of The Tetris Company, Minecraft of Mojang Synergies AB, Pac-Man of Bandai Namco and Connect Four of Hasbro.</sub>
 
-<sub>Unofficial fan games, not affiliated with NumWorks, RobTop Games (Geometry Dash), Hipster Whale (Crossy Road), the makers of Drive Mad, LocalThunk or Playstack (Balatro), Mike Klubnika or Critical Reflex (Buckshot Roulette), Mojang or Microsoft (Minecraft), Maddy Makes Games (Celeste), Team Cherry (Hollow Knight), Florian van Strien (The Final Earth 2), MateoConLechuga (Portal Returns), Valve (Portal), .GEARS (Flappy Bird), Bandai Namco (Pac-Man), Hasbro (Connect Four), Google (Snake, Solitaire, Block Breaker, Doodle Champion Island Games), STUDIO4°C or Microsoft (Minesweeper). Tetris is a trademark of The Tetris Company, Minecraft of Mojang Synergies AB, Pac-Man of Bandai Namco and Connect Four of Hasbro.</sub>
+## Gallery
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/gallery/numdash.gif" width="100%" alt="NumDash on a real NumWorks calculator"><br><a href="games/numdash/README.md"><b>NumDash</b></a></td>
+    <td align="center" width="33%"><img src="docs/media/gallery/crossyroad.gif" width="100%" alt="Crossy Road on a real NumWorks calculator"><br><a href="games/crossyroad/README.md"><b>Crossy Road</b></a></td>
+    <td align="center" width="33%"><img src="docs/media/gallery/numblocks.gif" width="100%" alt="NumBlocks: lighting TNT and blowing a crater in the ground"><br><a href="games/numblocks/README.md"><b>NumBlocks</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/gallery/numblocks_real.gif" width="100%" alt="NumBlocks on a real NumWorks calculator, walking past trees and a sheep"><br><a href="games/numblocks/README.md"><b>NumBlocks</b></a></td>
+    <td align="center"><img src="docs/media/gallery/numdrive.gif" width="100%" alt="NumDrive on a real NumWorks calculator: a monster truck jumps off a ramp"><br><a href="games/numdrive/README.md"><b>NumDrive</b></a></td>
+    <td align="center"><img src="docs/media/gallery/balatro.gif" width="100%" alt="Balatro on a real NumWorks calculator: a hand of cards is scored"><br><a href="games/balatro/README.md"><b>Balatro</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/gallery/buckshot.gif" width="100%" alt="Buckshot Roulette on a real NumWorks calculator: picking up the shotgun"><br><a href="games/buckshot/README.md"><b>Buckshot Roulette</b></a></td>
+    <td align="center"><img src="docs/media/gallery/portal.gif" width="100%" alt="Portal Returns: jumping through portals in a test chamber"><br><a href="games/portal/README.md"><b>Portal Returns</b></a></td>
+    <td align="center"><img src="docs/media/gallery/tetris.gif" width="100%" alt="Tetris on a real NumWorks calculator: pieces drop and a line clears"><br><a href="games/tetris/README.md"><b>Tetris</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/gallery/chess.gif" width="100%" alt="Chess: the opening moves of a game against a bot"><br><a href="games/chess/README.md"><b>Chess</b></a></td>
+    <td align="center"><img src="docs/media/gallery/flappybird.gif" width="100%" alt="Flappy Bird: flapping through the pipes"><br><a href="games/flappybird/README.md"><b>Flappy Bird</b></a></td>
+    <td align="center"><img src="docs/media/gallery/pacman.gif" width="100%" alt="Pac-Man: eating dots in the maze"><br><a href="games/pacman/README.md"><b>Pac-Man</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/gallery/snake.gif" width="100%" alt="Snake: the snake eats apples and grows"><br><a href="games/snake/README.md"><b>Snake</b></a></td>
+    <td align="center"><img src="docs/media/gallery/connectfour.gif" width="100%" alt="Connect Four: winning a round against the computer"><br><a href="games/connectfour/README.md"><b>Connect Four</b></a></td>
+    <td align="center"><img src="docs/media/gallery/solitaire.gif" width="100%" alt="Solitaire: moving cards between the columns"><br><a href="games/solitaire/README.md"><b>Solitaire</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/gallery/g2048.gif" width="100%" alt="2048: sliding and merging tiles up to 128"><br><a href="games/g2048/README.md"><b>2048</b></a></td>
+    <td align="center"><img src="docs/media/gallery/minesweeper.gif" width="100%" alt="Minesweeper: opening the field, flagging the mines and winning"><br><a href="games/minesweeper/README.md"><b>Minesweeper</b></a></td>
+    <td align="center"><img src="docs/media/gallery/breakout.gif" width="100%" alt="Block Breaker: the ball breaks bricks"><br><a href="games/breakout/README.md"><b>Block Breaker</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/gallery/numvisuals.gif" width="100%" alt="NumVisuals: moving backgrounds, from northern lights to a lava lamp"><br><a href="games/numvisuals/README.md"><b>NumVisuals</b></a></td>
+    <td align="center"><img src="docs/media/gallery/numpowder.gif" width="100%" alt="NumPowder: water floods the sand, then lava pours in and boils it"><br><a href="games/numpowder/README.md"><b>NumPowder</b></a></td>
+    <td align="center"><img src="docs/media/gallery/finalearth2.gif" width="100%" alt="The Final Earth 2: building a house in a city on a floating island"><br><a href="games/finalearth2/README.md"><b>The Final Earth 2</b></a></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/gallery/hollowknight.gif" width="100%" alt="Hollow Knight: fighting the False Knight and Hornet"><br><a href="games/hollowknight/README.md"><b>Hollow Knight</b></a></td>
+    <td align="center"><img src="docs/media/gallery/celeste.gif" width="100%" alt="Celeste on a real NumWorks calculator: Madeline climbs the first level"><br><a href="games/celeste/README.md"><b>Celeste</b></a></td>
+    <td align="center"><img src="docs/media/gallery/championisland.gif" width="100%" alt="Champion Island: climbing, artistic swimming and the marathon"><br><a href="games/championisland/README.md"><b>Champion Island</b></a></td>
+  </tr>
+</table>

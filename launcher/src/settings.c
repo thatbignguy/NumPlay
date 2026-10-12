@@ -12,7 +12,7 @@
 #define DANGER_TOP 0x8C1D23
 #define DANGER_BOTTOM 0x2A080B
 #define OK_GREEN 0x2FB36B
-#define ACCENT 0x7B43FF
+#define ACCENT 0x1F8A7D   /* NumPlay's teal (its icon's) */
 #define ROW_H 34
 #define ROWS_Y 50
 #define HOLD_MS 1400

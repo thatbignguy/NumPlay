@@ -116,6 +116,29 @@ Choose Climb, then a chapter, then Start. Madeline can dash once in the air (twi
 
 <br clear="right">
 
+## NumPowder
+
+<img src="media/numpowder.gif" width="320" align="right" alt="NumPowder: sand, water and lava">
+
+NumPowder comes as its own app, `NumPowder.nwa`: it is too big to share the calculator with NumPlay.
+
+| Key | What it does |
+| --- | --- |
+| **Arrows** | Move the brush (**shift**: 4 at a time) |
+| **OK** | Draw with the OK material |
+| **Back** | Draw with the Back tool (ERASE at first) |
+| **toolbox** | The materials: left and right pick, up and down change category, **OK** takes it, **shift**+**OK** for Back |
+| **var** | The menu: How to play, keys, save, load, clear, display, settings, credits |
+| **+** and **-** | The brush's size (**shift**: its shape) |
+| **shift**+**OK** | Draw a line; **⌫** switches to a box or a fill |
+| **⌫** | Take the material under the brush |
+| **alpha** | Pause (**shift**+**alpha**: one frame) |
+| **Home** | Save and quit |
+
+Pick a material with **toolbox**, then hold **OK** to draw it. The bar at the bottom always shows what **OK** and **Back** draw with, and the line under it says what the keys do right now. Try sand on water, fire on wood, lava on ice, or draw metal (METL) and touch it with a spark (SPRK). How to play, in the **var** menu, has more ideas. Home saves, and four save slots keep more; they are also copied into `numpowder_saves.py`, so installing the app again doesn't erase them.
+
+<br clear="right">
+
 ## The Final Earth 2
 
 <img src="media/finalearth2.gif" width="320" align="right" alt="The Final Earth 2: building a house on a city in free play">

@@ -1,10 +1,10 @@
 # NumBlocks
 
-Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1.8.
+Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it follows Minecraft 1.8.8 exactly, so a seed gives you the very same world that Minecraft 1.8.8 makes, block for block, with its blocks, items, recipes, mobs, textures, font and screens.
 
 <img src="docs/shot.png" width="320" alt="NumBlocks: oak trees and lilacs, with a sheep, a cow, a pig, a chicken and a creeper">
 
-- **A real 1.8 world:** the same biomes, hills, caves, lakes and trees as Minecraft 1.8.8, for any seed. Or a superflat world to build on.
+- **The same worlds as Minecraft 1.8.8:** type a seed and you get the world Minecraft 1.8.8 makes, block for block: the same terrain, biomes, hills, caves, lakes and trees. Or a superflat world to build on.
 - **Survival:** health, hunger, day and night, zombies, skeletons, creepers and spiders, and pigs, cows, sheep and chickens.
 - **Weather:** rain, snow and thunderstorms with lightning, as often as in 1.8.
 - **The Nether:** netherrack, caverns, a lava sea and a red sky. Build an obsidian frame, light it
@@ -18,6 +18,7 @@ Mine, craft and survive on your NumWorks calculator, in a world like Minecraft 1
 - **Spectator mode:** fly through the blocks and see through them, nothing to touch, and OK on a mob sees the world through its eyes.
 - **Commands:** /gamemode, /give, /time, /weather, /tp and more, with cheats on (Allow Cheats, or Open to LAN).
 - **Your worlds:** keep several, give them names, and they save as you play and when you quit. A copy also goes into `numblocks_saves.py`, so installing the game again doesn't erase them.
+- **Not in yet:** the End, redstone circuits and pistons, villages and other structures, enchanting and brewing.
 
 ## Controls
 
@@ -46,7 +47,7 @@ Spectator, as `/gamemode spectator` or the switcher's third slot, is Minecraft's
 
 ## Get it
 
-It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `NumBlocks.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
+It comes on its own as `NumBlocks.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest). (In this fork it is not inside NumPlay.nwa: install it on its own, or as `numblocks-interest.nwa`, hidden in the Interest app.)
 
 ## Credits
 

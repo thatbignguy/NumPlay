@@ -2,6 +2,7 @@
  *
  *   play [--frames N] [--ms-per-frame M] [--keys "10-40:fwd,50:use,..."] [--shots 30,60] [--out DIR]
  *        [--showcase]   (the hotbar of the README's GIF: TNT, flint and steel, water and lava, blocks)
+ *        [--animals]    (a sheep, a cow, a pig and a chicken ahead, on the ground where they stand)
  *        [--spawner]    (a monster spawner hanging in the air in front of the player, unset, and the eggs to set it with)
  *        [--distance 1..2]   (render distance, default: the saved option, 2 chunks)
  *        [--fancy]           (graphics: Fancy, see-through leaves; the default is what the options say, Fast)
@@ -19,8 +20,8 @@
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -54,7 +55,7 @@ static uint32_t key_bit(const char *s) {
 
 int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
-  int give = 0, showcase = 0, title_screen = 0, mobs = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
+  int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
   int nether = 0, portal = 0;
@@ -70,6 +71,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--showcase")) showcase = 1;
     else if (!strcmp(argv[i], "--title")) title_screen = 1;
     else if (!strcmp(argv[i], "--mobs")) mobs = 1;
+    else if (!strcmp(argv[i], "--animals")) animals = 1;
     else if (!strcmp(argv[i], "--torches")) torches = 1;
     else if (!strcmp(argv[i], "--water")) water = 1;
     else if (!strcmp(argv[i], "--creative")) creative = 1;
@@ -289,6 +291,23 @@ int main(int argc, char **argv) {
         for (int y = 0; y < fy; y++) world_set(x, y, z, B_AIR);
     pl.x = px + 0.5f, pl.z = pz + 0.5f, pl.y = (float)fy - 8.5f, pl.vy = 0;
     if (pl.mode) pl.flying = true;   /* (creative and spectator hang there; survival falls) */
+  }
+  if (animals) {
+    /* a few animals ahead of the player (forward f, right r blocks), each on the first solid ground under it, facing
+     * the player */
+    float a = pl.yaw * 3.14159265f / 180, fx = -sinf(a), fz = cosf(a), rx = -cosf(a), rz = -sinf(a);
+    static const struct { int type; float f, r; } herd[] = {
+      {E_SHEEP, 5.2f, -1.7f}, {E_COW, 7.5f, 1.2f}, {E_PIG, 4.6f, 1.9f}, {E_CHICKEN, 3.6f, -0.6f}};
+    for (unsigned k = 0; k < sizeof herd / sizeof herd[0]; k++) {
+      float x = pl.x + fx * herd[k].f + rx * herd[k].r, z = pl.z + fz * herd[k].f + rz * herd[k].r;
+      for (int y = (int)pl.y + 8; y > (int)pl.y - 12; y--) {
+        float box[6] = {x - 0.3f, y - 0.5f, z - 0.3f, x + 0.3f, y - 0.01f, z + 0.3f};
+        if (phys_free(box)) continue;
+        Entity *e = ent_new(herd[k].type, x, (float)y, z);
+        if (e) e->health = 10, e->yaw = pl.yaw + 180 + (float)(k * 37 % 60) - 30, e->gx = e->x, e->gz = e->z;
+        break;
+      }
+    }
   }
   if (torches) {
     /* torches around, for the night (on the cave's floor when there is one, in front of

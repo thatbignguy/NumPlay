@@ -13,6 +13,9 @@ import sys
 
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from make_icon import RADIUS  # noqa: E402  (the corner every app icon shares)
+
 W, H, S = 55, 56, 8
 INK, ORANGE, SLATE = (65, 65, 71), (255, 183, 52), (101, 105, 117)
 BANDS = ((0, 245), (17, 236), (35, 217), (50, 210))  # grey bands of the calculator's light icons, from the top
@@ -41,7 +44,7 @@ def matrices(size=(W, H)):
             x, y = (16.5 + j * 12) * S, (16 + i * 12) * S
             d.rounded_rectangle([x, y, x + 10 * S, y + 10 * S], radius=2 * S, fill=ORANGE if i == j else SLATE)
     mask = Image.new("L", im.size, 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W * S - 1, H * S - 1], radius=7 * S, fill=255)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W * S - 1, H * S - 1], radius=RADIUS * S, fill=255)
     im.paste(tile, (0, 0), mask)
     return im.resize(size, Image.LANCZOS)
 
@@ -50,7 +53,7 @@ def invisible_preview(size):
     w, h = size[0] * 4, size[1] * 4
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle([0, 0, w - 1, h - 1], radius=w // 8, fill=(255, 255, 255, 255))
+    d.rounded_rectangle([0, 0, w - 1, h - 1], radius=RADIUS * w / 55, fill=(255, 255, 255, 255))
     dash, gap, t, c = w // 14, w // 20, max(2, w // 60), (190, 190, 196, 255)
     inset = t * 2
     for x in range(inset + w // 8, w - inset - w // 8, dash + gap):
