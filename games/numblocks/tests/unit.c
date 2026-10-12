@@ -586,6 +586,24 @@ int main(void) {
     remove("build/unit-saves/numblocks.cfg");
   }
   {
+    /* Fullbright is kept with the options the same way, in the byte the Options struct
+     * had as padding (41: the record does not grow), and a record from before it reads
+     * as off */
+    CHECK(offsetof(Options, fullbright) == 41 && sizeof opt == 44);
+    remove("build/unit-saves/numblocks.cfg");
+    opt.fullbright = 1;
+    save_options();
+    opt.fullbright = 0;
+    load_options();
+    CHECK(opt.fullbright == 1);
+    remove("build/unit-saves/numblocks.cfg");
+    plat_save("numblocks.cfg", &opt, offsetof(Options, fullbright));   /* (the record older versions wrote) */
+    opt.fullbright = 0;
+    load_options();
+    CHECK(opt.fullbright == 0);   /* (off, as the options fresh from boot have it) */
+    remove("build/unit-saves/numblocks.cfg");
+  }
+  {
     /* the cache moving up a step at a time (new rows above the terrain are not generated, only
      * aired) holds the same blocks and light as one made there at once. The two can come to
      * rest in different bands (the climb flies, arriving at once does not yet know to), so

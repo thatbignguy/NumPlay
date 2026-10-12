@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.10"
+#define NB_VERSION "1.5.11"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -347,7 +347,7 @@ bool settle_fall(int x, int y, int z);   /* the settle pass: drop a sand/gravel 
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU, GUI_MODE };
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU, GUI_MODE, GUI_MODS };
 extern int gui;            /* the screen open */
 void gui_open(int screen, int x, int y, int z);
 void gui_close(void);
@@ -380,6 +380,7 @@ typedef struct {
   uint8_t distance;     /* render distance, 1..2 chunks (2 is what the game had); global, in numblocks.cfg */
   uint8_t sprint_toggle;   /* Sprint: 0 hold the key while walking, 1 a tap switches it on and off (1.15) */
   uint8_t brightness;   /* Brightness (Video Settings): 0 Moody to 15 Bright (its default, 8) */
+  uint8_t fullbright;   /* Fullbright (Mods and Cheats): with cheats on, every block drawn as if lit at 15 */
 } Options;
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,

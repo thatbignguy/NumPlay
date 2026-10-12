@@ -1,3 +1,53 @@
+## 1.5.11
+**Mods and Cheats: Options gains the screen, and Fullbright**
+- Options has a **Mods and Cheats...** row now (under Video Settings/Controls, before Done), and
+  behind it the list screen the next switch will go on: one row for now, **Fullbright: ON/OFF**,
+  and Done. The screen is the world's: it opens only from a world's Options and with cheats on
+  (`cheats_on()`); from anywhere else - a world without them, or the title's Options, even when
+  the world the title shows behind was played with cheats and `world_cheats` is still set - the
+  press says so in the chat and no screen opens, in the switcher's red: "Mods and cheats are only
+  available if you turned cheats on when creating a world". In a world the line is there once
+  Options closes, as the chat draws over the world; at the title the chat is never drawn, so the
+  button there says it into nothing (the reading the spec left open; chosen because the title has
+  no world open to be cheating in, and the button is kept there rather than hidden so the
+  refusal is the same answer everywhere).
+- Fullbright is a read helper in the renderer (`draw_light`, render.c): while the option is on
+  **and** cheats are on, every light the picture is drawn with answers the whole byte, 0xFF (sky
+  15 and block 15), as if a level-15 light stood next to every block. It wraps every read the
+  picture's light comes from: `face_lit`'s faces, `cell_hit`'s shaped blocks and cross plants,
+  `face_pixel`'s and `box_hit`'s faces for the pixels between samples, the water seen through its
+  top, the hand (`view_light`), the entities' `dr->light`, the particles, the rain and snow
+  sheets, and the spawner's egg. `vl[]` itself is not touched - the light engine, mob spawning,
+  burning and the F3 overlay read the same bytes - and the sky's gradient, the fog and
+  `setup_light`'s tables stay as they are: a fullbright block is a level-15 block at every
+  Brightness stop (Moody and Bright draw the same picture).
+- The option is the byte `Options` had as padding (41): the record is still 44 bytes, so no BSS,
+  and a record from before reads it as off. A world loaded without cheats keeps a stored
+  fullbright and gives it no effect, as asked; it is saved with the other options on Done.
+- Recorded (the host harness, not `build/desktop`): `./build/play --cave --cheats --bright 8
+  --frames 60 --shots 20,24,28,44 --keys "5:pause,8:down,10:ok,13:down,15:down,17:down,19:down,
+  21:ok,26:ok,30:down,32:ok,36:esc,40:pause" --out /tmp/mods` has shot 20 the Options row, 24
+  the screen with Fullbright: OFF, 28 ON (the world behind it already lighter), 44 the sealed
+  room's every block lit as at 15, where the same camera on the build before is a dark room. The
+  same keys without `--cheats` (`--shots 24,36 --keys "...21:ok,26:esc,30:esc"`) leave the screen
+  unopened (shot 24 still Options) and show the red line over the world (36); the title's Options
+  refuses too even with cheats forced on (`--title --cheats --frames 30 --shots 17,21 --keys
+  "2:ok,5:down,7:ok,10:down,12:down,14:down,16:down,18:ok"`, the first ok dismissing the fresh
+  harness's key sheet: shot 21 is still the title's Options). Off, the documented frames are
+  byte-identical:
+  the 18 `bench_render.py --fancy --rain --mobs` checksums match (180.58 -> 180.45 M insns - code
+  layout, the branch is not taken; the settle phase 253.86 M insns and the deepest stack 20032 B
+  unchanged), and the `--cave`, night and `--frames 120 --mobs --torches --rain` shots are
+  byte-for-byte the same as before.
+- `make test` passes (a new block: the byte is at 41, is kept with the options, and an older
+  record reads off); `make build && make check` fits - BSS 121941 and data 5073 unchanged, text
+  515881 -> 517482 (+1601: 325 the row, the screen and its line, 1276 the inlined check at the
+  light reads; the .nwa 740564 -> 742724 bytes, the .bin 519332 -> 520932). The device build runs
+  (`tools/emu.py`: 690 frames, 32.1 fps, 31.2 ms a frame, slowest 52 ms, no violations), the
+  screen opened there with cheats turned on at world creation and Fullbright lit the world,
+  `tests/test_numblocks_progress.py` passes (numblocks.cfg still 44 bytes) and
+  `games/numblocks-interest` builds (`make -C games/numblocks-interest build check`).
+
 ## 1.5.10
 **A spectator's head in rock sees the water and the lava the rock hides, not the blocks behind them**
 - The xray view (a spectator's head inside solid rock sees the world through it) left out

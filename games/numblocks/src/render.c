@@ -494,12 +494,20 @@ static inline int came_from(int i, int face, int x, int y, int z) {
   return i;
 }
 
+/* Fullbright (Options, Mods and Cheats - with cheats on only): the light the picture is drawn
+ * with, as if a level-15 light stood next to every block. The whole light byte: sky 15 and
+ * block 15, so the brighter of the two is block 15's, which no brightness stops darken. It is
+ * a read helper, not a change of the cache: the light engine, mob spawning, burning and the F3
+ * overlay read vl[] itself, and the sky's gradient, the fog and setup_light's tables stay as
+ * they are. Off (or without cheats), every read is the byte it was. */
+static inline int draw_light(int lb) { return opt.fullbright && cheats_on() ? 0xFF : lb; }
+
 /* the light a face of cell i (x, y, z) is lit by: the cell in front of it. Under the world's
  * lowest layer that cell is the void, which Minecraft lights at 15 (a light layer's default
  * value outside the world), so the underside of the world shows as the lit blocks they are */
 static inline int face_lit(int i, int face, int x, int y, int z) {
-  if (face == 0 && y == 0 && vc_y0 == 0) return 15;   /* (the void under the world, lit as Minecraft's is) */
-  return vl[came_from(i, face, x, y, z)];
+  if (face == 0 && y == 0 && vc_y0 == 0) return draw_light(15);   /* (the void under the world, lit as Minecraft's is) */
+  return draw_light(vl[came_from(i, face, x, y, z)]);
 }
 
 /* a ray: its direction, and a see-through layer (water) it went through: its colour and how much */
@@ -564,7 +572,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
     if (hit_cross(blk_tex[b][3], lx, ly, lz, R->dx, R->dy, R->dz, 0, t1, &h)) {
       int tc = texel565(b, blk_tex[b][3], h.u, h.v, col);   /* (hit_cross met a texel that is there) */
       last_t = t + h.t;
-      uint16_t c = lit565((uint16_t)tc, 1, vl[i], (t + h.t) * R->len);
+      uint16_t c = lit565((uint16_t)tc, 1, draw_light(vl[i]), (t + h.t) * R->len);
       if (R->wa) c = pack_nc((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
                        (b5(c) * (256 - R->wa) + R->wb * R->wa) >> 8);
       else hit_kind = 3, hit_i = i;
@@ -609,7 +617,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
       int tc = texel565(b, tex, h.u, h.v, col);
       if (tc >= 0) {
         /* (a face R->inside the cell is lit by the cell's light, one on its side by the cell in front) */
-        int lt = m == M_LIQUID || m == M_TORCH || h.t > 0 ? vl[i] : face_lit(i, face, x, y, z);
+        int lt = m == M_LIQUID || m == M_TORCH || h.t > 0 ? draw_light(vl[i]) : face_lit(i, face, x, y, z);
         uint16_t c = lit565((uint16_t)tc, h.face, lt, (t + h.t) * R->len);
         if (!R->wa && one_box(b) && i != cam_i) {
           /* a face of a block of one box (slab, snow layer...): the pixels between can find it too */
@@ -893,10 +901,10 @@ static int face_pixel(float dx, float dy, float dz, int plane, int f, bool wet) 
       /* hidden, or something stands in front: trace (wet: water in front is clear; a
        * spectator's head in the rock: only what is solid stands in its way) */
       if (vc_get(fi) != B_AIR && !(wet && is_water(vc_get(fi))) && !(xray && !(blk_flags[vc_get(fi)] & BF_OPAQUE))) return -1;
-      light = vl[fi];
+      light = draw_light(vl[fi]);
     } else if (!(f == 0 && y == 0 && vc_y0 == 0))
-      light = vl[i];   /* (outside the cache: as face_lit lights it, not the sky's 15) */
-  } else light = vl[i];
+      light = draw_light(vl[i]);   /* (outside the cache: as face_lit lights it, not the sky's 15) */
+  } else light = draw_light(vl[i]);
   int u, v;
   switch (f) {
     case 0: case 1: u = (int)(lx * 16); v = (int)(lz * 16); break;
@@ -1106,20 +1114,20 @@ static __attribute__((unused)) void plane_fill(uint16_t (*cb)[RW], float (*zb)[R
         if (cube) ok = !(edge & 15);
         else ok = one_box(bk) && blk_box[bk][0][ka + ((f & 1) ? 3 : 0)] == edge, q = blk_box[bk][0];
         if (!ok) goto miss;
-        int light = vl[i];
+        int light = draw_light(vl[i]);
         if (!(edge & 15)) {
           /* on the cell's side: lit by the cell in front, which must be clear */
           int px = c[0] + nx[f], py = c[1] + ny[f], pz = c[2] + nz[f];
-          light = 15;
+          light = draw_light(15);
           if ((unsigned)px < VCX && (unsigned)py < VCY && (unsigned)pz < VCZ) {
             int fi = VC_I(px, py, pz);
             if (vc_get(fi) != B_AIR && !(wet && is_water(vc_get(fi))) && !(xray && !(blk_flags[vc_get(fi)] & BF_OPAQUE))) {
               ok = 0;
               goto miss;
             }
-            light = vl[fi];
+            light = draw_light(vl[fi]);
           } else if (!(f == 0 && c[1] == 0 && vc_y0 == 0))
-            light = vl[i];   /* (outside the cache: as face_lit lights it, not the sky's 15) */
+            light = draw_light(vl[i]);   /* (outside the cache: as face_lit lights it, not the sky's 15) */
         }
         tex = blk_front[bk] ? face_tex(bk, f, c[0], c[1], c[2]) : blk_tex[bk][f];
         fl = tex_flags[tex];
@@ -1173,7 +1181,7 @@ static int water_pixel(float dx, float dy, float dz, int wplane, int plane, int 
   int u = (int)((hx - x) * 16), v = (int)((hz - z) * 16), r, g, bb;
   u = u < 0 ? 0 : u > 15 ? 15 : u, v = v < 0 ? 0 : v > 15 ? 15 : v;
   if (texel_rgb(b, face_tex(b, 1, x, y, z), u, v, z * VCX + x, &r, &g, &bb) < 0) return -1;
-  uint16_t w = lit(r, g, bb, 1, vl[i], unfogged(t, dx * dx + dy * dy + dz * dz));
+  uint16_t w = lit(r, g, bb, 1, draw_light(vl[i]), unfogged(t, dx * dx + dy * dy + dz * dz));
   int c = face_pixel(dx, dy, dz, plane, f, true);
   if (c < 0) return -1;
   return pack_nc((r5((uint16_t)c) * 106 + r5(w) * 150) >> 8, (g6((uint16_t)c) * 106 + g6(w) * 150) >> 8,
@@ -1243,7 +1251,7 @@ static uint16_t agreed(float dx, float dy, float dz, const Sample *a, bool one) 
       last_t = h.t;
       int tc = texel565(b, blk_tex[b][3], h.u, h.v, z * VCX + x);
       float d2 = h.t * h.t * (dx * dx + dy * dy + dz * dz);
-      return lit565((uint16_t)tc, 1, vl[i], d2 > fog0 * fog0 ? sqrtf(d2) : 0);
+      return lit565((uint16_t)tc, 1, draw_light(vl[i]), d2 > fog0 * fog0 ? sqrtf(d2) : 0);
     }
   }
   last_t = 1e9f;
@@ -1356,7 +1364,7 @@ int held_texel(int b, int face, int u, int v) {
 }
 
 /* how lit the player's hand is (0..32): the light where the eyes are */
-static int view_light(void) { return light_shade(0, cam_i >= 0 ? vl[cam_i] : 15); }
+static int view_light(void) { return light_shade(0, draw_light(cam_i >= 0 ? vl[cam_i] : 15)); }
 
 static void ents_frame(Frame *F) {
   F->ndraws = 0;
@@ -1388,7 +1396,7 @@ static void ents_frame(Frame *F) {
     d->x0 = r[0], d->y0 = r[1], d->x1 = r[2], d->y1 = r[3];
     d->e = e, d->ex = ex, d->ey = ey, d->ez = ez, d->dist = sqrtf(d2);
     int cx = (int)floorf(ex), cy = (int)floorf(ey + 0.2f), cz2 = (int)floorf(ez);
-    d->light = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz2 < VCZ ? vl[VC_I(cx, cy, cz2)] : 15;
+    d->light = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz2 < VCZ ? draw_light(vl[VC_I(cx, cy, cz2)]) : draw_light(15);
     F->ndraws++;
   }
 }
@@ -1701,7 +1709,7 @@ static void particles_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[R
     int half = p->life & (RAIN_DROP | P_FLOAT) ? 1 : (int)(0.05f / t / TAN_V * RH / 2 + 0.5f);   /* (drops: a texel or two) */
     if (half < 1) half = 1;
     int cx = (int)floorf(x), cy = (int)floorf(y), cz = (int)floorf(z);
-    int lb = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz < VCZ ? vl[VC_I(cx, cy, cz)] : 15;
+    int lb = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz < VCZ ? draw_light(vl[VC_I(cx, cy, cz)]) : draw_light(15);
     uint16_t c = shade565(p->c, light_shade(0, lb));
     for (int yy = (int)sy - half + 1; yy <= (int)sy + half - 1 + (half == 1); yy++) {
       if (yy < py0 || yy >= py0 + rows || yy < 0) continue;
@@ -1789,8 +1797,8 @@ static void rain_frame(void) {
         uint32_t h = col_hash(wx, wz);
         float rnd1 = (h & 0xFFFF) / 65536.0f, rnd2 = (h >> 16) / 65536.0f;
         /* the light where the sheet meets the player's height, or the ground */
-        int ly = (top > l ? top : l) - vc_y0, lb = 15;
-        if ((unsigned)ly < VCY) lb = vl[VC_I(lx, ly, lz)];
+        int ly = (top > l ? top : l) - vc_y0, lb = draw_light(15);
+        if ((unsigned)ly < VCY) lb = draw_light(vl[VC_I(lx, ly, lz)]);
         s->snow = temp_at(wx, y0, wz) < 0.15f;
         if (!s->snow) {
           /* rows scroll down 3 to 4 blocks a second... (d5 in renderRainSnow) */
@@ -2119,7 +2127,7 @@ static void spawner_frame(Frame *F) {
     d->ex = cx + 0.5f, d->ey = cy + 0.5f, d->ez = cz + 0.5f;
     d->yaw = (game_time + tick_frac) * 0.0628319f;   /* a turn in five seconds */
     for (int k = 0; k < 4; k++) d->r[k] = (int16_t)r[k];
-    d->light = vl[VC_I(cx, cy, cz)];
+    d->light = draw_light(vl[VC_I(cx, cy, cz)]);
     d->egg = (uint8_t)(set - E_ZOMBIE);
   }
 }
@@ -2265,7 +2273,7 @@ static bool still_screen(void) {
   return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CTRLMENU || gui == GUI_CONTROLS ||
          gui == GUI_WORLDS || gui == GUI_CREATE ||
          gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS ||
-         gui == GUI_FLAT;
+         gui == GUI_FLAT || gui == GUI_MODS;
 }
 static void send_strip(int py, bool still) {
   if (still) {

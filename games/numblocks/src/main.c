@@ -233,7 +233,7 @@ bool game_frame(void) {
     if (pl.pitch > 90) pl.pitch = 90;
     if (pl.pitch < -90) pl.pitch = -90;
   }
-  bool paused = gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_OPTIONS || gui == GUI_CTRLMENU || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS;
+  bool paused = gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_OPTIONS || gui == GUI_CTRLMENU || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS || gui == GUI_MODS;
   if (!paused) acc += dt;
   /* a key pressed on a frame between ticks waits for the next tick (else that press is lost) */
   static uint32_t game_pressed;

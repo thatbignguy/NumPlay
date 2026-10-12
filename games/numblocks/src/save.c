@@ -13,8 +13,9 @@
 /* the options' defaults, positional (the record is the struct as it comes):
  * difficulty, fancy, look speed, clouds, bobbing, key sheet version, last world,
  * plays, the keys, debug overlay, render distance, sprint toggle, brightness
- * (8, just over the middle of Moody..Bright: a dark room can be made out at once) */
-Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 8};
+ * (8, just over the middle of Moody..Bright: a dark room can be made out at once),
+ * fullbright (off) */
+Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 8, 0};
 int64_t world_seed;
 uint8_t world_type;
 uint8_t world_dim;   /* the dimension (DIM_*): the overworld, or the nether */
@@ -471,6 +472,7 @@ void load_options(void) {
   /* (older records end in padding where distance now lives: 0 means "never set") */
   if (opt.distance < 1 || opt.distance > 2) opt.distance = 2;
   if (opt.sprint_toggle) opt.sprint_toggle = 1;
+  if (opt.fullbright) opt.fullbright = 1;
   /* (an older record is shorter than the struct: the fields it has no room for stay
    * as they were initialised above; a value past what the field holds is never set) */
   if (opt.brightness > 15) opt.brightness = 0;
