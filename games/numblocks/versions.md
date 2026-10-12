@@ -1,3 +1,36 @@
+## 1.5.10
+**A spectator's head in rock sees the water and the lava the rock hides, not the blocks behind them**
+- The xray view (a spectator's head inside solid rock sees the world through it) left out
+  any face the ray came into from a full block (`BF_OPAQUE`), so a liquid face the rock
+  itself hid - water or lava directly under a block, or against its side - was left out
+  too and the view showed what stood behind it: a block-sized square of the sand under a
+  pool, the stone behind a lava block. `cell_hit` and the trace loop's skip (render.c)
+  ask both sides now: a face is buried, and does not draw, only where the rock is on
+  both sides of it; rock against water or lava goes on into the liquid (a top face
+  starts the water's see-through layer there, as looking into water does anywhere), and
+  rock against glass, leaves, a slab or another shaped block draws that block's face.
+  Rock against rock stays as hidden as it was, and a head inside a slab (not a full
+  block) still does not start the xray view.
+- Recorded: `tests/play.c`'s `--xray` builds a stone-rimmed pool of water with a stone
+  block over its middle and a lava block in a stone pocket against the block's side, the
+  spectator's head inside the block, looking down at the water below and the lava beside
+  it. `./build/play --xray --frames 12 --shots 0,11 --bright 15 --time 6000
+  --out /tmp/xray` (the host harness, not `build/desktop`) shows the water surface under
+  the block (24,32,41: the shadowed water hue) where 1.5.9 draws the sand (57,52,41),
+  and the lava beside it exactly as the same camera sees it with the block gone
+  (131,76,16) where 1.5.9 draws the stone wall (106,109,106). The same camera flown out
+  of the block (a normal view) is byte-identical between the two builds, and the
+  adaptive picture equals the full-trace reference there (0 wrong pixels).
+- `make test` passes; the 18 documented `bench_render.py --fancy --rain --mobs` frames
+  are pixel-identical (checksums; 177.29 -> 177.40 M insns, +0.06%, code layout - the
+  skip is behind `xray` and never runs in those frames, the settle phase 264.21 M insns
+  and the deepest stack 20016 B unchanged). BSS 121941, unchanged; the .nwa grows by 68
+  bytes of text (515811 -> 515879, 740452 -> 740560 bytes). The device build runs
+  (`tools/emu.py`: 155 frames, 38.8 fps, no violations), `tests/test_numblocks_progress.py`
+  passes, and `games/numblocks-interest` builds (`make -C games/numblocks-interest build
+  check`) - its stale `output/fin.o` was rebuilt, it held bytecode from the older
+  toolchain and would not link.
+
 ## 1.5.9
 **A falling block placed with nothing under it drops at once**
 - A placement runs `neighbours_changed` on the cell it placed into, and that ran the fall only

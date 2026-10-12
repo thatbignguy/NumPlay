@@ -516,11 +516,14 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
   int col = z * VCX + x;
   float lx = ox + R->dx * t - x, ly = oy + R->dy * t - y, lz = oz + R->dz * t - z;
   /* A spectator flying through the blocks sees through them, as Minecraft's does with
-   * its head inside one: a face shows only when nothing solid stands in front of it,
-   * so the ray goes on past every cell it came into from solid rock (the camera's own
-   * block included) until it meets a face that shows - a cave's wall, the ground, the
-   * sky. One more look at the world's blocks, and only while the head is in one. */
-  if (xray && (blk_flags[vc_get(came_from(i, face, x, y, z))] & BF_OPAQUE)) return -1;
+   * its head inside one: a face between two full blocks is buried in the rock and does
+   * not draw, so the ray goes on past the cells it came into from solid rock (the
+   * camera's own block included) until it meets a face with air or anything that is not
+   * a full block on one side - a cave's wall, the ground, the water or lava the rock
+   * hides, the sky. One more look at the world's blocks, and only while the head is in
+   * one. (Both sides are asked: a rock against water, lava, glass, leaves or a shaped
+   * block is the surface the rock hides, and draws.) */
+  if (xray && (blk_flags[b] & BF_OPAQUE) && (blk_flags[vc_get(came_from(i, face, x, y, z))] & BF_OPAQUE)) return -1;
   if (m == M_CUBE || m == M_LEAVES || m == M_GLASS) {
     /* The camera's own cell: the face a ray would "come in through" is the one behind it,
      * a back face - Minecraft's faces are culled, and leaves and glass are see-through
@@ -753,10 +756,11 @@ static uint16_t trace(float dx, float dy, float dz) {
       if (shape_top[b] >= 16 || oy + dy * (dy > 0 ? t : te) - y <= shape_top[b] * (1 / 16.0f)) {
         float px = tx - idx, py = ty - idy, pz = tz - idz;
         int face = t == tj ? jf : px > py ? (px > pz ? fx : fz) : (py > pz ? fy : fz);
-        /* a spectator's head in solid rock: this cell's face is hidden by whatever the
-         * ray came through - the rock itself (cell_hit's own rule, here where it costs a
-         * comparison instead of a call), so the ray walks on past it */
-        if (!(xray && (blk_flags[vc_get(came_from(i, face, x, y, z))] & BF_OPAQUE))) {
+        /* a spectator's head in solid rock: this cell's face is hidden only where the
+         * rock is on both sides of it (cell_hit's own rule, here where it costs a
+         * comparison instead of a call); rock against water, lava, glass or a shaped
+         * block is a surface, so the ray stops there (or goes into the liquid) */
+        if (!(xray && (blk_flags[b] & BF_OPAQUE) && (blk_flags[vc_get(came_from(i, face, x, y, z))] & BF_OPAQUE))) {
           int c = cell_hit(&R, b, i, x, y, z, face, t, te - t);
           if (c >= 0) return (uint16_t)c;
           in_liq = liquid[R.inside] ? liquid[R.inside] : 255;   /* (it may have gone into water) */
@@ -2482,14 +2486,14 @@ nether_sky_done:;
   cam_fr[2][0] = cam_z - oz, cam_fr[2][1] = cam_z + 1 - oz;
   under_water = is_water(cam_b);
   /* A spectator's head in a solid block: what it sees is through the rock (cell_hit):
-   * a face shows only with nothing solid in front of it, so the ray walks on past
-   * the rock until it meets one. It costs what it costs to see through the world
-   * - the rays run 14 blocks a pixel instead of 7 - and only while the head is in
-   * a block. One thing it does not do exactly: a surface the rays meet almost edge
-   * on (the side of a hill, seen from under it) can slip between the 4 x 4 samples
-   * the picture is drawn from, so a pixel or two of it here and there is sky where
-   * the rock was. Tracing every pixel instead - the reference build - costs three
-   * times the frame. */
+   * a face buried in the rock (rock on both sides of it) does not draw, so the ray
+   * walks on until it meets one that is not. It costs what it costs to see through
+   * the world - the rays run 14 blocks a pixel instead of 7 - and only while the head
+   * is in a block. One thing it does not do exactly: a surface the rays meet almost
+   * edge on (the side of a hill, seen from under it) can slip between the 4 x 4
+   * samples the picture is drawn from, so a pixel or two of it here and there is sky
+   * where the rock was. Tracing every pixel instead - the reference build - costs
+   * three times the frame. */
   xray = pl.mode == 2 && cam_i >= 0 && (blk_flags[cam_b] & BF_OPAQUE) != 0;
   if (under_water) {
     fog_r = 10, fog_g = 30, fog_b = 110;

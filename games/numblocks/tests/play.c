@@ -33,6 +33,11 @@
  *                         neighbours leaves it hanging)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
+ *        [--xray]       (the spectator's water and lava holes: the head inside the stone
+ *                         block over a pool of water, a lava block against the block's
+ *                         side - looking down, the water under the block and the lava
+ *                         beside it are the faces the rock hides; 1.5.9 draws the sand
+ *                         under the water and the stone behind the lava instead)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
@@ -74,7 +79,7 @@ int main(int argc, char **argv) {
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -102,6 +107,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--settle")) settle = 1;
     else if (!strcmp(argv[i], "--place")) placing = 1;
     else if (!strcmp(argv[i], "--portal")) portal = 1;
+    else if (!strcmp(argv[i], "--xray")) xray = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
     else if (!strcmp(argv[i], "--build")) build = 1;
@@ -391,6 +397,47 @@ int main(int argc, char **argv) {
     camera_reset();
     fprintf(stderr, "place: pillar %d %d %d..%d; OK at 25 puts the sand at %d %d %d, over the air\n", px, pz + 3, fy,
             fy + 2, px, fy + 2, pz + 2);
+  }
+  if (xray) {
+    /* The spectator's water and lava holes (render.c's xray rule): with the head inside
+     * a stone block the world is seen through the rock, but a liquid face the rock hides
+     * - the water directly under the block, the lava beside it - was left out with it,
+     * so the view showed what stood behind the liquid instead (the sand under the water,
+     * the stone behind the lava). A pool of water with a stone block hanging over its
+     * middle and a lava block against the block's side; the spectator's head goes into
+     * the block, looking down at the water below and the lava beside it. */
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);   /* (the world whole: no settle pass after the build) */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    /* a cleared field with a sand floor and a stone-rimmed pool of water in it */
+    for (int z = pz - 6; z <= pz + 6; z++)
+      for (int x = px - 6; x <= px + 6; x++)
+        for (int y = fy - 1; y <= fy + 6; y++) world_set(x, y, z, y == fy - 1 ? B_SAND : B_AIR);
+    int r = 3;
+    for (int z = pz - r; z <= pz + r; z++)
+      for (int x = px - r; x <= px + r; x++) world_set(x, fy, z, B_WATER);
+    for (int k = -r; k <= r; k++) {
+      world_set(px - r - 1, fy, pz + k, B_STONE);
+      world_set(px + r + 1, fy, pz + k, B_STONE);
+      world_set(px + k, fy, pz - r - 1, B_STONE);
+      world_set(px + k, fy, pz + r + 1, B_STONE);
+    }
+    /* the block over the middle water, and the lava against its side - in a stone
+     * pocket, so a settle pass can never start it flowing */
+    world_set(px, fy + 1, pz, B_STONE);
+    world_set(px + 1, fy + 1, pz, B_LAVA);
+    world_set(px + 2, fy + 1, pz, B_STONE);
+    world_set(px + 1, fy + 1, pz - 1, B_STONE);
+    world_set(px + 1, fy + 1, pz + 1, B_STONE);
+    /* the head in the block, the eye half a block over its floor, looking down and
+     * towards +z: the water it stands over below, the lava at its side to the left */
+    pl.mode = 2, pl.flying = true;
+    pl.x = px + 0.5f, pl.y = fy - 0.12f, pl.z = pz + 0.5f;
+    pl.yaw = 0, pl.pitch = 60;
+    opt.difficulty = 0;
+    camera_reset();
+    fprintf(stderr, "xray: the block over the water at %d %d %d, the lava against it at %d %d %d, the head in the block\n",
+            px, fy + 1, pz, px + 1, fy + 1, pz);
   }
   if (mobs) {
     /* a row of every mob, 4 blocks ahead, facing the player, on a cleared grass field */
