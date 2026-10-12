@@ -31,7 +31,10 @@ permissions:
 
 jobs:
   sync:
-    if: github.event_name != 'workflow_run' && inputs.tag == ''
+    # Upstream only: the mirrors and their deploy keys live in Mason363/NumPlay.
+    # In forks (no CHAMPION_ISLAND_DEPLOY_KEY / NUMBLOCKS_DEPLOY_KEY) the mirror
+    # checkout would fail with exit 128, so skip there.
+    if: github.repository == 'Mason363/NumPlay' && github.event_name != 'workflow_run' && inputs.tag == ''
     strategy:
       fail-fast: false
       matrix:
@@ -84,11 +87,13 @@ jobs:
         run: git -C mirror push origin HEAD:main
 
   release:
+    # Upstream only, like sync above: forks have no mirror deploy keys.
     if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+      github.repository == 'Mason363/NumPlay' &&
+      ((github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
         && github.event.workflow_run.event != 'pull_request'
         && (github.event.workflow_run.head_branch == 'main' || startsWith(github.event.workflow_run.head_branch, 'v')))
-      || (github.event_name == 'workflow_dispatch' && inputs.tag != '' && github.ref == 'refs/heads/main')
+      || (github.event_name == 'workflow_dispatch' && inputs.tag != '' && github.ref == 'refs/heads/main'))
     strategy:
       fail-fast: false
       matrix:
