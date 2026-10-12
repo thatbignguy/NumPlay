@@ -18,6 +18,9 @@
  *        [--roof]       (above the nether's ceiling: a floor laid over the roof, the player
  *                         standing on it in Creative with netherrack in hand, so keys can
  *                         break and place blocks up there - the nether is 200 tall)
+ *        [--concrete]   (a powder column on a shelf over a pit, and a water stream reaching a
+ *                         powder block: OK mines the shelf and the column falls, the stream
+ *                         sets its block into concrete - the player holds white powder)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
  *
@@ -61,7 +64,7 @@ int main(int argc, char **argv) {
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -85,6 +88,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
     else if (!strcmp(argv[i], "--nether")) nether = 1;
     else if (!strcmp(argv[i], "--roof")) roof = 1;
+    else if (!strcmp(argv[i], "--concrete")) concrete = 1;
     else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
@@ -285,6 +289,37 @@ int main(int argc, char **argv) {
     world_set((int)pl.x, fy, (int)pl.z + 6, B_COBBLESTONE);
     world_set((int)pl.x, fy + 1, (int)pl.z + 6, B_WATER);
     neighbours_changed((int)pl.x, fy + 1, (int)pl.z + 6);
+  }
+  if (concrete) {
+    /* the concrete pair on a cleared field: a white powder column on a stone shelf over a
+     * pit (Back places a powder block at frame 10, OK mines it at 25, OK mines the shelf at
+     * 50 and the column falls into the pit), and a red powder block at the foot of a stone
+     * spout the water runs down (the stream sets it on its own). Creative, white powder in
+     * hand; the field is cleared wide enough that the water's seven-block spread stops well
+     * short of the pit, which only opens when the shelf goes. */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 3; z < pz + 12; z++)
+      for (int x = px - 9; x < px + 10; x++)
+        for (int y = fy - 1; y < fy + 8; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
+    /* the column: the shelf, white powder on it, a three-deep pit under the shelf */
+    int cx = px - 1, cz = pz + 3;
+    world_set(cx, fy - 3, cz, B_STONE);   /* the pit's floor */
+    for (int y = fy - 2; y < fy; y++) world_set(cx, y, cz, B_AIR);
+    world_set(cx, fy, cz, B_STONE);       /* the shelf */
+    for (int y = fy + 1; y <= fy + 3; y++) world_set(cx, y, cz, B_CONCRETE_POWDER_WHITE);
+    /* the spout: a stone pillar with the source on top, the red powder two blocks off at its
+     * foot (the base flow reaches it two steps in; its top face stands above the water, so
+     * the frames can show the powder's texture become the concrete's) */
+    int wx = px - 7, wz = pz + 8;
+    for (int y = fy; y <= fy + 2; y++) world_set(wx, y, wz, B_STONE);
+    world_set(wx, fy + 3, wz, B_WATER);
+    world_set(wx, fy, wz - 2, B_CONCRETE_POWDER_RED);
+    neighbours_changed(wx, fy + 3, wz);
+    pl.mode = 1, pl.flying = false;
+    pl.yaw = 18, pl.pitch = 22;   /* (the shelf at the crosshair, the spout off to the right) */
+    pl.inv[0] = (Stack){B_CONCRETE_POWDER_WHITE, 64}, pl.slot = 0;
+    camera_reset();
+    fprintf(stderr, "concrete: shelf %d %d %d (pit under), spout %d %d\n", cx, fy, cz, wx, wz);
   }
   if (mobs) {
     /* a row of every mob, 4 blocks ahead, facing the player, on a cleared grass field */

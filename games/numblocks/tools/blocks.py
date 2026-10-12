@@ -269,6 +269,18 @@ b('QUARTZ_PILLAR_Z', 155, 4, tex={'top': 'quartz_pillar', 'side': 'quartz_pillar
                                   'z': 'quartz_pillar_top'}, hard=0.8, tool='pickaxe')
 b('SMOOTH_QUARTZ', 155, 5, tex='quartz_block_bottom', hard=0.8, tool='pickaxe')
 b('QUARTZ_BRICKS', 155, 6, tex='quartz_bricks', hard=0.8, tool='pickaxe')
+# --- concrete (1.12): the sixteen powders first, the concretes they set into after, both in the
+# same colour order so the match is powder + (B_CONCRETE_WHITE - B_CONCRETE_POWDER_WHITE). Modern
+# only - 1.8 has no id for either - so 1.12's own numeric ids (251 concrete, 252 concrete powder)
+# stand in, and the states sit past the items' (the 9-bit packing is what saves them).
+CCOLORS = ['WHITE', 'ORANGE', 'MAGENTA', 'LIGHT_BLUE', 'YELLOW', 'LIME', 'PINK', 'GRAY', 'SILVER', 'CYAN',
+           'PURPLE', 'BLUE', 'BROWN', 'GREEN', 'RED', 'BLACK']
+CTEX = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan',
+        'purple', 'blue', 'brown', 'green', 'red', 'black']
+for v, (c, t) in enumerate(zip(CCOLORS, CTEX)):
+    b(f'CONCRETE_POWDER_{c}', 252, v, tex=f'{t}_concrete_powder', hard=0.5, tool='shovel')
+for v, (c, t) in enumerate(zip(CCOLORS, CTEX)):
+    b(f'CONCRETE_{c}', 251, v, tex=f'{t}_concrete', hard=1.8, tool='pickaxe')
 
 assert len(S) <= NSTATES, len(S)
 

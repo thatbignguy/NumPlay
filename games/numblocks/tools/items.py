@@ -202,6 +202,8 @@ CLAB = ['White', 'Orange', 'Magenta', 'Light Blue', 'Yellow', 'Lime', 'Pink', 'G
 for c, l in zip(COLORS, CLAB):
     LABELS[f'WOOL_{c}'] = 'Wool' if c == 'WHITE' else f'{l} Wool'
     LABELS[f'STAINED_CLAY_{c}'] = f'{l} Terracotta'
+    LABELS[f'CONCRETE_{c}'] = f'{l} Concrete'
+    LABELS[f'CONCRETE_POWDER_{c}'] = f'{l} Concrete Powder'
 
 # block states that stand for another one in the inventory
 ITEM_OF = {'PORTAL_NS': None, 'PORTAL_EW': None,   # the nether portal: the game's own, never an item
@@ -328,6 +330,10 @@ for i, (n, lab, t) in enumerate(DYES):
     if wool != 'WOOL_WHITE':
         shapeless(wool, 1, [f'DYE_{n}', 'WOOL_WHITE'])
     shaped('STAINED_CLAY_' + COLORS[15 - i], 8, ['###', '#X#', '###'], {'#': 'HARDENED_CLAY', 'X': f'DYE_{n}'})
+    # modern concrete powder: shapeless, 4 sand and 4 gravel with the dye, 8 out (the concrete
+    # it sets into is not crafted)
+    shapeless('CONCRETE_POWDER_' + COLORS[15 - i], 8,
+              ['SAND', 'SAND', 'SAND', 'SAND', 'GRAVEL', 'GRAVEL', 'GRAVEL', 'GRAVEL', f'DYE_{n}'])
 shapeless('DYE_YELLOW', 1, ['DANDELION'])
 shapeless('DYE_RED', 1, ['POPPY'])
 shapeless('DYE_WHITE', 3, ['BONE'])

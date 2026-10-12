@@ -1,3 +1,32 @@
+## 1.5.7
+**Concrete: the powder falls, and the water that touches it sets it, in the sixteen colours**
+- The pair is in, all sixteen colours: **concrete powder** falls like sand and gravel and
+  stays powder while it is dry, and the moment water - a source or a flow, placed by the
+  player or flowing in on its own - touches it, it sets into the **concrete** of its colour,
+  which then sits where it set. Powder that falls into water sets where it lands. Both ride
+  `neighbours_changed` (player.c): the powder joins the sand and gravel fall list, and a
+  wet neighbour (or a wet change beside it) turns it in place; the states run the powders
+  first and the concretes after, in the same colour order, so a powder's concrete is its
+  state + 16 (`is_concrete_powder` / `concrete_of`, nb.h).
+- The 32 states are appended past the quartz family (402..433, `B_COUNT` 434). Concrete is
+  modern-only - 1.8 has no id for it - so 1.12's own numeric ids stand in (251 concrete,
+  252 concrete powder) and `/give` takes the modern names (`white_concrete`,
+  `light_gray_concrete_powder`, ...). The pieces show in Building Blocks and the search
+  tab, and are /setblock-able by name.
+- The texture list passed 256 with the 32 new pictures, so `blk_tex` and `blk_front` hold
+  16-bit indices now (3.5 KB more flash, no RAM). The pictures are the modern dump's
+  (`make data-modern`'s set), packed by tools/data_add.py; the labels, the tab and the
+  recipe are the tools' tables, `names.py` the /give names.
+- The powder crafts the vanilla way: shapeless four sand and four gravel with a dye, eight
+  at a time (16 recipes); concrete is not crafted. The powder mines like sand and gravel
+  (any tool drops it), the concrete like stone (a pickaxe).
+- `make test` passes (the new test falls a column into a pit, sets one from a source and one
+  from a flow, walks a set block with water beside it and drops a powder into a pool; the
+  recipes, labels, /give names, /setblock and the Building Blocks tab are checked too) and
+  `make build && make check` fits (BSS unchanged at 121941). `./build/play --concrete`
+  frames show the powder placed, the column falling when the shelf goes, and the stream
+  reaching the red block: its speckled face turns the flat concrete.
+
 ## 1.5.6
 **A hole under the world and over the nether's roof renders right**
 - A block over a broken floor block was drawn at the broken block's own depth -

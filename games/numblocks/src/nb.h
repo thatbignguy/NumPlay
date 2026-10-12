@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.6"
+#define NB_VERSION "1.5.7"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -70,6 +70,13 @@ static inline bool is_door_lower(int b) {
 static inline bool is_lava(int b) { return b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA); }
 /* the nether portal's two states: NS faces north/south (thin in Z), EW faces east/west (thin in X) */
 static inline bool is_portal(int b) { return b == B_PORTAL_NS || b == B_PORTAL_EW; }
+/* the concrete pair (blocks.py): the powder falls like sand and gravel, and water - a source
+ * or a flow - sets it into the concrete of its colour (player.c's neighbours_changed). The
+ * states run the sixteen powders first and the concretes after, in the same colour order */
+static inline bool is_concrete_powder(int b) {
+  return b >= B_CONCRETE_POWDER_WHITE && b <= B_CONCRETE_POWDER_BLACK;
+}
+static inline int concrete_of(int b) { return b + (B_CONCRETE_WHITE - B_CONCRETE_POWDER_WHITE); }
 /* a stack id is one of the items' (I_*) rather than a block state's (B_*): the items live
  * at 256..256+N_ITEMS-1, the blocks below 256 and the post-item states past them (the
  * portal and the reserved states in between keep the items' own behaviour) */

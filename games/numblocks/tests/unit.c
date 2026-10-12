@@ -51,6 +51,11 @@ int main(void) {
   CHECK(craft(qb, 3) == B_QUARTZ_BRICKS * 100 + 4);
   int qc[4] = {B_QUARTZ_PILLAR, B_QUARTZ_PILLAR, B_QUARTZ_PILLAR, B_QUARTZ_PILLAR};
   CHECK(craft(qc, 2) == B_CHISELED_QUARTZ_BLOCK * 100 + 1);
+  /* concrete powder: four sand and four gravel with a dye, shapeless, eight at a time */
+  int cp[9] = {B_SAND, B_GRAVEL, B_SAND, B_GRAVEL, I_DYE_BLACK, B_SAND, B_GRAVEL, B_SAND, B_GRAVEL};
+  CHECK(craft(cp, 3) == B_CONCRETE_POWDER_BLACK * 100 + 8);
+  int cw[9] = {B_GRAVEL, I_DYE_WHITE, B_SAND, B_GRAVEL, B_SAND, B_SAND, B_GRAVEL, B_SAND, B_GRAVEL};
+  CHECK(craft(cw, 3) == B_CONCRETE_POWDER_WHITE * 100 + 8);
   /* nothing */
   int n[4] = {B_DIRT, 0, 0, 0};
   CHECK(craft(n, 2) == 0);
@@ -89,6 +94,13 @@ int main(void) {
   CHECK(block_drops(B_IRON_ORE, I_STONE_PICKAXE, out) == 1 && out[0].id == I_RAW_IRON);
   CHECK(block_drops(B_GOLD_ORE, I_IRON_PICKAXE, out) == 1 && out[0].id == I_RAW_GOLD);
   CHECK(block_drops(B_TORCH_E, 0, out) == 1 && out[0].id == B_TORCH);
+  /* concrete and its powder: the powder mines like sand and gravel (anything drops it), the
+   * concrete like stone (a pickaxe; bare hands break it and get nothing) */
+  CHECK(can_harvest(B_CONCRETE_POWDER_RED, 0) && dig_speed(B_CONCRETE_POWDER_RED, I_DIAMOND_SHOVEL) == 8);
+  CHECK(block_drops(B_CONCRETE_POWDER_RED, 0, out) == 1 && out[0].id == B_CONCRETE_POWDER_RED);
+  CHECK(can_harvest(B_CONCRETE_LIGHT_BLUE, I_WOODEN_PICKAXE) && !can_harvest(B_CONCRETE_LIGHT_BLUE, 0));
+  CHECK(block_drops(B_CONCRETE_LIGHT_BLUE, I_WOODEN_PICKAXE, out) == 1 && out[0].id == B_CONCRETE_LIGHT_BLUE);
+  CHECK(block_drops(B_CONCRETE_LIGHT_BLUE, 0, out) == 0);
   /* changes survive: through the journal, into storage, back after a reload */
   {
     extern void host_save_dir(const char *d);
@@ -645,6 +657,9 @@ int main(void) {
   CHECK(!strcmp(item_label(I_COOKED_FISH), "Cooked Cod"));
   CHECK(!strcmp(item_label(I_CLOWNFISH), "Tropical Fish"));
   CHECK(!strcmp(item_label(I_RAW_SALMON), "Raw Salmon"));
+  CHECK(!strcmp(item_label(B_CONCRETE_RED), "Red Concrete"));
+  CHECK(!strcmp(item_label(B_CONCRETE_SILVER), "Light Gray Concrete"));
+  CHECK(!strcmp(item_label(B_CONCRETE_POWDER_LIGHT_BLUE), "Light Blue Concrete Powder"));
   {
     /* commands: what they do; most need cheats */
     extern uint32_t game_time;
@@ -753,6 +768,19 @@ int main(void) {
           if (tab_items[i] == qids[k]) in_tab[k] = 1;
       CHECK(in_tab[0] && in_tab[1] && in_tab[2] && in_tab[3]);
     }
+    /* the concrete pair: /give names, and Building Blocks (tab 1) */
+    command_run("/give @p white_concrete 3");
+    CHECK(pl.inv[21].id == B_CONCRETE_WHITE && item_count(&pl.inv[21]) == 3);
+    command_run("/give @p light_gray_concrete_powder 1");
+    CHECK(pl.inv[22].id == B_CONCRETE_POWDER_SILVER);
+    {
+      int lo = tab_start[1], hi = tab_start[2], in_tab[2] = {0, 0};
+      for (int i = lo; i < hi; i++) {
+        if (tab_items[i] == B_CONCRETE_RED) in_tab[0] = 1;
+        if (tab_items[i] == B_CONCRETE_POWDER_BLACK) in_tab[1] = 1;
+      }
+      CHECK(in_tab[0] && in_tab[1]);
+    }
     memset(pl.inv, 0, sizeof pl.inv);
     /* the 1.8 spellings are gone */
     command_run("/give @p wool 5 14");
@@ -768,6 +796,10 @@ int main(void) {
     CHECK(world_get(sx, sy + 3, sz) == B_MONSTER_EGG_STONE);
     command_run("/setblock ~ ~3 ~ oak_stairs destroy");
     CHECK(world_get(sx, sy + 3, sz) == B_OAK_STAIRS);
+    command_run("/setblock ~ ~3 ~ light_blue_concrete");
+    CHECK(world_get(sx, sy + 3, sz) == B_CONCRETE_LIGHT_BLUE);
+    command_run("/setblock ~ ~3 ~ black_concrete_powder");
+    CHECK(world_get(sx, sy + 3, sz) == B_CONCRETE_POWDER_BLACK);
     /* /clear: a name clears the one item it names */
     memset(pl.inv, 0, sizeof pl.inv);
     command_run("/give @p red_wool 2");
@@ -1489,6 +1521,54 @@ int main(void) {
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     CHECK(world_get(px, 128, pz) == B_DIAMOND_BLOCK);
     delete_world(3);
+  }
+  {
+    /* concrete: the powder falls like sand and gravel and stays powder while it is dry; the
+     * water that touches it - a source or a flow - sets it into the concrete of its colour,
+     * which then sits where it is; powder that falls into water sets where it lands */
+    new_world(5, 15, 0, false, WT_DEFAULT, "Concrete", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int bx = (int)floorf(pl.x), by = (int)floorf(pl.y), bz = (int)floorf(pl.z);
+    /* a column of red powder on a stone shelf, a three-deep pit dug under it (the stone
+     * below the pit is the ground the fall stops on) */
+    world_set(bx, by - 1, bz, B_STONE);
+    for (int y = by; y <= by + 2; y++) world_set(bx, y, bz, B_AIR);
+    world_set(bx, by + 3, bz, B_STONE);
+    world_set(bx, by + 4, bz, B_CONCRETE_POWDER_RED);
+    world_set(bx, by + 5, bz, B_CONCRETE_POWDER_RED);
+    /* the shelf goes: the column falls into the pit and stacks there, still powder */
+    break_block_at(bx, by + 3, bz, false);
+    CHECK(world_get(bx, by + 3, bz) == B_AIR && world_get(bx, by + 4, bz) == B_AIR &&
+          world_get(bx, by + 5, bz) == B_AIR);
+    CHECK(world_get(bx, by, bz) == B_CONCRETE_POWDER_RED);
+    CHECK(world_get(bx, by + 1, bz) == B_CONCRETE_POWDER_RED);
+    /* a source beside the lower one sets it; a flow arriving beside the upper one sets that
+     * too (the same pair of calls a flowing liquid makes: the set and its neighbours) */
+    world_set(bx + 1, by, bz, B_WATER);
+    neighbours_changed(bx + 1, by, bz);
+    CHECK(world_get(bx, by, bz) == B_CONCRETE_RED);
+    world_set(bx + 1, by + 1, bz, B_FLOWING_WATER_2);
+    neighbours_changed(bx + 1, by + 1, bz);
+    CHECK(world_get(bx, by + 1, bz) == B_CONCRETE_RED);
+    /* set, it does not fall: the pit's floor goes and the two stay */
+    break_block_at(bx, by - 1, bz, false);
+    CHECK(world_get(bx, by - 1, bz) == B_AIR);
+    CHECK(world_get(bx, by, bz) == B_CONCRETE_RED && world_get(bx, by + 1, bz) == B_CONCRETE_RED);
+    /* powder that lands in water sets where it lands: a pool with powder above it */
+    world_set(bx + 3, by - 1, bz, B_STONE);
+    world_set(bx + 3, by, bz, B_WATER);
+    world_set(bx + 4, by, bz, B_WATER);
+    world_set(bx + 3, by + 2, bz, B_CONCRETE_POWDER_CYAN);
+    world_set(bx + 3, by + 1, bz, B_AIR);   /* (the change that starts the fall) */
+    neighbours_changed(bx + 3, by + 1, bz);
+    CHECK(world_get(bx + 3, by, bz) == B_CONCRETE_CYAN && world_get(bx + 3, by + 2, bz) == B_AIR);
+    /* and they draw (a frame with the set pair in view) */
+    {
+      Camera c = {(float)bx + 2.5f, (float)by + 2.62f, (float)bz - 2.5f, 0, 20};
+      render_frame(&c, 6000);
+    }
+    delete_world(5);
   }
   {
     /* the portal: the frame lights with flint and steel, standing in it travels to the

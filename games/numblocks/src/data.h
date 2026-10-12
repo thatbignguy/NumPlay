@@ -4,18 +4,18 @@
 #include <stdint.h>
 #include "blocks.h"
 
-#define NTEX 229
+#define NTEX 261
 /* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */
 extern const uint8_t tex_px[NTEX][128];
 extern const uint16_t tex_pal[NTEX][16];
 extern const uint8_t tex_flags[NTEX];
 
 /* faces: -Y +Y -Z +Z -X +X */
-extern const uint8_t blk_tex[NSTATES][6];
+extern const uint16_t blk_tex[NSTATES][6];
 extern const uint8_t blk_model[NSTATES], blk_light[NSTATES], blk_flags[NSTATES], blk_tool[NSTATES];
 extern const uint8_t blk_nbox[NSTATES];   /* how many boxes it is made of (0: a whole cube) */
 extern const int8_t blk_box[NSTATES][2][6];   /* the boxes, sixteenths: x0 y0 z0 x1 y1 z1 */
-extern const uint8_t blk_front[NSTATES];   /* the texture of its front (0: none) */
+extern const uint16_t blk_front[NSTATES];   /* the texture of its front (0: none) */
 extern const uint8_t blk_level[NSTATES], blk_hard[NSTATES], blk_id[NSTATES], blk_meta[NSTATES];
 /* blk_flags: bits 0-2 the tint (1 grass, 2 foliage, 3 spruce, 4 birch, 5 water, 6 lily pad) */
 extern const uint16_t biome_grass[256], biome_foliage[256], biome_water[256];
@@ -256,6 +256,38 @@ extern const uint8_t rain_run[][4], snow_run[][4], rain_idx[257], snow_idx[257];
 #define TX_QUARTZ_PILLAR_TOP 226
 #define TX_QUARTZ_PILLAR 227
 #define TX_QUARTZ_BRICKS 228
+#define TX_WHITE_CONCRETE_POWDER 229
+#define TX_ORANGE_CONCRETE_POWDER 230
+#define TX_MAGENTA_CONCRETE_POWDER 231
+#define TX_LIGHT_BLUE_CONCRETE_POWDER 232
+#define TX_YELLOW_CONCRETE_POWDER 233
+#define TX_LIME_CONCRETE_POWDER 234
+#define TX_PINK_CONCRETE_POWDER 235
+#define TX_GRAY_CONCRETE_POWDER 236
+#define TX_LIGHT_GRAY_CONCRETE_POWDER 237
+#define TX_CYAN_CONCRETE_POWDER 238
+#define TX_PURPLE_CONCRETE_POWDER 239
+#define TX_BLUE_CONCRETE_POWDER 240
+#define TX_BROWN_CONCRETE_POWDER 241
+#define TX_GREEN_CONCRETE_POWDER 242
+#define TX_RED_CONCRETE_POWDER 243
+#define TX_BLACK_CONCRETE_POWDER 244
+#define TX_WHITE_CONCRETE 245
+#define TX_ORANGE_CONCRETE 246
+#define TX_MAGENTA_CONCRETE 247
+#define TX_LIGHT_BLUE_CONCRETE 248
+#define TX_YELLOW_CONCRETE 249
+#define TX_LIME_CONCRETE 250
+#define TX_PINK_CONCRETE 251
+#define TX_GRAY_CONCRETE 252
+#define TX_LIGHT_GRAY_CONCRETE 253
+#define TX_CYAN_CONCRETE 254
+#define TX_PURPLE_CONCRETE 255
+#define TX_BLUE_CONCRETE 256
+#define TX_BROWN_CONCRETE 257
+#define TX_GREEN_CONCRETE 258
+#define TX_RED_CONCRETE 259
+#define TX_BLACK_CONCRETE 260
 
 extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];
 extern const uint32_t spr_off[];
@@ -325,7 +357,7 @@ extern const uint16_t it_icon[N_ITEMS], it_dur[N_ITEMS], it_fuel[N_ITEMS];
 extern const uint8_t it_kind[N_ITEMS], it_stack[N_ITEMS], it_tier[N_ITEMS], it_a[N_ITEMS], it_b[N_ITEMS];
 extern const uint8_t it_place[N_ITEMS];   /* the block it places (255: none) */
 typedef struct { uint16_t out; uint8_t n, w, h; uint16_t in[9]; } Recipe;   /* w 0: shapeless, h of them */
-#define N_RECIPES 192
+#define N_RECIPES 208
 extern const Recipe recipes[N_RECIPES];
 #define N_SMELTING 28
 extern const uint16_t smelting[N_SMELTING][2];

@@ -290,9 +290,21 @@ static bool can_stay(int b, int x, int y, int z) {
 static void break_block(int x, int y, int z, bool drops);
 void break_block_at(int x, int y, int z, bool drops) { break_block(x, y, z, drops); }
 
+/* is any of the cell's six neighbours water, moving or still? (what the concrete
+ * powder sets on - BlockConcretePowder's water check, which 1.12 does on a block
+ * update: here every set, break and liquid move runs neighbours_changed) */
+static bool wet_at(int x, int y, int z) {
+  for (int f = 0; f < 6; f++)
+    if (is_water(world_get(x + NX[f], y + NY[f], z + NZ[f]))) return true;
+  return false;
+}
+
 /* a block changed at (x, y, z): what stood on it or hung on it may fall off */
 void neighbours_changed(int x, int y, int z) {
   fluid_schedule(x, y, z);
+  /* the change itself: powder placed beside water (or a wet change left in its place) sets */
+  int here = world_get(x, y, z);
+  if (is_concrete_powder(here) && wet_at(x, y, z)) world_set(x, y, z, concrete_of(here));
   for (int f = 0; f < 6; f++) {
     int nx = x + NX[f], ny = y + NY[f], nz = z + NZ[f];
     int b = world_get(nx, ny, nz);
@@ -300,12 +312,21 @@ void neighbours_changed(int x, int y, int z) {
     if (b != B_AIR && blk_model[b] != M_LIQUID && !can_stay(b, nx, ny, nz)) break_block(nx, ny, nz, true);
     /* a portal block by the change: without its whole frame it goes too */
     if (is_portal(b)) portal_changed(nx, ny, nz);
-    /* sand and gravel fall (straight down, at once) */
-    if ((b == B_SAND || b == B_RED_SAND || b == B_GRAVEL) && replaceable(world_get(nx, ny - 1, nz)) && ny > 0) {
+    /* concrete powder by water - a source or a flow, placed or arrived - becomes its
+     * concrete (and set, it stays where it is) */
+    if (is_concrete_powder(b) && wet_at(nx, ny, nz)) {
+      world_set(nx, ny, nz, concrete_of(b));
+      continue;
+    }
+    /* sand, gravel and concrete powder fall (straight down, at once) */
+    if ((b == B_SAND || b == B_RED_SAND || b == B_GRAVEL || is_concrete_powder(b)) && replaceable(world_get(nx, ny - 1, nz)) &&
+        ny > 0) {
       int yy = ny;
       while (yy > 0 && replaceable(world_get(nx, yy - 1, nz))) yy--;
       world_set(nx, ny, nz, B_AIR);
       world_set(nx, yy, nz, b);
+      /* (into water or beside it: concrete where it lands) */
+      if (is_concrete_powder(b) && wet_at(nx, yy, nz)) world_set(nx, yy, nz, concrete_of(b));
       neighbours_changed(nx, ny, nz);
     }
   }

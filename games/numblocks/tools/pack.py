@@ -830,7 +830,7 @@ def main():
         """the table's rows, padded to NSTATES (the states past B_COUNT are none)"""
         return rows + [fill] * (NST - len(rows))
 
-    out.append(f'const uint8_t blk_tex[NSTATES][6] = {{')
+    out.append(f'const uint16_t blk_tex[NSTATES][6] = {{')
     for s in blocks.S:
         out.append('  {' + ','.join(str(v) for v in faces(s, names)) + '},   /* ' + s['name'] + ' */')
     out.append('  ' + ', '.join('{0,0,0,0,0,0}' for _ in range(NST - len(blocks.S))) + '   /* unused states */')
@@ -853,7 +853,7 @@ def main():
     for st in blocks.S:
         t = st['tex']
         fr.append(names.index(t['front']) if isinstance(t, dict) and 'front' in t else 0)
-    out.append('const uint8_t blk_front[NSTATES] = {' + ','.join(pad([str(v) for v in fr])) + '};')
+    out.append('const uint16_t blk_front[NSTATES] = {' + ','.join(pad([str(v) for v in fr])) + '};')
     fl = []
     for s in blocks.S:
         f = TINT[s['tint']]
@@ -1106,11 +1106,12 @@ def main():
          '/* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */',
          'extern const uint8_t tex_px[NTEX][128];', 'extern const uint16_t tex_pal[NTEX][16];',
          'extern const uint8_t tex_flags[NTEX];', '',
-         '/* faces: -Y +Y -Z +Z -X +X */', 'extern const uint8_t blk_tex[NSTATES][6];',
+         '/* faces: -Y +Y -Z +Z -X +X; 16 bits: the texture list passed 256 with the concrete */',
+         'extern const uint16_t blk_tex[NSTATES][6];',
          'extern const uint8_t blk_model[NSTATES], blk_light[NSTATES], blk_flags[NSTATES], blk_tool[NSTATES];',
          'extern const uint8_t blk_nbox[NSTATES];   /* how many boxes it is made of (0: a whole cube) */',
          'extern const int8_t blk_box[NSTATES][2][6];   /* the boxes, sixteenths: x0 y0 z0 x1 y1 z1 */',
-         'extern const uint8_t blk_front[NSTATES];   /* the texture of its front (0: none) */',
+         'extern const uint16_t blk_front[NSTATES];   /* the texture of its front (0: none) */',
          'extern const uint8_t blk_level[NSTATES], blk_hard[NSTATES], blk_id[NSTATES], blk_meta[NSTATES];',
          '/* blk_flags: bits 0-2 the tint (1 grass, 2 foliage, 3 spruce, 4 birch, 5 water, 6 lily pad) */',
          'extern const uint16_t biome_grass[256], biome_foliage[256], biome_water[256];',

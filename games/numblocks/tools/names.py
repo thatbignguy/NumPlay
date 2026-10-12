@@ -136,6 +136,8 @@ for w in ['OAK', 'SPRUCE', 'BIRCH', 'JUNGLE', 'ACACIA', 'DARK_OAK']:
 for c, l in zip(items.COLORS, items.CLAB):
     MODERN[f'WOOL_{c}'] = l.lower().replace(' ', '_') + '_wool'
     MODERN[f'STAINED_CLAY_{c}'] = l.lower().replace(' ', '_') + '_terracotta'
+    MODERN[f'CONCRETE_{c}'] = l.lower().replace(' ', '_') + '_concrete'
+    MODERN[f'CONCRETE_POWDER_{c}'] = l.lower().replace(' ', '_') + '_concrete_powder'
 # the blocks no item has: their modern id (the crops and the multi-state blocks the
 # flattening gave one id of their own)
 BLOCK_ONLY = {0: 'air', 8: 'flowing_water', 9: 'water', 10: 'flowing_lava', 11: 'lava', 26: 'white_bed',
@@ -180,6 +182,8 @@ def main():
         if s['id'] not in first_state:
             first_state[s['id']] = BLOCK_ONLY.get(s['id'], modern_of(s['name']))
     for i in have_block:
+        if i >= 198:
+            continue   # modern-only blocks (concrete: 251/252): no 1.8 id to line up with
         assert BLOCK[i] == first_state[i], (i, BLOCK[i], first_state[i])
     # an item's modern name: NumBlocks' first item with that 1.8 id
     il = [''] * 176
@@ -196,6 +200,8 @@ def main():
     out.append('/* the blocks that are items too (their names are items\' names) */')
     mask = [0] * 25
     for i in item_block:
+        if i >= 198:
+            continue   # modern-only blocks (concrete): no 1.8 id to mark as an item of
         mask[i >> 3] |= 1 << (i & 7)
     out.append('const uint8_t mc_block_item[25] = {' + ','.join(str(v) for v in mask) + '};')
     out.append(f'const uint16_t give_key[{len(give)}] = {{' + ','.join(str(g[0]) for g in give) + '};')
