@@ -10,7 +10,7 @@ DIST_DIR = ../../build/apps
 DIST = $(DIST_DIR)/numblocks-interest.nwa
 
 NB = ../numblocks
-NB_GAME = $(NB)/src/main.c $(NB)/src/world.c $(NB)/src/edits.c $(NB)/src/render.c \
+NB_GAME = $(NB)/src/main.c $(NB)/src/world.c $(NB)/src/edits.c $(NB)/src/portal.c $(NB)/src/render.c \
   $(NB)/src/player.c $(NB)/src/phys.c $(NB)/src/inv.c $(NB)/src/entity.c $(NB)/src/mob.c \
   $(NB)/src/tick.c $(NB)/src/gui.c $(NB)/src/hand.c $(NB)/src/save.c $(NB)/src/data.c \
   $(NB)/src/names.c $(NB)/src/command.c $(NB)/src/gen.c
