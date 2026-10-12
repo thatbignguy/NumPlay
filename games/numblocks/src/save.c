@@ -235,8 +235,6 @@ bool load_world(int s) {
   game_time = h.h3.h2.h.time;
   world_cheats = h.h3.cheats, lan_open = lan_cheats = false, game_rules = h.h3.rules, world_type = h.h3.type;
   copy_preset(world_preset, h.flat_preset);
-  world_dim = dim;   /* the dimension the player was in */
-  nb_ret_x = ret[0], nb_ret_y = ret[1], nb_ret_z = ret[2], nb_ret_ok = (ret[0] | ret[1] | ret[2]) != 0;
   /* World.calculateInitialWeather */
   weather = h.h3.h2.h.weather;
   rain_str = weather.raining ? 1 : 0;
@@ -248,6 +246,17 @@ bool load_world(int s) {
   char pre[4];
   prefix_of(s, pre);
   world_new(world_seed, pre);
+  /* the dimension the player saved in: world_new starts in the overworld, so
+   * the nether's generator and records are put back when that is where the
+   * save is (the cache is still empty, so this is the whole volume again in
+   * the right dimension). Without this the title's backdrop and the spawn
+   * after loading are in the overworld at the nether's coordinates. */
+  world_dim = dim;
+  nb_ret_x = ret[0], nb_ret_y = ret[1], nb_ret_z = ret[2], nb_ret_ok = (ret[0] | ret[1] | ret[2]) != 0;
+  if (dim != DIM_OVER) {
+    gen_set_dim(dim);
+    edits_set_dim(dim);
+  }
   if (hl < sizeof(Head5)) {
     /* a world from before the states were 9 bits: its records are re-encoded once
      * (the record is written as NBW5 from now on, which says it has been) */
@@ -275,6 +284,7 @@ void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char 
   rain_str = thunder_str = 0;
   spawners_clear();
   world_new(seed, pre);
+  nb_ret_x = nb_ret_y = nb_ret_z = 0, nb_ret_ok = false;   /* a new world has no return portal */
   player_spawn();
   pl.mode = (uint8_t)mode;
   played(s);

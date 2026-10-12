@@ -167,15 +167,20 @@ static void portal_build(int x, int y, int z, int axis) {
       if (world_get(bx, by, bz) != B_OBSIDIAN) world_set(bx, by, bz, B_OBSIDIAN);
     }
   portal_fill(ox, y, oz, axis, 2, 3);
-  /* the floor in front of the portal's middle (one block out from its plane),
-   * with air over it, and the player standing on it facing the portal */
-  int sx = axis ? ox - 1 : ox + 1, sz = axis ? oz + 1 : oz - 1;
-  for (int k = -1; k <= 1; k++) {
-    int bxx = axis ? sx : sx + k, byy = y - 1, bzz = axis ? sz + k : sz;
-    if (world_get(bxx, byy, bzz) == B_AIR) world_set(bxx, byy, bzz, B_OBSIDIAN);
-    if (world_get(bxx, y, bzz) != B_AIR) world_set(bxx, y, bzz, B_AIR);
-    if (world_get(bxx, y + 1, bzz) != B_AIR) world_set(bxx, y + 1, bzz, B_AIR);
+  /* the floor on both sides of the portal (two blocks a side, one out from its
+   * plane, under the interior), with air over it, and the player standing on
+   * the front side facing the portal: with only one side the player arriving
+   * walks one block forward off the edge */
+  for (int s = 0; s < 2; s++) {
+    for (int i = 0; i < 2; i++) {
+      int bxx = axis ? (s ? ox + 1 : ox - 1) : ox + i;
+      int bzz = axis ? oz + i : (s ? oz + 1 : oz - 1);
+      if (world_get(bxx, y - 1, bzz) == B_AIR) world_set(bxx, y - 1, bzz, B_OBSIDIAN);
+      if (world_get(bxx, y, bzz) != B_AIR) world_set(bxx, y, bzz, B_AIR);
+      if (world_get(bxx, y + 1, bzz) != B_AIR) world_set(bxx, y + 1, bzz, B_AIR);
+    }
   }
+  int sx = axis ? ox - 1 : ox + 1, sz = axis ? oz + 1 : oz - 1;
   pl.x = sx + 0.5f, pl.y = (float)y, pl.z = sz + 0.5f;
   pl.yaw = axis ? -90.0f : 0.0f, pl.pitch = 0.0f, pl.vx = pl.vy = pl.vz = 0.0f;
   portal_axis = axis;

@@ -1,3 +1,17 @@
+## 1.5.1
+**The far portal lands on both sides, and a nether save reloads in the nether**
+- The portal the far side builds comes with a floor on both sides now: two obsidian
+  under the interior one block out on each side (four in all, only where air was),
+  with air kept over them. Before it laid three in a row on the one side in front -
+  the middle of three with a stray third - so walking one block forward through a
+  floating portal stepped straight off the edge.
+- Saving in the nether and leaving stays in the nether: loading put the world back
+  in the overworld at the nether's coordinates (world_new restarts in the overworld
+  and the saved dimension was set before it, so it was lost), which put the title's
+  backdrop and the loaded spawn in the wrong dimension. The saved dimension, return
+  position and generator/records are restored after the world is made, and a new
+  world starts with no return portal.
+
 ## 1.5.0
 **The nether opens up and lights up: brighter everywhere, more quartz, no more 4x4 pillars, glowstone you can actually find, and a portal overlay like Minecraft's**
 - The nether's block light runs eight levels brighter (lava still stops at 15): no block
