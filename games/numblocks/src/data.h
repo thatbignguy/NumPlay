@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "blocks.h"
 
-#define NTEX 224
+#define NTEX 229
 /* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */
 extern const uint8_t tex_px[NTEX][128];
 extern const uint16_t tex_pal[NTEX][16];
@@ -244,6 +244,18 @@ extern const uint8_t rain_run[][4], snow_run[][4], rain_idx[257], snow_idx[257];
 #define TX_POTATOES_STAGE_2 214
 #define TX_POTATOES_STAGE_3 215
 #define TX_FIRE_LAYER_0 216
+#define TX_NETHERRACK 217
+#define TX_SOUL_SAND 218
+#define TX_NETHER_QUARTZ_ORE 219
+#define TX_QUARTZ_BLOCK_TOP 220
+#define TX_QUARTZ_BLOCK_SIDE 221
+#define TX_QUARTZ_BLOCK_BOTTOM 222
+#define TX_NETHER_PORTAL 223
+#define TX_CHISELED_QUARTZ_BLOCK_TOP 224
+#define TX_CHISELED_QUARTZ_BLOCK 225
+#define TX_QUARTZ_PILLAR_TOP 226
+#define TX_QUARTZ_PILLAR 227
+#define TX_QUARTZ_BRICKS 228
 
 extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];
 extern const uint32_t spr_off[];
@@ -313,9 +325,9 @@ extern const uint16_t it_icon[N_ITEMS], it_dur[N_ITEMS], it_fuel[N_ITEMS];
 extern const uint8_t it_kind[N_ITEMS], it_stack[N_ITEMS], it_tier[N_ITEMS], it_a[N_ITEMS], it_b[N_ITEMS];
 extern const uint8_t it_place[N_ITEMS];   /* the block it places (255: none) */
 typedef struct { uint16_t out; uint8_t n, w, h; uint16_t in[9]; } Recipe;   /* w 0: shapeless, h of them */
-#define N_RECIPES 189
+#define N_RECIPES 192
 extern const Recipe recipes[N_RECIPES];
-#define N_SMELTING 27
+#define N_SMELTING 28
 extern const uint16_t smelting[N_SMELTING][2];
 extern const uint16_t group_planks[];   /* ends with 0xFFFF */
 extern const uint16_t group_wool[];   /* ends with 0xFFFF */

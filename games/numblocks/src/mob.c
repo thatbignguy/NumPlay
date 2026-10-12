@@ -521,7 +521,7 @@ bool mob_attack(const Entity *ce) {
   Entity *e = (Entity *)ce;
   Stack *h = held();
   int k = item_kind(h->id);
-  float dmg = h->id >= 256 && k >= IK_PICKAXE && k <= IK_SWORD ? it_a[h->id - 256] : 1;
+  float dmg = is_item_id(h->id) && k >= IK_PICKAXE && k <= IK_SWORD ? it_a[h->id - 256] : 1;
   /* a critical hit: falling, not on a ladder or in water */
   if (pl.vy < 0 && !pl.on_ground && !pl.in_water) dmg *= 1.5f;
   float kx = e->x - pl.x, kz = e->z - pl.z;

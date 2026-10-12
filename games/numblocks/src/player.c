@@ -125,7 +125,7 @@ static bool in_liquid(void) {
 static float armor_points(void) {
   int n = 0;
   for (int i = 0; i < 4; i++)
-    if (pl.armor[i].id >= 256) n += it_a[pl.armor[i].id - 256];
+    if (is_item_id(pl.armor[i].id)) n += it_a[pl.armor[i].id - 256];
   return (float)n;
 }
 

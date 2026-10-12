@@ -7,17 +7,17 @@
 /* ---------------------------------------------------------------- items */
 int item_max(int id) {
   if (id <= 0) return 0;
-  return id < 256 ? 64 : it_stack[id - 256];
+  return is_item_id(id) ? it_stack[id - 256] : 64;
 }
-int item_dur(int id) { return id >= 256 ? it_dur[id - 256] : 0; }
-int item_kind(int id) { return id >= 256 ? it_kind[id - 256] : (id > 0 ? IK_BLOCK : IK_NONE); }
+int item_dur(int id) { return is_item_id(id) ? it_dur[id - 256] : 0; }
+int item_kind(int id) { return is_item_id(id) ? it_kind[id - 256] : (id > 0 ? IK_BLOCK : IK_NONE); }
 int item_count(const Stack *s) { return !s->id ? 0 : item_dur(s->id) ? 1 : s->aux; }
 const char *item_label(int id) {
-  if (id >= 256) return it_label[id - 256];
+  if (is_item_id(id)) return it_label[id - 256];
   return id > 0 && blk_label[id] ? blk_label[id] : "";
 }
-int item_icon(int id) { return id >= 256 ? it_icon[id - 256] : id > 0 ? blk_icon[id] : -1; }
-int item_fuel(int id) { return id >= 256 ? it_fuel[id - 256] : id > 0 ? blk_fuel[id] : 0; }
+int item_icon(int id) { return is_item_id(id) ? it_icon[id - 256] : id > 0 ? blk_icon[id] : -1; }
+int item_fuel(int id) { return is_item_id(id) ? it_fuel[id - 256] : id > 0 ? blk_fuel[id] : 0; }
 
 int smelt_of(int id) {
   for (int i = 0; i < N_SMELTING; i++)

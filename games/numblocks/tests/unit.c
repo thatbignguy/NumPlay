@@ -43,6 +43,14 @@ int main(void) {
   /* shapeless: stew, in any order */
   int s[9] = {I_BOWL, 0, 0, 0, B_RED_MUSHROOM, 0, 0, 0, B_BROWN_MUSHROOM};
   CHECK(craft(s, 3) == I_MUSHROOM_STEW * 100 + 1);
+  /* the quartz family's cut blocks: a pillar from two blocks in a column, bricks
+   * and chiseled from 2 x 2, smooth from the furnace */
+  int qp[4] = {B_QUARTZ_BLOCK, 0, B_QUARTZ_BLOCK, 0};
+  CHECK(craft(qp, 2) == B_QUARTZ_PILLAR * 100 + 2);
+  int qb[9] = {B_QUARTZ_BLOCK, B_QUARTZ_BLOCK, 0, B_QUARTZ_BLOCK, B_QUARTZ_BLOCK, 0, 0, 0, 0};
+  CHECK(craft(qb, 3) == B_QUARTZ_BRICKS * 100 + 4);
+  int qc[4] = {B_QUARTZ_PILLAR, B_QUARTZ_PILLAR, B_QUARTZ_PILLAR, B_QUARTZ_PILLAR};
+  CHECK(craft(qc, 2) == B_CHISELED_QUARTZ_BLOCK * 100 + 1);
   /* nothing */
   int n[4] = {B_DIRT, 0, 0, 0};
   CHECK(craft(n, 2) == 0);
@@ -65,6 +73,7 @@ int main(void) {
   CHECK(smelt_of(B_IRON_ORE) == 0);
   CHECK(smelt_of(B_GOLD_ORE) == 0);
   CHECK(smelt_of(B_LOG_ACACIA) == I_CHARCOAL);
+  CHECK(smelt_of(B_QUARTZ_BLOCK) == B_SMOOTH_QUARTZ);
   CHECK(smelt_of(B_DIRT) == 0);
   CHECK(item_fuel(I_COAL) == 1600 && item_fuel(B_PLANKS_OAK) == 300 && item_fuel(I_STICK) == 100);
   /* harvesting */
@@ -726,13 +735,32 @@ int main(void) {
     CHECK(pl.inv[15].id == I_MELON_SLICE);
     command_run("/give @p sugar_cane 1");
     CHECK(pl.inv[16].id == I_REEDS);
+    /* the quartz family's cut blocks: /give names, and Building Blocks (tab 1).
+     * (/give stacks into the first free slot: 17..20 after the 0..16 above) */
+    command_run("/give @p chiseled_quartz_block 1");
+    CHECK(pl.inv[17].id == B_CHISELED_QUARTZ_BLOCK);
+    command_run("/give @p quartz_pillar 1");
+    CHECK(pl.inv[18].id == B_QUARTZ_PILLAR);
+    command_run("/give @p smooth_quartz 1");
+    CHECK(pl.inv[19].id == B_SMOOTH_QUARTZ);
+    command_run("/give @p quartz_bricks 1");
+    CHECK(pl.inv[20].id == B_QUARTZ_BRICKS);
+    {
+      int lo = tab_start[1], hi = tab_start[2], in_tab[4] = {0, 0, 0, 0};
+      static const int qids[4] = {B_CHISELED_QUARTZ_BLOCK, B_QUARTZ_PILLAR, B_SMOOTH_QUARTZ, B_QUARTZ_BRICKS};
+      for (int i = lo; i < hi; i++)
+        for (int k = 0; k < 4; k++)
+          if (tab_items[i] == qids[k]) in_tab[k] = 1;
+      CHECK(in_tab[0] && in_tab[1] && in_tab[2] && in_tab[3]);
+    }
+    memset(pl.inv, 0, sizeof pl.inv);
     /* the 1.8 spellings are gone */
     command_run("/give @p wool 5 14");
-    CHECK(!pl.inv[17].id);
+    CHECK(!pl.inv[0].id);
     command_run("/give @p stained_hardened_clay 1");
-    CHECK(!pl.inv[18].id);
+    CHECK(!pl.inv[1].id);
     command_run("/give @p tallgrass 1");
-    CHECK(!pl.inv[19].id);
+    CHECK(!pl.inv[2].id);
     /* /setblock: the modern name places exactly that state, its handling beside the name */
     command_run("/setblock ~ ~3 ~ orange_terracotta");
     CHECK(world_get(sx, sy + 3, sz) == B_STAINED_CLAY_ORANGE);
@@ -960,6 +988,7 @@ int main(void) {
     /* 1.13's names, with the 1.8 spellings as aliases: an old preset still loads, and one
      * kept with them is shown with the modern names */
     CHECK(flat_validate("bedrock,terracotta,whiteterracotta,orangeterracotta", e, sizeof e));
+    CHECK(flat_validate("bedrock,chiseledquartz,quartzpillar,smoothquartz,quartzbricks", e, sizeof e));
     CHECK(flat_validate("bedrock,hardenedclay,stainedclay,whiteclay", e, sizeof e));
     CHECK(flat_validate("bedrock,oakplanks,spruceplanks,oaklog,snowblock", e, sizeof e));
     CHECK(flat_validate("bedrock,planks,logoak,snow,mossstone,wool", e, sizeof e));
@@ -1514,6 +1543,11 @@ int main(void) {
     world_new(12, "utlink");
     pl.mode = 1, pl.dead = false, pl.health = 20, pl.flying = true;
     pl.vx = pl.vy = pl.vz = 0.0f;
+    /* high air out of any portal before idling (a lit portal left standing in
+     * would travel again once the cooldown runs out) */
+    pl.x = 0.5f, pl.y = 90.0f, pl.z = 0.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     for (int t = 0; t < 100; t++) player_tick(0, 0);   /* (the last test's cooldown) */
     pl.x = 0.5f, pl.y = 70.0f, pl.z = 0.5f;
     world_follow(pl.x, pl.y, pl.z);
@@ -1613,8 +1647,72 @@ int main(void) {
     plat_remove_prefix("utlink");
   }
   {
-    /* glowstone grows as clumps hanging off the ceiling: face-touching blocks,
-     * branching (not a diagonal staircase where nothing face-touches) */
+    /* portals never spawn underwater: aimed at a pool, the new portal lands
+     * above the water on its obsidian floor instead of submerged in it */
+    world_new(15, "utpool");
+    pl.mode = 1, pl.dead = false, pl.health = 20, pl.flying = true;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    /* high air out of any portal: the last test ends inside its own portal, and
+     * idling there would travel again once the cooldown runs out */
+    pl.x = 8.5f, pl.y = 90.0f, pl.z = 8.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    for (int t = 0; t < 100; t++) player_tick(0, 0);   /* (the last test's cooldown) */
+    pl.x = 8.5f, pl.y = 70.0f, pl.z = 8.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    /* a pool: stone at 60, water 61..64, air above (no ticks run, so it stays) */
+    for (int z = 0; z < 16; z++)
+      for (int x = 0; x < 16; x++) {
+        world_set(x, 60, z, B_STONE);
+        for (int y = 61; y <= 64; y++) world_set(x, y, z, B_WATER);
+        for (int y = 65; y <= 70; y++) world_set(x, y, z, B_AIR);
+      }
+    /* overworld portal far away (so the return must build, not find) */
+    int W_x = 200, W_y = 70, W_z = 200;
+    pl.x = W_x + 0.5f, pl.y = 70.0f, pl.z = W_z + 0.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 5; j++) {
+        bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+        world_set(W_x + i, W_y + j, W_z, inner ? B_AIR : B_OBSIDIAN);
+      }
+    CHECK(portal_light_here(W_x + 1, W_y + 1, W_z));
+    pl.x = W_x + 1.5f, pl.y = (float)W_y + 1, pl.z = W_z + 0.5f;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    for (int t = 0; t < 10 && world_dim == DIM_OVER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_NETHER);
+    for (int t = 0; t < 80; t++) player_tick(0, 0);
+    /* nether portal aimed so the overworld side lands in the pool at y 61 */
+    pl.x = 1.5f, pl.y = 61.0f, pl.z = 1.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    for (int i = 0; i < 4; i++)
+      for (int j = 0; j < 5; j++) {
+        bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+        world_set(0 + i, 61 + j, 1, inner ? B_AIR : B_OBSIDIAN);
+      }
+    CHECK(portal_light_here(0 + 1, 61 + 1, 1));
+    pl.x = 1.5f, pl.y = 62.0f, pl.z = 1.5f;
+    pl.vx = pl.vy = pl.vz = 0.0f;
+    for (int t = 0; t < 10 && world_dim == DIM_NETHER; t++) player_tick(0, 0);
+    CHECK(world_dim == DIM_OVER);
+    /* above the water (pool top 64): dry feet on the obsidian floor with the
+     * portal right ahead (arrivals land in front of a new portal, facing it) */
+    {
+      int ox = (int)floorf(pl.x), oy = (int)floorf(pl.y), oz = (int)floorf(pl.z);
+      CHECK(!is_water(world_get(ox, oy, oz)));
+      CHECK(is_portal(world_get(ox, oy, oz + 1)) || is_portal(world_get(ox, oy, oz - 1)));
+      CHECK(oy > 64);
+      CHECK(world_get(ox, oy - 1, oz) == B_OBSIDIAN);
+    }
+    plat_remove_prefix("utpool");
+  }
+  {
+    /* glowstone grows as solid clumps hanging off the ceiling: face-touching
+     * blocks, several neighbours deep (not a diagonal staircase where nothing
+     * face-touches) */
     world_new(13, "utglow");
     world_switch_dim(DIM_NETHER);
     world_follow(8, 108, 8);
@@ -1640,6 +1738,33 @@ int main(void) {
     CHECK(with_nb * 2 >= total);   /* at least half face-touch another */
     CHECK(max_nb >= 2);            /* branching, not a lone trail */
     plat_remove_prefix("utglow");
+  }
+  {
+    /* the quartz family's cut blocks place, drop themselves and mine with a
+     * pickaxe, with their modern names - and they draw (a frame in view) */
+    world_new(14, "utq");
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int qx = (int)floorf(pl.x), qy = (int)floorf(pl.y), qz = (int)floorf(pl.z);
+    static const int qb[6] = {B_CHISELED_QUARTZ_BLOCK, B_QUARTZ_PILLAR, B_QUARTZ_PILLAR_X, B_QUARTZ_PILLAR_Z,
+                              B_SMOOTH_QUARTZ, B_QUARTZ_BRICKS};
+    for (int k = 0; k < 6; k++) world_set(qx + k, qy + 2, qz + 4, qb[k]);
+    for (int k = 0; k < 6; k++) CHECK(world_get(qx + k, qy + 2, qz + 4) == qb[k]);
+    static const int qi[4] = {B_CHISELED_QUARTZ_BLOCK, B_QUARTZ_PILLAR, B_SMOOTH_QUARTZ, B_QUARTZ_BRICKS};
+    for (int k = 0; k < 4; k++) {
+      CHECK(can_harvest(qi[k], I_WOODEN_PICKAXE));
+      Stack o[2];
+      CHECK(block_drops(qi[k], I_WOODEN_PICKAXE, o) == 1 && o[0].id == qi[k]);
+    }
+    CHECK(!strcmp(item_label(B_CHISELED_QUARTZ_BLOCK), "Chiseled Quartz Block"));
+    CHECK(!strcmp(item_label(B_QUARTZ_PILLAR), "Quartz Pillar"));
+    CHECK(!strcmp(item_label(B_SMOOTH_QUARTZ), "Smooth Quartz"));
+    CHECK(!strcmp(item_label(B_QUARTZ_BRICKS), "Quartz Bricks"));
+    {
+      Camera c = {(float)qx + 2.5f, (float)qy + 3.62f, (float)qz - 2.5f, 0, 20};
+      render_frame(&c, 6000);
+    }
+    plat_remove_prefix("utq");
   }
   {
     /* a world saved before the states were 9 bits: its records, written back in the old

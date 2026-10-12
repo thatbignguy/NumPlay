@@ -185,7 +185,8 @@ LABELS = {
     'LILAC_LOWER': 'Lilac', 'DOUBLE_GRASS_LOWER': 'Tall Grass', 'LARGE_FERN_LOWER': 'Large Fern',
     'ROSE_BUSH_LOWER': 'Rose Bush', 'PEONY_LOWER': 'Peony', 'RED_SANDSTONE': 'Red Sandstone', 'GLOWSTONE': 'Glowstone',
     'NETHERRACK': 'Netherrack', 'SOUL_SAND': 'Soul Sand', 'NETHER_QUARTZ_ORE': 'Nether Quartz Ore',
-    'QUARTZ_BLOCK': 'Block of Quartz',
+    'QUARTZ_BLOCK': 'Block of Quartz', 'CHISELED_QUARTZ_BLOCK': 'Chiseled Quartz Block',
+    'QUARTZ_PILLAR': 'Quartz Pillar', 'SMOOTH_QUARTZ': 'Smooth Quartz', 'QUARTZ_BRICKS': 'Quartz Bricks',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
@@ -215,6 +216,8 @@ ITEM_OF = {'PORTAL_NS': None, 'PORTAL_EW': None,   # the nether portal: the game
 for v in ['OAK', 'SPRUCE', 'BIRCH', 'JUNGLE', 'ACACIA', 'DARK_OAK']:
     for s in ['_X', '_Z', '_BARK']:
         ITEM_OF[f'LOG_{v}{s}'] = f'LOG_{v}'
+ITEM_OF['QUARTZ_PILLAR_X'] = 'QUARTZ_PILLAR'
+ITEM_OF['QUARTZ_PILLAR_Z'] = 'QUARTZ_PILLAR'
 for n in ['SUNFLOWER', 'LILAC', 'DOUBLE_GRASS', 'LARGE_FERN', 'ROSE_BUSH', 'PEONY']:
     ITEM_OF[f'{n}_UPPER'] = f'{n}_LOWER'
 for d in ['S', 'W', 'N', 'E_OPEN', 'S_OPEN', 'W_OPEN', 'N_OPEN']:
@@ -363,6 +366,9 @@ shaped('CLAY', 1, ['##', '##'], {'#': 'CLAY_BALL'})
 shaped('BRICKS', 1, ['##', '##'], {'#': 'BRICK'})
 shaped('GLOWSTONE', 1, ['##', '##'], {'#': 'GLOWSTONE_DUST'})
 shaped('QUARTZ_BLOCK', 1, ['##', '##'], {'#': 'QUARTZ'})   # 4 quartz items to a block, as modern does
+shaped('QUARTZ_PILLAR', 2, ['#', '#'], {'#': 'QUARTZ_BLOCK'})   # 2 blocks in a column, as modern does
+shaped('QUARTZ_BRICKS', 4, ['##', '##'], {'#': 'QUARTZ_BLOCK'})   # 4 blocks, as modern does
+shaped('CHISELED_QUARTZ_BLOCK', 1, ['##', '##'], {'#': 'QUARTZ_PILLAR'})   # (no slabs here: pillars instead)
 shaped('QUARTZ', 4, ['#'], {'#': 'QUARTZ_BLOCK'})
 shaped('WOOL_WHITE', 1, ['##', '##'], {'#': 'STRING'})
 shaped('TNT', 1, ['X#X', '#X#', 'X#X'], {'X': 'GUNPOWDER', '#': 'SAND'})
@@ -401,13 +407,13 @@ SMELT = [('RAW_IRON', 'IRON_INGOT'), ('RAW_GOLD', 'GOLD_INGOT'), ('DIAMOND_ORE',
          ('STONE_BRICKS', 'CRACKED_STONE_BRICKS'), ('CLAY_BALL', 'BRICK'), ('CLAY', 'HARDENED_CLAY'),
          ('CACTUS', 'DYE_GREEN'), ('EMERALD_ORE', 'EMERALD'), ('POTATO', 'BAKED_POTATO'), ('COAL_ORE', 'COAL'),
          ('REDSTONE_ORE', 'REDSTONE'), ('LAPIS_ORE', 'DYE_BLUE'), ('RAW_FISH', 'COOKED_FISH'),
-         ('RAW_SALMON', 'COOKED_SALMON')]
+         ('RAW_SALMON', 'COOKED_SALMON'), ('QUARTZ_BLOCK', 'SMOOTH_QUARTZ')]
 SMELT += [(n, 'CHARCOAL') for n in GROUP_OF['G_LOG']]
 
 
 def fuel_of(iid):
     """burn time in ticks (TileEntityFurnace.fuelTime)"""
-    if iid >= 256:
+    if 256 <= iid < 256 + len(I):
         return I[iid - 256]['fuel']
     n = BNAMES[iid]
     if n == 'COAL_BLOCK':

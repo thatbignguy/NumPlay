@@ -738,7 +738,7 @@ bool command_complete(const char *line, int k, int *at, char *o, int max) {
         /* every state and item /give knows, then the blocks that are no item: air, the
          * liquids, the crops */
         for (int i = 0; i < n_give; i++)
-          if (mc_state_name[i][0] && give_id[i] < 256 &&
+          if (mc_state_name[i][0] && !is_item_id(give_id[i]) &&
               offer(word, mc_state_name[i], "minecraft:", k, o, max)) return true;
         for (int i = 0; i < 198; i++)
           if (mc_block_name[i][0] && !(mc_block_item[i >> 3] >> (i & 7) & 1) &&

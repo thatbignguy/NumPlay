@@ -671,7 +671,7 @@ static void hud(void) {
     /* armour, over the hearts */
     int ap = 0;
     for (int i = 0; i < 4; i++)
-      if (pl.armor[i].id >= 256) ap += it_a[pl.armor[i].id - 256];
+      if (is_item_id(pl.armor[i].id)) ap += it_a[pl.armor[i].id - 256];
     if (ap > 0)
       for (int i = 0; i < 10; i++) {
         int x = left + i * 8;

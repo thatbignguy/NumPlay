@@ -92,7 +92,7 @@ static void first_person_item(Mat *m, float equip, float swing) {
 }
 
 static bool flat_item(int id) {
-  if (id >= 256) return true;
+  if (is_item_id(id)) return true;
   int m = blk_model[id];
   return m == M_CROSS || m == M_TORCH || m == M_FLAT || m == M_VINE || m == M_LADDER;
 }

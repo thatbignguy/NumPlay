@@ -252,6 +252,23 @@ b('QUARTZ_BLOCK', 155, 0, tex=tsb('quartz_block_top', 'quartz_block_side', 'quar
   tool='pickaxe')
 b('PORTAL_NS', 90, 1, model='portal', tex='nether_portal', light=11, hard=-1)
 b('PORTAL_EW', 90, 2, model='portal', tex='nether_portal', light=11, hard=-1)
+# --- reserved states (never placed, never items): the item ids live at 256..395, so the
+# blocks after the portal start past them at 396. Worlds keep blocks by their place in
+# this list, so nothing here may move again.
+for _u in range(258, 396):
+    b('UNUSED_%03d' % _u, 0, model='none')
+# --- the quartz family's cut blocks (modern): chiseled and pillar are 1.8's 155:1-4,
+# smooth (smelted) and bricks are modern-only, so they take 155:5-6. The X/Z pillar
+# states stand for the Y one in the inventory, like the logs' (items.py's ITEM_OF)
+b('CHISELED_QUARTZ_BLOCK', 155, 1, tex=tsb('chiseled_quartz_block_top', 'chiseled_quartz_block'), hard=0.8,
+  tool='pickaxe')
+b('QUARTZ_PILLAR', 155, 2, tex=tsb('quartz_pillar_top', 'quartz_pillar'), hard=0.8, tool='pickaxe')
+b('QUARTZ_PILLAR_X', 155, 3, tex={'top': 'quartz_pillar', 'side': 'quartz_pillar', 'bottom': 'quartz_pillar',
+                                  'x': 'quartz_pillar_top'}, hard=0.8, tool='pickaxe')
+b('QUARTZ_PILLAR_Z', 155, 4, tex={'top': 'quartz_pillar', 'side': 'quartz_pillar', 'bottom': 'quartz_pillar',
+                                  'z': 'quartz_pillar_top'}, hard=0.8, tool='pickaxe')
+b('SMOOTH_QUARTZ', 155, 5, tex='quartz_block_bottom', hard=0.8, tool='pickaxe')
+b('QUARTZ_BRICKS', 155, 6, tex='quartz_bricks', hard=0.8, tool='pickaxe')
 
 assert len(S) <= NSTATES, len(S)
 

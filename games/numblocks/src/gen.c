@@ -2466,10 +2466,10 @@ enum {
     BF_LIQUID = 128,
     BF_RPLANT = 256   /* Material.REPLACEABLE_PLANT (tall grass, ferns, double plants, vines, dead bush) */
 };
-static uint16_t bflags[256];
+static uint16_t bflags[NSTATES];
 
 static void bflags_init(void) {
-    for (int i = 0; i < 256; i++) bflags[i] = BF_OPAQUE | BF_SOLID | BF_BUILD | BF_CUBE;
+    for (int i = 0; i < NSTATES; i++) bflags[i] = BF_OPAQUE | BF_SOLID | BF_BUILD | BF_CUBE;
     bflags[B_AIR] = 0;
     bflags[B_WATER] = bflags[B_FLOWING_WATER] = BF_OPAQUE | BF_LIQUID;
     bflags[B_LAVA] = bflags[B_FLOWING_LAVA] = BF_LIQUID;
@@ -5615,20 +5615,11 @@ static void quartz_vein(JRand *r, int cx, int cz, int n) {
     }
 }
 
-/* the slab's block at chunk-local (x, y, z), or -1 past its window (the
- * glowstone clump's reads at the chunk and window edges) */
-static int glow_at(int x, int y, int z) {
-    if (x < 0 || x > 15 || z < 0 || z > 15 || y < c_y0 || y >= c_y0 + c_h) return -1;
-    return b9_get(c_out, (y - c_y0) * 256 + z * 16 + x);
-}
-
-/* the glowstone: a clump hanging off the ceiling in the open (WorldGenGlowStone1's
- * shape). The column is scanned down from the top for the highest air with rock
- * over it; without open air under rock there is no clump. Past the first block
- * the clump grows the vanilla way: random offsets around the start, a block
- * only where air with exactly one glowstone neighbour, so it branches into a
- * hanging clump instead of walking off as a staircase. Offsets are taken from
- * the start each try (not a walk), and downward (vanilla's -rand.nextInt(12)). */
+/* the glowstone: a solid clump hanging off the ceiling in the open. The column
+ * is scanned down from the top for the highest air with rock over it; without
+ * open air under rock there is no clump. The clump is an ellipsoid ball a few
+ * blocks across, hung so its top touches the ceiling, filled only where air -
+ * so it sits in the open like an ore vein, not a branching trail. */
 static void glow_blob(JRand *r, int cx, int cz) {
     if (cx < 0 || cx > 15 || cz < 0 || cz > 15) return;
     int top = 122;
@@ -5645,23 +5636,20 @@ static void glow_blob(JRand *r, int cx, int cz) {
         }
     }
     if (y < 0) return;
-    int sx = cx, sy = y, sz = cz;
-    b9_set(c_out, (y - c_y0) * 256 + cz * 16 + cx, B_GLOWSTONE);
-    for (int i = 0; i < 800; i++) {
-        int dx = jr_int_i(r, 8) - jr_int_i(r, 8);
-        int dy = -jr_int_i(r, 12);
-        int dz = jr_int_i(r, 8) - jr_int_i(r, 8);
-        int tx = sx + dx, ty = sy + dy, tz = sz + dz;
-        if (glow_at(tx, ty, tz) != B_AIR) continue;
-        int nbs = 0;
-        if (glow_at(tx + 1, ty, tz) == B_GLOWSTONE && ++nbs > 1) continue;
-        if (glow_at(tx - 1, ty, tz) == B_GLOWSTONE && ++nbs > 1) continue;
-        if (glow_at(tx, ty + 1, tz) == B_GLOWSTONE && ++nbs > 1) continue;
-        if (glow_at(tx, ty - 1, tz) == B_GLOWSTONE && ++nbs > 1) continue;
-        if (glow_at(tx, ty, tz + 1) == B_GLOWSTONE && ++nbs > 1) continue;
-        if (glow_at(tx, ty, tz - 1) == B_GLOWSTONE && ++nbs > 1) continue;
-        if (nbs == 1) b9_set(c_out, (ty - c_y0) * 256 + tz * 16 + tx, B_GLOWSTONE);
-    }
+    int sx = cx, sy = y - 1, sz = cz;   /* hung a block down: the ball's top meets the rock */
+    int rx = 2 + jr_int_i(r, 2), ry = 2 + jr_int_i(r, 2), rz = 2 + jr_int_i(r, 2);
+    /* (dx/rx)^2 + (dy/ry)^2 + (dz/rz)^2 <= 1, in integers (all radii <= 3: no overflow) */
+    int rxx = rx * rx, ryy = ry * ry, rzz = rz * rz, lim = rxx * ryy * rzz;
+    for (int dy = -ry; dy <= ry; dy++)
+        for (int dz = -rz; dz <= rz; dz++)
+            for (int dx = -rx; dx <= rx; dx++) {
+                if (dx * dx * ryy * rzz + dy * dy * rxx * rzz + dz * dz * rxx * ryy > lim) continue;
+                int tx = sx + dx, ty = sy + dy, tz = sz + dz;
+                if (tx < 0 || tx > 15 || tz < 0 || tz > 15 || ty < c_y0 || ty + 1 >= c_y0 + c_h) continue;
+                int o = (ty - c_y0) * 256 + tz * 16 + tx;
+                if (b9_get(c_out, o) != B_AIR) continue;   /* only in the open */
+                b9_set(c_out, o, B_GLOWSTONE);
+            }
 }
 
 
@@ -5872,6 +5860,8 @@ static const struct { const char *name; uint16_t block; } flat_names[] = {
   /* the nether's (a superflat nether, for looking at them) */
   {"netherrack", B_NETHERRACK}, {"soulsand", B_SOUL_SAND}, {"netherquartzore", B_NETHER_QUARTZ_ORE},
   {"quartzore", B_NETHER_QUARTZ_ORE}, {"quartzblock", B_QUARTZ_BLOCK}, {"blockofquartz", B_QUARTZ_BLOCK},
+  {"chiseledquartz", B_CHISELED_QUARTZ_BLOCK}, {"quartzpillar", B_QUARTZ_PILLAR},
+  {"smoothquartz", B_SMOOTH_QUARTZ}, {"quartzbricks", B_QUARTZ_BRICKS},
   {"portal", B_PORTAL_NS}, {"netherportal", B_PORTAL_NS},
 };
 

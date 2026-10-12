@@ -128,9 +128,19 @@ def main():
     src = open(DATA).read()
     T = tables(src)
     jar = modern_map.ModernSource(MODERN)
-    nstates = len(T['blk_model'].rows)
     BCOUNT = len(blocks.S)
+    # the per-state tables are padded to NSTATES (the 9-bit packing): the states data.c
+    # defines end where its nonzero Minecraft ids do (every defined state but air and the
+    # reserved id-0 states has one; the padding past them is all zero). Cut that padding so
+    # the new states overwrite it instead of appending past the tables' declared size.
+    idrows = T['blk_id'].rows
+    nstates = max([i for i, v in enumerate(idrows) if v] or [0]) + 1
     assert BCOUNT >= nstates, 'data.c has more states than blocks.py'
+    assert all(v == 0 for v in idrows[nstates:]), 'blk_id padding is not zero'
+    for name in ('blk_tex', 'blk_model', 'blk_light', 'blk_nbox', 'blk_box', 'blk_front', 'blk_flags',
+                 'blk_tool', 'blk_level', 'blk_hard', 'blk_id', 'blk_meta', 'blk_icon', 'blk_item',
+                 'blk_fuel', 'blk_label'):
+        T[name].rows = T[name].rows[:nstates]
     ntex = len(T['tex_px'].rows)
     nsprites0 = len(T['spr_off'].rows)
     nitems0 = len(T['it_label'].rows)
@@ -151,6 +161,7 @@ def main():
                 new_names.append(n)
 
     # ---- the new textures
+    ntex0 = ntex
     for n in new_names:
         idx, pal, alpha = pack.quantize(pack.tex_image(jar, n), 16)
         while len(pal) < 16:
@@ -233,6 +244,10 @@ def main():
     T['recipes'].rows = rec
     T['recipes'].changed = True
 
+    # ---- smelting: rebuilt like the recipes (pack.py's smelting table)
+    T['smelting'].rows = [[items.resolve(a), items.resolve(b)] for a, b in items.SMELT]
+    T['smelting'].changed = True
+
     # ---- the creative tabs: each tab's ids, in items.py's order (blocks as blocks,
     # items as items: the two share the ids from 256 up)
     tab_lists = [[] for _ in items.TABS]
@@ -290,13 +305,19 @@ def main():
     out.append(src[at:])
     open(DATA, 'w').write(''.join(out))
 
-    # ---- data.h: NTEX, the tables' sizes, the recipe count
+    # ---- data.h: NTEX, the new textures' TX_, the tables' sizes, the recipe count
     h = open(DATAH).read()
     h = re.sub(r'#define NTEX \d+', '#define NTEX %d' % ntex, h)
+    lines = h.split('\n')
+    last_tx = max(i for i, l in enumerate(lines) if l.startswith('#define TX_'))
+    for k, n in enumerate(new_names):
+        lines.insert(last_tx + 1 + k, '#define TX_%s %d' % (n.upper(), ntex0 + k))
+    h = '\n'.join(lines)
     for name in ('blk_tex', 'blk_model', 'blk_light', 'blk_flags', 'blk_tool', 'blk_nbox', 'blk_box', 'blk_front',
                  'blk_level', 'blk_hard', 'blk_id', 'blk_meta', 'blk_icon', 'blk_item', 'blk_fuel', 'blk_label'):
         h = h.replace('%s[B_COUNT]' % name, '%s[NSTATES]' % name)
     h = re.sub(r'#define N_RECIPES \d+', '#define N_RECIPES %d' % len(items.R), h)
+    h = re.sub(r'#define N_SMELTING \d+', '#define N_SMELTING %d' % len(items.SMELT), h)
     open(DATAH, 'w').write(h)
     print(f'{BCOUNT - nstates} block states added (B_COUNT {BCOUNT}, {blocks.NSTATES} ids), {len(new_names)} '
           f'textures (to {ntex}), {len(items.I)} items, {len(items.R)} recipes')

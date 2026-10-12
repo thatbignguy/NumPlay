@@ -146,6 +146,63 @@ bool portal_light_here(int x, int y, int z) {
   return true;
 }
 
+/* Liquid a new portal must not spawn in: standing water or lava (an ocean, a
+ * lake, the lava sea). The frame is carved out of whatever is there, so without
+ * this a portal aimed at an ocean ends up submerged. */
+static bool portal_wet(int b) { return is_water(b) || is_lava(b); }
+
+/* A new portal fits at (x, y, z) on its axis with nothing liquid: none in the
+ * whole volume portal_build carves, and none in the ground under it (where the
+ * obsidian floor goes - portal_build only lays it on air, so over water the
+ * portal would float with no floor). Rock in the volume is fine: it is carved. */
+static bool portal_dry(int x, int y, int z, int axis) {
+  if (y < 1 || y + 3 >= WORLD_H) return false;
+  int ox = axis ? x : x - 1, oz = axis ? z - 1 : z;
+  /* outside the loaded cache reads as air: never approve what is not loaded
+   * (the build below writes nothing there, stranding the player). The box covers
+   * either axis' footprint. */
+  if (!world_loaded(ox - 2, y - 1, oz - 2) || !world_loaded(ox + 3, y + 3, oz + 3)) return false;
+  for (int i = -2; i <= 3; i++)
+    for (int j = 0; j <= 3; j++)
+      for (int k = -1; k <= 1; k++) {
+        int bx = axis ? ox + k : ox + i, by = y + j, bz = axis ? oz + i : oz + k;
+        if (portal_wet(world_get(bx, by, bz))) return false;
+      }
+  for (int i = -2; i <= 3; i++)
+    for (int k = -1; k <= 1; k++) {
+      int bx = axis ? ox + k : ox + i, bz = axis ? oz + i : oz + k;
+      if (portal_wet(world_get(bx, y - 1, bz))) return false;
+    }
+  return true;
+}
+
+/* A dry spot for the new portal near the mapped position (vanilla picks the
+ * nearest ground the same way): rings out to 8 blocks, upward first so an
+ * ocean crossing lands above the water instead of in it. Only loaded ground
+ * counts, so mid-ocean with no land in the cache falls back to the mapped
+ * spot (vanilla looks 128 blocks out, which does not fit). False: nowhere dry
+ * near, and the caller builds at the mapped spot as before. */
+static bool portal_spot(int x, int y, int z, int axis, int *ox, int *oy, int *oz) {
+  if (y < 1) y = 1;
+  if (y + 3 >= WORLD_H) y = WORLD_H - 4;
+  for (int r = 0; r <= 8; r++)
+    for (int dz = -r; dz <= r; dz++)
+      for (int dx = -r; dx <= r; dx++) {
+        if (dx != -r && dx != r && dz != -r && dz != r) continue;   /* the ring */
+        for (int yy = y; yy + 3 < WORLD_H; yy++)
+          if (portal_dry(x + dx, yy, z + dz, axis)) {
+            *ox = x + dx, *oy = yy, *oz = z + dz;
+            return true;
+          }
+        for (int yy = y - 1; yy >= 1; yy--)
+          if (portal_dry(x + dx, yy, z + dz, axis)) {
+            *ox = x + dx, *oy = yy, *oz = z + dz;
+            return true;
+          }
+      }
+  return false;
+}
+
 /* A portal at (x, y, z), made where there is none: room carved around its
  * place, the frame's obsidian put in whole, the interior cleared and filled,
  * and a floor laid in front so the player arriving has somewhere to stand.
@@ -226,7 +283,11 @@ static void portal_far(int x, int y, int z, int axis) {
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     return;
   }
-  portal_build(x, y, z, axis);
+  /* no portal near: a new one at the mapped spot, moved to dry ground where it
+   * aimed underwater (portal_spot), so crossings never land submerged */
+  int nx = x, ny = y, nz = z;
+  portal_spot(x, y, z, axis, &nx, &ny, &nz);
+  portal_build(nx, ny, nz, axis);
 }
 
 /* floor division by 8 (vanilla's coord mapping, right for negatives too) */

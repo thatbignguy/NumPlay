@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.2"
+#define NB_VERSION "1.5.3"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -70,6 +70,10 @@ static inline bool is_door_lower(int b) {
 static inline bool is_lava(int b) { return b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA); }
 /* the nether portal's two states: NS faces north/south (thin in Z), EW faces east/west (thin in X) */
 static inline bool is_portal(int b) { return b == B_PORTAL_NS || b == B_PORTAL_EW; }
+/* a stack id is one of the items' (I_*) rather than a block state's (B_*): the items live
+ * at 256..256+N_ITEMS-1, the blocks below 256 and the post-item states past them (the
+ * portal and the reserved states in between keep the items' own behaviour) */
+static inline bool is_item_id(int id) { return id >= 256 && id < 256 + N_ITEMS; }
 
 /* ---------------------------------------------------------------- the generator (gen.c) */
 void gen_init(int64_t seed);

@@ -1,3 +1,29 @@
+## 1.5.3
+**Glowstone grows as solid balls, new portals land on dry ground, and the quartz family moves in**
+- Glowstone is solid clumps now, not trails: an ellipsoid ball a few blocks across, hung so
+  its top meets the ceiling and filled only where air. The branching growth read as a spider
+  web of thin lines; the balls sit in the open like ore veins. A nether chunk is 1.08 M insns
+  / 5.0 ms, back at the pre-clump cost.
+- New portals never spawn underwater: the far side goes to the nearest spot in rings out to
+  8 blocks whose whole carved volume and floor layer hold no water or lava, scanning upward
+  first, so an ocean crossing lands above the water on its obsidian floor. Only loaded ground
+  counts (outside the cache reads as air, which would approve spots the build cannot write);
+  mid-ocean with no land in the cache falls back to the mapped spot, as before.
+- The quartz family's cut blocks: chiseled quartz and the pillar (1.8's 155:1-4), smooth
+  quartz (smelted from the block, as modern does) and quartz bricks, all in Building Blocks,
+  with their recipes, `/give` names and superflat aliases, textured from minecraft-textures.
+- Room for them past the items: block states that live in the inventory cannot share ids with
+  the tools at 256 and up (the labels, icons, kinds and stacking all read those as items, and
+  the generator's `bflags[256]` was already overflowing), so states 258-395 are `UNUSED_*`
+  reserves and the quartz blocks are states 396-401 (`B_COUNT` 402 of the 512 packed ids). The
+  item/block helpers take items as 256..256+N_ITEMS-1, and `bflags` is `NSTATES`-sized. Old
+  saves are untouched (they hold nothing up there but the never-stacked portal states).
+- `tools/data_add.py` works again: it handles the 9-bit-padded tables, emits the new states'
+  `TX_` defines (and backfills the 7 missing nether ones), rebuilds the smelting table, and a
+  second run is byte-identical.
+- `make test` passes (portal pairing, the pool landing, glowstone clumps, quartz crafting,
+  smelting, tabs and labels), `make build && make check` fits (BSS 121941 of the 153676 budget).
+
 ## 1.5.2
 **Portals link in pairs at 1:8 both ways, and glowstone grows in clumps, not staircases**
 - Portals pair one-to-one like Minecraft's: both directions map 1:8 (overworld / 8
