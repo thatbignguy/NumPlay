@@ -213,6 +213,29 @@ static void fill_chunk(int cx, int cz, const uint8_t *keep, int oy, int ylo, int
 
 static uint8_t kept[VCZ * VCX / 8];   /* columns the old cache covered (moved, not generated): a bit each */
 
+/* The generator places blocks; it does not tick them. Sand and gravel are left hanging
+ * over the air a cave carved out from under them; water and lava stand where a cave, a
+ * ravine or a spring opened into them. Nothing notices until a change beside them runs
+ * neighbours_changed, so this is that first update, run once a move of the cache is
+ * complete - every chunk of it whole, so what it reads is what the world holds - and over
+ * the whole cache: the chunks just made are the ones entering the render distance (the
+ * lazy "when the player renders it in"), and the kept ones cost a scan and find nothing.
+ *   - a hanging sand or gravel block drops (settle_fall, player.c);
+ *   - a liquid that can move at all is woken (fluid_wake, tick.c) and flows from there.
+ * The move's chunks are made one a frame, so the pass runs when the last of them is made:
+ * the cost lands once every few frames and never inside a chunk's own making. */
+static void settle_cache(void) {
+  for (int lz = 0; lz < VCZ; lz++)
+    for (int lx = 0; lx < VCX; lx++) {
+      int wx = vc_x0 + lx, wz = vc_z0 + lz;
+      for (int ly = 0; ly < VCY; ly++) {
+        int b = vc_get(VC_I(lx, ly, lz));
+        if (b == B_SAND || b == B_RED_SAND || b == B_GRAVEL) settle_fall(wx, vc_y0 + ly, wz);
+        else if (blk_model[b] == M_LIQUID) fluid_wake(wx, vc_y0 + ly, wz);
+      }
+    }
+}
+
 /* Chunks still to generate after a move: the one under the player is made
  * at once, the others one a frame (world_follow), nearest first. Until then
  * their columns are air to look at and solid to everything that moves. */
@@ -233,6 +256,7 @@ static void fill_pending(int k) {
   int x0 = p.cx * 16 - vc_x0, z0 = p.cz * 16 - vc_z0;
   for (int z = z0 < 0 ? 0 : z0; z < z0 + 16 && z < VCZ; z++)
     for (int x = x0 < 0 ? 0 : x0; x < x0 + 16 && x < VCX; x++) vpend_clear(z * VCX + x);
+  if (!npend) settle_cache();   /* (the last chunk of the move: the world is whole again) */
 }
 
 /* The chunks waiting to be made, meanwhile: the blocks about them carried on, not holes the sky shows
@@ -358,6 +382,7 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
     }
   stand_in(any, oy, px, pz);
   vc_valid = true;
+  if (!npend) settle_cache();   /* (no chunk of the move waiting: its blocks get their first update) */
   dirty[0] = dirty[3] = 0;   /* (all of it, now) */
   light_box(0, 0, 0, VCX, VCY, VCZ);
   mac_box(0, 0, 0, VCX, VCY, VCZ);

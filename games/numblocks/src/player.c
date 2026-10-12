@@ -332,6 +332,26 @@ void neighbours_changed(int x, int y, int z) {
   }
 }
 
+/* The settle pass (world.c) asks here about a block generation left hanging in the air -
+ * a sand or gravel shelf over the pocket a cave carved, which nothing ticks until a change
+ * beside it runs neighbours_changed. The drop is that same straight one, but a block is
+ * only dropped where the cache can see the ground it lands on: out of the cache is not air,
+ * so one whose fall would leave the loaded world waits where it is, and the pass asks again
+ * once the cache has moved and the ground below is there. */
+bool settle_fall(int x, int y, int z) {
+  int b = world_get(x, y, z);
+  if (b != B_SAND && b != B_RED_SAND && b != B_GRAVEL) return false;
+  if (y <= 0 || !world_loaded(x, y - 1, z) || !replaceable(world_get(x, y - 1, z))) return false;
+  int yy = y;
+  while (yy > 0 && world_loaded(x, yy - 1, z) && replaceable(world_get(x, yy - 1, z))) yy--;
+  /* the ground it lands on has to be in sight (or it is the world's own floor, y = 0) */
+  if (vc_y0 != 0 && !world_loaded(x, yy - 1, z)) return false;
+  world_set(x, y, z, B_AIR);
+  world_set(x, yy, z, b);
+  neighbours_changed(x, y, z);
+  return true;
+}
+
 static int depth;
 static void break_block(int x, int y, int z, bool drops) {
   int b = world_get(x, y, z);

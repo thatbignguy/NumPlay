@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.7"
+#define NB_VERSION "1.5.8"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -172,6 +172,7 @@ bool can_harvest(int b, int held);
 float dig_speed(int b, int held);
 int block_drops(int b, int held, Stack *out);   /* up to 2 */
 int rnd(int n);
+uint32_t rnd_seed(uint32_t s);   /* the world's random stream starts over; the old state comes back (tests) */
 float rndf(void);
 
 /* ---------------------------------------------------------------- collisions (phys.c) */
@@ -315,6 +316,7 @@ void portal_broken(int x, int y, int z);
 
 /* ---------------------------------------------------------------- liquids and growing (tick.c) */
 void fluid_schedule(int x, int y, int z);   /* a liquid there may move */
+void fluid_wake(int x, int y, int z);       /* generation left it open: give it its first move */
 bool fire_can_stay(int x, int y, int z);    /* on a solid top, or by something that burns */
 void fire_set(int x, int y, int z, int age);   /* fire there (age 0 to 15: older spreads less, goes out sooner) */
 void bolt_start(float x, float y, float z);   /* lightning strikes there */
@@ -340,6 +342,7 @@ extern int last_bolt;                 /* ticks of the sky's flash left (World.la
 void sapling_grow(int x, int y, int z);      /* a step towards a tree */
 void neighbours_changed(int x, int y, int z);
 void break_block_at(int x, int y, int z, bool drops);
+bool settle_fall(int x, int y, int z);   /* the settle pass: drop a sand/gravel generation left in the air */
 
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,

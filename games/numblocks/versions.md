@@ -1,3 +1,39 @@
+## 1.5.8
+**Generation's own blocks get their first update: sand and gravel no longer hang, and water and lava no longer stand, in a chunk that has just been made**
+- The generator places blocks; it does not tick them, so a chunk could hold sand and gravel
+  hanging over the air a cave carved out from under them, and water and lava standing where a
+  cave, a ravine or a spring opened into them, until some change beside them ran
+  `neighbours_changed`: a shelf visibly floating, water that would not run. The settle pass
+  (`settle_cache`, world.c) is that first update - sand and gravel drop (`settle_fall`,
+  player.c: the same straight fall a change gives them, but only where the cache can see the
+  ground it lands on, so a fall that would leave the loaded world waits for the cache to move
+  there) and a liquid that can move at all - down through an open cell, or sideways into one -
+  is scheduled (`fluid_wake`, tick.c) and flows on its own from there.
+- It runs once a move of the cache is complete (every chunk whole, so what it reads is what
+  the world holds) and over the whole cache: the chunks just made are the ones entering the
+  render distance - the cost follows what the player is about to see, as the note asked - and
+  the kept ones cost a scan and find nothing. A move's chunks are made one a frame, so it runs
+  when the last of them is made, never inside a chunk's own making. Measured
+  (`tests/render/arm/bench_render.py --fancy --rain --mobs`): the settle phase 253.20 -> 253.86
+  M insns (+0.26%), and the 18 documented frames are pixel-identical (checksums). BSS unchanged
+  at 121941; the .nwa grows by 696 bytes of text (517161 -> 517857).
+- The bench's own source list was missing `portal.c`, so the documented command could not link
+  since the nether landed: added, and `bench_render.py` runs again (that is what the numbers
+  above are from).
+- Tests: the sand the generator left hanging over a beach's cave pocket is checked to have come
+  down onto the ground under it (seed 0 at -286,63,-250); a sand a save brings back in the air
+  and a water source with an open cell under it settle the frame the chunk is made again, and
+  the water then flows down and out along the floor on its own; the recorded-block tests take
+  the whole region now (the settle's drops sit beside their own entries). The dungeon-spawner
+  test counts what the spawner itself made - a slot that holds a spider and held none a tick
+  ago, with the cap relieved every couple of seconds - on a random stream of its own
+  (`rnd_seed`), so where an earlier test left the shared stream cannot move the count.
+- `make test` passes and `make build && make check` fits; the device build runs (`tools/emu.py`:
+  784 frames, 35.6 fps, 28.1 ms a frame, no violations) and `tests/test_numblocks_progress.py`
+  passes; and `./build/play --settle` frames show it: the sand that hung in the air sits on the
+  ground and the source that stood still has run down and spread - the same scenario built on
+  1.5.7 leaves both standing through the last frame.
+
 ## 1.5.7
 **Concrete: the powder falls, and the water that touches it sets it, in the sixteen colours**
 - The pair is in, all sixteen colours: **concrete powder** falls like sand and gravel and

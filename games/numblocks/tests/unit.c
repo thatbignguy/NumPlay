@@ -155,6 +155,49 @@ int main(void) {
     CHECK(world_get(5, y, 4) == B_OBSIDIAN);
     plat_remove_prefix("ut2");
   }
+  {
+    /* generation's own blocks get their first update: the generator places blocks, it does
+     * not tick them, so a chunk it made holds sand and gravel hanging over the air a cave
+     * carved out from under them. The settle pass (world.c) runs when a move of the cache is
+     * whole - its chunks are the ones just entering the render distance - and drops them. */
+    world_new(0, "uts");
+    world_follow(-300, 70, -270);   /* (a beach over a cave pocket: red sand hanging at 63) */
+    while (world_pending()) world_follow(-300, 70, -270);
+    CHECK(world_get(-286, 63, -250) == B_AIR);        /* (was red sand, hanging in the air) */
+    CHECK(world_get(-286, 62, -250) == B_RED_SAND);   /* (it dropped onto the ground under it) */
+    plat_remove_prefix("uts");
+  }
+  {
+    /* the same for what a save brings back: a record puts a block where it was left - no
+     * block update has ticked it - so a sand with nothing under it drops and a water source
+     * with an open cell below it is woken, the frame the chunk is made again */
+    world_new(12345, "uts2");
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    int bx = 8, bz = 8, by = 72;
+    /* a stone floor with a clear room over it: a sand block hanging over the room, and a
+     * water source beside it with air under it (both written as the player's changes are,
+     * without the neighbours_changed a placement would run) */
+    for (int z = bz - 1; z <= bz + 1; z++)
+      for (int x = bx - 1; x <= bx + 4; x++)
+        for (int y = by - 1; y <= by + 4; y++) world_set(x, y, z, y == by - 1 ? B_STONE : B_AIR);
+    world_set(bx, by + 4, bz, B_SAND);
+    world_set(bx + 2, by + 4, bz, B_WATER);
+    CHECK(world_get(bx, by + 4, bz) == B_SAND && world_get(bx + 2, by + 4, bz) == B_WATER);
+    /* the cache away and back: the records put them back, and the settle pass with them */
+    world_follow(bx + 400, 70, bz + 400);
+    while (world_pending()) world_follow(bx + 400, 70, bz + 400);
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    CHECK(world_get(bx, by + 4, bz) == B_AIR && world_get(bx, by, bz) == B_SAND);
+    CHECK(world_get(bx + 2, by + 4, bz) == B_WATER);   /* (a source stays a source) */
+    /* and the water flows on its own from there: down to the floor, and out along it */
+    for (int t = 0; t < 400; t++) ticks_run++, world_tick();
+    CHECK(world_get(bx + 2, by + 3, bz) == B_FALLING_WATER);   /* (the stream under the source) */
+    CHECK(world_get(bx + 2, by, bz) == B_FALLING_WATER);       /* (fallen to the floor) */
+    CHECK(world_get(bx - 1, by, bz) == B_FLOWING_WATER_4);     /* (and out along it, four steps) */
+    plat_remove_prefix("uts2");
+  }
   /* two cows fed wheat make a calf (EntityAIMate) */
   {
     extern uint32_t game_time;
@@ -1366,22 +1409,36 @@ int main(void) {
     opt.difficulty = 2;             /* (spawners make monsters only on a world with monsters) */
     memset(ents, 0, sizeof ents);
     game_time = 6000;   /* (daylight on the grass: only a spawner's monsters, natural ones want the dark) */
-    int events = 0, prev = 0, first_at = -1;
+    /* What the spawner itself makes (a slot that holds a spider and held none a tick
+     * ago), rather than the spiders about it: a wanderer out of the window and back
+     * moved that count by itself, and the world keeps six of a kind about one, so the
+     * spiders are cleared away every couple of seconds and the count is the tries the
+     * spawner won. A run of the world's shared random stream of the test's own makes the
+     * count its own - any change about the world moves where that stream stands - and
+     * the stream goes back afterwards. */
+    uint32_t rng0 = rnd_seed(0x2545F491);
+    uint8_t was[N_ENT];
+    memset(was, 0, sizeof was);
+    int made = 0, first_at = -1;
     for (int t = 0; t < 2400; t++) {
       pl.health = 20, pl.dead = false, ents_tick(), game_time++;
-      int n = 0;
-      for (int i = 0; i < N_ENT; i++)
-        if (ents[i].type == E_SPIDER && fabsf(ents[i].x - (sx + 0.5f)) < 8 && fabsf(ents[i].z - (sz + 0.5f)) < 8) n++;
-      if (n > prev) {
-        events += n - prev;
-        if (first_at < 0) first_at = t;
+      for (int i = 0; i < N_ENT; i++) {
+        bool now = ents[i].type == E_SPIDER;
+        if (now && !was[i]) {
+          made++;
+          if (first_at < 0) first_at = t;
+        }
+        was[i] = (uint8_t)now;
       }
-      prev = n;
+      if (t % 40 == 39)
+        for (int i = 0; i < N_ENT; i++)
+          if (ents[i].type == E_SPIDER) ents[i].type = E_NONE, was[i] = 0;
     }
     CHECK(first_at >= 0 && first_at < 900);   /* the first within three quarters of a minute of ticks */
-    CHECK(events >= 15);                      /* and the ones after it: a stream of them over the two
-                                               * minutes, where the one try in sixteen a second it had
-                                               * gave about a third as many */
+    CHECK(made >= 12);                        /* seventeen in the two minutes: about one try in six a
+                                               * second won, where the one try in sixteen a second it had
+                                               * won six, and a wanderer in and out is not counted now */
+    rnd_seed(rng0);
     delete_world(2);
   }
   {
@@ -1914,25 +1971,28 @@ int main(void) {
     world_set(bx, by, bz, B_GOLD_BLOCK);
     world_set(bx + 1, by, bz, B_DIAMOND_BLOCK);
     save_world();
-    /* the region's record, written back in the old 8-bit shape */
+    /* the region's record, written back in the old 8-bit shape - the whole record: the
+     * settle pass (world.c) may have left entries of its own beside the two changes */
     uint32_t len = 0;
     char rec[40];
     const uint8_t *r = NULL;
     for (int i = 0; plat_record(i, rec, sizeof rec); i++)
-      if (!strncmp(rec, "nb2r", 4) && plat_load(rec, &len) && len == 8) {
-        r = plat_load(rec, &len);   /* two entries, 4 bytes each */
+      if (!strncmp(rec, "nb2r", 4) && plat_load(rec, &len) && len >= 8 && len % 4 == 0) {
+        r = plat_load(rec, &len);
         break;
       }
     CHECK(r != NULL);
-    uint32_t old[2];
-    for (int i = 0; i < 2; i++) {
+    uint8_t *old = r ? (uint8_t *)edits_scratch(len) : NULL;
+    CHECK(old != NULL);
+    for (uint32_t i = 0; old && i < len / 4; i++) {
       uint32_t e;
       memcpy(&e, r + 4 * i, 4);
       /* the old shape: the 7-bit-y position, the block on top */
       uint32_t key = e & 0xFFFFF, blk = (e >> 20) & 511;
-      old[i] = (((key >> 8) << 7) | (key & 0x7F)) | blk << 24;
+      e = (((key >> 8) << 7) | (key & 0x7F)) | blk << 24;
+      memcpy(old + 4 * i, &e, 4);
     }
-    plat_save(rec, old, sizeof old);
+    if (old) plat_save(rec, old, len);
     /* the world again: the slab is made from the records, so the old shape reads wrong ... */
     load_world(2);
     world_switch_dim(DIM_OVER);   /* (the whole volume again, from the records) */

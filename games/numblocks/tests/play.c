@@ -21,6 +21,11 @@
  *        [--concrete]   (a powder column on a shelf over a pit, and a water stream reaching a
  *                         powder block: OK mines the shelf and the column falls, the stream
  *                         sets its block into concrete - the player holds white powder)
+ *        [--settle]     (sand hanging in the air and a water source standing beside it,
+ *                         with no block update behind either - as generation and a save
+ *                         leave blocks: the cache slides a little and back, and when the
+ *                         chunks are made again the settle pass drops the sand and starts
+ *                         the water - the frames show the sand down and the stream growing)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
  *
@@ -64,7 +69,7 @@ int main(int argc, char **argv) {
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0, concrete = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -89,6 +94,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--nether")) nether = 1;
     else if (!strcmp(argv[i], "--roof")) roof = 1;
     else if (!strcmp(argv[i], "--concrete")) concrete = 1;
+    else if (!strcmp(argv[i], "--settle")) settle = 1;
     else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
@@ -320,6 +326,40 @@ int main(int argc, char **argv) {
     pl.inv[0] = (Stack){B_CONCRETE_POWDER_WHITE, 64}, pl.slot = 0;
     camera_reset();
     fprintf(stderr, "concrete: shelf %d %d %d (pit under), spout %d %d\n", cx, fy, cz, wx, wz);
+  }
+  if (settle) {
+    /* The settle pass (world.c): a chunk the generator (or a save) put blocks into has
+     * never given them their first update - sand hanging over the air a cave carved,
+     * water with nothing under it standing still. This builds the same pair with world_set
+     * (nothing here runs neighbours_changed, as generation runs nothing), then slides the
+     * cache a little and back: the pass runs once the move's chunks are whole, and the
+     * sand drops and the water starts running with nothing touching either. The camera
+     * stands on the ground between them; the stream grows over the frames. */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    /* a cleared patch of ground: grass at fy-1, air above */
+    for (int z = pz - 2; z <= pz + 10; z++)
+      for (int x = px - 6; x <= px + 8; x++)
+        for (int y = fy - 1; y <= fy + 6; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
+    /* the sand: two blocks hanging in the air, three blocks over the grass */
+    int sx = px - 3, sz = pz + 8;
+    world_set(sx, fy + 3, sz, B_SAND);
+    world_set(sx, fy + 4, sz, B_SAND);
+    /* the water: a source standing in the air with a clear run under it */
+    int wx = px + 3, wz = pz + 9;
+    world_set(wx, fy + 2, wz, B_WATER);
+    /* the cache a little and back: the chunks are made again (a move completes with the
+     * settle pass), and the two have not been ticked by anything in between */
+    world_follow(pl.x + 8, pl.y, pl.z + 8);
+    while (world_pending()) world_follow(pl.x + 8, pl.y, pl.z + 8);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    pl.yaw = 0, pl.pitch = 6;   /* (the sand ahead and left, the water ahead and right) */
+    camera_reset();
+    fprintf(stderr, "settle: the sand sits at %d %d %d (%s) and %d (%s); the water source is at %d %d %d (%s) with %d under it (%s)\n",
+            sx, fy, sz, world_get(sx, fy, sz) == B_SAND ? "sand" : "NOT SAND", fy + 1,
+            world_get(sx, fy + 1, sz) == B_SAND ? "sand" : "NOT SAND", wx, fy + 2, wz,
+            world_get(wx, fy + 2, wz) == B_WATER ? "a source" : "NOT A SOURCE", fy + 1,
+            world_get(wx, fy + 1, wz) == B_FALLING_WATER ? "falling" : "not yet");
   }
   if (mobs) {
     /* a row of every mob, 4 blocks ahead, facing the player, on a cleared grass field */

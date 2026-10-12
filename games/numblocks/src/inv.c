@@ -185,6 +185,13 @@ float dig_speed(int b, int held) {
 }
 
 static uint32_t rng = 0x2545F491;
+/* the game's random stream starts over at s (0: its own start); the state before goes back
+ * (tests that count draws make a run of their own and put the shared stream back after) */
+uint32_t rnd_seed(uint32_t s) {
+  uint32_t old = rng;
+  rng = s ? s : 0x2545F491;
+  return old;
+}
 int rnd(int n) {
   rng ^= rng << 13;
   rng ^= rng >> 17;

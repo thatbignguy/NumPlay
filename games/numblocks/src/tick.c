@@ -62,6 +62,30 @@ static bool open_to(int water, int b) {
  * the void; there is nothing here under the world to drain it into) */
 static int below(int x, int y, int z) { return y > 0 ? world_get(x, y - 1, z) : B_BEDROCK; }
 
+/* The settle pass (world.c) asks here about a liquid generation left standing: a spring's
+ * source in a cave wall, water a cave or a ravine was carved under. Nothing has ticked it,
+ * so ask whether it can go anywhere at all - down through an open cell, or sideways into
+ * one - and schedule it; from there it flows on its own, as if a neighbour had changed.
+ * (The wake is only a tick: what the liquid does is worked out again when it runs.) A cell
+ * the cache does not hold is not air, and one of a column still to be made is not either:
+ * those are not somewhere to go, and the pass runs again when the world there is whole. */
+void fluid_wake(int x, int y, int z) {
+  int b = world_get(x, y, z);
+  if (blk_model[b] != M_LIQUID) return;
+  int water = is_water(b);
+  if (world_loaded(x, y - 1, z) && open_to(water, below(x, y, z))) {
+    fluid_schedule(x, y, z);
+    return;
+  }
+  for (int f = 2; f < 6; f++) {
+    int nx = x + NX[f], nz = z + NZ[f];
+    if (world_loaded(nx, y, nz) && open_to(water, world_get(nx, y, nz))) {
+      fluid_schedule(x, y, z);
+      return;
+    }
+  }
+}
+
 static void set(int x, int y, int z, int b) {
   world_set(x, y, z, b);
   neighbours_changed(x, y, z);
