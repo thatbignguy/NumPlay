@@ -1,3 +1,18 @@
+## 1.5.4
+**Glowstone is a lumpy vein up in the ceiling, not a shape, and it is rarer**
+- The glowstone is small clusters of one or two little lumps now: each try picks a column's
+  highest open ceiling and grows a lump or two of a block or two about it, keeping the cells
+  that are open air (the rock keeps the rest). It has no outline to recognise, and the ceiling
+  line through it breaks it up. Three tries a chunk where 1.5.3 made ten, so the blocks are
+  about 23 a chunk against 1.5.3's 155 (1.8's own are near this, in clusters to match), and
+  most veins are a handful of blocks where the ellipsoid read as one solid mass.
+- The ceiling each vein hangs from is read off the whole column once, so a vein lands in the
+  same place whichever slab window the generator is asked for (before, the window the chunk
+  was made in chose where it went, and asking for another window grew another vein).
+- Quartz comes in ninety veins of ten to twenty-four blocks a chunk (1.5.3 had sixty-five of
+  eight to twenty; 1.8 had about twenty of four to eleven), so much more of it shows in the
+  cavern walls.
+
 ## 1.5.3
 **Glowstone grows as solid balls, new portals land on dry ground, and the quartz family moves in**
 - Glowstone is solid clumps now, not trails: an ellipsoid ball a few blocks across, hung so

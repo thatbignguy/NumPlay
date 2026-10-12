@@ -5585,14 +5585,30 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                 for (int y = 0; y < h; y++) b9_set(out, y * 256 + z * 16 + x, col[y0 + y]);
             c_top[z * 16 + x] = (uint8_t)top;
             c_sl[z * 16 + x] = (uint8_t)top;
+            /* the column's glowstone ceiling: the highest open air with rock
+             * over it (0: none). Read off the whole column here so the glowstone
+             * below lands at the same place whichever slab window is asked for
+             * (cls[0..255] is free in this pass: the cell classes live past it) */
+            {
+                int c = 0;
+                for (int yy = 122; yy >= 8; yy--) {
+                    int above = col[yy + 1];
+                    if (col[yy] == B_AIR && (above == B_NETHERRACK || above == B_BEDROCK ||
+                                             above == B_NETHER_QUARTZ_ORE || above == B_GLOWSTONE)) {
+                        c = yy;
+                        break;
+                    }
+                }
+                cls[z * 16 + x] = (uint8_t)c;
+            }
         }
-    /* the quartz veins: sixty-five of eight to twenty blocks, y 10..117 (1.8 had
-     * about twenty of four to eleven; this is bigger veins, more often) */
-    for (int i = 0; i < 65; i++)
-        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 8 + jr_int_i(&r, 13));
-    /* glowstone clumps hanging off the ceiling, only in the open: each try finds
-     * the highest open ceiling in its column and grows a clump under it */
-    for (int i = 0; i < 10; i++)
+    /* the quartz veins: ninety of ten to twenty-four blocks, y 10..117 (1.8 had
+     * about twenty of four to eleven) */
+    for (int i = 0; i < 90; i++)
+        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 10 + jr_int_i(&r, 15));
+    /* glowstone clusters up in the ceiling where the rock meets the open: each
+     * try finds the column's highest open ceiling and grows one there */
+    for (int i = 0; i < 3; i++)
         glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16));
     memset(sum_pin, 0, sizeof sum_pin);
     last_cx = cx;
@@ -5615,37 +5631,37 @@ static void quartz_vein(JRand *r, int cx, int cz, int n) {
     }
 }
 
-/* the glowstone: a solid clump hanging off the ceiling in the open. The column
- * is scanned down from the top for the highest air with rock over it; without
- * open air under rock there is no clump. The clump is an ellipsoid ball a few
- * blocks across, hung so its top touches the ceiling, filled only where air -
- * so it sits in the open like an ore vein, not a branching trail. */
+/* the glowstone: small vein-like clusters up in the ceiling where the rock meets
+ * open air, like the ore veins of the walls. The column's ceiling was read off
+ * the whole column in nether_slab's pass (cls[z*16+x], 0 if none), so the vein
+ * lands at the same place whatever slab window is asked for. Each try picks a
+ * couple of small lumps scattered about that point and keeps the cells that are
+ * open air: the rock keeps the rest, and no outline survives. */
 static void glow_blob(JRand *r, int cx, int cz) {
     if (cx < 0 || cx > 15 || cz < 0 || cz > 15) return;
-    int top = 122;
-    if (top >= c_y0 + c_h - 1) top = c_y0 + c_h - 2;
-    int y = -1;
-    for (int yy = top; yy >= c_y0 && yy >= 40; yy--) {
-        int o = (yy - c_y0) * 256 + cz * 16 + cx;
-        if (b9_get(c_out, o) != B_AIR) continue;
-        if (yy + 1 >= c_y0 + c_h) continue;
-        int above = b9_get(c_out, o + 256);
-        if (above == B_NETHERRACK || above == B_BEDROCK || above == B_NETHER_QUARTZ_ORE || above == B_GLOWSTONE) {
-            y = yy;
-            break;
-        }
+    int y = U->t.cls[cz * 16 + cx];   /* the ceiling pass left the map in cls[0..255] */
+    if (y < 8) return;
+    /* the lumps: the first on the ceiling cell, the rest a block about it */
+    int n = 1 + (jr_int_i(r, 4) == 0);   /* 1, a quarter of them 2 */
+    int cxx[3], cyy[3], czz[3], rr[3];
+    for (int k = 0; k < n; k++) {
+        cxx[k] = cx + (k ? jr_int_i(r, 3) - 1 : 0);
+        cyy[k] = y + (k ? -jr_int_i(r, 2) : 0);
+        czz[k] = cz + (k ? jr_int_i(r, 3) - 1 : 0);
+        rr[k] = 1 + (jr_int_i(r, 5) == 0);   /* 1, a fifth of them 2 */
     }
-    if (y < 0) return;
-    int sx = cx, sy = y - 1, sz = cz;   /* hung a block down: the ball's top meets the rock */
-    int rx = 2 + jr_int_i(r, 2), ry = 2 + jr_int_i(r, 2), rz = 2 + jr_int_i(r, 2);
-    /* (dx/rx)^2 + (dy/ry)^2 + (dz/rz)^2 <= 1, in integers (all radii <= 3: no overflow) */
-    int rxx = rx * rx, ryy = ry * ry, rzz = rz * rz, lim = rxx * ryy * rzz;
-    for (int dy = -ry; dy <= ry; dy++)
-        for (int dz = -rz; dz <= rz; dz++)
-            for (int dx = -rx; dx <= rx; dx++) {
-                if (dx * dx * ryy * rzz + dy * dy * rxx * rzz + dz * dz * rxx * ryy > lim) continue;
-                int tx = sx + dx, ty = sy + dy, tz = sz + dz;
-                if (tx < 0 || tx > 15 || tz < 0 || tz > 15 || ty < c_y0 || ty + 1 >= c_y0 + c_h) continue;
+    for (int dy = -2; dy <= 2; dy++)
+        for (int dz = -3; dz <= 3; dz++)
+            for (int dx = -3; dx <= 3; dx++) {
+                int tx = cx + dx, ty = y + dy, tz = cz + dz;
+                if (tx < 0 || tx > 15 || tz < 0 || tz > 15) continue;
+                if (ty < c_y0 || ty + 1 >= c_y0 + c_h) continue;   /* (other windows place their rows) */
+                int hit = 0;
+                for (int k = 0; k < n && !hit; k++) {
+                    int ax = tx - cxx[k], ay = ty - cyy[k], az = tz - czz[k], rk = rr[k];
+                    hit = ax * ax + ay * ay + az * az <= rk * rk;
+                }
+                if (!hit) continue;
                 int o = (ty - c_y0) * 256 + tz * 16 + tx;
                 if (b9_get(c_out, o) != B_AIR) continue;   /* only in the open */
                 b9_set(c_out, o, B_GLOWSTONE);
