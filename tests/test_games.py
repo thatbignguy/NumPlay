@@ -194,9 +194,10 @@ CHECKS = {
     "minesweeper": (lambda v: len(v) == 276 and v[:2] == b"M\1" and v[32:34] == bytes([9, 9]) and v[28] == 10
                     and v[34] == 5 and struct.unpack_from("<H", v, 14)[0] == 1,
                     lambda v: v[32] == 9 and struct.unpack_from("<H", v, 14)[0] == 2),
-    # the world's record: its magic, then (offset 16) the time of day, which goes on from one session to the next
-    "numblocks": (lambda v: v[:4] == b"NBW4" and struct.unpack_from("<I", v, 16)[0] > 0,
-                  lambda v: v[:4] == b"NBW4" and struct.unpack_from("<I", v, 16)[0] > 60),
+    # the world's record: its magic (NBW5 since 1.4.4's nether dimension), then (offset 16)
+    # the time of day, which goes on from one session to the next
+    "numblocks": (lambda v: v[:4] in (b"NBW4", b"NBW5") and struct.unpack_from("<I", v, 16)[0] > 0,
+                  lambda v: v[:4] in (b"NBW4", b"NBW5") and struct.unpack_from("<I", v, 16)[0] > 60),
     "breakout": (lambda v: len(v) == 12 and v[:2] == b"B\2" and v[4] == 1 and struct.unpack_from("<I", v, 8)[0] >= 10,
                  lambda v: v[4] == 0 and struct.unpack_from("<I", v, 8)[0] >= 1),  # best kept, shake off
 }
