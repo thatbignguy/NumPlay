@@ -488,7 +488,7 @@ static bool place(int b) {
   int at = world_get(x, y, z);
   if (!(replaceable(at) && at != B_AIR)) x += NX[f], y += NY[f], z += NZ[f];
   else f = 1;
-  if (y < 0 || y >= WORLD_H || !world_loaded(x, y, z) || !replaceable(world_get(x, y, z))) return false;
+  if (y < 0 || y >= dim_height() || !world_loaded(x, y, z) || !replaceable(world_get(x, y, z))) return false;
   /* the variant: logs lie along the face's axis, torches lean on the block */
   if (b >= B_LOG_OAK && b <= B_LOG_JUNGLE_BARK && (b - B_LOG_OAK) % 4 == 0) b += (f >> 1) == 2 ? 1 : (f >> 1) == 1 ? 2 : 0;
   if (b >= B_LOG_ACACIA && b <= B_LOG_DARK_OAK_BARK && (b - B_LOG_ACACIA) % 4 == 0)
@@ -734,7 +734,7 @@ static void use(uint32_t pressed) {
       if (on_block) {
         int f = pl.hit_face, sx = x + NX[f], sy = y + NY[f], sz = z + NZ[f];
         int t = mob_of_egg(h->id);
-        if (sy >= 0 && sy < WORLD_H) {
+        if (sy >= 0 && sy < dim_height()) {
           float dy = (f == 1 && blk_model[b] == M_FENCE) ? 0.5f : 0.0f;
           mob_summon(t, sx + 0.5f, (float)sy + dy, sz + 0.5f);
           use_up();
@@ -765,14 +765,14 @@ static void use(uint32_t pressed) {
         /* ItemFlintAndSteel.onItemUse on obsidian: the nether portal's frame
          * lights (the cell the obsidian faces is the frame's air) */
         int f = pl.hit_face, fx = x + NX[f], fy = y + NY[f], fz = z + NZ[f];
-        if (!portal_light_here(fx, fy, fz) && world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < WORLD_H &&
+        if (!portal_light_here(fx, fy, fz) && world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < dim_height() &&
             fire_can_stay(fx, fy, fz))
           fire_set(fx, fy, fz, 0);
       } else {
         /* ItemFlintAndSteel.onItemUse: fire in the air against the face (BlockFire.onBlockAdded: out at once
          * where it cannot stay) */
         int f = pl.hit_face, fx = x + NX[f], fy = y + NY[f], fz = z + NZ[f];
-        if (world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < WORLD_H) {
+        if (world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < dim_height()) {
           if (fire_can_stay(fx, fy, fz)) fire_set(fx, fy, fz, 0);
         }
       }
@@ -924,7 +924,7 @@ static void spectate_tick(uint32_t keys, uint32_t pressed) {
   move_flying(strafe, fwd, pl.sprinting ? 0.1f : 0.05f);
   pl.x += pl.vx, pl.y += pl.vy, pl.z += pl.vz;
   /* (no floor to stop at: the spectator flies down into the void under the world) */
-  if (pl.y > (float)(WORLD_H + 24)) pl.y = (float)(WORLD_H + 24), pl.vy = 0;   /* above the clouds */
+  if (pl.y > (float)(dim_height() + 24)) pl.y = (float)(dim_height() + 24), pl.vy = 0;   /* above the clouds */
   pl.vx *= 0.91f, pl.vy *= 0.6f, pl.vz *= 0.91f;
   pl.on_ground = false;
   pl.walked = pl.prev_walked = pl.bob = pl.prev_bob = 0;

@@ -2,9 +2,10 @@
  *
  * The world is cut in regions of 4 x 4 chunks (64 x 64 columns). Each region
  * the player changed has a record in the calculator's storage, read where it
- * lies: sorted 32-bit entries, chunk (4 bits), x and z in it (8), y (7), then
- * the block (9 bits, at the top: block states are 9 bits each, nb.h). New
- * changes go to a small journal in RAM, kept in the same order; when it fills
+ * lies: sorted 32-bit entries, chunk (4 bits), x and z in it (8), y (8), then
+ * the block (9 bits, at the top: block states are 9 bits each, nb.h). The y is
+ * 8 bits because a dimension's build height can pass 127: the nether's is 200.
+ * New changes go to a small journal in RAM, kept in the same order; when it fills
  * up (and when the game saves), its entries are merged into the records.
  *
  * The two dimensions keep their own records: the region's name says which
@@ -100,16 +101,16 @@ static inline uint32_t rd32(const uint8_t *p) {
 }
 #define R(i) rd32(r + 4 * (i))
 
-/* entries are sorted by their low 19 bits (the position: chunk, x and z in it, y);
+/* entries are sorted by their low 20 bits (the position: chunk, x and z in it, y);
  * the block state is the 9 bits above them, so a 32-bit entry holds both */
-#define KEY(e) ((e) & 0x7FFFF)
-#define BLK(e) ((int)((e) >> 19) & 511)
-#define ENTRY(key, b) ((key) | (uint32_t)(b) << 19)
+#define KEY(e) ((e) & 0xFFFFF)
+#define BLK(e) ((int)((e) >> 20) & 511)
+#define ENTRY(key, b) ((key) | (uint32_t)(b) << 20)
 static inline uint32_t entry_key(int x, int y, int z) {
   int cx = floordiv(x, 16), cz = floordiv(z, 16);
   int chunk = (cx & 3) | (cz & 3) << 2;
   int xz = (x & 15) | (z & 15) << 4;
-  return (uint32_t)(chunk << 15 | xz << 7 | (y & 127));
+  return (uint32_t)(chunk << 16 | xz << 8 | (y & 255));
 }
 
 static int jcmp(int rx, int rz, uint32_t key, const Journal *j) {
@@ -194,16 +195,16 @@ bool edits_put(int x, int y, int z, int b) {
 /* onto a chunk from gen_slab: the record's entries, then the journal's */
 void edits_apply(int cx, int cz, int y0, int h, uint8_t *slab) {
   int rx = floordiv(cx, 4), rz = floordiv(cz, 4), chunk = (cx & 3) | (cz & 3) << 2;
-  uint32_t k0 = (uint32_t)chunk << 15, k1 = k0 + (1 << 15);
+  uint32_t k0 = (uint32_t)chunk << 16, k1 = k0 + (1 << 16);
   int n;
   const uint8_t *r = region(rx, rz, &n);
   for (int i = rlower(r, n, k0); i < n && KEY(R(i)) < k1; i++) {
     uint32_t e = R(i);
-    int y = (int)(e & 127) - y0, xz = (int)(e >> 7) & 255;
+    int y = (int)(e & 255) - y0, xz = (int)(e >> 8) & 255;
     if (y >= 0 && y < h) b9_set(slab, (y * 16 + (xz >> 4)) * 16 + (xz & 15), BLK(e));
   }
   for (int i = jlower(rx, rz, k0); i < nj && jn[i].rx == rx && jn[i].rz == rz && KEY(jn[i].e) < k1; i++) {
-    int y = (int)(jn[i].e & 127) - y0, xz = (int)(jn[i].e >> 7) & 255;
+    int y = (int)(jn[i].e & 255) - y0, xz = (int)(jn[i].e >> 8) & 255;
     if (y >= 0 && y < h) b9_set(slab, (y * 16 + (xz >> 4)) * 16 + (xz & 15), BLK(jn[i].e));
   }
 }
@@ -211,15 +212,15 @@ void edits_apply(int cx, int cz, int y0, int h, uint8_t *slab) {
 /* the column's sky top (1 + the highest opaque y) with the changes */
 int edits_top(int x, int z, int top) {
   int rx = floordiv(x, 64), rz = floordiv(z, 64);
-  uint32_t k0 = entry_key(x, 0, z), k1 = k0 + 128;
+  uint32_t k0 = entry_key(x, 0, z), k1 = k0 + 256;
   int n;
   const uint8_t *r = region(rx, rz, &n);
   for (int i = rlower(r, n, k0); i < n && KEY(R(i)) < k1; i++) {
     uint32_t e = R(i);
-    if ((blk_flags[BLK(e)] & BF_OPAQUE) && (int)(e & 127) + 1 > top) top = (int)(e & 127) + 1;
+    if ((blk_flags[BLK(e)] & BF_OPAQUE) && (int)(e & 255) + 1 > top) top = (int)(e & 255) + 1;
   }
   for (int i = jlower(rx, rz, k0); i < nj && jn[i].rx == rx && jn[i].rz == rz && KEY(jn[i].e) < k1; i++)
-    if ((blk_flags[BLK(jn[i].e)] & BF_OPAQUE) && (int)(jn[i].e & 127) + 1 > top) top = (int)(jn[i].e & 127) + 1;
+    if ((blk_flags[BLK(jn[i].e)] & BF_OPAQUE) && (int)(jn[i].e & 255) + 1 > top) top = (int)(jn[i].e & 255) + 1;
   return top;
 }
 
@@ -229,42 +230,42 @@ int edits_count(void) { return nj; }
 void *edits_scratch(uint32_t n) { return n <= scratch_n * 4 ? (void *)scratch : NULL; }
 
 /* ---------------------------------------------------------------- old records
- * The records a world saved before the states were 9 bits (its head is NBW1..4)
- * hold the position in 24 bits and the block in the top byte. They are read
- * again and written back with the block at bits 19.., once per world (the head
- * is then saved as NBW5, which is what says it has been done). */
-#define ECONV_MAX 32
-bool edits_convert(void) {
+ * Records written before the states were 9 bits hold 8-bit blocks over a 24-bit
+ * position (a head says NBW1..4: from 0); the records written while the position
+ * packed y in 7 bits hold 9-bit blocks over 19 (a head says NBW5: from 1). Both
+ * are read again and written back in the current shape - the position 20 bits
+ * (y 8 of them), the block at bits 20.. - once per world. The head is then saved
+ * as NBW6, which is what says it has been done. Every entry is still 4 bytes,
+ * so each record is rewritten in place and the records keep their places. */
+bool edits_convert(const char *world, int from) {
   bool ok = true;
-  char names[ECONV_MAX][32];
-  int nn = 0;
-  int pl = (int)strlen(prefix);
+  int pl = (int)strlen(world);
   char rec[40];
-  for (int i = 0; i < 64 && nn < ECONV_MAX; i++) {
-    if (!plat_record(i, rec, sizeof rec)) break;
-    /* the world's own: prefix + "r<region>.nbe" (the overworld's; the nether's are
-     * written 9-bit from the start, so they are left alone) */
-    if (strncmp(rec, prefix, (size_t)pl) || rec[pl] != 'r') continue;
+  for (int i = 0; plat_record(i, rec, sizeof rec); i++) {
+    /* the world's own: the world's prefix, then "r" (the overworld) or "n" (the
+     * nether), then the region */
+    if (strncmp(rec, world, (size_t)pl) || (rec[pl] != 'r' && rec[pl] != 'n')) continue;
     int k = pl + 1;
     bool shape = rec[k] == '-' || (rec[k] >= '0' && rec[k] <= '9');
     while (rec[k] && (rec[k] == '-' || (rec[k] >= '0' && rec[k] <= '9') || rec[k] == '_')) k++;
-    if (shape && !strcmp(rec + k, ".nbe")) memcpy(names[nn++], rec, 32);
-  }
-  for (int i = 0; i < nn; i++) {
+    if (!shape || strcmp(rec + k, ".nbe")) continue;
     uint32_t len = 0;
-    const uint8_t *r = plat_load(names[i], &len);
+    const uint8_t *r = plat_load(rec, &len);
     if (!r || !len || len % 4 || len / 4 > scratch_n) continue;
-    int n = (int)(len / 4);
-    for (int k = 0; k < n; k++) {
-      uint32_t e = rd32(r + 4 * k);
-      uint32_t key = e & 0xFFFFFF, blk = e >> 24;   /* the old shape: 24-bit position, block on top */
-      if (key >> 19 || blk >= NSTATES) {
-        ok = false;   /* not an old entry: leave this record alone */
-        break;
+    int n = (int)(len / 4), good = 1;
+    for (int j = 0; j < n && good; j++) {
+      uint32_t e = rd32(r + 4 * j), key, blk;
+      if (from == 0) {
+        key = e & 0xFFFFFF, blk = e >> 24;   /* the old shape: 24-bit position, block on top */
+        if (key >> 19 || blk >= NSTATES) good = 0;   /* not an 8-bit entry: leave this record alone */
+      } else {
+        key = e & 0x7FFFF, blk = (e >> 19) & 511;
+        if (e >> 28) good = 0;   /* not a 19-bit entry: already converted, leave it */
       }
-      scratch[k] = ENTRY(key, blk);
+      if (good)   /* y stays low (0..6), xz and the chunk move up one bit */
+        scratch[j] = ENTRY(((key >> 7) << 8) | (key & 0x7F), (int)blk);
     }
-    if (!plat_save(names[i], scratch, len)) ok = false;
+    if (!good || !plat_save(rec, scratch, len)) ok = false;
   }
   edits_forget();
   return ok;

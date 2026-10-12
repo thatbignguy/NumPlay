@@ -1,3 +1,28 @@
+## 1.5.5
+**The nether's build limit is 200: its roof is open air to build on, not a cap**
+- The nether is 200 blocks tall now (the overworld's 128, and the 72 the ceiling
+  leaves open above it): blocks place and break above y 127 up to y 199, the cache
+  follows the player up there, and what is built stands against the red sky. Its
+  terrain is untouched - the ceiling still closes at 123..127 and the rows above it
+  generate as air (the window above 128 skips the density work altogether).
+- The dimension's own limit is `dim_height()` (nb.h): the nether's 200, the
+  overworld's 128. Placement, breaking, `/setblock`, `/summon`, flint and steel,
+  the spectator's ceiling and the portal frame's scan all read it, so a portal can
+  also be lit above the roof.
+- Edit records hold the position in 20 bits now (y is 8 bits under the chunk and
+  x, z; the block states moved from bit 19 to bit 20 - four bytes an entry still).
+  A world saved before this version re-encodes its records once when it is first
+  loaded, and its head is written as NBW6 right away, so a game killed before its
+  next save does not convert them a second time; renaming a world converts it the
+  same way (the old head's NBW5 said the records were the 19-bit shape, and the
+  nether's own could not hold anything above y 127 at all).
+- `make test` (the new roof test places at 128 and 199, checks the limit at 200,
+  the records, the save and the NBW5 re-encode; the target also clears
+  `build/unit-saves` first, so records a build with the old shape left there are
+  not read as the current one) and `make build && make check` pass; the host
+  `./build/play --nether --roof` frames show a block placed and one mined on the
+  ceiling, in Creative, above the red sky.
+
 ## 1.5.4
 **Glowstone is a lumpy vein up in the ceiling, not a shape, and it is rarer**
 - The glowstone is small clusters of one or two little lumps now: each try picks a column's

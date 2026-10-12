@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.4"
+#define NB_VERSION "1.5.5"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -97,6 +97,9 @@ float gen_temp_noise(int x, int z);   /* BiomeGenBase.temperatureNoise at (x / 8
 #define VCZ 40
 #define VCY 24
 #define WORLD_H 128
+/* The nether's build height is gen.h's NETHER_H (200): its world is the same 128
+ * blocks (its ceiling closes at 123..127), but above the ceiling there is open air
+ * to build in, as on Minecraft's nether roof. The overworld's limit stays 128. */
 /* Under the world is the void (as in Minecraft, below the lowest block there is): nothing
  * stands there, and 64 below the bottom of the world what is in it starts to take damage
  * (Entity.checkBelowWorld, minBuildHeight - 64). Everything that goes under the world
@@ -382,6 +385,11 @@ extern uint8_t world_type;   /* the world type (WT_*): Default, or Superflat */
 /* the dimension the world is in (save.c): the overworld, or the nether */
 enum { DIM_OVER, DIM_NETHER };
 extern uint8_t world_dim;
+/* How tall the dimension's world is (the y limit of world_set and the commands):
+ * the overworld's 128, or the nether's 200 - its ceiling at 123..127 included, and
+ * the open air above it (128..199), which is built on the way the overworld's sky
+ * cannot be. The cache is 24 tall either way: only its window's place moves. */
+static inline int dim_height(void) { return world_dim == DIM_NETHER ? NETHER_H : WORLD_H; }
 /* where the nether's portal leads back to (the overworld), saved with the world */
 extern int32_t nb_ret_x, nb_ret_y, nb_ret_z;
 extern bool nb_ret_ok;

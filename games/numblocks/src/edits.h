@@ -10,7 +10,7 @@ void edits_set_dim(int dim);   /* the dimension the player's changes go to (DIM_
 bool edits_put(int x, int y, int z, int b);      /* false: no room left to keep it */
 bool edits_flush(void);                          /* the journal into storage; false if some did not fit */
 bool edits_full(void);
-bool edits_convert(void);   /* records from before the states were 9 bits, written back 9-bit */
+bool edits_convert(const char *world, int from);   /* the world's records from an old shape (0: 8-bit blocks, 1: 7-bit y), written back in the current one */
 void edits_forget(void);   /* storage changed: records may have moved */
 void edits_apply(int cx, int cz, int y0, int h, uint8_t *slab);   /* onto a chunk from gen_slab */
 int edits_top(int x, int z, int top);            /* the column's sky top with the edits (1 + y) */

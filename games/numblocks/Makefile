@@ -50,7 +50,9 @@ build/unit: $(GAME) src/plat_host.c tests/unit.c $(HEADERS)
 	$(Q) mkdir -p build
 	$(Q) cc $(HOST_FLAGS) $(filter-out src/main.c,$(GAME)) src/plat_host.c tests/unit.c tests/stubs.c -lm -o $@
 test: build/unit
-	@mkdir -p build/unit-saves
+	@# a clean save dir: records from a build with an older entry shape would be
+	@# read as the current one (the world's head is what converts a real world)
+	@rm -rf build/unit-saves && mkdir -p build/unit-saves
 	./build/unit
 # every pixel traced: the reference the adaptive picture is checked against
 build/play_ref: $(GAME) src/plat_host.c tests/play.c $(HEADERS)

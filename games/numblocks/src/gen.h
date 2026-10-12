@@ -28,10 +28,18 @@ void gen_set_flat(int flat);
  * to the default preset. Max 16 layer entries, max height 128. */
 void gen_set_flat_preset(const char *preset);
 
+/* The nether's build height: the top of gen_slab's windows there (one past the highest
+ * block the player can put, y 199). Its terrain is the same 128-block column, ceiling
+ * and all; everything above the ceiling is the open air the world lets build in, as on
+ * Minecraft's nether roof (nb.h's dim_height is this per dimension). */
+#define NETHER_H 200
+
 /* Blocks of chunk (cx, cz) for y in [y0, y0 + h), after terrain, caves, ravines
  * and the decoration (population) that Minecraft would put in this chunk:
  * out[(y - y0) * 256 + z * 16 + x], x and z in 0..15, values from blocks.h (B_*).
- * Only y < 128 is ever written (y0 + h must be <= 128).
+ * The overworld and flat generators write y < 128 only; the nether's terrain stops at
+ * its ceiling too (y 127), and y0 + h may reach its build height NETHER_H (200) there:
+ * everything above the ceiling comes out as air.
  * Cost: work around the chunk is cached, so neighbouring chunks asked one after the
  * other are much cheaper than scattered ones (Cortex-M7 at 216 MHz, h = 24, rows of
  * 3-4 neighbours: about 60-80 ms per call; the first call after gen_init or after a

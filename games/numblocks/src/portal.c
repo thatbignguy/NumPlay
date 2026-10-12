@@ -52,7 +52,7 @@ static bool portal_frame(int x, int y, int z, int *ox, int *oy, int *oz, int *ax
       y0--;
     }
     for (int k = 0; k < PORTAL_MAX; k++) {
-      bool row = y1 + 1 < WORLD_H;
+      bool row = y1 + 1 < dim_height();
       for (int i = lo; i <= hi && row; i++)
         if (!portal_open(ax_get(a, i, y1 + 1, a ? x : z))) row = false;
       if (!row) break;
@@ -156,7 +156,7 @@ static bool portal_wet(int b) { return is_water(b) || is_lava(b); }
  * obsidian floor goes - portal_build only lays it on air, so over water the
  * portal would float with no floor). Rock in the volume is fine: it is carved. */
 static bool portal_dry(int x, int y, int z, int axis) {
-  if (y < 1 || y + 3 >= WORLD_H) return false;
+  if (y < 1 || y + 3 >= dim_height()) return false;
   int ox = axis ? x : x - 1, oz = axis ? z - 1 : z;
   /* outside the loaded cache reads as air: never approve what is not loaded
    * (the build below writes nothing there, stranding the player). The box covers
@@ -184,12 +184,12 @@ static bool portal_dry(int x, int y, int z, int axis) {
  * near, and the caller builds at the mapped spot as before. */
 static bool portal_spot(int x, int y, int z, int axis, int *ox, int *oy, int *oz) {
   if (y < 1) y = 1;
-  if (y + 3 >= WORLD_H) y = WORLD_H - 4;
+  if (y + 3 >= dim_height()) y = dim_height() - 4;
   for (int r = 0; r <= 8; r++)
     for (int dz = -r; dz <= r; dz++)
       for (int dx = -r; dx <= r; dx++) {
         if (dx != -r && dx != r && dz != -r && dz != r) continue;   /* the ring */
-        for (int yy = y; yy + 3 < WORLD_H; yy++)
+        for (int yy = y; yy + 3 < dim_height(); yy++)
           if (portal_dry(x + dx, yy, z + dz, axis)) {
             *ox = x + dx, *oy = yy, *oz = z + dz;
             return true;

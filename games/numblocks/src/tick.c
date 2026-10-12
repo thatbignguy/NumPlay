@@ -330,7 +330,7 @@ static void grow_tree(int x, int y, int z, int sapling) {
         int b = world_get(x + dx, y + dy, z + dz);
         if (b != B_AIR && blk_model[b] != M_LEAVES && blk_model[b] != M_CROSS) return;
       }
-  if (y + h + 2 >= WORLD_H) return;
+  if (y + h + 2 >= dim_height()) return;
   if (v == 1) {
     /* spruce (WorldGenTaiga2): rings of leaves narrowing to the top */
     int r = 0;

@@ -5582,7 +5582,8 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                 }
             }
             if (out)
-                for (int y = 0; y < h; y++) b9_set(out, y * 256 + z * 16 + x, col[y0 + y]);
+                for (int y = 0; y < h; y++)
+                    b9_set(out, y * 256 + z * 16 + x, y0 + y < 128 ? col[y0 + y] : B_AIR);   /* (above the ceiling: air) */
             c_top[z * 16 + x] = (uint8_t)top;
             c_sl[z * 16 + x] = (uint8_t)top;
             /* the column's glowstone ceiling: the highest open air with rock
@@ -6232,9 +6233,18 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
         h += y0;
         y0 = 0;
     }
-    if (y0 + h > 128) h = 128 - y0;
+    /* the nether is NETHER_H tall: its terrain still ends at its ceiling (127), and the
+     * rows above it are the open air the player builds in (nb.h's dim_height) */
+    int H = g_dim ? NETHER_H : 128;
+    if (y0 + h > H) h = H - y0;
     if (h <= 0) return;
     if (g_dim) {
+        if (y0 >= 128) {
+            /* above the ceiling: only air, whatever slab window is asked for (no
+             * column of the density reaches up here) */
+            memset(out, 0, (size_t)h * 256 / 8 * 9);
+            return;
+        }
         /* the nether's chunk needs the same slab state (c_out and its window):
          * its veins and glowstone write into the slab directly */
         c_out = out;

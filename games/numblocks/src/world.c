@@ -464,7 +464,7 @@ static void world_follow_gen(float x, float y, float z) {
     int nx0 = (px - M) & ~7, nz0 = (pz - M) & ~7;
     int ny0 = high ? ny_high : (py - VCY / 2 + 2) & ~3;
     if (ny0 < 0) ny0 = 0;
-    if (ny0 > WORLD_H - VCY) ny0 = WORLD_H - VCY;
+    if (ny0 > dim_height() - VCY) ny0 = dim_height() - VCY;
     if (!vc_valid || nx0 != vc_x0 || ny0 != vc_y0 || nz0 != vc_z0) {
       recenter(nx0, ny0, nz0, px, pz);
       return;
@@ -500,7 +500,7 @@ int world_get(int x, int y, int z) {
 }
 
 void world_set(int x, int y, int z, int b) {
-  if (!world_loaded(x, y, z) || y < 0 || y >= WORLD_H) return;
+  if (!world_loaded(x, y, z) || y < 0 || y >= dim_height()) return;
   if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return;
   int lx = x - vc_x0, ly = y - vc_y0, lz = z - vc_z0;
   vc_set(VC_I(lx, ly, lz), b);

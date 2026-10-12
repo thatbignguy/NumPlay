@@ -1433,6 +1433,64 @@ int main(void) {
     plat_remove_prefix("utn");
   }
   {
+    /* the nether's build height: blocks above its ceiling (y 128..199) place, break
+     * and come back from the records - through the cache's own window, and through a
+     * save and a load */
+    new_world(3, 12, 1, false, WT_DEFAULT, "Roof", NULL);
+    world_switch_dim(DIM_NETHER);
+    int px = 66, pz = 8;
+    pl.x = px + 0.5f, pl.z = pz + 0.5f;
+    pl.y = 130.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(vc_y0 + VCY > 128);   /* (the window is up in the open air) */
+    world_set(px, 128, pz, B_DIAMOND_BLOCK);   /* just over the ceiling */
+    CHECK(world_get(px, 128, pz) == B_DIAMOND_BLOCK);
+    pl.y = 150.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    world_set(px, 150, pz, B_GOLD_BLOCK);
+    CHECK(world_get(px, 150, pz) == B_GOLD_BLOCK);
+    pl.y = 195.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(vc_y0 + VCY == NETHER_H);   /* (the cache stops at the build height) */
+    int nj = edits_count();
+    world_set(px, 199, pz, B_EMERALD_BLOCK);   /* the top block there is */
+    CHECK(world_get(px, 199, pz) == B_EMERALD_BLOCK && edits_count() == nj + 1);
+    world_set(px, 200, pz, B_EMERALD_BLOCK);   /* one past it: nothing to write */
+    CHECK(edits_count() == nj + 1 && world_get(px, 200, pz) == B_AIR);
+    CHECK(edits_flush());
+    /* the cache gone and back: the records put them back */
+    world_switch_dim(DIM_OVER);
+    world_switch_dim(DIM_NETHER);
+    pl.y = 130.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(px, 128, pz) == B_DIAMOND_BLOCK);
+    pl.y = 195.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(px, 199, pz) == B_EMERALD_BLOCK && world_get(px, 150, pz) == B_AIR);
+    pl.y = 150.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(px, 150, pz) == B_GOLD_BLOCK);
+    /* and through the world's own save and load */
+    save_world();
+    CHECK(load_world(3));
+    world_switch_dim(DIM_NETHER);
+    pl.y = 195.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(px, 199, pz) == B_EMERALD_BLOCK);
+    pl.y = 128.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(px, 128, pz) == B_DIAMOND_BLOCK);
+    delete_world(3);
+  }
+  {
     /* the portal: the frame lights with flint and steel, standing in it travels to the
      * nether at the 1:8 mapping, the far side's portal is made where there is none,
      * and coming back goes through the portal the player left by */
@@ -1790,8 +1848,9 @@ int main(void) {
     for (int i = 0; i < 2; i++) {
       uint32_t e;
       memcpy(&e, r + 4 * i, 4);
-      e = (e & 0x7FFFF) | ((e >> 19) & 511) << 24;   /* the old shape: block on top */
-      old[i] = e;
+      /* the old shape: the 7-bit-y position, the block on top */
+      uint32_t key = e & 0xFFFFF, blk = (e >> 20) & 511;
+      old[i] = (((key >> 8) << 7) | (key & 0x7F)) | blk << 24;
     }
     plat_save(rec, old, sizeof old);
     /* the world again: the slab is made from the records, so the old shape reads wrong ... */
@@ -1801,12 +1860,61 @@ int main(void) {
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     CHECK(world_get(bx, by, bz) != B_GOLD_BLOCK);
     /* ... and the conversion puts it back */
-    edits_convert();
+    edits_convert("nb2", 0);
     world_switch_dim(DIM_OVER);
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     CHECK(world_get(bx, by, bz) == B_GOLD_BLOCK && world_get(bx + 1, by, bz) == B_DIAMOND_BLOCK);
     delete_world(2);
+  }
+  {
+    /* a world saved while the position packed y in 7 bits (an NBW5 head): the load
+     * re-encodes its records once and every position comes back - the y low and the
+     * x, z and chunk of a column moved up one bit - and the head says NBW6 at once,
+     * so a game killed before its next save does not convert them a second time */
+    new_world(4, 13, 0, false, WT_DEFAULT, "Old5", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int bx = (int)floorf(pl.x), by = (int)floorf(pl.y), bz = (int)floorf(pl.z);
+    world_set(bx, by, bz, B_GOLD_BLOCK);
+    world_set(bx + 1, by + 1, bz + 2, B_DIAMOND_BLOCK);
+    save_world();
+    /* the records back in the 19-bit shape, and the head as NBW5 */
+    char rec[40];
+    for (int i = 0; plat_record(i, rec, sizeof rec); i++) {
+      uint32_t len = 0;
+      const uint8_t *d = plat_load(rec, &len);
+      uint8_t *tmp = d && len >= 4 ? (uint8_t *)edits_scratch(len) : NULL;
+      if (!strcmp(rec, "nb4.nbw")) {
+        CHECK(tmp != NULL);
+        if (!tmp) continue;
+        memcpy(tmp, d, len);   /* (the whole record, its magic patched) */
+        memcpy(tmp, "NBW5", 4);
+        plat_save(rec, tmp, len);
+        continue;
+      }
+      if (strncmp(rec, "nb4", 3) || (rec[3] != 'r' && rec[3] != 'n')) continue;
+      if (!tmp || !len || len % 4) continue;
+      memcpy(tmp, d, len);
+      for (uint32_t k = 0; k < len / 4; k++) {
+        uint32_t e;
+        memcpy(&e, tmp + 4 * k, 4);
+        uint32_t key = e & 0xFFFFF, blk = (e >> 20) & 511;
+        e = (((key >> 8) << 7) | (key & 0x7F)) | blk << 19;   /* the 19-bit shape */
+        memcpy(tmp + 4 * k, &e, 4);
+      }
+      plat_save(rec, tmp, len);
+    }
+    load_world(4);   /* (the load re-encodes the records: NBW5 -> the current shape) */
+    world_switch_dim(DIM_OVER);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(bx, by, bz) == B_GOLD_BLOCK);
+    CHECK(world_get(bx + 1, by + 1, bz + 2) == B_DIAMOND_BLOCK);
+    uint32_t hl4 = 0;
+    const uint8_t *h4 = plat_load("nb4.nbw", &hl4);
+    CHECK(h4 && hl4 >= 4 && !memcmp(h4, "NBW6", 4));   /* (the head says so at once) */
+    delete_world(4);
   }
   {
     /* keys saved as they first were (Back mining, OK placing) become OK mining, Back placing; set ones stay */

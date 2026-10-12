@@ -15,6 +15,9 @@
  *        [--cave]       (a sealed stone room with no light in it, for what the dark is)
  *        [--void]       (a shaft dug through the bedrock under the player, who hangs in the void below it)
  *        [--nether]     (the world is the nether's: netherrack, lava sea, red sky)
+ *        [--roof]       (above the nether's ceiling: a floor laid over the roof, the player
+ *                         standing on it in Creative with netherrack in hand, so keys can
+ *                         break and place blocks up there - the nether is 200 tall)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
  *
@@ -58,7 +61,7 @@ int main(int argc, char **argv) {
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0;
+  int nether = 0, portal = 0, roof = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -81,6 +84,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--void")) void_world = 1;
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
     else if (!strcmp(argv[i], "--nether")) nether = 1;
+    else if (!strcmp(argv[i], "--roof")) roof = 1;
     else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
@@ -155,6 +159,35 @@ int main(int argc, char **argv) {
       fprintf(stderr, "nether: spot %d %d %d glowstone light %d (vl %d)\n", bx, best + 1, bz, vl[i] >> 4, vl[i]);
     }
     camera_reset();
+  }
+  if (roof) {
+    /* Above the nether's ceiling: the open air over the roof is buildable (the
+     * dimension's build limit is 200, so y 128..199 is there). The player stands on
+     * a netherrack floor laid just over the ceiling, in Creative with netherrack in
+     * hand: scripted keys break a block of it and place another, against the red sky. */
+    if (!nether) {
+      world_switch_dim(DIM_NETHER);
+      pl.x = 8.5f, pl.z = 8.5f;
+    }
+    pl.y = 126.0f;   /* (up where the cache covers the ceiling, then lay the floor) */
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int px = (int)floorf(pl.x), pz = (int)floorf(pl.z), top = 127;
+    for (int y = 127; y >= 120; y--)
+      if (world_get(px, y, pz) == B_BEDROCK) {
+        top = y;
+        break;
+      }
+    for (int dz = -3; dz <= 3; dz++)
+      for (int dx = -3; dx <= 3; dx++) world_set(px + dx, top + 1, pz + dz, B_NETHERRACK);
+    pl.x = px + 0.5f, pl.y = (float)(top + 2), pl.z = pz + 0.5f;
+    pl.yaw = 0, pl.pitch = 30;   /* (down the floor, a couple of blocks ahead) */
+    pl.mode = 1, pl.flying = false;
+    pl.inv[0] = (Stack){B_NETHERRACK, 64}, pl.slot = 0;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    camera_reset();
+    fprintf(stderr, "roof: standing %d %d %d on netherrack at %d\n", px, top + 2, pz, top + 1);
   }
   if (portal) {
     /* a portal frame in front of the player (an obsidian rectangle 4 x 5 with a
