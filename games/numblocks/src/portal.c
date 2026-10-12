@@ -19,8 +19,8 @@ static int portal_time;   /* ticks stood in the portal */
 static int portal_cool;   /* ticks since travelling */
 static int portal_axis;   /* the axis of the frame the player last stood in (0 x, 1 z) */
 
-/* air a portal's frame may be filled with: air, or portal */
-static bool portal_open(int b) { return b == B_AIR || b == B_PORTAL; }
+/* air a portal's frame may be filled with: air, or either portal state */
+static bool portal_open(int b) { return b == B_AIR || is_portal(b); }
 
 /* the block of a column at (i, y, z) on axis a (a: which of x, z runs) */
 static inline int ax_get(int a, int i, int y, int r) { return world_get(a ? r : i, y, a ? i : r); }
@@ -77,12 +77,15 @@ static bool portal_frame(int x, int y, int z, int *ox, int *oy, int *oz, int *ax
   return false;
 }
 
-/* the frame's air, filled with portal blocks (the corners stay as they are) */
+/* the frame's air, filled with portal blocks of its axis (the corners stay as
+ * they are): NS faces north/south (thin in Z) for a frame running along X,
+ * EW faces east/west (thin in X) for one running along Z */
 static void portal_fill(int ox, int oy, int oz, int axis, int w, int h) {
+  int pb = axis ? B_PORTAL_EW : B_PORTAL_NS;
   for (int j = 0; j < h; j++)
     for (int i = 0; i < w; i++) {
       int bx = axis ? ox : ox + i, by = oy + j, bz = axis ? oz + i : oz;
-      if (world_get(bx, by, bz) == B_AIR) world_set(bx, by, bz, B_PORTAL);
+      if (world_get(bx, by, bz) == B_AIR) world_set(bx, by, bz, pb);
     }
   portal_axis = axis;
 }
@@ -95,7 +98,7 @@ static void portal_fill(int ox, int oy, int oz, int axis, int w, int h) {
 static int portal_depth;
 #define PORTAL_CLEAR_MAX 64
 static void portal_clear(int x, int y, int z) {
-  if (world_get(x, y, z) != B_PORTAL || portal_depth >= PORTAL_CLEAR_MAX) return;
+  if (!is_portal(world_get(x, y, z)) || portal_depth >= PORTAL_CLEAR_MAX) return;
   portal_depth++;
   world_set(x, y, z, B_AIR);
   portal_clear(x + 1, y, z);
@@ -110,7 +113,7 @@ static void portal_clear(int x, int y, int z) {
 /* A portal block by a change: without its whole frame around it it goes too.
  * Breaking or blowing up the frame brings the whole connected interior down. */
 void portal_changed(int x, int y, int z) {
-  if (world_get(x, y, z) != B_PORTAL) return;
+  if (!is_portal(world_get(x, y, z))) return;
   int ox, oy, oz, axis, w, h;
   if (portal_frame(x, y, z, &ox, &oy, &oz, &axis, &w, &h)) return;   /* still framed */
   portal_clear(x, y, z);
@@ -185,7 +188,7 @@ static void portal_far(int x, int y, int z, int axis) {
     for (int dx = -8; dx <= 8; dx++) {
       int bx = x + dx, bz = z + dz;
       for (int by = 34; by < 118; by++)
-        if (world_get(bx, by, bz) == B_PORTAL) {
+        if (is_portal(world_get(bx, by, bz))) {
           pl.x = bx + 0.5f, pl.y = (float)by, pl.z = bz + 0.5f;
           pl.vx = pl.vy = pl.vz = 0.0f;
           return;
@@ -232,14 +235,14 @@ void portal_tick(void) {
   if (portal_cool > 0) portal_cool--;
   if (pl.mode == 2) return;   /* a spectator goes through the blocks, not the portal */
   int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
-  if (portal_cool == 0 && world_get(x, y, z) == B_PORTAL) {
+  if (portal_cool == 0 && is_portal(world_get(x, y, z))) {
     if (++portal_time >= (pl.mode == 1 ? 1 : PORTAL_WAIT)) portal_travel();
   } else if (portal_time)
     portal_time--;
 }
 
 /* how far through the wait standing in a portal is, 0..24: the screen's
- * purple overlay (nothing while travelling creative, which goes at once) */
+ * portal-swirl overlay (nothing while travelling creative, which goes at once) */
 int portal_anim(void) {
   if (portal_time <= 0) return 0;
   int a = portal_time * 24 / PORTAL_WAIT;

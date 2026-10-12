@@ -1353,7 +1353,7 @@ int main(void) {
     CHECK(nother == 0 && nrack > 1000);   /* netherrack, and the patches and lava near the sea */
     CHECK(nlava > 100);
     CHECK(nair == 0);   /* the sea fills everything the density leaves at y <= 31 */
-    /* the nether's light runs two brighter: no block light below 2 anywhere */
+    /* the nether's light runs eight brighter: no block light below 8 anywhere */
     {
       int minlb = 15;
       for (int z = 0; z < VCZ; z++)
@@ -1362,7 +1362,7 @@ int main(void) {
             int lb = vl[VC_I(x, y, z)] >> 4;
             if (lb < minlb) minlb = lb;
           }
-      CHECK(minlb >= 2);
+      CHECK(minlb >= 8);
     }
     /* glowstone hangs off the ceiling: some in a high window */
     world_follow(8, 108, 8);
@@ -1425,7 +1425,7 @@ int main(void) {
     player_look(pl.x, pl.y + 1.62f, pl.z, 90, 0);
     CHECK(pl.hit_face >= 0 && world_get(pl.hit_x, pl.hit_y, pl.hit_z) == B_OBSIDIAN);
     player_tick(K_USE, K_USE);
-    CHECK(world_get(fx + 1, fy + 1, fz) == B_PORTAL && world_get(fx + 2, fy + 3, fz) == B_PORTAL);
+    CHECK(world_get(fx + 1, fy + 1, fz) == B_PORTAL_NS && world_get(fx + 2, fy + 3, fz) == B_PORTAL_NS);
     CHECK(nb_ret_ok && nb_ret_x == fx + 1 && nb_ret_y == fy + 1 && nb_ret_z == fz);
     /* standing in it: a few seconds, and the nether */
     memset(ents, 0, sizeof ents);
@@ -1440,7 +1440,7 @@ int main(void) {
     for (int dz = -3; dz <= 3 && !found; dz++)
       for (int dx = -3; dx <= 3 && !found; dx++)
         for (int y = 20; y < 100 && !found; y++)
-          if (world_get(mx + dx, y, mz + dz) == B_PORTAL) {
+          if (world_get(mx + dx, y, mz + dz) == B_PORTAL_NS) {
             pl.x = mx + dx + 0.5f, pl.z = mz + dz + 0.5f, pl.y = (float)y;
             pl.vx = pl.vy = pl.vz = 0;
             found = 1;
@@ -1465,14 +1465,14 @@ int main(void) {
       int nportal = 0;
       for (int j = 1; j <= 3; j++)
         for (int i = 1; i <= 2; i++)
-          if (world_get(fx + i, fy + j, fz) == B_PORTAL) nportal++;
+          if (world_get(fx + i, fy + j, fz) == B_PORTAL_NS) nportal++;
       CHECK(nportal == 6);
       CHECK(world_get(fx, fy + 1, fz) == B_OBSIDIAN);
       break_block_at(fx, fy + 1, fz, false);
       nportal = 0;
       for (int j = 1; j <= 3; j++)
         for (int i = 1; i <= 2; i++)
-          if (world_get(fx + i, fy + j, fz) == B_PORTAL) nportal++;
+          if (world_get(fx + i, fy + j, fz) == B_PORTAL_NS) nportal++;
       CHECK(nportal == 0);
     }
     /* blowing one up breaks it too: a second frame, lit, TNT next to it */
@@ -1484,14 +1484,27 @@ int main(void) {
           world_set(gx + i, fy + j, fz, inner ? B_AIR : B_OBSIDIAN);
         }
       CHECK(portal_light_here(gx + 1, fy + 1, fz));
-      CHECK(world_get(gx + 1, fy + 2, fz) == B_PORTAL);
+      CHECK(world_get(gx + 1, fy + 2, fz) == B_PORTAL_NS);
       explode((float)gx + 1.5f, (float)fy + 2.0f, (float)fz, 4.0f, true);
       int left = 0;
       for (int j = 1; j <= 3; j++)
         for (int i = 1; i <= 2; i++)
-          if (world_get(gx + i, fy + j, fz) == B_PORTAL) left++;
+          if (world_get(gx + i, fy + j, fz) == B_PORTAL_NS) left++;
       CHECK(left == 0);
       CHECK(world_get(gx, fy + 1, fz) == B_OBSIDIAN);   /* (the frame stands: only the interior goes) */
+    }
+    /* a frame running along Z lights thin in X: the EW state, not the NS one */
+    {
+      int hx = fx - 6, hz = fz;   /* (inside the cache: the scan reads past it as air) */
+      for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 5; j++) {
+          bool inner = i >= 1 && i <= 2 && j >= 1 && j <= 3;
+          world_set(hx, fy + j, hz + i, inner ? B_AIR : B_OBSIDIAN);
+        }
+      CHECK(portal_light_here(hx, fy + 1, hz + 1));
+      CHECK(world_get(hx, fy + 1, hz + 1) == B_PORTAL_EW);
+      CHECK(world_get(hx, fy + 3, hz + 2) == B_PORTAL_EW);
+      CHECK(world_get(hx, fy + 2, hz + 1) != B_PORTAL_NS);
     }
     plat_remove_prefix("utp");
   }

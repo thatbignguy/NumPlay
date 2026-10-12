@@ -203,7 +203,8 @@ for c, l in zip(COLORS, CLAB):
     LABELS[f'STAINED_CLAY_{c}'] = f'{l} Terracotta'
 
 # block states that stand for another one in the inventory
-ITEM_OF = {'PORTAL': None,   # the nether portal: the game's own, never an item'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
+ITEM_OF = {'PORTAL_NS': None, 'PORTAL_EW': None,   # the nether portal: the game's own, never an item
+           'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
            'COBBLESTONE_STAIRS_W': 'COBBLESTONE_STAIRS', 'COBBLESTONE_STAIRS_S': 'COBBLESTONE_STAIRS',
            'COBBLESTONE_STAIRS_N': 'COBBLESTONE_STAIRS', 'GRASS_SNOWED': 'GRASS', 'FURNACE_LIT': 'FURNACE', 'TORCH_E': 'TORCH', 'TORCH_W': 'TORCH',
            'TORCH_S': 'TORCH', 'TORCH_N': 'TORCH', 'FARMLAND_WET': 'FARMLAND', 'DOOR_OAK_LOWER': 'I:WOODEN_DOOR',
@@ -431,9 +432,11 @@ TABS = ['Natural Blocks', 'Building Blocks', 'Decorative Items', 'Functional', '
 # what the world is made of: soil, stone, ores, ice; a natural block is a building block too, so it is
 # in both tabs (Minecraft keeps it in Building Blocks only)
 NATURAL = ('GRASS', 'DIRT', 'COARSE_DIRT', 'PODZOL', 'MYCELIUM', 'STONE', 'GRANITE', 'DIORITE', 'ANDESITE',
-           'SAND', 'RED_SAND', 'GRAVEL', 'CLAY', 'SNOW', 'ICE', 'PACKED_ICE', 'BEDROCK', 'OBSIDIAN',
+           'SAND', 'RED_SAND', 'GRAVEL', 'CLAY', 'SNOW', 'ICE', 'PACKED_ICE', 'BEDROCK', 'OBSIDIAN', 'NETHERRACK',
            'COAL_ORE', 'IRON_ORE', 'GOLD_ORE', 'DIAMOND_ORE', 'REDSTONE_ORE', 'LAPIS_ORE', 'EMERALD_ORE')
-NATURAL_ONLY = ('SNOW_LAYER',)   # natural, but not a full cube, and "Snow Block" is already in Building Blocks
+NATURAL_ONLY = ('SNOW_LAYER', 'SOUL_SAND', 'NETHER_QUARTZ_ORE')   # natural, but only in Natural Blocks:
+# Snow Block is already in Building Blocks, and soul sand and quartz ore are the nether's
+# ground and veins (quartz ore groups with the other ores through tab_group's _ORE rule)
 # blocks that do something rather than just sit there (Minecraft's decoration tab, most of it)
 FUNC = ('TNT', 'TORCH', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'RAIL')
 # of those, the ones that fill a whole cube, so they go first in their tab

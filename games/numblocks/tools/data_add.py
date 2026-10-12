@@ -233,14 +233,23 @@ def main():
     T['recipes'].rows = rec
     T['recipes'].changed = True
 
-    # ---- the creative tabs: each tab's ids, in items.py's order
+    # ---- the creative tabs: each tab's ids, in items.py's order (blocks as blocks,
+    # items as items: the two share the ids from 256 up)
     tab_lists = [[] for _ in items.TABS]
-    for iid in list(range(len(blocks.S))) + [256 + k for k in range(len(items.I))]:
-        tabs = items.tab_of(iid, iid < len(blocks.S))
+    for iid in range(len(blocks.S)):
+        tabs = items.tab_of(iid, True)
         if tabs:
             for t in tabs:
                 tab_lists[t].append(iid)
             tab_lists[items.T_SEARCH].append(iid)
+    for k in range(len(items.I)):
+        iid = 256 + k
+        tabs = items.tab_of(iid, False)
+        if tabs:
+            for t in tabs:
+                tab_lists[t].append(iid)
+            if tab_lists[items.T_SEARCH].count(iid) == 0:
+                tab_lists[items.T_SEARCH].append(iid)
     for t in range(len(items.TABS)):
         tab_lists[t] = items.tab_order(t, tab_lists[t])
     flat, starts = [], []

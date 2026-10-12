@@ -51,12 +51,13 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
     for (int x = x0; x < x1; x++) {
       /* the nether has no sky (not even a lit one): its light is the blocks' alone,
        * so the sky pass is skipped and only block light spreads. Without any sky
-       * the dark reads darker than the overworld's night, so everything glows two
-       * levels brighter (lava still stops at 15): the lava sea then reaches. */
+       * the dark reads darker than the overworld's night, so everything glows
+       * eight levels brighter (lava still stops at 15): the lava sea then reaches
+       * and the wastes stay readable far from any glow. */
       if (world_dim == DIM_NETHER) {
         for (int y = VCY - 1; y >= y0; y--) {
           int i = VC_I(x, y, z), b = vc_get(i);
-          int lb = blk_light[b] + 2;
+          int lb = blk_light[b] + 8;
           if (lb > 15) lb = 15;
           if (y < y1) vl[i] = (uint8_t)(lb << 4);
         }
@@ -521,7 +522,7 @@ void world_set(int x, int y, int z, int b) {
  * layers or rails). Above the cache only the sky light's top is known. */
 static bool stops_rain(int b) {
   switch (blk_model[b]) {
-    case M_NONE: case M_CROSS: case M_TORCH: case M_LAYER: case M_VINE: case M_FLAT: case M_LADDER: return false;
+    case M_NONE: case M_CROSS: case M_PORTAL: case M_TORCH: case M_LAYER: case M_VINE: case M_FLAT: case M_LADDER: return false;
     default: return true;
   }
 }

@@ -1,3 +1,32 @@
+## 1.5.0
+**The nether opens up and lights up: brighter everywhere, more quartz, no more 4x4 pillars, glowstone you can actually find, and a portal overlay like Minecraft's**
+- The nether's block light runs eight levels brighter (lava still stops at 15): no block
+  light below 8 anywhere, so the wastes stay readable far from any glow.
+- Quartz comes in fifty veins of four to fourteen blocks (1.8 had about twenty of four
+  to eleven): two to three times as much, in veins up to fourteen like modern's.
+- The 4x4 pillars are gone: the grid-cell classes were written in place over the grid-point
+  classes they were still read from, so whole cells read already-written neighbours and
+  showed as square pillars of rock in the open and square holes in the rock. They live
+  after the point classes now, in the same scratch, so no new RAM.
+- Less terrain: the density threshold went from -0.12 to 0.0, so about half the column
+  between the lava sea and the ceiling is open air instead of two fifths.
+- Glowstone hangs off the ceiling where there is open air under rock: each try scans its
+  column down from the top for the highest open ceiling instead of asking one random block,
+  then grows its blob in the open only. About thirty blocks a chunk where barely one
+  generated before.
+- Standing in a portal covers the screen with the portal's own swirl, thicker until you go
+  through - the nether-portal texture tiled large, scrolling and wobbling, blended over the
+  world by the wait's progress - instead of a flat purple wash.
+
+## 1.4.7
+**The portal is thin like Minecraft's, and the nether's blocks are in the right creative tabs**
+- The portal is a thin plane now, not an X: two states, NS facing north/south (thin
+  in Z, for frames running east-west) and EW facing east/west (thin in X, for frames
+  running north-south), lit by the frame's axis. Old single-state portals load as NS.
+- The creative inventory: netherrack is in Natural Blocks and Building Blocks, soul
+  sand and nether quartz ore are only in Natural Blocks (the ore with the other ores),
+  and the block of quartz stays only in Building Blocks.
+
 ## 1.4.6
 **The nether lit and finished: glowstone that generates, two brighter light, and portals that break**
 - Glowstone finally hangs off the ceiling: its blob writer indexed the slab in absolute rows

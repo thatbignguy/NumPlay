@@ -630,7 +630,7 @@ void explode(float x, float y, float z, float power, bool blocks) {
         float f = power * (0.7f + rndf() * 0.6f) - d * 0.9f;
         int bx = ifl(x) + dx, by = ifl(y) + dy, bz = ifl(z) + dz;
         int b = world_get(bx, by, bz);
-        if (b == B_PORTAL) {
+        if (is_portal(b)) {
           /* (no blast resistance, and nothing to drop: the rest of its interior goes too) */
           if (f > 0) {
             world_set(bx, by, bz, B_AIR);

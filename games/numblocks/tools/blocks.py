@@ -241,18 +241,22 @@ for v, d in [(1, 'S'), (2, 'W'), (3, 'N'), (4, 'E_OPEN'), (5, 'S_OPEN'), (6, 'W_
 b('FIRE', 51, 0, model='cross', tex='fire_layer_0', light=15, hard=0)
 # --- the nether's blocks (modern Nether Wastes): the terrain block, the slow sand, the
 # quartz pair and the portal. The portal is not solid (you walk through it, as in
-# Minecraft), lights what is about it, and stops no light.
+# Minecraft), lights what is about it, and stops no light. It is a thin plane like
+# Minecraft's, in two states for its two axes (BlockPortal's axis): NS faces
+# north/south (the plane runs east-west, thin in Z) and EW faces east/west (the
+# plane runs north-south, thin in X). The boxes are in tools/pack.py's boxes_of.
 b('NETHERRACK', 87, 0, tex='netherrack', hard=0.4, tool='pickaxe')
 b('SOUL_SAND', 88, 0, tex='soul_sand', hard=0.5, tool='shovel')
 b('NETHER_QUARTZ_ORE', 153, 0, tex='nether_quartz_ore', hard=3.0, tool='pickaxe')
 b('QUARTZ_BLOCK', 155, 0, tex=tsb('quartz_block_top', 'quartz_block_side', 'quartz_block_bottom'), hard=0.8,
   tool='pickaxe')
-b('PORTAL', 90, 0, model='cross', tex='nether_portal', light=11, hard=-1)
+b('PORTAL_NS', 90, 1, model='portal', tex='nether_portal', light=11, hard=-1)
+b('PORTAL_EW', 90, 2, model='portal', tex='nether_portal', light=11, hard=-1)
 
 assert len(S) <= NSTATES, len(S)
 
 MODELS = ['none', 'cube', 'cross', 'liquid', 'torch', 'slab', 'layer', 'cactus', 'leaves', 'glass', 'flat', 'vine',
-          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed']
+          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed', 'portal']
 TOOLS = [None, 'pickaxe', 'axe', 'shovel', 'shears', 'sword']
 
 

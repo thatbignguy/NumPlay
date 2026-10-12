@@ -50,7 +50,7 @@ static bool open_to(int water, int b) {
   if (water && is_lava(b)) return false;   /* water never flows into lava: the lava turns to stone */
   if (!water && is_water(b)) return true;
   if (b == B_AIR) return true;
-  if (b == B_PORTAL) return false;   /* (the portal stands: liquids stop at it, as at a door) */
+  if (is_portal(b)) return false;   /* (the portal stands: liquids stop at it, as at a door) */
   if (blk_flags[b] & BF_SOLID) return false;
   /* plants, torches, snow... are washed away (doors, ladders and signs stop it) */
   int m = blk_model[b];

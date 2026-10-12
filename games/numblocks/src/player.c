@@ -267,7 +267,7 @@ static bool can_stay(int b, int x, int y, int z) {
   if (b >= B_SUNFLOWER_LOWER && b <= B_PEONY_UPPER && ((b - B_SUNFLOWER_LOWER) & 1))
     return world_get(x, y - 1, z) == b - 1;
   if (b == B_FIRE) return fire_can_stay(x, y, z);
-  if (b == B_PORTAL) return true;   /* (the portal hangs in its frame: no ground under it) */
+  if (is_portal(b)) return true;   /* (the portal hangs in its frame: no ground under it) */
   if (is_plant(b)) return soil(below);
   if (b == B_TORCH) return solid_top(below);
   if (b == B_TORCH_E) return blk_flags[world_get(x - 1, y, z)] & BF_OPAQUE;
@@ -299,7 +299,7 @@ void neighbours_changed(int x, int y, int z) {
     if (blk_model[b] == M_LIQUID) fluid_schedule(nx, ny, nz);
     if (b != B_AIR && blk_model[b] != M_LIQUID && !can_stay(b, nx, ny, nz)) break_block(nx, ny, nz, true);
     /* a portal block by the change: without its whole frame it goes too */
-    if (b == B_PORTAL) portal_changed(nx, ny, nz);
+    if (is_portal(b)) portal_changed(nx, ny, nz);
     /* sand and gravel fall (straight down, at once) */
     if ((b == B_SAND || b == B_RED_SAND || b == B_GRAVEL) && replaceable(world_get(nx, ny - 1, nz)) && ny > 0) {
       int yy = ny;
@@ -319,7 +319,7 @@ static void break_block(int x, int y, int z, bool drops) {
   if (b == B_CHEST || b == B_FURNACE || b == B_FURNACE_LIT) tiles_removed(x, y, z);
   if (depth == 1 && blk_model[b] != M_LIQUID) particles_break(x, y, z, b);
   world_set(x, y, z, B_AIR);
-  if (b == B_PORTAL) portal_broken(x, y, z);   /* (the rest of its interior goes too) */
+  if (is_portal(b)) portal_broken(x, y, z);   /* (the rest of its interior goes too) */
   if (drops && pl.mode == 0 && rule(GR_TILE_DROPS)) {
     Stack out[2];
     int n = block_drops(b, held()->id, out);

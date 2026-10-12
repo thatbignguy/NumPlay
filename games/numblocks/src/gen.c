@@ -5455,8 +5455,9 @@ void gen_set_dim(int dim) {
 }
 
 /* the density above which a block is netherrack (the threshold that leaves the
- * caverns: about two fifths of the column is air between the sea and the ceiling) */
-#define NETHER_DENS_MIN (-0.12f)
+ * caverns: about half of the column is air between the sea and the ceiling,
+ * open enough to walk through) */
+#define NETHER_DENS_MIN (0.0f)
 
 /* the nether's grid: 4 blocks across and 8 high a cell, 5 x 17 x 5 cells a chunk */
 #define NGC 5
@@ -5505,8 +5506,13 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     for (int c = 0; c < NGCELLS; c++) A[c] += B[c];
     /* per grid cell (4 x 8 x 4 blocks): 1 the eight corners around it are all
      * netherrack, 2 all air, 0 mixed (a mixed cell's blocks are decided one by
-     * one; the runs that agree are filled whole, as column_density's are) */
+     * one; the runs that agree are filled whole, as column_density's are).
+     * The cell classes live after the point classes (cls + NGCELLS): writing
+     * them over the points they were read from made whole 4 x 4 cells read
+     * already-written neighbours, which showed as square pillars of rock in
+     * open space and square holes in the rock. */
     for (int c = 0; c < NGCELLS; c++) cls[c] = A[c] > NETHER_DENS_MIN ? 1 : 2;
+    uint8_t *cell = cls + NGCELLS;
     for (int k = 0; k < NGC - 1; k++)
         for (int j = 0; j < NGH - 1; j++)
             for (int i = 0; i < NGC - 1; i++) {
@@ -5518,7 +5524,7 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                 solid += cls[(j * NGC + k + 1) * NGC + i + 1] & 1;
                 solid += cls[((j + 1) * NGC + k) * NGC + i + 1] & 1;
                 solid += cls[((j + 1) * NGC + k + 1) * NGC + i + 1] & 1;
-                cls[(j * (NGC - 1) + k) * (NGC - 1) + i] = (uint8_t)(solid == 8 ? 1 : solid == 0 ? 2 : 0);
+                cell[(j * (NGC - 1) + k) * (NGC - 1) + i] = (uint8_t)(solid == 8 ? 1 : solid == 0 ? 2 : 0);
             }
     JRand r;
     jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x4E42ULL);
@@ -5532,7 +5538,7 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
             int ci = x >> 2, ck = z >> 2, top = 0;
             float fx = (float)(x & 3) * 0.25f, fz = (float)(z & 3) * 0.25f;
             for (int j = 0; j < NGH - 1; j++) {
-                int cl = cls[(j * (NGC - 1) + ck) * (NGC - 1) + ci];
+                int cl = cell[(j * (NGC - 1) + ck) * (NGC - 1) + ci];
                 int y = j * 8;
                 if (cl == 1) {
                     for (int q = 0; q < 8; q++) col[y + q] = B_NETHERRACK;
@@ -5580,13 +5586,15 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
             c_top[z * 16 + x] = (uint8_t)top;
             c_sl[z * 16 + x] = (uint8_t)top;
         }
-    /* the quartz veins: about twenty of four to eleven blocks, y 10..117 */
-    for (int i = 0; i < 20; i++)
-        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 4 + jr_int_i(&r, 8));
-    /* glowstone hanging off the ceiling (a blob where a column has air under
-     * rock near the top: not every chunk has one) */
-    for (int i = 0; i < 40; i++)
-        glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 2 + jr_int_i(&r, 4));
+    /* the quartz veins: fifty of four to fourteen blocks, y 10..117 (1.8 had
+     * about twenty of four to eleven; this is two to three times as much, in
+     * veins up to fourteen like modern's) */
+    for (int i = 0; i < 50; i++)
+        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 4 + jr_int_i(&r, 11));
+    /* glowstone hanging off the ceiling, only in the open: each try finds the
+     * highest open ceiling in its column and grows a blob under it */
+    for (int i = 0; i < 14; i++)
+        glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 3 + jr_int_i(&r, 4));
     memset(sum_pin, 0, sizeof sum_pin);
     last_cx = cx;
     last_cz = cz;
@@ -5608,13 +5616,31 @@ static void quartz_vein(JRand *r, int cx, int cz, int n) {
     }
 }
 
-/* the glowstone: a few blocks off the ceiling (WorldGenGlowStone1's shape) */
+/* the glowstone: a blob hanging off the ceiling in the open (WorldGenGlowStone1's
+ * shape, simplified). The column is scanned down from the top for the highest
+ * air with rock over it; without open air under rock there is no blob. Past
+ * the first block the blob only needs open air: it hangs off the rock and off
+ * itself, the way the vanilla cluster does. */
 static void glow_blob(JRand *r, int cx, int cz, int n) {
-    int y = 100 + jr_int_i(r, 23);
+    if (cx < 0 || cx > 15 || cz < 0 || cz > 15) return;
+    int top = 122;
+    if (top >= c_y0 + c_h - 1) top = c_y0 + c_h - 2;
+    int y = -1;
+    for (int yy = top; yy >= c_y0 && yy >= 40; yy--) {
+        int o = (yy - c_y0) * 256 + cz * 16 + cx;
+        if (b9_get(c_out, o) != B_AIR) continue;
+        if (yy + 1 >= c_y0 + c_h) continue;
+        int above = b9_get(c_out, o + 256);
+        if (above == B_NETHERRACK || above == B_BEDROCK || above == B_NETHER_QUARTZ_ORE || above == B_GLOWSTONE) {
+            y = yy;
+            break;
+        }
+    }
+    if (y < 0) return;
     for (int i = 0; i < n; i++) {
         if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || y < c_y0 || y + 1 >= c_y0 + c_h) break;
         int o = (y - c_y0) * 256 + cz * 16 + cx;
-        if (b9_get(c_out, o) != B_AIR || b9_get(c_out, o + 256) == B_AIR) break;   /* hangs off rock */
+        if (b9_get(c_out, o) != B_AIR) break;   /* only in the open */
         b9_set(c_out, o, B_GLOWSTONE);
         int d = jr_int_i(r, 4);
         cx += d == 0 ? 1 : d == 1 ? -1 : 0;
@@ -5831,7 +5857,7 @@ static const struct { const char *name; uint16_t block; } flat_names[] = {
   /* the nether's (a superflat nether, for looking at them) */
   {"netherrack", B_NETHERRACK}, {"soulsand", B_SOUL_SAND}, {"netherquartzore", B_NETHER_QUARTZ_ORE},
   {"quartzore", B_NETHER_QUARTZ_ORE}, {"quartzblock", B_QUARTZ_BLOCK}, {"blockofquartz", B_QUARTZ_BLOCK},
-  {"portal", B_PORTAL}, {"netherportal", B_PORTAL},
+  {"portal", B_PORTAL_NS}, {"netherportal", B_PORTAL_NS},
 };
 
 static int flat_tolower(int c) { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; }

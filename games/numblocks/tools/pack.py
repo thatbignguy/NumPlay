@@ -237,6 +237,12 @@ WALL_TORCH = {'TORCH_E': (1, 3, 7, 3, 14, 9), 'TORCH_W': (13, 3, 7, 15, 14, 9), 
 
 def boxes_of(s):
     m = s['model']
+    if m == 'portal':
+        # the nether portal's thin plane: NS runs east-west (thin in Z), EW runs
+        # north-south (thin in X), two texels thick in the middle like a pane
+        if s['name'].endswith('_EW'):
+            return [(7, 0, 0, 9, 16, 16)]
+        return [(0, 0, 7, 16, 16, 9)]
     if m == 'stairs':
         return [(0, 0, 0, 16, 8, 16), STAIR_TOP[s['meta'] & 3]]
     if m == 'door':
@@ -350,7 +356,7 @@ def iso_icon(jar, s, names_px):
     """A block as the inventory shows it: three faces, the top lit, the left 0.8, the right 0.6 (16 x 16)."""
     t = s['tex']
     k = ICON_TINT.get(s['tint'])
-    if s['model'] in ('cross', 'flat', 'torch', 'vine', 'ladder', 'door', 'pane'):
+    if s['model'] in ('cross', 'flat', 'torch', 'vine', 'ladder', 'door', 'pane', 'portal'):
         n = t if isinstance(t, str) else t.get('side')
         im = tex_image(jar, n)
         if k:
@@ -994,14 +1000,25 @@ def main():
                 bits[i >> 3] |= 1 << (i & 7)
         cr.append(bits)
     out.append('const uint8_t cracks[10][32] = {' + ','.join('{' + ','.join(str(v) for v in b) + '}' for b in cr) + '};')
-    # the creative inventory: each tab's items, in id order (blocks, then items)
+    # the creative inventory: each tab's items, in id order (blocks, then items).
+    # Block states and items share the ids from 256 up (block state 256 is item
+    # id 256 too), so the two walks say what each id is: the states as states,
+    # the items as items. Search Items holds everything, once.
     tab_lists = [[] for _ in items.TABS]
-    for iid in list(range(len(blocks.S))) + [256 + k for k in range(len(items.I))]:
-        tabs = items.tab_of(iid, iid < len(blocks.S))
+    for iid in range(len(blocks.S)):
+        tabs = items.tab_of(iid, True)
         if tabs:
             for t in tabs:
                 tab_lists[t].append(iid)
-            tab_lists[items.T_SEARCH].append(iid)   # Search Items: everything, once
+            tab_lists[items.T_SEARCH].append(iid)
+    for k in range(len(items.I)):
+        iid = 256 + k
+        tabs = items.tab_of(iid, False)
+        if tabs:
+            for t in tabs:
+                tab_lists[t].append(iid)
+            if tab_lists[items.T_SEARCH].count(iid) == 0:
+                tab_lists[items.T_SEARCH].append(iid)
     for t in range(len(items.TABS)):
         tab_lists[t] = items.tab_order(t, tab_lists[t])
     flat, starts = [], []

@@ -104,6 +104,35 @@ static void tint_rect(int x, int y, int w, int h, uint16_t k, int a) {
   }
 }
 
+/* GuiIngame.renderPortal: standing in a portal covers the screen with the
+ * portal's own swirl, thicker until you go through (not a flat purple wash:
+ * the nether portal texture, tiled large, scrolling and wobbling as it does
+ * in Minecraft, blended over the world by the wait's progress). */
+static void portal_overlay(int y0, int rows, int anim) {
+  int tex = blk_tex[B_PORTAL_NS][0];
+  const uint8_t *px = tex_px[tex];
+  const uint16_t *pal = tex_pal[tex];
+  int a = anim * 32 / 24;
+  if (a > 32) a = 32;
+  if (a <= 0) return;
+  int t = (int)(frame_no >> 1);
+  for (int r = 0; r < rows; r++) {
+    int y = y0 + r;
+    if (y < clip_y0 || y >= clip_y1) continue;
+    uint16_t *d = row_at(y);
+    /* one row's wobble (the swirl): a few texels sideways, moving with time */
+    int wob = (int)(sinf(y * 0.15f + t * 0.15f) * 3.0f);
+    int v = ((y >> 2) + (t >> 1)) & 15;
+    const uint8_t *s = px + v * 8;
+    int base = (t >> 2) + wob;
+    for (int x = 0; x < SCREEN_W; x++) {
+      int u = ((x >> 2) + base) & 15;
+      uint8_t p = s[u >> 1];
+      d[x] = blend(d[x], pal[(u & 1) ? p >> 4 : p & 15], a);
+    }
+  }
+}
+
 /* GuiScreen.drawDefaultBackground: the world behind, darkened (0xC0101010 to 0xD0101010) */
 static void dark_background(void) {
   for (int y = clip_y0; y < clip_y1; y++) {
@@ -2714,8 +2743,8 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
     tint_rect(0, y0, SCREEN_W, rows, RGB(0xFF, 0, 0), pl.hurt_time * 2 / 3);
   }
   if (gui == GUI_NONE && portal_anim() > 0) {
-    /* standing in a portal: a purple overlay, worse until you go through */
-    tint_rect(0, y0, SCREEN_W, rows, RGB(0x70, 0x18, 0xD0), portal_anim());
+    /* standing in a portal: the portal's swirl over the world, worse until you go through */
+    portal_overlay(y0, rows, portal_anim());
   }
   switch (gui) {
     case GUI_INVENTORY: case GUI_CRAFTING: case GUI_FURNACE: case GUI_CHEST: case GUI_CREATIVE:

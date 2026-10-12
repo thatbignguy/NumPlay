@@ -123,7 +123,7 @@ MODERN = {'GRASS': 'grass_block',
           'SANDSTONE_SMOOTH': 'smooth_sandstone',
           'SNOW': 'snow_block', 'SNOW_LAYER': 'snow',
           'HARDENED_CLAY': 'terracotta', 'HAY_BALE': 'hay_block', 'MOB_SPAWNER': 'spawner',
-          'FENCE_OAK': 'oak_fence',
+          'FENCE_OAK': 'oak_fence', 'PORTAL_NS': 'portal', 'PORTAL_EW': 'portal',
           'SUNFLOWER_LOWER': 'sunflower', 'LILAC_LOWER': 'lilac', 'DOUBLE_GRASS_LOWER': 'tall_grass',
           'LARGE_FERN_LOWER': 'large_fern', 'ROSE_BUSH_LOWER': 'rose_bush', 'PEONY_LOWER': 'peony'}
 # the blocks that were one id per kind of wood or colour: 1.13's id is per wood, per colour
