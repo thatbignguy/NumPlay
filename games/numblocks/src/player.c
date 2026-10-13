@@ -305,11 +305,11 @@ static bool falling(int b) {
 }
 
 /* the drop itself: straight down, at once, to the first block that is not replaceable (the
- * world's floor at y = 0 is where it stops for good). The change runs its neighbours after,
- * so what stood on the dropped block falls with it */
+ * world's floor, gen.h's WORLD_MIN_Y, is where it stops for good). The change runs its
+ * neighbours after, so what stood on the dropped block falls with it */
 static void drop_fall(int x, int y, int z, int b) {
   int yy = y;
-  while (yy > 0 && replaceable(world_get(x, yy - 1, z))) yy--;
+  while (yy > WORLD_MIN_Y && replaceable(world_get(x, yy - 1, z))) yy--;
   world_set(x, y, z, B_AIR);
   world_set(x, yy, z, b);
   /* (into water or beside it: concrete where it lands) */
@@ -319,7 +319,7 @@ static void drop_fall(int x, int y, int z, int b) {
 
 /* a falling block at (x, y, z) with nothing under it */
 static void fall_if_loose(int x, int y, int z, int b) {
-  if (!falling(b) || y <= 0 || !replaceable(world_get(x, y - 1, z))) return;
+  if (!falling(b) || y <= WORLD_MIN_Y || !replaceable(world_get(x, y - 1, z))) return;
   drop_fall(x, y, z, b);
 }
 
@@ -361,11 +361,11 @@ void neighbours_changed(int x, int y, int z) {
 bool settle_fall(int x, int y, int z) {
   int b = world_get(x, y, z);
   if (b != B_SAND && b != B_RED_SAND && b != B_GRAVEL) return false;   /* (the generator makes no powder) */
-  if (y <= 0 || !world_loaded(x, y - 1, z) || !replaceable(world_get(x, y - 1, z))) return false;
+  if (y <= WORLD_MIN_Y || !world_loaded(x, y - 1, z) || !replaceable(world_get(x, y - 1, z))) return false;
   int yy = y;
-  while (yy > 0 && world_loaded(x, yy - 1, z) && replaceable(world_get(x, yy - 1, z))) yy--;
-  /* the ground it lands on has to be in sight (or it is the world's own floor, y = 0) */
-  if (vc_y0 != 0 && !world_loaded(x, yy - 1, z)) return false;
+  while (yy > WORLD_MIN_Y && world_loaded(x, yy - 1, z) && replaceable(world_get(x, yy - 1, z))) yy--;
+  /* the ground it lands on has to be in sight (or it is the world's own floor, WORLD_MIN_Y) */
+  if (vc_y0 != WORLD_MIN_Y && !world_loaded(x, yy - 1, z)) return false;
   world_set(x, y, z, B_AIR);
   world_set(x, yy, z, b);
   neighbours_changed(x, y, z);
@@ -549,7 +549,7 @@ static bool place(int b) {
   int at = world_get(x, y, z);
   if (!(replaceable(at) && at != B_AIR)) x += NX[f], y += NY[f], z += NZ[f];
   else f = 1;
-  if (y < 0 || y >= dim_height() || !world_loaded(x, y, z) || !replaceable(world_get(x, y, z))) return false;
+  if (y < dim_min_y() || y >= dim_height() || !world_loaded(x, y, z) || !replaceable(world_get(x, y, z))) return false;
   /* the variant: logs lie along the face's axis, torches lean on the block */
   if (b >= B_LOG_OAK && b <= B_LOG_JUNGLE_BARK && (b - B_LOG_OAK) % 4 == 0) b += (f >> 1) == 2 ? 1 : (f >> 1) == 1 ? 2 : 0;
   if (b >= B_LOG_ACACIA && b <= B_LOG_DARK_OAK_BARK && (b - B_LOG_ACACIA) % 4 == 0)
@@ -795,7 +795,7 @@ static void use(uint32_t pressed) {
       if (on_block) {
         int f = pl.hit_face, sx = x + NX[f], sy = y + NY[f], sz = z + NZ[f];
         int t = mob_of_egg(h->id);
-        if (sy >= 0 && sy < dim_height()) {
+        if (sy >= dim_min_y() && sy < dim_height()) {
           float dy = (f == 1 && blk_model[b] == M_FENCE) ? 0.5f : 0.0f;
           mob_summon(t, sx + 0.5f, (float)sy + dy, sz + 0.5f);
           use_up();
@@ -826,14 +826,14 @@ static void use(uint32_t pressed) {
         /* ItemFlintAndSteel.onItemUse on obsidian: the nether portal's frame
          * lights (the cell the obsidian faces is the frame's air) */
         int f = pl.hit_face, fx = x + NX[f], fy = y + NY[f], fz = z + NZ[f];
-        if (!portal_light_here(fx, fy, fz) && world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < dim_height() &&
+        if (!portal_light_here(fx, fy, fz) && world_get(fx, fy, fz) == B_AIR && fy >= dim_min_y() && fy < dim_height() &&
             fire_can_stay(fx, fy, fz))
           fire_set(fx, fy, fz, 0);
       } else {
         /* ItemFlintAndSteel.onItemUse: fire in the air against the face (BlockFire.onBlockAdded: out at once
          * where it cannot stay) */
         int f = pl.hit_face, fx = x + NX[f], fy = y + NY[f], fz = z + NZ[f];
-        if (world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < dim_height()) {
+        if (world_get(fx, fy, fz) == B_AIR && fy >= dim_min_y() && fy < dim_height()) {
           if (fire_can_stay(fx, fy, fz)) fire_set(fx, fy, fz, 0);
         }
       }
@@ -1160,11 +1160,12 @@ void player_tick(uint32_t keys, uint32_t pressed) {
         break_block(pl.hit_x, pl.hit_y, pl.hit_z, true);
         exhaust(0.025f);
         /* experience from ores (Block.dropXpOnBlockBreak) */
-        if (b == B_COAL_ORE) player_add_xp(rnd(3));
-        else if (b == B_DIAMOND_ORE || b == B_EMERALD_ORE) player_add_xp(3 + rnd(5));
-        else if (b == B_LAPIS_ORE) player_add_xp(2 + rnd(4));
+        if (b == B_COAL_ORE || b == B_DEEPSLATE_COAL_ORE) player_add_xp(rnd(3));
+        else if (b == B_DIAMOND_ORE || b == B_EMERALD_ORE || b == B_DEEPSLATE_DIAMOND_ORE ||
+                 b == B_DEEPSLATE_EMERALD_ORE) player_add_xp(3 + rnd(5));
+        else if (b == B_LAPIS_ORE || b == B_DEEPSLATE_LAPIS_ORE) player_add_xp(2 + rnd(4));
         else if (b == B_NETHER_QUARTZ_ORE) player_add_xp(rnd(2));
-        else if (b == B_REDSTONE_ORE) player_add_xp(1 + rnd(5));
+        else if (b == B_REDSTONE_ORE || b == B_DEEPSLATE_REDSTONE_ORE) player_add_xp(1 + rnd(5));
         /* tools wear: 1 a block (swords 2), not for blocks that break at once */
         int k = item_kind(h);
         if (hard && k >= IK_PICKAXE && k <= IK_SHEARS && k != IK_HOE) stack_wear(held(), k == IK_SWORD ? 2 : 1);

@@ -2108,12 +2108,14 @@ HOT static void build_default(uint16_t *col, const Biome *b, JRand *r, float noi
     unsigned skip = (unsigned)(255 - y);
     for (; y >= 0; y--) {
         if (y <= 4) {
+            /* 1.8's bedrock floor moved down to the deep layer (gen_slab's WORLD_MIN_Y):
+             * the five draws are kept so the random stream above is unchanged, and the old
+             * floor is deepslate - a clean boundary at y=0, as 1.18's deepslate is */
             jr_skip(r, skip);
             skip = 0;
-            if (y <= jr_int_i(r, 5)) {
-                col[y] = B_BEDROCK;
-                continue;
-            }
+            (void)jr_int_i(r, 5);
+            col[y] = B_DEEPSLATE;
+            continue;
         } else {
             skip++;
             uint8_t blk = col[y];
@@ -2198,12 +2200,13 @@ static void build_mesa(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, 
     for (int y = 255; y >= 0; y--) {
         if (col[y] == B_AIR && y < d1i) col[y] = B_STONE;
         if (y <= 4) {
+            /* as build_default: the bedrock draw is kept, the old floor is deepslate now
+             * (its bedrock lives in gen_slab's deep layer) */
             jr_skip(r, skip);
             skip = 0;
-            if (y <= jr_int(r, 5)) {
-                col[y] = B_BEDROCK;
-                continue;
-            }
+            (void)jr_int(r, 5);
+            col[y] = B_DEEPSLATE;
+            continue;
         } else {
             skip++;
         }
@@ -6228,17 +6231,85 @@ int gen_prepare(int cx, int cz) {
     return 0;
 }
 
-void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
-    if (y0 < 0) {
-        h += y0;
-        y0 = 0;
+/* The overworld deep layer's bedrock floor: a hash of the column, so the same column gets
+ * the same floor whichever slab window asks for it (1.18's bedrock sits about y -64..-60). */
+static int deep_bedrock(int x, int z) {
+    uint32_t h = (uint32_t)x * 374761393u + (uint32_t)z * 668265263u;
+    h = (h ^ (h >> 13)) * 1274126177u;
+    h ^= h >> 16;
+    return WORLD_MIN_Y + (int)(h % (unsigned)(BEDROCK_TOP - WORLD_MIN_Y + 1));
+}
+
+/* One ore vein in the deep layer: WorldGenMinable's shape (a chain of spheres along a
+ * segment), placed at chunk-local (X, Y, Z), replacing deepslate only. Cells outside the
+ * window (y0..y0+h-1) or the chunk's columns are left - a vein is the same whichever
+ * slab window asks, because its draws come from the chunk's own stream (below). */
+static void deep_vein(int y0, int h, uint8_t *out, JRand *r, int X, int Y, int Z, int n, uint16_t blk) {
+    float f = jr_float(r) * 3.1415927f;
+    float s = mh_sin_i(f) * (float)n / 8.0f, c = mh_cos_i(f) * (float)n / 8.0f;
+    float d0 = (float)X + s, d1 = (float)X - s, d2 = (float)Z + c, d3 = (float)Z - c;
+    int d4 = Y + jr_int(r, 3) - 2, d5 = Y + jr_int(r, 3) - 2;
+    for (int i = 0; i < n; i++) {
+        float f1 = (float)i / (float)n;
+        float d6 = d0 + (d1 - d0) * f1, d7 = (float)d4 + (float)(d5 - d4) * f1, d8 = d2 + (d3 - d2) * f1;
+        float d9 = jr_doublef_i(r) * (float)n / 16.0f;
+        float d10 = (mh_sin_i(3.1415927f * f1) + 1.0f) * d9 + 1.0f, hh = d10 / 2.0f;
+        int j = floor_f_i(d6 - hh), k = floor_f_i(d7 - hh), l = floor_f_i(d8 - hh);
+        int j1 = floor_f_i(d6 + hh), k1 = floor_f_i(d7 + hh), l1 = floor_f_i(d8 + hh);
+        if (j < 0) j = 0;
+        if (j1 > 15) j1 = 15;
+        if (l < 0) l = 0;
+        if (l1 > 15) l1 = 15;
+        if (k < y0) k = y0;
+        if (k1 > y0 + h - 1) k1 = y0 + h - 1;
+        for (int a = j; a <= j1; a++)
+            for (int b = k; b <= k1; b++)
+                for (int zz = l; zz <= l1; zz++) {
+                    float da = ((float)a + 0.5f - d6) / hh, db = ((float)b + 0.5f - d7) / hh,
+                          dc = ((float)zz + 0.5f - d8) / hh;
+                    if (da * da + db * db + dc * dc >= 1.0f) continue;
+                    if (b >= 0 || b < WORLD_MIN_Y) continue;   /* the deep layer only */
+                    int o = (b - y0) * 256 + zz * 16 + a;
+                    if (b9_get(out, o) == B_DEEPSLATE) b9_set(out, o, blk);
+                }
     }
+}
+
+/* 1.17's deepslate ores: the deep layer (y < 0) is all deepslate, so every ore that reaches
+ * it is the deepslate variant - a stone ore never sits in the deep rock. The veins use their
+ * own stream, seeded from the chunk, so the 1.8 terrain above 0 (t_refcmp's exactness) is
+ * untouched. Ranges are 1.18's deepslate targets in spirit (the common ores reach the floor,
+ * gold/redstone/diamond are lower; emerald, always a mountain ore above y 32 in 1.18, never
+ * generates in the deep layer though its block exists). Counts are per chunk. */
+static void deep_ores(int cx, int cz, int y0, int h, uint8_t *out) {
+    static const struct {
+        uint8_t n, size, depth;
+        uint16_t blk;
+    } O[] = {{10, 17, 64, B_DEEPSLATE_COAL_ORE}, {12, 9, 64, B_DEEPSLATE_IRON_ORE},
+             {3, 9, 48, B_DEEPSLATE_GOLD_ORE},   {6, 8, 48, B_DEEPSLATE_REDSTONE_ORE},
+             {4, 8, 48, B_DEEPSLATE_DIAMOND_ORE}, {2, 7, 64, B_DEEPSLATE_LAPIS_ORE}};
+    JRand r;
+    jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x1E18DEEFULL);
+    for (int t = 0; t < 6; t++)
+        for (int c = 0; c < O[t].n; c++) {
+            int X = jr_int(&r, 16), Y = -1 - jr_int(&r, O[t].depth), Z = jr_int(&r, 16);
+            deep_vein(y0, h, out, &r, X, Y, Z, O[t].size, O[t].blk);
+        }
+}
+
+void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     /* the nether is NETHER_H tall: its terrain still ends at its ceiling (127), and the
-     * rows above it are the open air the player builds in (nb.h's dim_height) */
-    int H = g_dim ? NETHER_H : 128;
+     * rows above it are the open air the player builds in (nb.h's dim_height). The
+     * overworld's top is WORLD_TOP; its floor is the deep layer below y = 0. */
+    int H = g_dim ? NETHER_H : WORLD_TOP;
     if (y0 + h > H) h = H - y0;
     if (h <= 0) return;
     if (g_dim) {
+        if (y0 < 0) {   /* the nether has no deep layer: below 0 is air */
+            h += y0;
+            y0 = 0;
+            if (h <= 0) return;
+        }
         if (y0 >= 128) {
             /* above the ceiling: only air, whatever slab window is asked for (no
              * column of the density reaches up here) */
@@ -6256,15 +6327,33 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
         return;
     }
     if (g_flat) {
+        /* flat worlds keep their layers where the preset puts them (y = 0 up): below 0 is
+         * air, the void (flat_block answers air for a negative y) */
         for (int y = 0; y < h; y++) {
             int b = flat_block(y0 + y);
             for (int i = 0; i < 256; i++) b9_set(out, y * 256 + i, b);
         }
         return;
     }
-    c_out = out;
-    c_y0 = y0;
-    c_h = h;
+    /* the overworld's deep layer (1.18): rows below y = 0 are deepslate with bedrock on the
+     * floor, then 1.8's terrain above. The deep rows go straight into the slab; the terrain
+     * rows keep the whole (unchanged) 1.8 generator, addressed by a byte offset - 256 cells
+     * x 9 bits = 288 bytes a row - so its windows and col[] indices read as before. */
+    int deep = y0 < 0 ? (h < -y0 ? h : -y0) : 0;
+    for (int y = 0; y < deep; y++) {
+        int wy = y0 + y;
+        for (int z = 0; z < 16; z++)
+            for (int x = 0; x < 16; x++)
+                b9_set(out, y * 256 + z * 16 + x,
+                       wy <= deep_bedrock(cx * 16 + x, cz * 16 + z) ? B_BEDROCK : B_DEEPSLATE);
+    }
+    if (deep) deep_ores(cx, cz, y0, h, out);   /* the deepslate ores, into the deep rows */
+    if (deep == h) return;   /* the window is all deep layer: no terrain rows to make */
+    uint8_t *tout = out + (size_t)deep * 288;
+    int ty0 = y0 + deep, th = h - deep;
+    c_out = tout;
+    c_y0 = ty0;
+    c_h = th;
     c_cx = cx;
     c_cz = cz;
     nb_cx = cx;
@@ -6274,7 +6363,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     if (!e) e = sum_slot(cx, cz);
     int ie = (int)(e - sumc);
     sum_pin[ie] = 1;
-    chunk_terrain(cx, cz, out, y0, h, e->s);
+    chunk_terrain(cx, cz, tout, ty0, th, e->s);
     e->b00 = cb16[0];
     memcpy(c_b16, cb16, 256);
     for (int i = 0; i < 256; i++) {
@@ -6283,7 +6372,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     }
     nb[1][1] = e;
     /* caves and ravines */
-    slab_caves(cx, cz, e->s, out, y0, h);
+    slab_caves(cx, cz, e->s, tout, ty0, th);
     /* the 3x3 summaries */
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++) {

@@ -103,7 +103,7 @@ static void loading(void) {
   /* standing inside blocks (the world changed under a saved player): up to the first free space
    * (a spectator goes through them: it stays where it was saved) */
   if (pl.mode != 2)
-    for (int k = 0; k < WORLD_H; k++) {
+    for (int k = 0; k < dim_height() - dim_min_y(); k++) {
       int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
       if (!(blk_flags[world_get(x, y, z)] & BF_SOLID) && !(blk_flags[world_get(x, y + 1, z)] & BF_SOLID)) break;
       pl.y = (float)(y + 1);

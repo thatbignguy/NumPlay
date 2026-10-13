@@ -59,8 +59,9 @@ static bool open_to(int water, int b) {
 
 /* what a liquid has under it: at the bottom of the world the void, which it does not fall
  * into - a liquid stops at the world's floor as it does at its top (Minecraft drains it into
- * the void; there is nothing here under the world to drain it into) */
-static int below(int x, int y, int z) { return y > 0 ? world_get(x, y - 1, z) : B_BEDROCK; }
+ * the void; there is nothing here under the world to drain it into). The floor is the
+ * deepslate layer's (gen.h's WORLD_MIN_Y); the nether keeps 0. */
+static int below(int x, int y, int z) { return y > dim_min_y() ? world_get(x, y - 1, z) : B_BEDROCK; }
 
 /* The settle pass (world.c) asks here about a liquid generation left standing: a spring's
  * source in a cave wall, water a cave or a ravine was carved under. Nothing has ticked it,
@@ -170,7 +171,7 @@ static void fluid_update(int x, int y, int z) {
   }
   /* down first, then sideways towards the nearest way down */
   int under = below(x, y, z);
-  if (y > 0 && open_to(water, under)) {
+  if (y > dim_min_y() && open_to(water, under)) {
     if (!water && is_water(under)) set(x, y - 1, z, B_STONE);
     else flow_into(water, x, y - 1, z, 8);
     return;

@@ -1067,7 +1067,7 @@ int main(void) {
     /* the void under the world: it flies down into it, and nothing there hurts it
      * (Player.isInvulnerableTo); the top of the world still stops it */
     for (int t = 0; t < 600; t++) player_tick(K_SNEAK, 0);
-    CHECK(pl.y < (float)VOID_Y && pl.health == 20 && !pl.dead);
+    CHECK(pl.y < (float)WORLD_MIN_Y && pl.health == 20 && !pl.dead);   /* under the deep layer's floor */
     for (int t = 0; t < 900; t++) player_tick(K_JUMP, 0);
     CHECK(pl.y > WORLD_H + 20 && pl.y <= WORLD_H + 24);
     /* nothing hurts a spectator */
@@ -2093,8 +2093,11 @@ int main(void) {
     for (uint32_t i = 0; old && i < len / 4; i++) {
       uint32_t e;
       memcpy(&e, r + 4 * i, 4);
-      /* the old shape: the 7-bit-y position, the block on top */
+      /* the current entry, y and all: undo the deepslate floor base (the overworld's
+       * stored y is y + 64), then the old shape - the 7-bit-y position, the block on top */
       uint32_t key = e & 0xFFFFF, blk = (e >> 20) & 511;
+      int y = (int)(key & 0xFF) - 64;
+      key = (key & ~0xFFu) | (uint32_t)(y & 0xFF);
       e = (((key >> 8) << 7) | (key & 0x7F)) | blk << 24;
       memcpy(old + 4 * i, &e, 4);
     }
@@ -2116,7 +2119,7 @@ int main(void) {
   {
     /* a world saved while the position packed y in 7 bits (an NBW5 head): the load
      * re-encodes its records once and every position comes back - the y low and the
-     * x, z and chunk of a column moved up one bit - and the head says NBW6 at once,
+     * x, z and chunk of a column moved up one bit - and the head says NBW7 at once,
      * so a game killed before its next save does not convert them a second time */
     new_world(4, 13, 0, false, WT_DEFAULT, "Old5", NULL);
     world_follow(pl.x, pl.y, pl.z);
@@ -2146,7 +2149,9 @@ int main(void) {
         uint32_t e;
         memcpy(&e, tmp + 4 * k, 4);
         uint32_t key = e & 0xFFFFF, blk = (e >> 20) & 511;
-        e = (((key >> 8) << 7) | (key & 0x7F)) | blk << 19;   /* the 19-bit shape */
+        int y = (int)(key & 0xFF) - 64;   /* undo the deepslate floor base, then the 19-bit shape */
+        key = (key & ~0xFFu) | (uint32_t)(y & 0xFF);
+        e = (((key >> 8) << 7) | (key & 0x7F)) | blk << 19;
         memcpy(tmp + 4 * k, &e, 4);
       }
       plat_save(rec, tmp, len);
@@ -2159,8 +2164,27 @@ int main(void) {
     CHECK(world_get(bx + 1, by + 1, bz + 2) == B_DIAMOND_BLOCK);
     uint32_t hl4 = 0;
     const uint8_t *h4 = plat_load("nb4.nbw", &hl4);
-    CHECK(h4 && hl4 >= 4 && !memcmp(h4, "NBW6", 4));   /* (the head says so at once) */
+    CHECK(h4 && hl4 >= 4 && !memcmp(h4, "NBW7", 4));   /* (the head says so at once) */
     delete_world(4);
+  }
+  {
+    /* an edit in the deep layer (y -40, below the 1.8 world) survives a save and reload:
+     * the record's y is based on the deepslate floor (NBW7), and both a plain block and a
+     * deepslate ore come back */
+    new_world(8, 21, 0, false, WT_DEFAULT, "Deep", NULL);
+    pl.x = 8.5f, pl.z = 8.5f, pl.y = -40.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    world_set(8, -40, 8, B_GOLD_BLOCK);
+    world_set(9, -39, 9, B_DEEPSLATE_DIAMOND_ORE);
+    save_world();
+    load_world(8);
+    world_switch_dim(DIM_OVER);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(world_get(8, -40, 8) == B_GOLD_BLOCK);
+    CHECK(world_get(9, -39, 9) == B_DEEPSLATE_DIAMOND_ORE);
+    delete_world(8);
   }
   {
     /* keys saved as they first were (Back mining, OK placing) become OK mining, Back placing; set ones stay */

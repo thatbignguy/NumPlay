@@ -438,7 +438,15 @@ enum {
   B_CONCRETE_GREEN = 431,   /* 251:13 */
   B_CONCRETE_RED = 432,   /* 251:14 */
   B_CONCRETE_BLACK = 433,   /* 251:15 */
-  B_COUNT = 434
+  B_DEEPSLATE = 434,   /* 253:0 */
+  B_DEEPSLATE_COAL_ORE = 435,   /* 253:1 */
+  B_DEEPSLATE_IRON_ORE = 436,   /* 253:2 */
+  B_DEEPSLATE_GOLD_ORE = 437,   /* 253:3 */
+  B_DEEPSLATE_REDSTONE_ORE = 438,   /* 253:4 */
+  B_DEEPSLATE_DIAMOND_ORE = 439,   /* 253:5 */
+  B_DEEPSLATE_LAPIS_ORE = 440,   /* 253:6 */
+  B_DEEPSLATE_EMERALD_ORE = 441,   /* 253:7 */
+  B_COUNT = 442
 };
 
 /* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the

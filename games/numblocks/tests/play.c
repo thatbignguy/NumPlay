@@ -43,6 +43,8 @@
  *                         show the eye in lava: the dense orange fog and screen wash)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
+ *        [--deep]       (the deepslate family in a row - deepslate and its seven ores - on a
+ *                         deepslate floor, four blocks ahead: the deep layer's blocks)
  *        [--xray]       (the spectator's water and lava holes: the head inside the stone
  *                         block over a pool of water, a lava block against the block's
  *                         side - looking down, the water under the block and the lava
@@ -93,7 +95,7 @@ int main(int argc, char **argv) {
   int skeleton = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0, deep = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0, contrast = 0, panorama = -1;
@@ -124,6 +126,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--place")) placing = 1;
     else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--xray")) xray = 1;
+    else if (!strcmp(argv[i], "--deep")) deep = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
     else if (!strcmp(argv[i], "--contrast")) contrast = 1;
@@ -318,6 +321,20 @@ int main(int argc, char **argv) {
     world_set(px + 3, fy, z + 1, B_LADDER), world_set(px + 3, fy + 1, z + 1, B_LADDER);
     world_set(px - 2, fy + 1, z + 3, B_TORCH_N);
     world_set(px - 2, fy + 1, z + 4, B_COBBLESTONE);
+  }
+  if (deep) {
+    /* the deepslate family (1.17): a deepslate floor with a 3-high row of deepslate and
+     * its seven ores four blocks ahead, so the deep layer's blocks are in the frame */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 2; z < pz + 8; z++)
+      for (int x = px - 6; x < px + 7; x++)
+        for (int y = fy - 1; y < fy + 6; y++) world_set(x, y, z, y == fy - 1 ? B_DEEPSLATE : B_AIR);
+    static const uint8_t fam[8] = {B_DEEPSLATE, B_DEEPSLATE_COAL_ORE, B_DEEPSLATE_IRON_ORE,
+                                   B_DEEPSLATE_GOLD_ORE, B_DEEPSLATE_REDSTONE_ORE, B_DEEPSLATE_DIAMOND_ORE,
+                                   B_DEEPSLATE_LAPIS_ORE, B_DEEPSLATE_EMERALD_ORE};
+    for (int k = 0; k < 8; k++)
+      for (int h = 0; h < 3; h++) world_set(px - 3 + k, fy + h, pz + 4, fam[k]);
+    pl.yaw = 0, pl.pitch = 0;
   }
   if (water) {
     /* a cleared field with a water source on a step */
@@ -560,7 +577,7 @@ int main(int argc, char **argv) {
     int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
     for (int z = pz - 1; z <= pz + 1; z++)
       for (int x = px - 1; x <= px + 1; x++)
-        for (int y = 0; y < fy; y++) world_set(x, y, z, B_AIR);
+        for (int y = WORLD_MIN_Y; y < fy; y++) world_set(x, y, z, B_AIR);   /* through the deep layer too */
     pl.x = px + 0.5f, pl.z = pz + 0.5f, pl.y = (float)fy - 8.5f, pl.vy = 0;
     if (pl.mode) pl.flying = true;   /* (creative and spectator hang there; survival falls) */
   }

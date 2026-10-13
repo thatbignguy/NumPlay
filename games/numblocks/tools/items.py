@@ -187,6 +187,10 @@ LABELS = {
     'NETHERRACK': 'Netherrack', 'SOUL_SAND': 'Soul Sand', 'NETHER_QUARTZ_ORE': 'Nether Quartz Ore',
     'QUARTZ_BLOCK': 'Block of Quartz', 'CHISELED_QUARTZ_BLOCK': 'Chiseled Quartz Block',
     'QUARTZ_PILLAR': 'Quartz Pillar', 'SMOOTH_QUARTZ': 'Smooth Quartz', 'QUARTZ_BRICKS': 'Quartz Bricks',
+    'DEEPSLATE': 'Deepslate', 'DEEPSLATE_COAL_ORE': 'Deepslate Coal Ore',
+    'DEEPSLATE_IRON_ORE': 'Deepslate Iron Ore', 'DEEPSLATE_GOLD_ORE': 'Deepslate Gold Ore',
+    'DEEPSLATE_REDSTONE_ORE': 'Deepslate Redstone Ore', 'DEEPSLATE_DIAMOND_ORE': 'Deepslate Diamond Ore',
+    'DEEPSLATE_LAPIS_ORE': 'Deepslate Lapis Lazuli Ore', 'DEEPSLATE_EMERALD_ORE': 'Deepslate Emerald Ore',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
@@ -445,7 +449,9 @@ TABS = ['Natural Blocks', 'Building Blocks', 'Decorative Items', 'Functional', '
 # in both tabs (Minecraft keeps it in Building Blocks only)
 NATURAL = ('GRASS', 'DIRT', 'COARSE_DIRT', 'PODZOL', 'MYCELIUM', 'STONE', 'GRANITE', 'DIORITE', 'ANDESITE',
            'SAND', 'RED_SAND', 'GRAVEL', 'CLAY', 'SNOW', 'ICE', 'PACKED_ICE', 'BEDROCK', 'OBSIDIAN', 'NETHERRACK',
-           'COAL_ORE', 'IRON_ORE', 'GOLD_ORE', 'DIAMOND_ORE', 'REDSTONE_ORE', 'LAPIS_ORE', 'EMERALD_ORE')
+           'COAL_ORE', 'IRON_ORE', 'GOLD_ORE', 'DIAMOND_ORE', 'REDSTONE_ORE', 'LAPIS_ORE', 'EMERALD_ORE', 'DEEPSLATE',
+           'DEEPSLATE_COAL_ORE', 'DEEPSLATE_IRON_ORE', 'DEEPSLATE_GOLD_ORE', 'DEEPSLATE_REDSTONE_ORE',
+           'DEEPSLATE_DIAMOND_ORE', 'DEEPSLATE_LAPIS_ORE', 'DEEPSLATE_EMERALD_ORE')
 NATURAL_ONLY = ('SNOW_LAYER', 'SOUL_SAND', 'NETHER_QUARTZ_ORE')   # natural, but only in Natural Blocks:
 # Snow Block is already in Building Blocks, and soul sand and quartz ore are the nether's
 # ground and veins (quartz ore groups with the other ores through tab_group's _ORE rule)

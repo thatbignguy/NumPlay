@@ -479,7 +479,7 @@ static void cmd_summon(char **a, int n) {
   float x = pl.x, y = pl.y, z = pl.z;
   if (n >= 4) x = coord(x, a[1], true), y = coord(y, a[2], false), z = coord(z, a[3], true);
   if (failed) return;
-  if (y < 0 || y >= dim_height() || !world_loaded((int)floorf(x), (int)floorf(y), (int)floorf(z)))
+  if (y < dim_min_y() || y >= dim_height() || !world_loaded((int)floorf(x), (int)floorf(y), (int)floorf(z)))
     return error("Cannot summon the object out of the world", NULL, 0, 0);
   if (!strcmp(a[0], "LightningBolt")) {
     bolt_start(x, y, z);
@@ -519,7 +519,7 @@ static void cmd_setblock(char **a, int n) {
     if (b < 0) return error("There is no such block with ID/name %s", a[3], 0, 0);
   } else
     hand = n > 4 ? a[4] : NULL;
-  if (y < 0 || y >= dim_height() || !world_loaded(x, y, z)) return error("Cannot place block outside of the world", NULL, 0, 0);
+  if (y < dim_min_y() || y >= dim_height() || !world_loaded(x, y, z)) return error("Cannot place block outside of the world", NULL, 0, 0);
   int was = world_get(x, y, z);
   if (hand) {
     if (!strcmp(hand, "keep") && was != B_AIR) return error("The block couldn't be placed", NULL, 0, 0);

@@ -109,7 +109,7 @@ static const uint8_t *read_head(int s, Head4 *h, uint8_t *dim, int32_t ret[3], u
     h->flat_preset[FLAT_MAX] = 0;
     if (!flat_validate(h->flat_preset, NULL, 0)) copy_preset(h->flat_preset, FLAT_DEFAULT);
     *head_len = sizeof(Head4);
-  } else if ((!memcmp(d, "NBW5", 4) || !memcmp(d, "NBW6", 4)) && *len >= sizeof(Head5)) {
+  } else if ((!memcmp(d, "NBW5", 4) || !memcmp(d, "NBW6", 4) || !memcmp(d, "NBW7", 4)) && *len >= sizeof(Head5)) {
     Head5 h5;
     memcpy(&h5, d, sizeof h5);
     *h = h5.h4;
@@ -130,10 +130,12 @@ static const uint8_t *read_head(int s, Head4 *h, uint8_t *dim, int32_t ret[3], u
   return d;
 }
 
-/* The shape of a world's edit records, from the head's magic: NBW6 is the current
- * one (the position 20 bits), NBW5 the 19-bit one, NBW1..4 the 8-bit-block one.
- * 2, 1, 0; -1: not a NumBlocks head (read_head would not have accepted it). */
+/* The shape of a world's edit records, from the head's magic: NBW7 is the current
+ * one (the position 20 bits, the overworld's y based on the deepslate floor), NBW6
+ * the 20-bit one with a raw y, NBW5 the 19-bit one, NBW1..4 the 8-bit-block one.
+ * 3, 2, 1, 0; -1: not a NumBlocks head (read_head would not have accepted it). */
 static int rec_shape(const char *magic) {
+  if (!memcmp(magic, "NBW7", 4)) return 3;
   if (!memcmp(magic, "NBW6", 4)) return 2;
   if (!memcmp(magic, "NBW5", 4)) return 1;
   if (!memcmp(magic, "NBW1", 4) || !memcmp(magic, "NBW2", 4) || !memcmp(magic, "NBW3", 4) || !memcmp(magic, "NBW4", 4))
@@ -156,7 +158,7 @@ static void convert_records(int s, int shape) {
   uint8_t *b = d && len >= 4 ? (uint8_t *)edits_scratch(len) : NULL;
   if (!b) return;
   memcpy(b, d, len);
-  memcpy(b, "NBW6", 4);
+  memcpy(b, "NBW7", 4);
   plat_save(rec, b, len);
   edits_forget();
   copy_write();
@@ -218,7 +220,7 @@ bool save_world(void) {
   void *t = tiles_data(&tl);
   Head5 h;
   memset(&h, 0, sizeof h);
-  h.h4.h3.h2.h = (Head1){{'N', 'B', 'W', '6'}, (uint16_t)sizeof pl, (uint16_t)tl, world_seed, game_time, weather};
+  h.h4.h3.h2.h = (Head1){{'N', 'B', 'W', '7'}, (uint16_t)sizeof pl, (uint16_t)tl, world_seed, game_time, weather};
   copy_name(h.h4.h3.h2.name, cur_name);
   h.h4.h3.h2.played = cur_played;
   h.h4.h3.cheats = world_cheats, h.h4.h3.rules = game_rules, h.h4.h3.type = world_type;
@@ -291,10 +293,10 @@ bool load_world(int s) {
     edits_set_dim(dim);
   }
   /* a world from before the current record shape: its records are re-encoded once
-   * (the head is written as NBW6 from now on, which says it has been) */
+   * (the head is written as NBW7 from now on, which says it has been) */
   {
     int rs = rec_shape(h.h3.h2.h.magic);
-    if (rs == 0 || rs == 1) convert_records(s, rs);
+    if (rs >= 0 && rs < 3) convert_records(s, rs);
   }
   if (s != opt.last_world || h.h3.h2.played != opt.plays) played(s);
   return true;
@@ -332,11 +334,11 @@ bool rename_world(int s, const char *name) {
   const uint8_t *d = read_head(s, &h, &dim, ret, &len, &hl);
   if (!d) return false;
   /* the records first, if this world's are an older shape: the head below is written
-   * as NBW6, which says they are the current one, so an older record that cannot be
+   * as NBW7, which says they are the current one, so an older record that cannot be
    * re-encoded leaves the world as it was rather than a head that lies about it */
   {
     int rs = rec_shape(h.h3.h2.h.magic);
-    if (rs == 0 || rs == 1) {
+    if (rs >= 0 && rs < 3) {
       char pre[4];
       prefix_of(s, pre);
       if (!edits_convert(pre, rs)) return false;
@@ -350,7 +352,7 @@ bool rename_world(int s, const char *name) {
   Head5 h5;
   memset(&h5, 0, sizeof h5);
   h5.h4 = h;
-  memcpy(h5.h4.h3.h2.h.magic, "NBW6", 4);
+  memcpy(h5.h4.h3.h2.h.magic, "NBW7", 4);
   h5.dim = dim;
   memcpy(&h5.ret_x, ret, sizeof ret);
   copy_name(h5.h4.h3.h2.name, name);

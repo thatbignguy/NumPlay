@@ -1,3 +1,57 @@
+## 1.5.24
+**The overworld goes down to -64: a deepslate layer under the surface world with a bedrock floor at the bottom, its seven deepslate ores, and a cache, records and guards that follow it down**
+
+- **The deep layer.** The overworld is y -64..127 now (it was 0..127): deepslate fills y 0 down to
+  the floor and bedrock sits on it (about -64..-60), 1.18's min build height. The old bedrock floor
+  at y 0..4 is deepslate now - a clean boundary at 0, as the request says - and everything above
+  0 is 1.8's terrain, block for block: `tests/gen/t_refcmp` (fixed to read the 9-bit slabs) reports
+  **0 / 3,212,800 blocks differ in 50 chunks from y=5 up**. The nether keeps its own 0..127 column
+  (below 0 there is air, no deepslate), and superflat worlds keep their layers where the preset
+  puts them (below y=0 is air). The deep rows go straight into the slab; the unchanged terrain
+  windows read from a byte offset (256 cells x 9 bits = 288 bytes a row), so `col[]` and the
+  generator's indices are as before. The five 1.8 bedrock draws a column are still drawn (and
+  discarded), so 1.8's random stream above 0 is untouched.
+- **The deepslate ores (1.18-style).** Every ore has its deepslate variant - coal, iron, gold,
+  redstone, diamond, lapis and emerald - placed by a pass of their own that replaces deepslate only,
+  so a stone ore never sits in the deep rock. The pass has its own per-chunk stream (never 1.8's),
+  and its ranges are 1.18's deepslate targets in spirit: coal and iron the whole deep layer, gold,
+  redstone and diamond the lower half, lapis sparse; emerald, always a mountain ore above y 32 in
+  1.18, does not generate below 0 though its block exists. Each variant drops what its stone ore
+  drops - iron ore's raw iron, redstone's dust, lapis's four-to-eight dye, and so on - and gives
+  its XP ([`block_drops`], the ore-XP block in `player.c`).
+- **The cache, the world, the guards.** The block cache is still 24 tall and still slides in 8-block
+  steps; only its window's place reaches down to -64 (`nb.h`'s `WORLD_MIN_Y`, `dim_min_y()`). Every
+  "y < 0" guard is the dimension's own floor now: placing and `/setblock`/`/summon`, the nether
+  portal's frame and dry-spot search, the falling-block drop (sand, gravel, concrete powder) and the
+  fluid floor (`tick.c`'s `below`), the light rule that reads below the world, and the player's
+  respawn-unstick. `VOID_Y` moves to -128 (64 below the new floor), so a fall out of the world is a
+  longer drop; a spectator still flies down into it unharmed.
+- **The records (NBW7).** An entry is still one 32-bit word, but the overworld's y is based on the
+  new floor - the byte reads 0..191 for y -64..127 - so the world's head is **NBW7**. A world with
+  an older head is read and re-encoded once on load (NBW1..4 = the 8-bit-block shape, NBW5 the
+  19-bit one, NBW6 the 20-bit one): the same position/block conversion as before, then +64 on the
+  overworld's y so it sits on the new floor; the nether, which has no deep layer, is unchanged.
+  Old worlds therefore load and re-save losslessly; an edit placed at y -40 survives a save and
+  reload (`tests/unit.c`).
+- **The blocks.** Nine states appended past the concrete, so no existing block id (and no save)
+  moves: `B_DEEPSLATE` (drops itself - the cobbled family is out of scope) and its seven ores, with
+  the modern pictures (`deepslate`, `deepslate_top`, `deepslate_<ore>_ore`), each in the Natural
+  Blocks tab and under `/give` (`deepslate`, `deepslate_coal_ore`, ...). `B_COUNT` 434 -> 442;
+  `tools/blocks.py`/`items.py`, and `data.c`/`data.h`/`names.c` carry them.
+- **Cost.** No BSS growth: the same `.data` 5,079 and `.bss` 119,056 (the game's 124,135 B inside
+  `CUSTOM_RAM` 133,652); the generator's statics do not grow (the pass has no new statics). The nine
+  new textures and eight icons are flash: `NumBlocks.nwa` 611,328 -> **616,788 B**,
+  `numblocks-interest.nwa` 637,520 -> **642,960 B**, the `.bin` 541,332 -> **546,192 B**. Recorded:
+  `make test` passes (208 recipes; the new deep-edit save/reload case); `make -C games/numblocks
+  host desktop build check` and `games/numblocks-interest build check` build; both `.nwa`s fit
+  `nwlink nwa-bin --ram-length 133652`; `tests/test_numblocks_progress.py`,
+  `tests/test_games.py build/apps --game numblocks` (the head magic check now takes NBW7) and
+  `tools/emu.py` pass; `tests/render/arm/bench_render.py --fancy --rain --mobs` runs (deepest stack
+  22,192 B). Frames (**not** `build/desktop`): `./build/play --deep --creative --fancy --bright 15
+  --frames 10 --shots 9` shows deepslate and its seven ores, and the deep layer itself is checked
+  column by column (`deepdump`: stone at y 5, deepslate y 4..0 and down, bedrock at -64, the ores
+  below 0).
+
 ## 1.5.23
 **Skeletons turn to face the player while they are shooting, instead of firing over their shoulder once the player steps outside the 60-degree cone**
 - **The bug.** `mob_tick`'s chase steers a hostile's body at the player only while it is

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "blocks.h"
 
-#define NTEX 261
+#define NTEX 270
 /* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */
 extern const uint8_t tex_px[NTEX][128];
 extern const uint16_t tex_pal[NTEX][16];
@@ -288,6 +288,15 @@ extern const uint8_t rain_run[][4], snow_run[][4], rain_idx[257], snow_idx[257];
 #define TX_GREEN_CONCRETE 258
 #define TX_RED_CONCRETE 259
 #define TX_BLACK_CONCRETE 260
+#define TX_DEEPSLATE_TOP 261
+#define TX_DEEPSLATE 262
+#define TX_DEEPSLATE_COAL_ORE 263
+#define TX_DEEPSLATE_IRON_ORE 264
+#define TX_DEEPSLATE_GOLD_ORE 265
+#define TX_DEEPSLATE_REDSTONE_ORE 266
+#define TX_DEEPSLATE_DIAMOND_ORE 267
+#define TX_DEEPSLATE_LAPIS_ORE 268
+#define TX_DEEPSLATE_EMERALD_ORE 269
 
 extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];
 extern const uint32_t spr_off[];

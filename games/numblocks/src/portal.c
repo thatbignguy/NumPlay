@@ -45,7 +45,7 @@ static bool portal_frame(int x, int y, int z, int *ox, int *oy, int *oz, int *ax
     for (int k = 0; k < PORTAL_MAX && portal_open(ax_get(a, hi + 1, y, a ? x : z)); k++) hi++;
     if (hi - lo + 1 < 2 || hi - lo + 1 > PORTAL_MAX) continue;
     for (int k = 0; k < PORTAL_MAX; k++) {
-      bool row = y0 > 0;
+      bool row = y0 > dim_min_y();
       for (int i = lo; i <= hi && row; i++)
         if (!portal_open(ax_get(a, i, y0 - 1, a ? x : z))) row = false;
       if (!row) break;
@@ -156,7 +156,7 @@ static bool portal_wet(int b) { return is_water(b) || is_lava(b); }
  * obsidian floor goes - portal_build only lays it on air, so over water the
  * portal would float with no floor). Rock in the volume is fine: it is carved. */
 static bool portal_dry(int x, int y, int z, int axis) {
-  if (y < 1 || y + 3 >= dim_height()) return false;
+  if (y < dim_min_y() + 1 || y + 3 >= dim_height()) return false;
   int ox = axis ? x : x - 1, oz = axis ? z - 1 : z;
   /* outside the loaded cache reads as air: never approve what is not loaded
    * (the build below writes nothing there, stranding the player). The box covers
@@ -183,7 +183,7 @@ static bool portal_dry(int x, int y, int z, int axis) {
  * spot (vanilla looks 128 blocks out, which does not fit). False: nowhere dry
  * near, and the caller builds at the mapped spot as before. */
 static bool portal_spot(int x, int y, int z, int axis, int *ox, int *oy, int *oz) {
-  if (y < 1) y = 1;
+  if (y < dim_min_y() + 1) y = dim_min_y() + 1;
   if (y + 3 >= dim_height()) y = dim_height() - 4;
   for (int r = 0; r <= 8; r++)
     for (int dz = -r; dz <= r; dz++)
@@ -194,7 +194,7 @@ static bool portal_spot(int x, int y, int z, int axis, int *ox, int *oy, int *oz
             *ox = x + dx, *oy = yy, *oz = z + dz;
             return true;
           }
-        for (int yy = y - 1; yy >= 1; yy--)
+        for (int yy = y - 1; yy >= dim_min_y() + 1; yy--)
           if (portal_dry(x + dx, yy, z + dz, axis)) {
             *ox = x + dx, *oy = yy, *oz = z + dz;
             return true;

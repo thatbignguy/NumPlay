@@ -198,10 +198,10 @@ CHECKS = {
     "minesweeper": (lambda v: len(v) == 276 and v[:2] == b"M\1" and v[32:34] == bytes([9, 9]) and v[28] == 10
                     and v[34] == 5 and struct.unpack_from("<H", v, 14)[0] == 1,
                     lambda v: v[32] == 9 and struct.unpack_from("<H", v, 14)[0] == 2),
-    # the world's record: its magic (NBW6 the current shape, NBW4/NBW5 read back too), then (offset 16)
+    # the world's record: its magic (NBW7 the current shape, NBW4..6 read back too), then (offset 16)
     # the time of day, which goes on from one session to the next
-    "numblocks": (lambda v: v[:4] in (b"NBW4", b"NBW5", b"NBW6") and struct.unpack_from("<I", v, 16)[0] > 0,
-                  lambda v: v[:4] in (b"NBW4", b"NBW5", b"NBW6") and struct.unpack_from("<I", v, 16)[0] > 60),
+    "numblocks": (lambda v: v[:4] in (b"NBW4", b"NBW5", b"NBW6", b"NBW7") and struct.unpack_from("<I", v, 16)[0] > 0,
+                  lambda v: v[:4] in (b"NBW4", b"NBW5", b"NBW6", b"NBW7") and struct.unpack_from("<I", v, 16)[0] > 60),
     # a game kept (guide read) with a block's points, the best as high; then a second block's
     "blockblast": (lambda v: len(v) == 92 and v[:3] == b"B\1\3" and struct.unpack_from("<I", v, 12)[0] >= 1
                    and struct.unpack_from("<I", v, 8)[0] >= struct.unpack_from("<I", v, 12)[0],

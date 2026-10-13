@@ -281,6 +281,19 @@ for v, (c, t) in enumerate(zip(CCOLORS, CTEX)):
     b(f'CONCRETE_POWDER_{c}', 252, v, tex=f'{t}_concrete_powder', hard=0.5, tool='shovel')
 for v, (c, t) in enumerate(zip(CCOLORS, CTEX)):
     b(f'CONCRETE_{c}', 251, v, tex=f'{t}_concrete', hard=1.8, tool='pickaxe')
+# --- deepslate (1.17) and its ores (the deep layer below y=0). Modern only - 1.8 has no
+# id for any of them - so 1.12's next free numeric id (253) stands in for the whole family,
+# told apart by the data value, and the states sit past the concrete (the 9-bit packing is
+# what saves them). Deepslate drops itself (the cobbled family is out of scope); each ore
+# drops what the stone ore drops (tools/items.py, inv.c's block_drops).
+b('DEEPSLATE', 253, 0, tex=tsb('deepslate_top', 'deepslate', 'deepslate'), hard=3.0, tool='pickaxe')
+b('DEEPSLATE_COAL_ORE', 253, 1, tex='deepslate_coal_ore', hard=3.0, tool='pickaxe')
+b('DEEPSLATE_IRON_ORE', 253, 2, tex='deepslate_iron_ore', hard=3.0, tool='pickaxe', level=1)
+b('DEEPSLATE_GOLD_ORE', 253, 3, tex='deepslate_gold_ore', hard=3.0, tool='pickaxe', level=2)
+b('DEEPSLATE_REDSTONE_ORE', 253, 4, tex='deepslate_redstone_ore', hard=3.0, tool='pickaxe', level=2)
+b('DEEPSLATE_DIAMOND_ORE', 253, 5, tex='deepslate_diamond_ore', hard=3.0, tool='pickaxe', level=2)
+b('DEEPSLATE_LAPIS_ORE', 253, 6, tex='deepslate_lapis_ore', hard=3.0, tool='pickaxe', level=1)
+b('DEEPSLATE_EMERALD_ORE', 253, 7, tex='deepslate_emerald_ore', hard=3.0, tool='pickaxe', level=2)
 
 assert len(S) <= NSTATES, len(S)
 

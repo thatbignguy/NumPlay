@@ -113,7 +113,7 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
                * reads 15 outside the world: a cell of the bottom row takes light from below as
                * from any neighbour, so a hole in the floor is lit from it (14) rather than
                * pitch black, as the intact underside is lit by its 15 (face_lit) */
-              if (y == 0 && vc_y0 == 0 && world_dim == DIM_OVER) ms = 15;
+              if (y == 0 && vc_y0 == WORLD_MIN_Y && world_dim == DIM_OVER) ms = 15;
               int n[6] = {x > 0 ? i - 1 : -1, x < VCX - 1 ? i + 1 : -1, z > 0 ? i - VCX : -1,
                           z < VCZ - 1 ? i + VCX : -1, y < VCY - 1 ? i + VCX * VCZ : -1, y > 0 ? i - VCX * VCZ : -1};
               for (int k = 0; k < 6; k++)
@@ -493,7 +493,7 @@ static void world_follow_gen(float x, float y, float z) {
     /* (the slide lands the camera M blocks in, and M or M+7 out: never on a side) */
     int nx0 = (px - M) & ~7, nz0 = (pz - M) & ~7;
     int ny0 = high ? ny_high : (py - VCY / 2 + 2) & ~3;
-    if (ny0 < 0) ny0 = 0;
+    if (ny0 < dim_min_y()) ny0 = dim_min_y();
     if (ny0 > dim_height() - VCY) ny0 = dim_height() - VCY;
     if (!vc_valid || nx0 != vc_x0 || ny0 != vc_y0 || nz0 != vc_z0) {
       recenter(nx0, ny0, nz0, px, pz);
@@ -523,14 +523,14 @@ bool world_loaded(int x, int y, int z) {
 }
 
 int world_get(int x, int y, int z) {
-  if (y < 0) return B_AIR;   /* under the world is the void, as in Minecraft below its lowest blocks */
+  if (y < WORLD_MIN_Y) return B_AIR;   /* under the world is the void, as in Minecraft below its lowest blocks */
   if (!world_loaded(x, y, z)) return B_AIR;
   if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return B_STONE;   /* not made yet: nothing goes in */
   return vc_get(VC_I(x - vc_x0, y - vc_y0, z - vc_z0));
 }
 
 void world_set(int x, int y, int z, int b) {
-  if (!world_loaded(x, y, z) || y < 0 || y >= dim_height()) return;
+  if (!world_loaded(x, y, z) || y < dim_min_y() || y >= dim_height()) return;
   if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return;
   int lx = x - vc_x0, ly = y - vc_y0, lz = z - vc_z0;
   vc_set(VC_I(lx, ly, lz), b);

@@ -219,6 +219,14 @@ int block_drops(int b, int held, Stack *out) {
     case B_EMERALD_ORE: DROP(I_EMERALD, 1); return n;
     case B_LAPIS_ORE: DROP(I_DYE_BLUE, 4 + rnd(5)); return n;
     case B_REDSTONE_ORE: DROP(I_REDSTONE, 4 + rnd(2)); return n;
+    /* the deepslate ores drop what their stone ore drops (1.17: the same items) */
+    case B_DEEPSLATE_COAL_ORE: DROP(I_COAL, 1); return n;
+    case B_DEEPSLATE_IRON_ORE: DROP(I_RAW_IRON, 1); return n;
+    case B_DEEPSLATE_GOLD_ORE: DROP(I_RAW_GOLD, 1); return n;
+    case B_DEEPSLATE_DIAMOND_ORE: DROP(I_DIAMOND, 1); return n;
+    case B_DEEPSLATE_EMERALD_ORE: DROP(I_EMERALD, 1); return n;
+    case B_DEEPSLATE_LAPIS_ORE: DROP(I_DYE_BLUE, 4 + rnd(5)); return n;
+    case B_DEEPSLATE_REDSTONE_ORE: DROP(I_REDSTONE, 4 + rnd(2)); return n;
     case B_GRAVEL: DROP(rnd(10) == 0 ? I_FLINT : B_GRAVEL, 1); return n;
     case B_NETHER_QUARTZ_ORE: DROP(I_QUARTZ, 1); return n;   /* the nether's ore drops quartz itself */
     case B_CLAY: DROP(I_CLAY_BALL, 4); return n;

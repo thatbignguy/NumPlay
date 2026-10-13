@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.23"
+#define NB_VERSION "1.5.24"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -111,12 +111,14 @@ float gen_temp_noise(int x, int z);   /* BiomeGenBase.temperatureNoise at (x / 8
 #define WORLD_H 128
 /* The nether's build height is gen.h's NETHER_H (200): its world is the same 128
  * blocks (its ceiling closes at 123..127), but above the ceiling there is open air
- * to build in, as on Minecraft's nether roof. The overworld's limit stays 128. */
+ * to build in, as on Minecraft's nether roof. The overworld's top stays 128, but its
+ * floor is gen.h's WORLD_MIN_Y (-64): the deepslate layer of 1.18, with deepslate from
+ * y=0 down to bedrock at -64 (see gen.c's build_default and gen_slab). */
 /* Under the world is the void (as in Minecraft, below the lowest block there is): nothing
  * stands there, and 64 below the bottom of the world what is in it starts to take damage
  * (Entity.checkBelowWorld, minBuildHeight - 64). Everything that goes under the world
  * falls to here: the player (player.c), the mobs and the dropped items (mob.c, entity.c). */
-#define VOID_Y (-64)
+#define VOID_Y (-128)
 /* Block states are 9 bits each (blocks.h's NSTATES), and 8 cells are exactly 9 bytes:
  * the cache's slides (world.c's recenter) move whole multiples of 8 cells, so they stay
  * byte-aligned. (A 32-bit load reads 4 bytes: the last cells run into 3 bytes of tail
@@ -147,7 +149,7 @@ void world_new(int64_t seed, const char *name);   /* name: the save's record pre
 void world_switch_dim(int dim);   /* to the other dimension: the whole volume again */
 void world_follow(float x, float y, float z);   /* keeps the cache around (x, y, z) */
 void world_spawn(int *x, int *y, int *z);   /* the world's spawn point (the generator's own choice) */
-int world_get(int x, int y, int z);            /* B_AIR outside the cache, B_BEDROCK below 0 */
+int world_get(int x, int y, int z);            /* B_AIR outside the cache, the deep layer's blocks below y=0 */
 void world_set(int x, int y, int z, int b);     /* a player's change: kept in the edit log */
 void world_light_flush(void);   /* the light of changed blocks (world_follow does it each frame) */
 bool world_loaded(int x, int y, int z);
@@ -408,6 +410,9 @@ extern uint8_t world_dim;
  * the open air above it (128..199), which is built on the way the overworld's sky
  * cannot be. The cache is 24 tall either way: only its window's place moves. */
 static inline int dim_height(void) { return world_dim == DIM_NETHER ? NETHER_H : WORLD_H; }
+/* The dimension's lowest y: the overworld's deepslate floor (gen.h's WORLD_MIN_Y), or the
+ * nether's 0 (it has no deep layer). Every "y < 0" guard is this instead. */
+static inline int dim_min_y(void) { return world_dim == DIM_NETHER ? 0 : WORLD_MIN_Y; }
 /* where the nether's portal leads back to (the overworld), saved with the world */
 extern int32_t nb_ret_x, nb_ret_y, nb_ret_z;
 extern bool nb_ret_ok;

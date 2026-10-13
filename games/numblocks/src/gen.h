@@ -34,6 +34,17 @@ void gen_set_flat_preset(const char *preset);
  * Minecraft's nether roof (nb.h's dim_height is this per dimension). */
 #define NETHER_H 200
 
+/* The top of the terrain column: y 0..127 in both dimensions (block level 128 is air).
+ * The overworld's surface world is unchanged by the deep layer below. */
+#define WORLD_TOP 128
+
+/* The overworld's lowest block (1.18's min build height): deepslate runs from y = 0 down
+ * to it and bedrock sits on it (nb.h's WORLD_MIN_Y is this). The nether has no deep layer:
+ * its floor stays at y = 0, and below 0 there is air. */
+#define WORLD_MIN_Y (-64)
+/* The deepest row bedrock reaches (1.18: bedrock about -64..-60). */
+#define BEDROCK_TOP (-60)
+
 /* Blocks of chunk (cx, cz) for y in [y0, y0 + h), after terrain, caves, ravines
  * and the decoration (population) that Minecraft would put in this chunk:
  * out[(y - y0) * 256 + z * 16 + x], x and z in 0..15, values from blocks.h (B_*).
