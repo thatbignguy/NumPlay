@@ -6269,21 +6269,13 @@ static int deep_bedrock(int x, int z) {
  * thin (its noodle); water pools and the lava sea fill the carved cells as before. */
 
 #define DEEP_LAVA_Y (-54)   /* 1.18's lava level: an open deep cell at or below it is the lava sea */
+#define DEEP_WATER_Y (-44)   /* the water table: open cells below it (down to the lava sea) are water,
+                              * a flat layer like the lava's - never floating balls in the rock above it */
 /* A walk never travels more than 32 blocks sideways from its chunk (20-30 steps of
  * 0.9 blocks, radius under 3.2; rooms sit inset with radius under 13), so the 5 x 5
  * chunks around the one being carved hold every walk that can reach it. */
 #define DEEP_REACH 2
 #define DEEP_SALT 0xCA9E5A1EULL   /* the walks' own stream (deep_ores has its own beside it) */
-
-/* The aquifer's water level at column (X, Z): where the caverns hold water (a smooth
- * low-frequency field says which), a chosen level that reads as pools; elsewhere the
- * caverns stay dry above the lava sea. */
-HOT static int deep_water_level(int X, int Z) {
-    float wn = 0.65f * grass_noise_div(X, Z, 48) + 0.35f * grass_noise_div(X, Z, 17);
-    if (wn <= 0.25f) return DEEP_LAVA_Y;   /* dry: only the lava below */
-    int wl = DEEP_LAVA_Y + 3 + (int)((wn - 0.25f) * 62.0f);
-    return wl > -2 ? -2 : wl;
-}
 
 typedef struct { float x, y, z, rx, ry, rz; } DeepSpot;   /* one ellipsoid to carve */
 typedef struct { float x0, x1, y0, y1, z0, z1; } DeepBox;   /* what a chunk's walks may touch */
@@ -6293,13 +6285,13 @@ typedef struct {
     int y0, deep;        /* the window out holds */
     uint8_t *out;
     int ccx, ccz;        /* the chunk being carved */
-    const int8_t *wlcol;   /* its columns' aquifer levels */
-    DeepBox *box;
+    DeepBox *box;        /* (bbox mode) */
 } DeepCtx;
 
 /* One ellipsoid spot: widen the box, or carve it where the window holds deepslate.
- * Carved cells become air, water (below the column's aquifer level) or the lava sea;
- * the bedrock floor is never carved and nothing above y = 0 is touched. */
+ * Carved cells become air, the water layer (at or below DEEP_WATER_Y) or the lava sea
+ * (at or below DEEP_LAVA_Y); the bedrock floor is never carved and nothing above
+ * y = 0 is touched. */
 HOT static void deep_spot(const DeepSpot *s, DeepCtx *c) {
     if (!c->raster) {
         DeepBox *b = c->box;
@@ -6333,8 +6325,7 @@ HOT static void deep_spot(const DeepSpot *s, DeepCtx *c) {
                 int o = (wy - c->y0) * 256 + (wz - cz0) * 16 + (wx - cx0);
                 uint8_t b = (uint8_t)b9_get(c->out, o);
                 if (b == B_AIR || b == B_BEDROCK) continue;
-                int wl = c->wlcol[(wz - cz0) * 16 + (wx - cx0)];
-                b9_set(c->out, o, wy <= DEEP_LAVA_Y ? B_LAVA : (wy <= wl ? B_WATER : B_AIR));
+                b9_set(c->out, o, wy <= DEEP_LAVA_Y ? B_LAVA : (wy <= DEEP_WATER_Y ? B_WATER : B_AIR));
             }
 }
 
@@ -6371,8 +6362,8 @@ HOT static void deep_walks(int cx, int cz, DeepCtx *c) {
     for (int t = 0; t < 3; t++)
         deep_walk(&r, c, (float)(cx * 16 + jr_int(&r, 16)), -58.0f + (float)jr_int(&r, 43),
                   (float)(cz * 16 + jr_int(&r, 16)), jr_float(&r) * 6.2831853f,
-                  (jr_float(&r) - 0.5f) * 1.0f, 20 + jr_int(&r, 11), 1.6f + jr_float(&r) * 1.1f, 1.0f);
-    if (jr_int(&r, 4) < 3) {
+                  (jr_float(&r) - 0.5f) * 1.0f, 18 + jr_int(&r, 10), 1.6f + jr_float(&r) * 1.1f, 1.0f);
+    if (jr_int(&r, 3) < 2) {
         float rxz = 6.0f + jr_float(&r) * 7.0f;
         DeepSpot s = {(float)(cx * 16 + 3 + jr_int(&r, 10)), -50.0f + (float)jr_int(&r, 35),
                       (float)(cz * 16 + 3 + jr_int(&r, 10)), rxz, rxz * (0.45f + jr_float(&r) * 0.25f), rxz};
@@ -6387,10 +6378,6 @@ HOT static void deep_walks(int cx, int cz, DeepCtx *c) {
  * it, rasterizing the ones whose box reaches it. Cells outside the window (or the
  * chunk) are left - a chunk comes out the same whichever slab window asks. */
 HOT static void deep_caves(int cx, int cz, int y0, int deep, uint8_t *out) {
-    int8_t wlcol[256];   /* the aquifer level of each column, once */
-    for (int zl = 0; zl < 16; zl++)
-        for (int xl = 0; xl < 16; xl++)
-            wlcol[zl * 16 + xl] = (int8_t)deep_water_level(cx * 16 + xl, cz * 16 + zl);
     float bx0 = (float)(cx * 16), bx1 = (float)(cx * 16 + 16);
     float bz0 = (float)(cz * 16), bz1 = (float)(cz * 16 + 16);
     for (int oz = -DEEP_REACH; oz <= DEEP_REACH; oz++)
@@ -6409,7 +6396,6 @@ HOT static void deep_caves(int cx, int cz, int y0, int deep, uint8_t *out) {
             c.out = out;
             c.ccx = cx;
             c.ccz = cz;
-            c.wlcol = wlcol;
             deep_walks(cx + ox, cz + oz, &c);
         }
 }

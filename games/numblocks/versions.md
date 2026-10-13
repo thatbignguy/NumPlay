@@ -1,3 +1,29 @@
+## 1.5.32
+**Fewer caves and honest water: a tenth less cave volume, and the water is a flat layer above the lava sea instead of floating balls**
+
+- **Fewer caves.** Tunnels run 18-27 steps instead of 20-30 and rooms come in two
+  chunks in three instead of three in four. Measured air goes from ~12.8% to ~11.2%
+  on average over 25 chunks on five seeds - about a tenth less cave to walk.
+- **Water as a layer.** The per-column aquifer table (a smooth noise field saying
+  which columns were wet) filled isolated pockets while neighbouring tunnels stayed
+  dry: balls of water floating in rock. There is a flat water table now,
+  `DEEP_WATER_Y` at -44 - ten rows above the lava sea, the way the lava is a flat
+  layer at -54. Everything carved below -44 down to the lava is water, everything
+  above is dry: pools sit flat in room bottoms and low tunnels run flooded, and no
+  water hangs in the rock above the table. Measured water goes from ~0.7% to ~2.8%
+  of the deep layer; the per-column table (256 simplex pairs a chunk) is gone, so a
+  fully-deep slab window drops from 4.94 M to 4.67 M instructions (21.6 ms).
+- **Recorded.** `./build/play --caves --creative --bright 15 --time 18000 --keys
+  "6-29:fwd" --frames 30 --shots 5,29` (**not** `build/desktop`): frame 5 a cavern
+  with redstone showing in its wall, frame 29 the tunnel past it with more ore -
+  and the section dumps show the water sitting flat at -44. `t_refcmp` still 0 differ
+  from y=5 up; the deep windows still 0 differ over 144 chunks (the unit case's
+  cavern chunk moved to (1, 2)).
+- **Cost.** No BSS growth; deepest stack 11,704 B unchanged. The straddling window is
+  27.55 M (from 27.81 M). `NumBlocks.nwa` 617,056 -> **616,792 B**. Recorded: `make
+  test` passes; `make build && make check` and `make -C games/numblocks-interest
+  build check` fit; `tools/emu.py` boots the device build; `build/desktop` rebuilt.
+
 ## 1.5.31
 **The deep caves are walked, not noised: round rooms and tunnels with circular sections instead of the faceted, glitchy noise shapes**
 
