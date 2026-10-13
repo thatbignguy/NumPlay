@@ -2627,7 +2627,6 @@ nether_sky_done:;
     for (int k = 0; k <= NC; k++) sample_at(&cbt[k], 4 * k, py + 4);
     memset(eb_ok, 0, NC + 1);
     memset(md_ok, 0, sizeof md_ok);
-    for (int k = 0; k < NC; k++) sample_at(&md[2 * k + 1], 4 * k + 2, py + 2), md_ok[2 * k + 1] = 1;
     /* the rays' bases for the strip's rows (the forward and up parts) */
     float rb[SR][3];
     SkyRow skr[SR];
@@ -2638,9 +2637,35 @@ nether_sky_done:;
       rb[r][0] = fwx + upx * sv, rb[r][1] = fwy + upy * sv, rb[r][2] = fwz + upz * sv;
       if (fast_sky) sky_row(&skr[r], rb[r]);
     }
+    const bool fastg = !opt.fancy;   /* (the fast-graphics cell shortcut below is fast-only) */
+    (void)fastg;
     for (int k = 0; k < NC; k++) {
       int x0 = 4 * k;
-      const Sample *a = &ct[k], *b = &ct[k + 1], *c = &cbt[k], *d = &cbt[k + 1], *m = &md[2 * k + 1];
+      const Sample *a = &ct[k], *b = &ct[k + 1], *c = &cbt[k], *d = &cbt[k + 1];
+      Sample *m = &md[2 * k + 1];
+#ifndef FULL_TRACE
+      /* A cell whose four corners all met one face needs no centre trace in Fast graphics: the
+       * fill resolves every pixel the way a trace would. One cell holding all four corners is
+       * that block's face (the flat-ground case) - the corner's colour, its depth from the fill.
+       * Four corners on one plane in different cells are a plane, which plane_fill draws (and it
+       * traces the pixels the plane's block does not show). Fast only: a leaf's or glass's holes
+       * are black there, so fill and trace agree exactly, where Fancy's see-through texels can
+       * differ at an edge by a texel. */
+      if (fastg && same(a, b) && same(a, c) && same(a, d) && a->kind == 1 && !under_world) {
+        bool c1 = a->cell == b->cell && a->cell == c->cell && a->cell == d->cell;
+        if (c1 && (a->flags & 1) && a->cell != brk_i) {
+          face_fill(cbuf, zbuf, rb, x0, a);
+          cbuf[0][x0] = a->c, zbuf[0][x0] = a->t;
+          continue;
+        }
+        if (!c1) {
+          plane_fill(cbuf, zbuf, rb, x0, a);
+          cbuf[0][x0] = a->c, zbuf[0][x0] = a->t;
+          continue;
+        }
+      }
+#endif
+      if (!md_ok[2 * k + 1]) sample_at(m, 4 * k + 2, py + 2), md_ok[2 * k + 1] = 1;
       if (same(a, b) && same(a, c) && same(a, d) && same(a, m)) {
         bool one = a->cell == b->cell && a->cell == c->cell && a->cell == d->cell && a->cell == m->cell;
         (void)one;

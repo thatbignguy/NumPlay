@@ -1,3 +1,41 @@
+## 1.5.19
+**Fast graphics stops tracing a centre sample the corners already decide: ~3% fewer instructions a frame, the same pixels**
+- **CPU.** The 3D view draws each 4 x 4 cell from five traced samples - the four corners and the
+  middle - and only a cell whose samples all agree is filled. But when the four corners already
+  met the *same face* (kind 1), the middle is decided: a fill reproduces it, and the trace was
+  only there to confirm what `render_frame` then throws away. This commit traces the middle on
+  demand (`src/render.c`, its sample_at loop is gone from the strip setup) and, **in Fast
+  graphics**, skips it entirely when the corners agree on one face:
+  - the four corners in one cell (`face_fill`): one block holds them, so its face is the middle
+    pixel too - the corner's colour, the fill's depth;
+  - the four corners on one plane in different cells (`plane_fill`): a plane, which `plane_fill`
+    draws per pixel (and a pixel whose block does not show the plane is still traced) - the same
+    per-pixel `face_pixel` result the subdivided path would have drawn.
+- **Why Fast only.** In Fancy graphics a leaf's or glass's see-through texels can fall on a texel
+  boundary, where the fill's texel and a traced sample can differ by one texel (measured: 44
+  pixels across three of the eighteen benchmark frames). In Fast graphics those holes are drawn
+  black, so fill and trace agree exactly and every checksum is unchanged; Fancy keeps tracing
+  the middle, byte-identical to 1.5.18.
+- **Measured (the M7, `bench_render.py`, instruction counts at 216 MHz).** **fast 88.47 -> 85.67
+  M insns** (409.6 -> 396.6 ms) and **fast `--rain --mobs` 106.19 -> 103.36 M** (491.6 -> 478.5 ms),
+  **-3.2% / -2.7%**; `--fancy` is 112.43 M unchanged (checksums identical) and `--fancy --rain
+  --mobs` 163.73 -> 163.75 M (noise, identical). The device (`tools/emu.py`, a fixed
+  `-DBENCH=12345` build, 15 s): 389 -> **431 frames**, 25.9 -> **28.7 fps**, 38.6 -> **34.8 ms a
+  frame**, slowest 46 -> 43 ms, no violations. Verified against 1.5.18's pixels with the whole
+  18-frame set in all four modes and, for the Fast change, at seeds 7 and 424242 as well.
+- **RAM and size.** No new state: `.data` 5,079 and `.bss` 119,064 unchanged, the game's RAM
+  124,143 B inside `CUSTOM_RAM` 133,652. The code moves the links a little: `NumBlocks.nwa`
+  609,712 -> **610,256 B**, `numblocks-interest.nwa` 636,032 -> **636,612 B**, the `.bin`
+  540,020 -> **540,460 B** - all still below 1.5.16's. The bench's deepest stack 21,320 B
+  (`--fancy --rain --mobs` 22,304).
+- Against 1.5.16 the four sets are now **-4.8% / -3.4% / -8.3% / -6.9%** (fast graphics more than
+  the required 2-5%).
+- Recorded: `make test` passes (208 recipes); `make -C games/numblocks host desktop build check`
+  and `games/numblocks-interest build` build (`build/play_ref`, the FULL_TRACE reference, still
+  compiles with the shortcut off); both `.nwa`s fit `nwlink nwa-bin --ram-length 133652`;
+  `tests/test_numblocks_progress.py build/apps/NumBlocks.nwa` and `tests/test_games.py
+  build/apps --game numblocks` pass; the host `./build/play` scenarios run.
+
 ## 1.5.18
 **Two more pixel loops: a sprite's two pixels a byte, and the cloud's floor in one instruction - another 1% a frame, the same pixels**
 - **CPU.** Both changes are in the innermost loops and leave every one of the 18 documented
