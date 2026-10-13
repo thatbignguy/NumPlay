@@ -31,13 +31,14 @@ def main():
     st = os.path.join(a.out, "storage.bin")
     save = bytes(range(30))
     write_storage(st, [("pi.py", b"\x01print(3.14159)\n\x00"), ("snake.sav", save)])
-    # the home screen: Crossy Road, Portal Returns, Tetris, Chess...: Right three times, OK
+    # the home screen: Crossy Road, Block Blast, Portal Returns, Tetris, Chess...: Right four times, OK
     c = emu.Calculator(a.nwa, storage_file=st)
     c.enable_checks(reads=True)
-    c.keys = presses((1200, "right"), (1600, "right"), (2000, "right"), (2600, "ok")) + [(7000, 7400, emu.KEYS["home"])]
+    c.keys = presses((1200, "right"), (1600, "right"), (2000, "right"), (2400, "right"), (3000, "ok")) + \
+        [(7400, 7800, emu.KEYS["home"])]
     menu = os.path.join(a.out, "chess.png")
-    c.pending_shots = [(6500, menu)]
-    c.run(10000)
+    c.pending_shots = [(6900, menu)]
+    c.run(10400)
     problems = sorted(set(c.violations))
     if not c.exited:
         problems.append("did not quit on Home")

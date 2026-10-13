@@ -212,6 +212,21 @@ Shooting yourself with a blank keeps your turn.
 
 <br clear="right">
 
+## Block Blast
+
+<img src="../games/blockblast/docs/shot.png" width="320" align="right" alt="Block Blast">
+
+| Key | What it does |
+| --- | --- |
+| **1, 2, 3** | Take that block |
+| **Arrows** | Move it on the board |
+| **OK** | Place it |
+| **Back** | Menu (with How to play and Quit) |
+
+Fill a row or a column to clear it; blocks never turn. The lines a block would fill light up in its colour before you place it. Clear again within three blocks for a combo, which multiplies the points. The game ends when none of your three blocks fits; your game and best score are saved.
+
+<br clear="right">
+
 ## Champion Island
 
 <img src="media/championisland.gif" width="320" align="right" alt="Champion Island: Lucky crossing the island, then the island map">

@@ -191,8 +191,9 @@ int main(int argc, char **argv) {
         if (shot_at[i] == fr) host_shot(shots[i]);
     }
   }
-  printf("room %s player %.0f,%.0f state %d dead %d\n", level_room_name(), g_player.ent ? g_player.ent->x : 0,
-         g_player.ent ? g_player.ent->y : 0, g_player.state, g_player.dead);
+  printf("room %s player %.0f,%.0f state %d dead %d dashes %d core %d/%d\n", level_room_name(),
+         g_player.ent ? g_player.ent->x : 0, g_player.ent ? g_player.ent->y : 0, g_player.state, g_player.dead,
+         g_player.dashes, g_level.core_mode, g_session.core_mode);
   printf("session: chapter %d area %d mode %d deaths %u time %u berries %llx; save berries %llx deaths %u\n",
          g_session.chapter, g_session.area, g_session.mode, g_session.deaths, g_session.time,
          (unsigned long long)g_session.berries, (unsigned long long)save_mode()->berries, save_mode()->deaths);

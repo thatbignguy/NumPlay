@@ -92,6 +92,10 @@ bool np_bg_save(int mode) {
   return ef_write(BG_NAME, d, sizeof d);
 }
 
+/* A game's save, for a game that uses NumPlay's file functions instead of its own (Block Blast). */
+const uint8_t *np_file_read(const char *name, uint32_t *len) { return ef_read(name, len); }
+bool np_file_write(const char *name, const void *data, uint32_t len) { return ef_write(name, data, len); }
+
 /* ---------------------------------------------------------------- progress copy
  * Installing apps restarts the calculator, which empties its file system; the
  * NumWorks installer puts back the Python scripts only. So NumPlay keeps every

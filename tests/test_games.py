@@ -96,6 +96,10 @@ GAMES = {
     # start, then through the bathroom and the hallway to the table; then continue
     "buckshot": ("BuckshotRoulette.nwa", "buckshot.sav", every(1500, 14000, 900, "ok"), 16000,
                  presses((1500, "ok")), 4000),
+    # the guide, then a block placed in the middle; next time the game goes on: one more in the corner
+    "blockblast": ("BlockBlast.nwa", "blockblast.sav", presses((1500, "ok"), (2000, "ok")), 3000,
+                   presses(*[(1500 + 250 * i, "up") for i in range(4)], *[(2500 + 250 * i, "left") for i in range(4)],
+                           (3600, "ok")), 4500),
     # the intro film is skipped (seen), Lucky walks up the dock and talks to the
     # guardians; next time the game starts where it was left
     "championisland": ("ChampionIsland.nwa", "champion.sav",
@@ -194,10 +198,14 @@ CHECKS = {
     "minesweeper": (lambda v: len(v) == 276 and v[:2] == b"M\1" and v[32:34] == bytes([9, 9]) and v[28] == 10
                     and v[34] == 5 and struct.unpack_from("<H", v, 14)[0] == 1,
                     lambda v: v[32] == 9 and struct.unpack_from("<H", v, 14)[0] == 2),
-    # the world's record: its magic (NBW5 since 1.4.4's nether dimension), then (offset 16)
+    # the world's record: its magic (NBW6 the current shape, NBW4/NBW5 read back too), then (offset 16)
     # the time of day, which goes on from one session to the next
-    "numblocks": (lambda v: v[:4] in (b"NBW4", b"NBW5") and struct.unpack_from("<I", v, 16)[0] > 0,
-                  lambda v: v[:4] in (b"NBW4", b"NBW5") and struct.unpack_from("<I", v, 16)[0] > 60),
+    "numblocks": (lambda v: v[:4] in (b"NBW4", b"NBW5", b"NBW6") and struct.unpack_from("<I", v, 16)[0] > 0,
+                  lambda v: v[:4] in (b"NBW4", b"NBW5", b"NBW6") and struct.unpack_from("<I", v, 16)[0] > 60),
+    # a game kept (guide read) with a block's points, the best as high; then a second block's
+    "blockblast": (lambda v: len(v) == 92 and v[:3] == b"B\1\3" and struct.unpack_from("<I", v, 12)[0] >= 1
+                   and struct.unpack_from("<I", v, 8)[0] >= struct.unpack_from("<I", v, 12)[0],
+                   lambda v: v[2] & 1 and struct.unpack_from("<I", v, 12)[0] >= 2),
     "breakout": (lambda v: len(v) == 12 and v[:2] == b"B\2" and v[4] == 1 and struct.unpack_from("<I", v, 8)[0] >= 10,
                  lambda v: v[4] == 0 and struct.unpack_from("<I", v, 8)[0] >= 1),  # best kept, shake off
 }

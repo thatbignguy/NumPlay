@@ -569,6 +569,7 @@ void level_reload(void) {
 
 /* ---------------------------------------------------------------- transitions */
 static void transition_to(int index, V2 dir) {
+  g_session.core_mode = (uint8_t)g_level.core_mode;   /* Level.TransitionTo: a death in the next room keeps it */
   int slot = g_level.room_slot ^ 1;
   ents_remove_room(slot);
   /* Player.CleanUpTriggers: the triggers the player is in are left; the room's triggers do nothing more (they go at the

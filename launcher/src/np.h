@@ -75,6 +75,9 @@ void np_game_run(int i);
 /* ---- storage (storage.c): Epsilon's record file system */
 bool np_storage_delete(const char *name);   /* true if gone (or never there) */
 uint32_t np_storage_record_size(const char *name);
+/* a record's content (NULL if none), and writing one: for the games too */
+const uint8_t *np_file_read(const char *name, uint32_t *len);
+bool np_file_write(const char *name, const void *data, uint32_t len);
 /* deletes a game's progress (np_game_t.progress); true if all of it is gone */
 bool np_reset_game(int game);
 

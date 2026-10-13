@@ -128,6 +128,17 @@ out = run(["--chapter", "13", "--room", "c-10", "--nowipe"], 520,
           "300-500:r,306-316:j,314-315:x,314-460:g,330-460:u", what="5A's c-10")
 check("room c-12 " in out and " deaths 0 " in out, f"5A's c-10 was not crossed (its touch switches' gate): {out[-160:]}")
 
+# 8A (Core): its inventory gives no dash back on the ground (PlayerInventory.Core, NoRefills), only its crystals do
+out = run(["--chapter", "23", "--room", "b-00", "--nowipe"], 240, "60-61:x", what="8A's no refills")
+check("room b-00 " in out and " dashes 1 " in out, f"8A's b-00: the ground gave the dash back: {out[-160:]}")
+
+# 8A's c-01: its ice toggle (not persistent) turns the core cold; the next room keeps it (Level.TransitionTo saves it
+# in the session), so a death there (Retry) comes back cold
+out = run(["--chapter", "23", "--room", "c-01", "--nowipe", "--at", "296,44", "--tp", "30:650,136"], 450,
+          "40-60:r,200-201:p,215-216:d,230-231:o", what="8A's cold mode after a death")
+check("room c-02 " in out and " core 2/2" in out and " deaths 1 " in out,
+      f"8A's c-02: a death turned the core hot again: {out[-160:]}")
+
 # 6A's boss-00: after the intro (its dialog, OK pressed through), Badeline hit twice dives through the floor, a dash block only
 # she breaks, and the player follows her down into boss-01 (the second hit: the player put next to her, out of her shots)
 out = run(["--chapter", "16", "--room", "boss-00", "--nowipe", "--at", "352,144", "--tp", "1680:546,112"], 2100,

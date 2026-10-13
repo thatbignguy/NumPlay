@@ -1,0 +1,29 @@
+# Block Blast in Chinese: the English text as in the source, a tab, the translation (see tools/lang.py).
+Resume	继续
+New game	新游戏
+How to play	玩法
+Quit	退出
+Play again	再来一局
+1 2 3	1 2 3
+choose a block	选择方块
+Arrows	方向键
+move it	移动
+OK	OK
+place it	放置
+Back	返回
+menu	菜单
+Paused	暂停
+Fill a row or a column to clear it. Blocks never turn.	填满一行或一列即可消除。方块不能旋转。
+Play	开始
+New best!	新纪录！
+Game over	游戏结束
+Best 	最高分 
+OK  place	OK  放置
+Back  menu	返回  菜单
+Good!	不错！
+Great!	很棒！
+Excellent!	优秀！
+Amazing!	惊人！
+Unbelievable!	难以置信！
+Combo 	连击 
+Board clear!	全部清空！

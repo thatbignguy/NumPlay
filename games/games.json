@@ -87,6 +87,24 @@
     "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/buckshot"
   },
   {
+    "id": "blockblast",
+    "title": "Block Blast",
+    "tagline": "Fit the blocks, blast the lines",
+    "credit": "Based on Block Blast! by Hungry Studio",
+    "top": "0x516FC5",
+    "bottom": "0x1A264C",
+    "accent": "0xFBD008",
+    "colors": 16,
+    "records": [
+      "blockblast.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "BlockBlast.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/blockblast"
+  },
+  {
     "id": "portal",
     "title": "Portal Returns",
     "tagline": "Think with portals",

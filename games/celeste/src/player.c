@@ -2853,6 +2853,7 @@ void player_spawn(V2 at, int intro) {
   p->hair_simulate = true;
   p->inventory_dashes = g_session.inv_dashes;
   p->inventory_dreamdash = g_session.dreamdash;
+  p->inventory_norefills = g_session.no_refills;   /* Core: dashes come back from crystals, not the ground */
   set_box(HB_NORMAL);
   hurtbox = HB_NORMAL_HURT;
   p->last_aim = v2(1, 0);

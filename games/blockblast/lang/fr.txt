@@ -1,0 +1,29 @@
+# Block Blast in French: the English text as in the source, a tab, the translation (see tools/lang.py).
+Resume	Reprendre
+New game	Nouvelle partie
+How to play	Comment jouer
+Quit	Quitter
+Play again	Rejouer
+1 2 3	1 2 3
+choose a block	choisir un bloc
+Arrows	Flèches
+move it	le déplacer
+OK	OK
+place it	le poser
+Back	Retour
+menu	menu
+Paused	Pause
+Fill a row or a column to clear it. Blocks never turn.	Remplis une ligne ou une colonne pour la vider. Les blocs ne tournent pas.
+Play	Jouer
+New best!	Record !
+Game over	Partie terminée
+Best 	Record 
+OK  place	OK  poser
+Back  menu	Retour  menu
+Good!	Bien !
+Great!	Super !
+Excellent!	Excellent !
+Amazing!	Incroyable !
+Unbelievable!	Fantastique !
+Combo 	Combo 
+Board clear!	Plateau vide !
