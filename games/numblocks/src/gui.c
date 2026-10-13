@@ -32,8 +32,22 @@ static void sprite_part(int id, int x, int y, int sx, int sy, int w, int h) {
   for (int r = r0; r < r1; r++) {
     uint16_t *d = row_at(y + r);
     const uint8_t *s = px + (sy + r) * stride;
-    for (int c = c0; c < c1; c++) {
-      int u = sx + c, i = (u & 1) ? s[u >> 1] >> 4 : s[u >> 1] & 15;
+    /* two screen pixels a source byte: the byte's low nibble is the even column, its high
+     * nibble the odd one, so a pair is one load and two palette reads instead of two loads */
+    int c = c0;
+    if ((sx + c) & 1) {
+      int i = s[(sx + c) >> 1] >> 4;
+      if (i) d[x + c] = pal[i];
+      c++;
+    }
+    for (; c + 1 < c1; c += 2) {
+      uint8_t b = s[(sx + c) >> 1];
+      int i0 = b & 15, i1 = b >> 4;
+      if (i0) d[x + c] = pal[i0];
+      if (i1) d[x + c + 1] = pal[i1];
+    }
+    if (c < c1) {
+      int i = s[(sx + c) >> 1] & 15;
       if (i) d[x + c] = pal[i];
     }
   }

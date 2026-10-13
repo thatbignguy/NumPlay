@@ -295,6 +295,17 @@ static void sky_row(SkyRow *k, const float *row) {
   k->cx0 = (ox + vc_x0) + row[0] * k->ct + cloud_off, k->cxs = rgx * k->ct;
   k->cz0 = (oz + vc_z0) + row[2] * k->ct, k->czs = rgz * k->ct;
 }
+/* floor to int in one instruction on the calculator (VCVTM rounds towards minus infinity, what
+ * (int)floorf is); the host build, which has no such instruction, keeps the two-step form */
+#if defined(__ARM_FP) && !defined(HOST)
+static inline __attribute__((always_inline)) int floor_i(float x) {
+  int r;
+  __asm__("vcvtm.s32.f32 %0, %1" : "=t"(r) : "t"(x));
+  return r;
+}
+#else
+static inline __attribute__((always_inline)) int floor_i(float x) { return (int)floorf(x); }
+#endif
 static inline __attribute__((always_inline)) uint16_t sky_px(const SkyRow *k, float su, float dz) {
   /* (what depends on the ray's length compared squared: its root only where it is needed) */
   float l2 = k->len2 + su * su, len = 0, dy = k->dy;
@@ -1009,7 +1020,7 @@ static __attribute__((unused)) void sky_fill(uint16_t (*cb)[RW], float (*zb)[RW]
         uint16_t c = sky_pk[g >= 128 ? 128 : (int)g];
         if (cloud) {
           float su = col_su[x];
-          int ix = (int)floorf((k->cx0 + k->cxs * su) / 12) & 255, iz = (int)floorf((k->cz0 + k->czs * su) / 12) & 255;
+          int ix = floor_i((k->cx0 + k->cxs * su) / 12) & 255, iz = floor_i((k->cz0 + k->czs * su) / 12) & 255;
           extern const uint8_t clouds[256 * 256 / 8];
           if (clouds[(iz * 256 + ix) >> 3] & (1 << (ix & 7))) {
             float pl2 = k->len2 + su * su;

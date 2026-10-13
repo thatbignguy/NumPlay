@@ -1,3 +1,39 @@
+## 1.5.18
+**Two more pixel loops: a sprite's two pixels a byte, and the cloud's floor in one instruction - another 1% a frame, the same pixels**
+- **CPU.** Both changes are in the innermost loops and leave every one of the 18 documented
+  `bench_render.py` checksums identical in all four sets, so the picture does not move:
+  - **The sprite loop** (`src/gui.c`, `sprite_part`). A sprite is nibble-packed, so the loop
+    loaded the same source byte twice, once for the even column and once for the odd. It now
+    steps two screen pixels a byte: one load, its low nibble for the even column and its high
+    nibble for the odd (a single leading pixel when the crop starts on an odd column, and a
+    single trailer when the width is odd). This draws the HUD, the hotbar's items, the hand
+    and the menus, all of which are redrawn every frame.
+  - **The cloud's floor** (`src/render.c`). The plain sky tests a cloud by flooring two ray
+    plane coordinates `(int)floorf(x)` and masking them; on the Cortex-M7 that is a `vrintm`
+    and a `vcvt` a coordinate, four instructions a pixel. `floor_i` is the one instruction
+    the FPU has for it, `vcvtm.s32.f32` (round towards minus infinity is exactly what
+    `(int)floorf` is), under `#if defined(__ARM_FP) && !defined(HOST)`; the host build, which
+    has no such instruction, keeps the two-step form. The clouds of a clouded sky were ~0.35%
+    of a frame.
+- **Measured (the M7, `bench_render.py`, instruction counts at 216 MHz).** Against 1.5.17's
+  113.51 / 164.85 / 89.55 / 107.31 M insns, **`--fancy` 113.51 -> 112.43 M** (525.5 -> 520.5 ms),
+  **`--fancy --rain --mobs` 164.85 -> 163.73 M** (763.2 -> 758.0 ms), **fast 89.55 -> 88.47 M**
+  (414.6 -> 409.6 ms), **fast `--rain --mobs` 107.31 -> 106.19 M** (496.8 -> 491.6 ms) -
+  **-1.0% / -0.7% / -1.2% / -1.0%** this commit. Against 1.5.16 that is **-4.8% / -3.4% /
+  -5.3% / -4.3%** over the two commits, all with 1.5.16's pixels (all 18 checksums of every
+  set). The device (`tools/emu.py`, a fixed `-DBENCH=12345` build, 15 s): 387 -> **389 frames**,
+  25.8 -> **25.9 fps**, 38.8 -> **38.6 ms a frame**, slowest 47 -> 46 ms, no violations.
+- **RAM and size.** No new state: `.data` 5,079 and `.bss` 119,064 unchanged from 1.5.17 (so
+  the game's RAM stays 124,143 B, inside `CUSTOM_RAM` 133,652), and the bench's deepest stack
+  stays 21,320 B (`--fancy --rain --mobs` 22,304). The little code moves the links by under
+  150 B: `NumBlocks.nwa` 609,568 -> **609,712 B**, `numblocks-interest.nwa` 635,896 ->
+  **636,032 B**, the `.bin` 539,884 -> **540,020 B** - all still below 1.5.16's.
+- Recorded: `make test` passes (208 recipes); `make -C games/numblocks host desktop build
+  check` and `games/numblocks-interest build` build (the host `cc` builds the fallback
+  `floor_i`); both `.nwa`s fit `nwlink nwa-bin --ram-length 133652`;
+  `tests/test_numblocks_progress.py build/apps/NumBlocks.nwa` and `tests/test_games.py
+  build/apps --game numblocks` pass; the host `./build/play` scenarios run.
+
 ## 1.5.17
 **Three hot-loop shortcuts: the block-cache read loses a multiply, the region map a shift, and a plain cloud a dead sky branch - 4% fewer instructions a frame, the same pixels**
 - **CPU.** Three expressions the renderer runs millions of times a frame were made shorter,
