@@ -1,3 +1,30 @@
+## 1.5.25
+**The change from stone to deepslate is gradual and random now, each column's own (all deepslate by y = -4) as 1.18 makes it, and a block whose chunk is still to be made can no longer be mined into a drop that then stays**
+
+- **The boundary is no longer a line at 0.** A column's deepslate top is its own, drawn from a
+  hash of its x and z and landing anywhere from y = 0 down to y = -4, so the deep layer starts the
+  way 1.18's does: a little different from column to column and gradually, and every column is all
+  deepslate by y = -4 (the bedrock floor below is unchanged). The 1.8 terrain above stays exact
+  (t_refcmp still reports 0 differ from y = 5 up).
+- **Mining a chunk that is still to be made.** A column whose chunk the cache has not made yet
+  reads as stone - that keeps everything that moves out of it - but it has no block to mine: the
+  pick ray now passes such a column over, and breaking and placing refuse it, where before the
+  block was "mined" (particles, a drop, the crack) and then stayed, because the write had nowhere
+  to go. It was easy to walk into while digging down, where the cache moves a lot and chunks are
+  queued. (`world_pending_at`, used by `pick_block`, `break_block` and `place`.)
+- **A deep-only slab no longer rebuilds the chunk.** When the window is all deep layer (the player
+  is far down), `gen_slab` now leaves the column summaries and biomes behind as well as the deep
+  rows, so `gen_top`/`gen_biome` do not each rebuild the whole chunk - caves and population and
+  all - a second time; chunks are made sooner.
+- **Cost.** No BSS growth: `.data` 5,079 and `.bss` 119,056 (the game's 124,135 B inside
+  `CUSTOM_RAM` 133,652). `NumBlocks.nwa` 616,788 -> **617,304 B**, `numblocks-interest.nwa`
+  642,960 -> **643,572 B**, the `.bin` 546,192 -> **546,600 B**. Recorded: `make test` passes (the
+  new pending-column case); `tests/gen/t_refcmp` 0 differ from y=5 up; a column dump shows the
+  random boundary (deepslate tops 0..-4, all deepslate by -4); `tests/test_games.py build/apps
+  --game numblocks` and `tests/test_numblocks_progress.py` pass; a scripted dig
+  (`./build/play --creative --keys "0-600:down,0-600:attack,610-900:up"`) still reaches the deep
+  layer and the shaft holds.
+
 ## 1.5.24
 **The overworld goes down to -64: a deepslate layer under the surface world with a bedrock floor at the bottom, its seven deepslate ores, and a cache, records and guards that follow it down**
 

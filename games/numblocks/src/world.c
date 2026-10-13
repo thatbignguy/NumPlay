@@ -518,6 +518,11 @@ static void world_follow_gen(float x, float y, float z) {
 
 bool world_pending(void) { return npend > 0; }
 
+bool world_pending_at(int x, int y, int z) {
+  if (!world_loaded(x, y, z)) return false;
+  return vpend_get((z - vc_z0) * VCX + x - vc_x0);
+}
+
 bool world_loaded(int x, int y, int z) {
   return (unsigned)(x - vc_x0) < VCX && (unsigned)(y - vc_y0) < VCY && (unsigned)(z - vc_z0) < VCZ;
 }

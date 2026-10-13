@@ -2187,6 +2187,23 @@ int main(void) {
     delete_world(8);
   }
   {
+    /* a column whose chunk is still to be made: it is reported pending - so the pick ray
+     * passes it over instead of mining a block that would then stay - but reads as stone,
+     * so nothing falls through it */
+    world_new(0, "utpend");
+    world_follow(8, 70, 8);
+    world_follow(24, 70, 8);   /* a move of 16: the far chunks are queued, not made at once */
+    int pend = 0, stone = 0;
+    for (int z = 0; z < VCZ && !pend; z++)
+      for (int x = 0; x < VCX; x++)
+        if (world_pending_at(vc_x0 + x, 70, vc_z0 + z)) {
+          pend = 1;
+          stone = world_get(vc_x0 + x, 70, vc_z0 + z) == B_STONE;
+          break;
+        }
+    CHECK(pend && stone);
+  }
+  {
     /* keys saved as they first were (Back mining, OK placing) become OK mining, Back placing; set ones stay */
     keys_reset();
     CHECK(opt.keys[A_ATTACK] == 4 && opt.keys[A_USE] == 5);

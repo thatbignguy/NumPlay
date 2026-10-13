@@ -2094,6 +2094,19 @@ INLINE int surf_step(SurfState *s, uint16_t *col, int y) {
 /* highest non-air y of the column being built (column_density's result) */
 static int col_top;
 
+/* The top of a column's deepslate, as 1.18 makes the change from stone to deepslate: not a
+ * flat line at y = 0 but a random boundary just below it (0 down to -4), so the deep layer
+ * starts gradually and a little differently from column to column, and every column is all
+ * deepslate by y = -4. The same column keeps the same boundary wherever it is asked. */
+static int deepslate_top(int x, int z) {
+    uint32_t h = (uint32_t)x * 2654435761u + (uint32_t)z * 40503u;
+    h = (h ^ (h >> 15)) * 2246822519u;
+    h ^= h >> 13;
+    return -(int)(h % 5u);   /* 0, -1, -2, -3 or -4: all deepslate by -4 */
+}
+/* the column being built's deepslate_top, for build_default/build_mesa (they have no x, z) */
+static int col_dtop;
+
 HOT static void build_default(uint16_t *col, const Biome *b, JRand *r, float noise, uint8_t top0, uint8_t fill0) {
     SurfState s;
     s.top0 = s.top = top0;
@@ -2114,7 +2127,7 @@ HOT static void build_default(uint16_t *col, const Biome *b, JRand *r, float noi
             jr_skip(r, skip);
             skip = 0;
             (void)jr_int_i(r, 5);
-            col[y] = B_DEEPSLATE;
+            if (y <= col_dtop) col[y] = B_DEEPSLATE;   /* else the stone column_density made */
             continue;
         } else {
             skip++;
@@ -2205,7 +2218,7 @@ static void build_mesa(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, 
             jr_skip(r, skip);
             skip = 0;
             (void)jr_int(r, 5);
-            col[y] = B_DEEPSLATE;
+            if (y <= col_dtop) col[y] = B_DEEPSLATE;   /* else the stone it built */
             continue;
         } else {
             skip++;
@@ -2445,6 +2458,7 @@ HOT static void chunk_terrain(int cx, int cz, uint8_t *out, int y0, int h, ColSu
     for (int z = 0; z < 16; z++)
         for (int x = 0; x < 16; x++) {
             col_top = column_density(x, z, col);
+            col_dtop = deepslate_top(cx * 16 + x, cz * 16 + z);   /* the column's own deepslate top */
             const Biome *b = bio(cb16[x + z * 16]);
             build_surface(col, b, &r, cx * 16 + z, cz * 16 + x, U->t.surf[z * 16 + x]);
             if (sum) column_summary(col, &sum[x + z * 16]);
@@ -6340,15 +6354,37 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
      * rows keep the whole (unchanged) 1.8 generator, addressed by a byte offset - 256 cells
      * x 9 bits = 288 bytes a row - so its windows and col[] indices read as before. */
     int deep = y0 < 0 ? (h < -y0 ? h : -y0) : 0;
-    for (int y = 0; y < deep; y++) {
-        int wy = y0 + y;
-        for (int z = 0; z < 16; z++)
-            for (int x = 0; x < 16; x++)
-                b9_set(out, y * 256 + z * 16 + x,
-                       wy <= deep_bedrock(cx * 16 + x, cz * 16 + z) ? B_BEDROCK : B_DEEPSLATE);
-    }
+    for (int z = 0; z < 16; z++)
+        for (int x = 0; x < 16; x++) {
+            int wx = cx * 16 + x, wz = cz * 16 + z;
+            int dt = deepslate_top(wx, wz), bd = deep_bedrock(wx, wz);
+            for (int y = 0; y < deep; y++) {
+                int wy = y0 + y;
+                /* bedrock on the floor, else the column's own deepslate top (stone above it) */
+                b9_set(out, y * 256 + z * 16 + x, wy <= bd ? B_BEDROCK : wy <= dt ? B_DEEPSLATE : B_STONE);
+            }
+        }
     if (deep) deep_ores(cx, cz, y0, h, out);   /* the deepslate ores, into the deep rows */
-    if (deep == h) return;   /* the window is all deep layer: no terrain rows to make */
+    if (deep == h) {
+        /* The window is all deep layer: no terrain rows to write. The column summaries and
+         * the biomes still have to be known (the world asks gen_top and gen_biome of every
+         * column), or each of them would rebuild the whole chunk - caves and population
+         * and all - a second time, far slower while the player is down here. */
+        SumEntry *se = sum_find(cx, cz);
+        if (!se) se = sum_slot(cx, cz);
+        sum_pin[se - sumc] = 1;
+        chunk_terrain(cx, cz, NULL, 0, 0, se->s);
+        memcpy(c_b16, cb16, 256);
+        se->b00 = cb16[0];
+        for (int i = 0; i < 256; i++) {
+            c_top[i] = (uint8_t)(cs_top(&se->s[i]) + (cs_blk(&se->s[i]) == B_LILY_PAD));
+            c_sl[i] = (uint8_t)cs_top(&se->s[i]);
+        }
+        last_cx = cx;
+        last_cz = cz;
+        memset(sum_pin, 0, sizeof sum_pin);
+        return;
+    }
     uint8_t *tout = out + (size_t)deep * 288;
     int ty0 = y0 + deep, th = h - deep;
     c_out = tout;

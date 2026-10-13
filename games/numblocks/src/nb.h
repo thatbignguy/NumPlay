@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.24"
+#define NB_VERSION "1.5.25"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -153,6 +153,10 @@ int world_get(int x, int y, int z);            /* B_AIR outside the cache, the d
 void world_set(int x, int y, int z, int b);     /* a player's change: kept in the edit log */
 void world_light_flush(void);   /* the light of changed blocks (world_follow does it each frame) */
 bool world_loaded(int x, int y, int z);
+/* A cell whose column is in the cache but whose chunk is still to be made: its block is not
+ * known yet (world_get answers stone, which keeps everything that moves out of it). Nothing
+ * may be mined, placed or picked there until the chunk is made. */
+bool world_pending_at(int x, int y, int z);
 bool world_pending(void);                       /* chunks still being made after a move */
 int world_rain_top(int x, int z);               /* the first y above what rain lands on, 255 if unknown */
 void *world_scratch(uint32_t n);                /* n bytes free while a frame is drawn, or NULL */

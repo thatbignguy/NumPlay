@@ -329,9 +329,9 @@ int main(int argc, char **argv) {
     for (int z = pz - 2; z < pz + 8; z++)
       for (int x = px - 6; x < px + 7; x++)
         for (int y = fy - 1; y < fy + 6; y++) world_set(x, y, z, y == fy - 1 ? B_DEEPSLATE : B_AIR);
-    static const uint8_t fam[8] = {B_DEEPSLATE, B_DEEPSLATE_COAL_ORE, B_DEEPSLATE_IRON_ORE,
-                                   B_DEEPSLATE_GOLD_ORE, B_DEEPSLATE_REDSTONE_ORE, B_DEEPSLATE_DIAMOND_ORE,
-                                   B_DEEPSLATE_LAPIS_ORE, B_DEEPSLATE_EMERALD_ORE};
+    static const uint16_t fam[8] = {B_DEEPSLATE, B_DEEPSLATE_COAL_ORE, B_DEEPSLATE_IRON_ORE,
+                                    B_DEEPSLATE_GOLD_ORE, B_DEEPSLATE_REDSTONE_ORE, B_DEEPSLATE_DIAMOND_ORE,
+                                    B_DEEPSLATE_LAPIS_ORE, B_DEEPSLATE_EMERALD_ORE};
     for (int k = 0; k < 8; k++)
       for (int h = 0; h < 3; h++) world_set(px - 3 + k, fy + h, pz + 4, fam[k]);
     pl.yaw = 0, pl.pitch = 0;

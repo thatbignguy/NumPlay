@@ -375,7 +375,7 @@ bool settle_fall(int x, int y, int z) {
 static int depth;
 static void break_block(int x, int y, int z, bool drops) {
   int b = world_get(x, y, z);
-  if (b == B_AIR || depth > 8) return;
+  if (b == B_AIR || depth > 8 || world_pending_at(x, y, z)) return;
   depth++;
   if (b == B_CHEST || b == B_FURNACE || b == B_FURNACE_LIT) tiles_removed(x, y, z);
   if (depth == 1 && blk_model[b] != M_LIQUID) particles_break(x, y, z, b);
@@ -478,7 +478,9 @@ static void pick_block(void) {
   pl.hit_face = -1;
   while (t <= reach) {
     int b = world_get(x, y, z);
-    if (b != B_AIR && blk_model[b] != M_LIQUID && b != B_FIRE) {
+    /* a chunk still to be made has no block to pick yet (its stone is only a stand-in:
+     * mining it would drop a block that then stayed, so the ray passes over it) */
+    if (!world_pending_at(x, y, z) && b != B_AIR && blk_model[b] != M_LIQUID && b != B_FIRE) {
       float bt;
       int bf;
       if (ray_block(b, x, y, z, &bt, &bf)) {
@@ -549,7 +551,9 @@ static bool place(int b) {
   int at = world_get(x, y, z);
   if (!(replaceable(at) && at != B_AIR)) x += NX[f], y += NY[f], z += NZ[f];
   else f = 1;
-  if (y < dim_min_y() || y >= dim_height() || !world_loaded(x, y, z) || !replaceable(world_get(x, y, z))) return false;
+  if (y < dim_min_y() || y >= dim_height() || !world_loaded(x, y, z) || world_pending_at(x, y, z) ||
+      !replaceable(world_get(x, y, z)))
+    return false;
   /* the variant: logs lie along the face's axis, torches lean on the block */
   if (b >= B_LOG_OAK && b <= B_LOG_JUNGLE_BARK && (b - B_LOG_OAK) % 4 == 0) b += (f >> 1) == 2 ? 1 : (f >> 1) == 1 ? 2 : 0;
   if (b >= B_LOG_ACACIA && b <= B_LOG_DARK_OAK_BARK && (b - B_LOG_ACACIA) % 4 == 0)
