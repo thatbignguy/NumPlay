@@ -2204,6 +2204,34 @@ int main(void) {
     CHECK(pend && stone);
   }
   {
+    /* a dug shaft keeps its sky light as the cache follows the player below the surface: the
+     * sky top is the shaft's own bottom (a signed world y below 0 now), not the surface that
+     * has left the cache, so the deep part of the shaft is lit, not black */
+    world_new(0, "utlight");
+    pl.x = 8.5f, pl.z = 8.5f;
+    for (int y = 90; y >= -30; y--) {   /* from the open air above the surface, straight down */
+      pl.y = (float)y;
+      world_follow(pl.x, pl.y, pl.z);
+      while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+      world_set(8, y, 8, B_AIR);
+    }
+    /* leave and come back, so the column is rebuilt from the records (edits_top), not kept */
+    pl.x = 300.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    pl.x = 8.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    world_follow(pl.x, pl.y, pl.z);   /* flush the last change's light */
+    int n = 0, lit = 0;
+    for (int y = -30; y <= -19; y++)
+      if (world_loaded(8, y, 8)) {
+        n++;
+        if (light_at(VC_I(8 - vc_x0, y - vc_y0, 8 - vc_z0)) > 0) lit++;
+      }
+    CHECK(n > 0 && lit == n);
+  }
+  {
     /* keys saved as they first were (Back mining, OK placing) become OK mining, Back placing; set ones stay */
     keys_reset();
     CHECK(opt.keys[A_ATTACK] == 4 && opt.keys[A_USE] == 5);

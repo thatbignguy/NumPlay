@@ -10,7 +10,14 @@
 uint8_t vc[VC_BYTES];
 uint8_t vl[VCY * VCZ * VCX];
 uint8_t vbiome[VCZ * VCX];
+/* The sky light's top: 1 + the highest opaque y. It is -64..128 now (a dug shaft open to the
+ * sky takes it below 0, and a block at the world top makes it 128), so it is stored biased by
+ * 64 in a byte: 0..192. vtop_at/vtop_put do the bias; the copies (memmove, recenter) are of
+ * the stored byte and need none. */
 uint8_t vtop[VCZ * VCX];
+#define VTOP_BIAS 64
+static inline int vtop_at(int col) { return (int)vtop[col] - VTOP_BIAS; }
+static inline void vtop_put(int col, int v) { vtop[col] = (uint8_t)(v + VTOP_BIAS); }
 uint8_t vmac[MCY * MCZ * MCX];   /* 4 x 4 x 4 regions: 0 all air, 2 water+air only, 1 other */
 static uint8_t vgtop[VCZ * VCX];    /* per column: the generator's highest block (not air) */
 int vc_x0, vc_y0, vc_z0;
@@ -63,7 +70,7 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
         }
         continue;
       }
-      int top = vtop[z * VCX + x] - vc_y0;   /* local y of the first sky-lit cell */
+      int top = vtop_at(z * VCX + x) - vc_y0;   /* local y of the first sky-lit cell */
       int lvl = 15;
       for (int y = VCY - 1; y >= y0; y--) {
         int i = VC_I(x, y, z), b = vc_get(i);
@@ -205,7 +212,7 @@ static void fill_chunk(int cx, int cz, const uint8_t *keep, int oy, int ylo, int
          * grass on top let it all through (else they and what they stand on were lit too dark) */
         for (int ly = gt - vc_y0; ly >= 0 && ly < VCY && opacity(vc_get(VC_I(lx, ly, lz))) == 0; ly--) lt--;
         int t = edits_top(cx * 16 + x, cz * 16 + z, lt + 1);
-        vtop[col] = (uint8_t)(t < 0 ? 0 : t > 255 ? 255 : t);
+        vtop_put(col, t);
       }
     }
   }
@@ -541,12 +548,14 @@ void world_set(int x, int y, int z, int b) {
   vc_set(VC_I(lx, ly, lz), b);
   edits_put(x, y, z, b);
   /* the column's sky top, then the light around */
-  int col = lz * VCX + lx, t = vtop[col];
-  if (opacity(b) >= 15 && y + 1 > t) vtop[col] = (uint8_t)(y + 1);
+  int col = lz * VCX + lx, t = vtop_at(col);
+  if (opacity(b) >= 15 && y + 1 > t) vtop_put(col, y + 1);
   else if (y + 1 == t && opacity(b) < 15) {
+    /* the block the sky was stopping at is gone: the top moves down to the next opaque one
+     * (or to the cache's own bottom, meaning the whole of it is open to the sky) */
     int ny = y;
     while (ny > vc_y0 && opacity(vc_get(VC_I(lx, ny - vc_y0 - 1, lz))) < 15) ny--;
-    vtop[col] = (uint8_t)(ny > vc_y0 ? ny : 0);
+    vtop_put(col, ny);
   }
   light_mark(lx - 15, ly - 15, lz - 15, lx + 16, VCY, lz + 16);
   mac_box(lx, ly, lz, lx + 1, ly + 1, lz + 1);
@@ -564,7 +573,7 @@ static bool stops_rain(int b) {
 int world_rain_top(int x, int z) {
   int lx = x - vc_x0, lz = z - vc_z0;
   if ((unsigned)lx >= VCX || (unsigned)lz >= VCZ) return 255;
-  int col = lz * VCX + lx, t = vtop[col];
+  int col = lz * VCX + lx, t = vtop_at(col);
   if (vpend_get(col)) return 255;
   if (t > vc_y0 + VCY) return t;
   for (int y = VCY - 1; y >= 0 && y + vc_y0 >= t; y--)

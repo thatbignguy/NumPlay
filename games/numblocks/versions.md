@@ -1,3 +1,25 @@
+## 1.5.26
+**A dug shaft keeps its sky light as the cache follows the player down below the surface: the sky top is a signed world y now and lowers through a dug shaft, where before the whole deep column went black just after the deepslate began**
+
+- **The black shaft.** A column's sky top (`vtop`, 1 + its highest opaque y) was a `uint8_t`, and
+  `edits_top` could only *raise* it. Once the cache left the surface - right after the deepslate
+  began, the player well under y=0 - the column's top read as the surface above, so the light pass
+  gave the whole column sky light 0: the shaft went black, the black looked like blocks overhead,
+  and breaking more made no difference. `vtop` is a signed world y now (`int16_t`, -64..128), set
+  from the ground when the cache holds it and, in `world_set`, to the next opaque block down (or
+  the cache's own bottom, all lit) when the top one is dug; `edits_top` also **lowers** the top
+  through the changes now, so a column rebuilt from its records keeps a dug shaft open to the sky.
+  (`edits_top`'s column range also had to move: since the y is based on the deepslate floor it was
+  only looking at y >= 0.)
+- **Recorded.** `tests/unit.c` digs a shaft from the open air above the surface straight down past
+  the deepslate, leaves the cache and comes back (the column rebuilt from its records), and checks
+  every loaded shaft cell is lit; `./build/play --creative --keys "0-560:down,0-560:attack,
+  570-900:up"` shows the shaft lit to its bottom instead of black.
+- **Cost.** `.data` 5,079 and `.bss` 119,064 (the game's 124,143 B inside `CUSTOM_RAM` 133,652:
+  `vtop` stays the same 1600 B, the sky top biased by 64 in a byte rather than widened). The code
+  grows a little: `NumBlocks.nwa` 617,304 -> **617,420 B**, `numblocks-interest.nwa`
+  643,572 -> **643,660 B**, the `.bin` 546,600 -> **546,712 B**.
+
 ## 1.5.25
 **The change from stone to deepslate is gradual and random now, each column's own (all deepslate by y = -4) as 1.18 makes it, and a block whose chunk is still to be made can no longer be mined into a drop that then stays**
 

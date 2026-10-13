@@ -216,10 +216,28 @@ void edits_apply(int cx, int cz, int y0, int h, uint8_t *slab) {
   }
 }
 
-/* the column's sky top (1 + the highest opaque y) with the changes */
+/* The change recorded at (x, y, z), or -1: the journal's (the newest) then the record's,
+ * as edits_apply reads them. */
+static int edit_block(int x, int y, int z) {
+  int rx = floordiv(x, 64), rz = floordiv(z, 64);
+  uint32_t k = entry_key(x, y, z);
+  int n;
+  const uint8_t *r = region(rx, rz, &n);
+  int j = jlower(rx, rz, k);
+  if (j < nj && jn[j].rx == rx && jn[j].rz == rz && KEY(jn[j].e) == k) return BLK(jn[j].e);
+  int i = rlower(r, n, k);
+  if (i < n && KEY(R(i)) == k) return BLK(R(i));
+  return -1;
+}
+
+/* The column's sky top (1 + the highest opaque y) with the changes. A block placed above
+ * raises it; a block dug out of the top lowers it, down through the changes, until a cell
+ * with no change - the ground itself, opaque below the generator's surface - or an opaque
+ * one. (Without the lowering a dug shaft whose surface has left the cache read as if the
+ * ground were still overhead, and the whole column went dark.) */
 int edits_top(int x, int z, int top) {
   int rx = floordiv(x, 64), rz = floordiv(z, 64);
-  uint32_t k0 = entry_key(x, 0, z), k1 = k0 + 256;
+  uint32_t k0 = entry_key(x, y_base(), z), k1 = k0 + 256;   /* the whole column, all y */
   int n;
   const uint8_t *r = region(rx, rz, &n);
   for (int i = rlower(r, n, k0); i < n && KEY(R(i)) < k1; i++) {
@@ -230,6 +248,11 @@ int edits_top(int x, int z, int top) {
   for (int i = jlower(rx, rz, k0); i < nj && jn[i].rx == rx && jn[i].rz == rz && KEY(jn[i].e) < k1; i++) {
     int ey = (int)(jn[i].e & 255) + y_base();
     if ((blk_flags[BLK(jn[i].e)] & BF_OPAQUE) && ey + 1 > top) top = ey + 1;
+  }
+  while (top > WORLD_MIN_Y) {
+    int b = edit_block(x, top - 1, z);
+    if (b < 0 || (blk_flags[b] & BF_OPAQUE)) break;
+    top--;
   }
   return top;
 }
