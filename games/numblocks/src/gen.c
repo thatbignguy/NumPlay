@@ -6282,23 +6282,35 @@ static NOINLINE float cave_pt(u64 o0, u64 o1, u64 o2, u64 sx, u64 sy, int X, int
 }
 
 /* How open the deep field is at a lattice point: > 0 means carved. The three shapes
- * are unioned (the largest wins), so a cavern can open into a tunnel. */
+ * are unioned (the largest wins), so a cavern can open into a tunnel. The thresholds
+ * follow the modern density functions in 26.3.jar
+ * (data/minecraft/worldgen/density_function/overworld/...): its 3D spaghetti carves
+ * where max(|n1|, |n2|) runs under ~0.08 (its thickness noise times -0.0115, minus
+ * 0.0765) and its noodle where the two ridge fields' max runs under ~0.05, so both
+ * are thin tubes - never sheets, which would slice the rock into floating slabs -
+ * and the cheese rooms stay a minority of the layer, separated by rock. About a
+ * fifth of the deep layer ends up open; past about a third the air connects and the
+ * rock itself breaks into floating islands instead. */
 HOT static float deep_open(u64 o0, u64 o1, u64 o2, int X, int Y, int Z) {
     /* cheese: broad rooms from a low-frequency field, with one detail octave */
     float ch = cave_pt(o0, o1, o2, FX(1.0f / 46.0f), FX(1.0f / 26.0f), X, Y, Z, 0, 0, 0) +
                0.5f * cave_pt(o0, o1, o2, FX(1.0f / 23.0f), FX(1.0f / 13.0f), X, Y, Z, 0, 0, 0);
-    float o = ch - 0.19f;
+    float o = ch - 0.34f;
     /* spaghetti: two crossing families; only where both are near zero is there a tube */
     float a = cave_pt(o0, o1, o2, FX(1.0f / 30.0f), FX(1.0f / 20.0f), X, Y, Z, 0, 0, 0);
     float b = cave_pt(o0, o1, o2, FX(1.0f / 30.0f), FX(1.0f / 20.0f), X, Y, Z,
                       (u64)129 << 32, (u64)71 << 32, (u64)199 << 32);
     float ma = a < 0 ? -a : a, mb = b < 0 ? -b : b;
-    float sp = 0.26f - (ma > mb ? ma : mb);
+    float sp = 0.10f - (ma > mb ? ma : mb);
     if (sp > o) o = sp;
-    /* noodle: a high-frequency field, carved only around its zero contour */
-    float n = cave_pt(o0, o1, o2, FX(1.0f / 15.0f), FX(1.0f / 15.0f), X, Y, Z,
-                      (u64)53 << 32, (u64)211 << 32, (u64)17 << 32);
-    float nd = 0.10f - (n < 0 ? -n : n);
+    /* noodle: two crossing high-frequency families, a ~1-block vein where both run
+     * near zero (never one field alone: a sheet would cut the layer into slabs) */
+    float n1 = cave_pt(o0, o1, o2, FX(1.0f / 15.0f), FX(1.0f / 15.0f), X, Y, Z,
+                       (u64)53 << 32, (u64)211 << 32, (u64)17 << 32);
+    float n2 = cave_pt(o0, o1, o2, FX(1.0f / 15.0f), FX(1.0f / 15.0f), X, Y, Z,
+                       (u64)97 << 32, (u64)31 << 32, (u64)167 << 32);
+    float m1 = n1 < 0 ? -n1 : n1, m2 = n2 < 0 ? -n2 : n2;
+    float nd = 0.06f - (m1 > m2 ? m1 : m2);
     if (nd > o) o = nd;
     return o;
 }

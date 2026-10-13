@@ -1,3 +1,34 @@
+## 1.5.30
+**The deep caves read as caves again: vanilla's own thresholds replace 1.5.29's blown-out ones, so the layer is rock with rooms, tunnels and veins instead of a floating-island mess**
+
+- **What was wrong.** 1.5.29's carve opened ~58% of the deep layer: the spaghetti
+  threshold alone (0.26) carved ~45%, the noodle was a single-field *sheet* at 0.10
+  (~30%, slicing the rock into slabs) and the cheese rooms (0.19, ~26%) merged into one
+  void. Past about a third open the air connects and the rock disconnects, so the
+  deepslate broke into floating islands in water and air - the screenshot's mess.
+- **The fix, from 26.3.jar's density functions.** The 3D spaghetti carves where
+  max(|n1|, |n2|) runs under ~0.08 and the noodle where its two ridge fields' max runs
+  under ~0.05: both are thin *tubes*, never sheets. The thresholds are now cheese 0.34
+  (rooms, separated by rock), spaghetti 0.10 (winding ~3-wide tunnels) and the noodle as
+  a two-field tube at 0.06 (~1-block veins). Measured over 25 chunks on five seeds: air
+  averages ~11-22% (was ~58%), the rock is connected everywhere, and a vertical section
+  shows distinct rooms, tunnels and veins with the surface intact. The lava sea, the
+  water pools and the bedrock floor are unchanged.
+- **Tests.** The unit case now checks window-consistency on two chunks (a nearly-solid
+  one and a cavern one) and asserts chunk (2, 0) at seed 12345 holds rooms and tunnels
+  with rock dominant. `t_refcmp` still 0 / 3,212,800 blocks differ from y=5 up; the deep
+  windows still 0 differ over 144 chunks.
+- **Recorded.** `./build/play --caves --creative --bright 15 --time 18000 --keys
+  "6-29:fwd" --frames 30 --shots 5,29` (**not** `build/desktop`): frame 5 a lit cavern
+  with a tunnel leading on, frame 29 inside that tunnel - rock all around, nothing
+  floating.
+- **Cost.** No BSS growth: `.data` 5,079 and `.bss` 119,064. A fully-deep slab window is
+  3.92 M instructions (18.2 ms at 216 MHz, from 3.96 M - fewer cells carved outweighs the
+  noodle's second field) and one straddling y=0 26.76 M (from 26.78 M); deepest stack
+  11,704 B unchanged. `NumBlocks.nwa` 617,564 -> **617,676 B**. Recorded: `make test`
+  passes; `make build && make check` and `make -C games/numblocks-interest build check`
+  fit; `tools/emu.py` boots the device build.
+
 ## 1.5.29
 **The deep caves are far denser: the fields' thresholds open the deepslate into a cavern network (about 58% air) instead of 1.5.27's sparse rooms, so exploring below y=0 finds caves at once**
 

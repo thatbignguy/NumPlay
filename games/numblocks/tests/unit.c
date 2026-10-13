@@ -2188,27 +2188,36 @@ int main(void) {
   }
   {
     /* the deep layer is carved: the caves are a pure function of a block's world position,
-     * so a chunk comes out the same whichever slab window asks for it, and the deepslate
-     * is opened into a cavern network (with rock between the caverns) */
+     * so a chunk comes out the same whichever slab window asks for it, and a cavern chunk
+     * holds rooms and tunnels with rock still dominant (no floating islands) */
     world_new(12345, "utcave");
     uint8_t gs[GEN_SCRATCH];
     static uint8_t full[64 * 288 + 4], part[64 * 288 + 4];
     gen_scratch(gs);
-    gen_slab(0, 0, -64, 64, full);
-    gen_slab(0, 0, -64, 24, part);
-    gen_slab(0, 0, -40, 24, part + 24 * 288);
-    gen_slab(0, 0, -16, 16, part + 48 * 288);
+    /* the same in any slab window, on a nearly-solid chunk and a cavern one */
+    int diff = 0;
+    for (int t = 0; t < 2; t++) {
+      int cx = t ? 2 : 0;
+      gen_slab(cx, 0, -64, 64, full);
+      gen_slab(cx, 0, -64, 24, part);
+      gen_slab(cx, 0, -40, 24, part + 24 * 288);
+      gen_slab(cx, 0, -16, 16, part + 48 * 288);
+      for (int r = 0; r < 64; r++)
+        for (int i = 0; i < 256; i++)
+          if (b9_get(full, r * 256 + i) != b9_get(part, r * 256 + i)) diff++;
+    }
+    /* chunk (2, 0) holds a cavern system */
+    gen_slab(2, 0, -64, 64, full);
     gen_scratch(NULL);
-    int diff = 0, air = 0, rock = 0;
+    int air = 0, rock = 0;
     for (int r = 0; r < 64; r++)
       for (int i = 0; i < 256; i++) {
         int a = b9_get(full, r * 256 + i);
-        if (a != b9_get(part, r * 256 + i)) diff++;
         if (a == B_AIR) air++; else if (a != B_WATER && a != B_LAVA) rock++;
       }
     CHECK(diff == 0);       /* the same in any slab window */
-    CHECK(air > 3000);      /* a cavern network */
-    CHECK(rock > 1500);     /* with rock between the caverns */
+    CHECK(air > 1500);      /* rooms and tunnels to walk */
+    CHECK(rock > air);      /* with rock dominant between them */
   }
   {
     /* a column whose chunk is still to be made: it is reported pending - so the pick ray
