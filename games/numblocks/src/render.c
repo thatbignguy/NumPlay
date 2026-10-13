@@ -212,16 +212,17 @@ static inline int texel_rgb(int b, int tex, int u, int v, int col, int *r, int *
 #define NETHER_R 51
 #define NETHER_G 8
 #define NETHER_B 8
-/* the eye in lava: Java's FogRenderer gives the lava fog the colour (0.6, 0.1, 0.0) = #991900,
- * a dense orange near full within a block or two, and its overlay washes what is seen through
- * it. That reads too dark and too close on the calculator's screen, so the fog is a brighter
- * orange and reaches further (LAVA_FOG0/FOG1), and the sky and the plain faces the fog does not
- * reach are tinted towards it (half of what was there, half the orange), not the water blue. */
-#define LAVA_R 255
-#define LAVA_G 110
+/* The eye in lava: Java's FogRenderer gives the lava fog the colour (0.6, 0.1, 0.0) = #991900,
+ * and its overlay washes what is seen through it. Java puts the fog near full within a block or
+ * two; that is far too close to tell where the lava is on the calculator, so it reaches much
+ * further here (LAVA_FOG0/FOG1), dark as Java's colour, while the sky and the plain faces the
+ * fog does not reach are tinted towards it (half of what was there, half the orange), not the
+ * water blue. */
+#define LAVA_R 153
+#define LAVA_G 25
 #define LAVA_B 0
 #define LAVA_FOG0 1.0f
-#define LAVA_FOG1 6.0f
+#define LAVA_FOG1 12.0f
 static inline uint16_t lava_tint(int r, int g, int b) {
   return pack((r + LAVA_R) / 2, (g + LAVA_G) / 2, b / 4);
 }
@@ -1305,6 +1306,11 @@ static inline bool same(const Sample *a, const Sample *b) {
 /* the pixel (px, py) knowing the samples around it agree (a, b) or not */
 /* the pixel of ray (dx, dy, dz) between samples that agree (one: they met the same cell) */
 static uint16_t agreed(float dx, float dy, float dz, const Sample *a, bool one) {
+  /* With the eye in lava the fog is dense enough that the fills' approximation - each draws the
+   * samples' surface, and a nearby surface between them slips through - reads as a grid of
+   * sample pixels over the far lava; trace instead of filling there. (Only there: the ordinary
+   * fog hides the approximation, and the fills are what keep the frame at speed.) */
+  if (under_liq == 2) return trace(dx, dy, dz);
   if (a->kind == 1 && !under_world) {
     int r = one ? face_cell(dx, dy, dz, a) : face_pixel(dx, dy, dz, a->plane, a->f, is_water(cam_b));
     if (r >= 0) return ST(st_fpok++), (uint16_t)r;
@@ -2680,7 +2686,7 @@ nether_sky_done:;
        * traces the pixels the plane's block does not show). Fast only: a leaf's or glass's holes
        * are black there, so fill and trace agree exactly, where Fancy's see-through texels can
        * differ at an edge by a texel. */
-      if (fastg && same(a, b) && same(a, c) && same(a, d) && a->kind == 1 && !under_world) {
+      if (fastg && same(a, b) && same(a, c) && same(a, d) && a->kind == 1 && !under_world && under_liq != 2) {
         bool c1 = a->cell == b->cell && a->cell == c->cell && a->cell == d->cell;
         if (c1 && (a->flags & 1) && a->cell != brk_i) {
           face_fill(cbuf, zbuf, rb, x0, a);
@@ -2699,14 +2705,14 @@ nether_sky_done:;
         bool one = a->cell == b->cell && a->cell == c->cell && a->cell == d->cell && a->cell == m->cell;
         (void)one;
 #ifndef FULL_TRACE
-        if (a->kind == 1 && !under_world && (one ? (a->flags & 1) && a->cell != brk_i : true)) {
+        if (a->kind == 1 && !under_world && under_liq != 2 && (one ? (a->flags & 1) && a->cell != brk_i : true)) {
           if (one) face_fill(cbuf, zbuf, rb, x0, a);
           else plane_fill(cbuf, zbuf, rb, x0, a);
           cbuf[0][x0] = a->c, zbuf[0][x0] = a->t;
           cbuf[2][x0 + 2] = m->c, zbuf[2][x0 + 2] = m->t;
           continue;
         }
-        if (a->kind == 2 && fast_sky) {
+        if (a->kind == 2 && fast_sky && under_liq != 2) {
           sky_fill(cbuf, zbuf, rb, skr, x0);
           cbuf[0][x0] = a->c, cbuf[2][x0 + 2] = m->c;
           continue;

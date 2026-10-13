@@ -1,3 +1,31 @@
+## 1.5.22
+**The eye in lava is Java's dark orange again, reaching twelve blocks, with the far lava traced rather than filled so its grid of sample pixels is gone**
+- **Darker and further.** The fog colour goes back to Java's `(0.6, 0.1, 0.0)` = `#991900`
+  (1.5.21's bright `#FF6E00` read as washed out), and its reach is far longer here than Java's
+  two blocks: from `fog0` 1 to `fog1` 12 (1.5.20 was full at two, 1.5.21 at six), so the sea
+  floor and the shore read out to where the fog closes. The sky and plain-face tint and the
+  `gui.c` screen wash follow the colour.
+- **The grid of dots and the outlines.** A large lava surface seen at a grazing angle under lava
+  came out as a regular grid of sample pixels over the far lava, with a jagged outline at the
+  steps: the adaptive renderer's fills each draw the surface the 4 x 4 samples agreed on, and a
+  nearby surface between the samples slips through - hidden by the ordinary fog (whose partial
+  band is a quarter as wide), but not by lava's. With the eye in lava the fills are now skipped
+  and the textured pixels are traced instead (`render.c`: `under_liq == 2` in `agreed` and at
+  the three fill sites), so the view is exactly what a per-pixel trace gives - no grid, and what
+  is too far away is the fog. Everything else is untouched.
+- **Cost, and the rest unchanged.** Under lava a frame traces more (the sea scene's steps +55%,
+  1.05 -> 1.34 ms a host frame), the price of the correct picture there; nothing of the game
+  outside lava moves (the whole 18-frame `bench_render.py` set is still checksum-identical to
+  1.5.19 in Fast and Fancy, `85.92 / 112.80 M insns`, from 85.67 / 112.43 - the one `under_liq`
+  test). `.data` 5,079 and `.bss` 119,056, the game's 124,135 B inside `CUSTOM_RAM` 133,652.
+  `NumBlocks.nwa` 611,024 -> **611,080 B**, `numblocks-interest.nwa` 637,408 -> **637,520 B**,
+  the `.bin` 541,196 -> **541,164 B**. Recorded: `make test` passes (208 recipes);
+  `make -C games/numblocks host desktop build check` and `games/numblocks-interest build check`
+  build; both `.nwa`s fit `nwlink nwa-bin --ram-length 133652`;
+  `tests/test_numblocks_progress.py`, `tests/test_games.py build/apps --game numblocks` and
+  `tools/emu.py` pass; the `./build/play --lava --nether --frames 90 --keys "10-40:sneak"
+  --shots 2,45` run (**not** `build/desktop`) shows the surface and the darker, further inside.
+
 ## 1.5.21
 **The eye in lava is brighter and sees further: a bright orange fog reaching six blocks, where it was Java's dark #991900 full at two**
 - **Brighter.** The lava fog colour goes from Java's `(0.6, 0.1, 0.0)` = `#991900` to `#FF6E00`
