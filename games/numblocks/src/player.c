@@ -775,8 +775,17 @@ static void use(uint32_t pressed) {
       if (on_block) {
         int f = pl.hit_face, px = x + NX[f], py = y + NY[f], pz = z + NZ[f];
         if (replaceable(world_get(px, py, pz))) {
-          set_block(px, py, pz, k == IK_WATER_BUCKET ? B_WATER : B_LAVA);
-          if (pl.mode == 0) h->id = I_BUCKET, h->aux = 1;
+          if (k == IK_WATER_BUCKET && world_dim == DIM_NETHER) {
+            /* the nether is ultra-warm: a water bucket places nothing - the water
+             * evaporates on the spot (a puff of smoke) and the bucket comes back
+             * empty, as Java's BucketItem does. neighbours_changed does not run:
+             * there is no placed block whose neighbours would wake. */
+            particles_evaporate(px, py, pz);
+            if (pl.mode == 0) h->id = I_BUCKET, h->aux = 1;
+          } else {
+            set_block(px, py, pz, k == IK_WATER_BUCKET ? B_WATER : B_LAVA);
+            if (pl.mode == 0) h->id = I_BUCKET, h->aux = 1;
+          }
         }
       }
       return;

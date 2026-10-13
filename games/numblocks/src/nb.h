@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.27"
+#define NB_VERSION "1.5.28"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -279,6 +279,7 @@ extern Particle parts[N_PART];
 void particles_break(int x, int y, int z, int b);
 void particle_add(float x, float y, float z, float vx, float vy, float vz, uint16_t c, int life);
 void particles_spawner(float mx, float my, float mz, float bx, float by, float bz);   /* a spawner's mob appearing */
+void particles_evaporate(int x, int y, int z);   /* a water bucket emptied in an ultra-warm dimension: smoke */
 /* fishing (EntityFishHook) */
 Entity *bobber(void);       /* the player's hook, if out */
 void fish_cast(void);

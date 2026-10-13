@@ -23,7 +23,7 @@ what "done" means. Order matters only where noted.
 - [ ] **[24] Under-lava fog and overlay** — the eye in lava reads like the eye
       beside it: give it Java's dense orange fog and the orange screen wash,
       as `under_water` already gives water its blue (`render.c`).
-- [ ] **[25] Water evaporates in the nether** — a water bucket emptied in the
+- [x] **[25] Water evaporates in the nether** — a water bucket emptied in the
       nether places nothing: the fizz and a puff of smoke, and the bucket
       comes back empty, as Java's ultra-warm dimension does.
 - [ ] **[26] Liquids at the cache's edge** — a stream whose source leaves the

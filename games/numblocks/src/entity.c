@@ -57,6 +57,16 @@ void particles_spawner(float mx, float my, float mz, float bx, float by, float b
                  (rndf() - 0.5f) * 0.02f, 0.04f + rndf() * 0.04f, (rndf() - 0.5f) * 0.02f, FLAME, P_FLOAT | (10 + rnd(6)));
 }
 
+/* a water bucket emptied in an ultra-warm dimension (the nether): the water evaporates on the
+ * spot - a short, dense burst of grey smoke from the target cell, Java's SMOKE/LARGE_SMOKE */
+void particles_evaporate(int x, int y, int z) {
+  for (int k = 0; k < 8; k++) {
+    particle_add(x + 0.3f + rndf() * 0.4f, y + 0.2f + rndf() * 0.4f, z + 0.3f + rndf() * 0.4f,
+                 (rndf() - 0.5f) * 0.08f, 0.12f + rndf() * 0.08f, (rndf() - 0.5f) * 0.08f, SMOKE,
+                 8 + rnd(6));
+  }
+}
+
 /* EntityRenderer.addRainParticles: drops splash on whatever the rain falls on
  * within 10 blocks, up to 100 a tick in a full downpour (half with Fast
  * graphics); here only as many as there are free particles */

@@ -1,3 +1,14 @@
+## 1.5.28
+**Water evaporates in the nether: a water bucket emptied there places nothing - the fizz and a puff of smoke, and the bucket comes back empty**
+
+- **The bucket.** In the nether (`world_dim == DIM_NETHER`) a water bucket used on a
+  replaceable block no longer calls `set_block`: the water is never placed and no level
+  calculation runs for it. The bucket still empties into an empty bucket (Creative keeps
+  it). Lava buckets are untouched. No `neighbours_changed` runs for an evaporated cell.
+- **The tell.** `particles_evaporate` (entity.c) puffs a short, dense burst of grey smoke
+  (the spawner's `SMOKE`) from the target cell, since the game has no sound for the fizz.
+- **Tests.** `make test` passes; `make build && make check` fits (no BSS growth, no state).
+
 ## 1.5.27
 **The deepslate is hollowed out: 1.17-1.19's noise caves under y=0 - cheese caverns, spaghetti and noodle tunnels, water pools and a lava sea - carved in a pass of their own, so the 1.8 surface stays exact**
 
