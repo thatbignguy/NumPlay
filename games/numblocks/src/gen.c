@@ -6287,18 +6287,18 @@ HOT static float deep_open(u64 o0, u64 o1, u64 o2, int X, int Y, int Z) {
     /* cheese: broad rooms from a low-frequency field, with one detail octave */
     float ch = cave_pt(o0, o1, o2, FX(1.0f / 46.0f), FX(1.0f / 26.0f), X, Y, Z, 0, 0, 0) +
                0.5f * cave_pt(o0, o1, o2, FX(1.0f / 23.0f), FX(1.0f / 13.0f), X, Y, Z, 0, 0, 0);
-    float o = ch - 0.32f;
+    float o = ch - 0.19f;
     /* spaghetti: two crossing families; only where both are near zero is there a tube */
     float a = cave_pt(o0, o1, o2, FX(1.0f / 30.0f), FX(1.0f / 20.0f), X, Y, Z, 0, 0, 0);
     float b = cave_pt(o0, o1, o2, FX(1.0f / 30.0f), FX(1.0f / 20.0f), X, Y, Z,
                       (u64)129 << 32, (u64)71 << 32, (u64)199 << 32);
     float ma = a < 0 ? -a : a, mb = b < 0 ? -b : b;
-    float sp = 0.14f - (ma > mb ? ma : mb);
+    float sp = 0.26f - (ma > mb ? ma : mb);
     if (sp > o) o = sp;
     /* noodle: a high-frequency field, carved only around its zero contour */
     float n = cave_pt(o0, o1, o2, FX(1.0f / 15.0f), FX(1.0f / 15.0f), X, Y, Z,
                       (u64)53 << 32, (u64)211 << 32, (u64)17 << 32);
-    float nd = 0.05f - (n < 0 ? -n : n);
+    float nd = 0.10f - (n < 0 ? -n : n);
     if (nd > o) o = nd;
     return o;
 }

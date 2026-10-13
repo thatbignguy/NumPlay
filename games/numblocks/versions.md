@@ -1,3 +1,21 @@
+## 1.5.29
+**The deep caves are far denser: the fields' thresholds open the deepslate into a cavern network (about 58% air) instead of 1.5.27's sparse rooms, so exploring below y=0 finds caves at once**
+
+- **More of everything.** 1.5.27's carve left the deep layer mostly rock - about 24% air on
+  average, and as little as 3% in a chunk - so a player exploring below y=0 found almost
+  nothing. The cheese threshold drops from 0.32 to 0.19, the spaghetti's from 0.14 to 0.26
+  and the noodle's from 0.05 to 0.10, so the same three fields open the layer into big
+  caverns, fat winding tunnels and thin veins that meet: about 58% air on average over 25
+  chunks (was 24%), and no chunk is mostly solid (the minimum is about 26%, was 3%). The
+  lava sea, the water pools and the bedrock floor are unchanged, and so is the surface
+  (`t_refcmp` still 0 / 3,212,800 blocks differ in 50 chunks from y=5 up).
+- **Cost.** No BSS growth: `.data` 5,079 and `.bss` 119,064. A fully-deep slab window is
+  3.96 M instructions (18.3 ms at 216 MHz, from 3.86 M) and one straddling y=0 26.78 M
+  (from 26.71 M) - the same noise calls, only more of the cells carved. `NumBlocks.nwa`
+  **617,564 B** (unchanged: the thresholds are the same constants). Recorded: `make test`
+  passes (the deep-cave case now expects a network); `make build && make check` fits; the
+  `./build/play --caves ...` frames show the denser network.
+
 ## 1.5.28
 **Water evaporates in the nether: a water bucket emptied there places nothing - the fizz and a puff of smoke, and the bucket comes back empty**
 

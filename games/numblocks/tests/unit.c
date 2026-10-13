@@ -2189,7 +2189,7 @@ int main(void) {
   {
     /* the deep layer is carved: the caves are a pure function of a block's world position,
      * so a chunk comes out the same whichever slab window asks for it, and the deepslate
-     * holds a cavern to walk into (with mostly rock around it) */
+     * is opened into a cavern network (with rock between the caverns) */
     world_new(12345, "utcave");
     uint8_t gs[GEN_SCRATCH];
     static uint8_t full[64 * 288 + 4], part[64 * 288 + 4];
@@ -2207,8 +2207,8 @@ int main(void) {
         if (a == B_AIR) air++; else if (a != B_WATER && a != B_LAVA) rock++;
       }
     CHECK(diff == 0);       /* the same in any slab window */
-    CHECK(air > 500);       /* a cavern */
-    CHECK(rock > air);      /* and mostly rock around it */
+    CHECK(air > 3000);      /* a cavern network */
+    CHECK(rock > 1500);     /* with rock between the caverns */
   }
   {
     /* a column whose chunk is still to be made: it is reported pending - so the pick ray
