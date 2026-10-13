@@ -79,6 +79,11 @@ data-modern:
 	python3 tools/items.py --header > src/items.h
 	python3 tools/pack.py --modern $(MODERN_TEX) $(CLIENT_JAR)
 
+# the four moving-fluid pictures packed again in place (no full pack without the
+# 1.8.8 jar: the bed and the GUI have no modern file to come from)
+data-fluids:
+	python3 tools/data_add.py --replace water_still,water_flow,lava_still,lava_flow $(MODERN_TEX)
+
 clean:
 	$(Q) rm -rf $(BUILD_DIR) build
 

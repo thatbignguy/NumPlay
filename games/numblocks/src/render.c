@@ -617,7 +617,17 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
       int tc = texel565(b, tex, h.u, h.v, col);
       if (tc >= 0) {
         /* (a face R->inside the cell is lit by the cell's light, one on its side by the cell in front) */
-        int lt = m == M_LIQUID || m == M_TORCH || h.t > 0 ? draw_light(vl[i]) : face_lit(i, face, x, y, z);
+        int lt;
+        if (m == M_LIQUID && is_water(b)) {
+          /* water is lit as the brighter of its own cell and the cell above it, exactly as
+           * water_pixel lights the surface between the samples: the water cell holds the sky
+           * less water's opacity (12 under an open sky) where the air above holds 15, so a
+           * pool's surface in daylight is lit as the air is, not at the water's dimmed 12;
+           * under a block it keeps its own. Lava glows itself and is lit by its own cell */
+          int own = draw_light(vl[i]), up = y < VCY - 1 ? draw_light(vl[i + VCX * VCZ]) : own;
+          lt = own > up ? own : up;
+        } else
+          lt = m == M_LIQUID || m == M_TORCH || h.t > 0 ? draw_light(vl[i]) : face_lit(i, face, x, y, z);
         uint16_t c = lit565((uint16_t)tc, h.face, lt, (t + h.t) * R->len);
         if (!R->wa && one_box(b) && i != cam_i) {
           /* a face of a block of one box (slab, snow layer...): the pixels between can find it too */
@@ -1181,7 +1191,10 @@ static int water_pixel(float dx, float dy, float dz, int wplane, int plane, int 
   int u = (int)((hx - x) * 16), v = (int)((hz - z) * 16), r, g, bb;
   u = u < 0 ? 0 : u > 15 ? 15 : u, v = v < 0 ? 0 : v > 15 ? 15 : v;
   if (texel_rgb(b, face_tex(b, 1, x, y, z), u, v, z * VCX + x, &r, &g, &bb) < 0) return -1;
-  uint16_t w = lit(r, g, bb, 1, draw_light(vl[i]), unfogged(t, dx * dx + dy * dy + dz * dz));
+  /* the water's own light, or the air's above where that is brighter (as cell_hit lights it:
+   * the water cell holds the sky less water's opacity, and the air above holds 15) */
+  int wl = draw_light(vl[i]), wf = draw_light(vl[i + VCX * VCZ]);
+  uint16_t w = lit(r, g, bb, 1, wl > wf ? wl : wf, unfogged(t, dx * dx + dy * dy + dz * dz));
   int c = face_pixel(dx, dy, dz, plane, f, true);
   if (c < 0) return -1;
   return pack_nc((r5((uint16_t)c) * 106 + r5(w) * 150) >> 8, (g6((uint16_t)c) * 106 + g6(w) * 150) >> 8,

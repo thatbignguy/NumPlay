@@ -31,6 +31,9 @@
  *                         it was placed into is checked for what is under it - drops it to
  *                         the ground at once, where a build that only checked its
  *                         neighbours leaves it hanging)
+ *        [--lava]       (a lava source standing in the air over a cleared field: the
+ *                         stream runs down and spreads - the flowing layers' picture,
+ *                         with the still source's over it; Creative, so nothing burns)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
  *        [--xray]       (the spectator's water and lava holes: the head inside the stone
@@ -79,7 +82,7 @@ int main(int argc, char **argv) {
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0;
@@ -95,6 +98,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--animals")) animals = 1;
     else if (!strcmp(argv[i], "--torches")) torches = 1;
     else if (!strcmp(argv[i], "--water")) water = 1;
+    else if (!strcmp(argv[i], "--lava")) lava = 1;
     else if (!strcmp(argv[i], "--creative")) creative = 1;
     else if (!strcmp(argv[i], "--flat")) flat = 1;
     else if (!strcmp(argv[i], "--tree")) tree = 1;
@@ -307,6 +311,49 @@ int main(int argc, char **argv) {
     world_set((int)pl.x, fy, (int)pl.z + 6, B_COBBLESTONE);
     world_set((int)pl.x, fy + 1, (int)pl.z + 6, B_WATER);
     neighbours_changed((int)pl.x, fy + 1, (int)pl.z + 6);
+  }
+  if (lava) {
+    if (nether) {
+      /* the nether's lava sea: down to the shore (the cache then holds the sea),
+       * then over the nearest lava, looking down at it - the still sea's picture */
+      pl.y = 38;
+      world_follow(pl.x, pl.y, pl.z);
+      while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+      int bx = (int)floorf(pl.x), bz = (int)floorf(pl.z), lx = 0, ly = 0, lz = 0, bscore = -1;
+      for (int z = 1; z < VCZ - 1; z++)
+        for (int x = 1; x < VCX - 1; x++)
+          for (int y = 0; y < VCY - 1; y++) {
+            if (vc_get(VC_I(x, y, z)) != B_LAVA) continue;
+            bool open = true;
+            for (int k = 1; k <= 5; k++)
+              if (vc_get(VC_I(x, y + k, z)) != B_AIR) open = false;
+            if (!open) continue;   /* (a rock ceiling over it: stay out of the rock) */
+            /* the open surface of the sea: the more lava around it the better */
+            int n = (vc_get(VC_I(x - 1, y, z)) == B_LAVA) + (vc_get(VC_I(x + 1, y, z)) == B_LAVA) +
+                    (vc_get(VC_I(x, y, z - 1)) == B_LAVA) + (vc_get(VC_I(x, y, z + 1)) == B_LAVA);
+            if (n > bscore) bscore = n, lx = vc_x0 + x, ly = vc_y0 + y, lz = vc_z0 + z;
+          }
+      if (bscore >= 0) {
+        pl.x = lx + 0.5f, pl.z = lz + 0.5f, pl.y = (float)(ly + 4);
+        pl.yaw = 0, pl.pitch = 78;   /* (pitch runs positive downwards) */
+        pl.flying = true;   /* (hover over the sea: it is not solid) */
+        world_follow(pl.x, pl.y, pl.z);
+        while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+        fprintf(stderr, "lava: the sea over %d %d %d (%d sides lava, shore %d %d)\n", lx, ly, lz, bscore, bx, bz);
+      }
+    } else {
+      /* a fall of lava: a source standing in the air over a cleared field - the
+       * stream runs down and spreads, its flowing layers' picture over the still
+       * source's */
+      int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+      for (int z = pz - 3; z < pz + 12; z++)
+        for (int x = px - 9; x < px + 10; x++)
+          for (int y = fy - 1; y < fy + 8; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
+      world_set(px, fy + 4, pz + 6, B_LAVA);
+      neighbours_changed(px, fy + 4, pz + 6);
+    }
+    pl.mode = 1;   /* (Creative: the frames are of the lava and not of a burning player) */
+    camera_reset();
   }
   if (concrete) {
     /* the concrete pair on a cleared field: a white powder column on a stone shelf over a

@@ -1,3 +1,51 @@
+## 1.5.12
+**The moving fluids wear the modern client's pictures now - the flow at its own size, and daylight water lit as the air is**
+- The four fluid pictures are the modern dump's (`minecraft-textures/`): water_still,
+  water_flow, lava_still and lava_flow, packed by `make data-fluids`
+  (`tools/data_add.py --replace ...`, which packs them again into the rows
+  `src/data.c` already has and the icons of the states that show them, so a later
+  full pack writes the same bytes; a second run changes nothing). The two stills
+  pack to the bytes that were already in `data.c`, so the real change is the moving
+  pair.
+- The **flowing** pictures were the wrong size: the flow strip is 32 x 32 a frame
+  (two 16 x 16 tiles) and `first_frame` squeezed the whole frame into the game's
+  16 x 16, so a falling or spreading block drew the picture at half scale - the
+  modern lava read as the same texture "really small" on a block. `pack.py`'s
+  `tex_image` now takes one 16 x 16 quarter of the frame at its own texel size,
+  which is how Minecraft draws a face of the flow (the strip spans two blocks
+  there), so the blobs on a lava fall and a spreading stream are the size the game
+  shows them. `FLOW_TEX` names the two, so a later full pack writes the same bytes.
+- **Daylight water was drawn at the water cell's own light** - the sky less water's
+  opacity, 12 under an open sky, half the light's worth - where the air above the
+  surface holds 15: a pool read a good deal darker than the vanilla one. Water
+  faces are lit by the brighter of the cell and the cell above it now (cell_hit,
+  and water_pixel for the pixels between the samples, so the adaptive picture keeps
+  to `play_ref`'s full trace as it did: the --water frames 12/16/20/20 differing
+  pixels, the --xray and --concrete ones 0, all as in 1.5.11). Lava glows by itself
+  and keeps its own cell's light, so the nether is untouched.
+- `tests/play.c` gains `--lava`: a source standing in the air over a cleared field
+  (the stream runs down and spreads; Creative, so nothing burns), and `--lava
+  --nether`, which looks out over the nether's lava sea from above it.
+- Recorded (the host harness, **not** `build/desktop`): `./build/play --water
+  --frames 60 --shots 3,20,40,59 --out /tmp/water` has shot 3's source block a
+  bright blue with its surface's pattern where 1.5.11 draws a flat slate, and shot
+  40's spread surface mean (41, 62, 77) -> (48, 78, 111) over the same field;
+  `./build/play --lava --frames 120 --shots 2,10,60,119 --out /tmp/lava` shows the
+  falling column and the spreading layers carrying the 16 x 16 quarter (blobs
+  twice the size of the squeezed picture) under the still source; `./build/play
+  --lava --nether --frames 8 --shots 7 --out /tmp/lava-nether` shows the sea's
+  surface over the shore.
+- Ordinary views are untouched: the 18 `bench_render.py --fancy --rain --mobs`
+  frames are pixel-identical (checksums; 177.38 M insns, the deepest stack 20016 B,
+  both the same as before), the documented `./build/play --frames 120 --mobs
+  --torches --rain --shots 30,60,90,119` frames are byte-identical, and the nether
+  shots are unchanged. `make test` passes; `make build && make check` fits (BSS
+  121941 and data 5073 unchanged, text 517482 -> 517610, the .nwa 742724 -> 742884
+  bytes, the .bin 520932 -> 521060). The device build runs (`tools/emu.py`: 272
+  frames, 45.3 fps, 22.1 ms a frame, no violations), `tests/test_numblocks_progress.py`
+  passes (numblocks.cfg still 44 bytes) and `make -C games/numblocks-interest build
+  check` passes.
+
 ## 1.5.11
 **Mods and Cheats: Options gains the screen, and Fullbright**
 - Options has a **Mods and Cheats...** row now (under Video Settings/Controls, before Done), and

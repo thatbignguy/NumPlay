@@ -141,19 +141,25 @@ def custom_texture(jar, n):
 def tex_image(jar, n):
     # bed block faces: use the old blocks/bed_* (1.8.8) – the modern entity is
     # 3D and too much for NumBlocks' low 9-high box (user asked for the old one)
-    return custom_texture(jar, n) if n.startswith('@') else first_frame(jar.image('blocks/' + n))
+    if n.startswith('@'):
+        return custom_texture(jar, n)
+    if n in FLOW_TEX:
+        # the flowing fluids: 32 x 32 a frame (two 16 x 16 tiles), and Minecraft
+        # draws them at their own texel size - a face shows one 16 x 16 quarter -
+        # so the first quarter is the picture, not the whole frame squeezed (a
+        # squeezed one reads as the same texture "really small" on a block)
+        return jar.image('blocks/' + n).crop((0, 0, 16, 16))
+    return first_frame(jar.image('blocks/' + n))
 
 
-def pack_textures(jar):
-    """Textures in the order blocks.py first names them."""
-    names = []
-    for s in blocks.S:
-        t = s['tex']
-        if t is None:
-            continue
-        for n in ([t] if isinstance(t, str) else list(t.values())):
-            if n and n not in names:
-                names.append(n)
+# the flowing water and lava (blocks.py's water_flow/lava_flow): the only 32-wide
+# pictures the packer is given, packed as above
+FLOW_TEX = {'water_flow', 'lava_flow'}
+
+
+def tinted_names():
+    """the texture names the biome tints: a palette from index 0 (or 1 where the
+    texel is see-through) is multiplied by the biome's colour"""
     tinted = set()
     for s in blocks.S:
         if s['tint'] and s['tex']:
@@ -166,6 +172,26 @@ def pack_textures(jar):
                     tinted.add(t['overlay'])
     tinted.discard('grass_side')   # its fringe comes from the overlay
     tinted.discard('grass_side_snowed')
+    return tinted
+
+
+def tex_flags(name, alpha, tinted):
+    """tex_flags: the first palette index the biome tints (16: none) | 0x20 if it has holes"""
+    tint_from = (1 if alpha else 0) if name in tinted else 16
+    return tint_from | (0x20 if alpha else 0)
+
+
+def pack_textures(jar):
+    """Textures in the order blocks.py first names them."""
+    names = []
+    for s in blocks.S:
+        t = s['tex']
+        if t is None:
+            continue
+        for n in ([t] if isinstance(t, str) else list(t.values())):
+            if n and n not in names:
+                names.append(n)
+    tinted = tinted_names()
     px, pals, flags = [], [], []
     for n in names:
         im = tex_image(jar, n)
@@ -194,8 +220,7 @@ def pack_textures(jar):
             pal.append((0, 0, 0))
         px.append(idx)
         pals.append(pal)
-        tint_from = (1 if alpha else 0) if n in tinted else 16
-        flags.append(tint_from | (0x20 if alpha else 0))
+        flags.append(tex_flags(n, alpha, tinted))
     return names, px, pals, flags
 
 

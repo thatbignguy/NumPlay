@@ -9,8 +9,13 @@ has added since, their textures and icons and any new item - packed with
 tools/pack.py's own functions, so a later full pack writes the same bytes.
 
     python3 tools/data_add.py [MODERN_TEX_DIR]     (default: ../../minecraft-textures)
+    python3 tools/data_add.py --replace NAME,... [MODERN_TEX_DIR]
 
-Idempotent: run it again and it finds nothing to add."""
+Idempotent: run it again and it finds nothing to add.
+
+--replace packs the named pictures again where data.c already has them (and the
+icons of the states that show them): for what a full pack would change in place
+rather than append - the moving fluids, whose pictures are the dump's now."""
 import os
 import re
 import sys
@@ -25,7 +30,7 @@ import modern_map  # noqa: E402
 
 DATA = os.path.join(ROOT, 'src', 'data.c')
 DATAH = os.path.join(ROOT, 'src', 'data.h')
-MODERN = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, '..', '..', 'minecraft-textures')
+MODERN = os.path.join(ROOT, '..', '..', 'minecraft-textures')
 
 
 def parse(body):
@@ -124,10 +129,70 @@ def add_sprite(T, bs, pal, alpha):
     return len(T['spr_off'].rows) - 1
 
 
+def replace_sprite(T, idx, bs, pal, alpha):
+    """a sprite where it already is (its bytes swapped for new ones of any length,
+    the sprites after it moved along): how a replaced block picture's icon is kept
+    the one a later full pack writes, without growing the sprite list"""
+    off = T['spr_off'].rows[idx]
+    end = T['spr_off'].rows[idx + 1] if idx + 1 < len(T['spr_off'].rows) else len(T['spr_px'].rows)
+    T['spr_px'].rows[off:end] = bs
+    shift = len(bs) - (end - off)
+    for k in range(idx + 1, len(T['spr_off'].rows)):
+        T['spr_off'].rows[k] += shift
+    T['spr_alpha'].rows[idx] = 1 if alpha else 0
+    T['spr_pal'].rows[idx] = [pack.rgb565(*c) for c in (pal + [(0, 0, 0)] * (16 - len(pal)))]
+    for name in ('spr_px', 'spr_off', 'spr_alpha', 'spr_pal'):
+        T[name].changed = True
+
+
+def replace_textures(T, jar, names, by_index):
+    """--replace's work: pack the named pictures again (as a full pack would, see
+    pack.tex_image) into the rows data.c already has for them, and the icons of the
+    states that show them. Idempotent: the same pictures packed again change nothing."""
+    replaced = set(names)
+    tinted = pack.tinted_names()
+    for n in names:
+        assert n in by_index.values(), f'data.c has no texture {n!r} (data.h lost its TX_?)'
+        idx = next(i for i, v in by_index.items() if v == n)
+        pix, pal, alpha = pack.quantize(pack.tex_image(jar, n), 16)
+        while len(pal) < 16:
+            pal.append((0, 0, 0))
+        T['tex_px'].rows[idx] = [pix[i] | (pix[i + 1] << 4) for i in range(0, 256, 2)]
+        T['tex_pal'].rows[idx] = [pack.rgb565(*c) for c in pal]
+        T['tex_flags'].rows[idx] = pack.tex_flags(n, alpha, tinted)
+    for name in ('tex_px', 'tex_pal', 'tex_flags'):
+        T[name].changed = True
+    for i, s in enumerate(blocks.S[:len(T['blk_icon'].rows)]):
+        t = s['tex']
+        if not t:
+            continue
+        if not any(n in replaced for n in ([t] if isinstance(t, str) else t.values())):
+            continue
+        bs, pal, alpha = pack.pack_sprite(pack.iso_icon(jar, s, None))
+        replace_sprite(T, T['blk_icon'].rows[i], bs, pal, alpha)
+
+
 def main():
+    args = sys.argv[1:]
+    replace, modern = [], MODERN
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith('--replace='):
+            replace = [n for n in a.split('=', 1)[1].split(',') if n]
+        elif a == '--replace':
+            i += 1
+            if i >= len(args):
+                sys.exit('--replace needs a comma-separated list of texture names')
+            replace = [n for n in args[i].split(',') if n]
+        elif a.startswith('--'):
+            sys.exit(f'unknown option {a!r}')
+        else:
+            modern = a
+        i += 1
     src = open(DATA).read()
     T = tables(src)
-    jar = modern_map.ModernSource(MODERN)
+    jar = modern_map.ModernSource(modern)
     BCOUNT = len(blocks.S)
     # the per-state tables are padded to NSTATES (the 9-bit packing): the states data.c
     # defines end where its nonzero Minecraft ids do (every defined state but air and the
@@ -151,6 +216,11 @@ def main():
     for m in re.finditer(r'#define TX_(\w+) (\d+)', open(DATAH).read()):
         by_index[int(m.group(2))] = m.group(1).lower()
     assert sorted(by_index) == list(range(ntex)), 'data.h lost a texture name'
+
+    # ---- pictures to pack again where they are (--replace, e.g. the moving fluids)
+    if replace:
+        replace_textures(T, jar, replace, by_index)
+
     new_names = []
     for s in blocks.S[nstates:]:
         t = s['tex']
