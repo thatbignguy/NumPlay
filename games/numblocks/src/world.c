@@ -11,7 +11,7 @@ uint8_t vc[VC_BYTES];
 uint8_t vl[VCY * VCZ * VCX];
 uint8_t vbiome[VCZ * VCX];
 uint8_t vtop[VCZ * VCX];
-uint8_t vmac[(MCY * MCZ * MCX + 3) / 4];   /* 4 x 4 x 4 regions: 0 all air, 2 water+air only, 1 other */
+uint8_t vmac[MCY * MCZ * MCX];   /* 4 x 4 x 4 regions: 0 all air, 2 water+air only, 1 other */
 static uint8_t vgtop[VCZ * VCX];    /* per column: the generator's highest block (not air) */
 int vc_x0, vc_y0, vc_z0;
 static bool vc_valid;

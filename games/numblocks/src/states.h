@@ -13,12 +13,12 @@
 /* the state at cell i of the packed array p */
 static inline int b9_get(const uint8_t *p, int i) {
   uint32_t v;
-  memcpy(&v, p + (i >> 3) * 9 + (i & 7), 4);
+  memcpy(&v, p + i + (i >> 3), 4);
   return (int)((v >> (i & 7)) & 511);
 }
 /* the state at cell i of the packed array p, put there */
 static inline void b9_set(uint8_t *p, int i, int b) {
-  uint8_t *q = p + (i >> 3) * 9 + (i & 7);
+  uint8_t *q = p + i + (i >> 3);
   int s = i & 7;
   uint32_t v, m = 511u << s;
   memcpy(&v, q, 4);

@@ -1,3 +1,44 @@
+## 1.5.17
+**Three hot-loop shortcuts: the block-cache read loses a multiply, the region map a shift, and a plain cloud a dead sky branch - 4% fewer instructions a frame, the same pixels**
+- **CPU.** Three expressions the renderer runs millions of times a frame were made shorter,
+  with every one of the 18 documented `bench_render.py` checksums unchanged in all four sets
+  (`--fancy`, `--fancy --rain --mobs`, fast, fast `--rain --mobs`) - the picture is
+  byte-identical, so nothing below is a visual trade:
+  - **The block-cache read** (`src/states.h`). `b9_get`/`b9_set` found cell `i`'s byte at
+    `(i >> 3) * 9 + (i & 7)`; the same place is `i + (i >> 3)` (8 cells are 9 bytes, so cell
+    `i` starts `i + i / 8` bytes in), which loses the multiply-by-9 and its operand shuffle.
+    This accessor is the single most-executed expression in the game: `trace` reads a block
+    every cell of every ray. It alone is ~1.5% of the frame.
+  - **The region map** (`src/nb.h`, `src/world.c`). `vmac` packed a 4 x 4 x 4 region's two-bit
+    kind into a shared byte, so every `vmac_get` shifted and masked; it is now one byte a
+    region (600 B, +450 over the 150 B it was; `vmac_set` a plain store). A ray asks it at
+    every region crossing, so the lookup became a load.
+  - **The plain sky's cloud pixel** (`src/render.c`). `sky_fill` draws a 4 x 4 cell of daytime
+    sky by gradient, and where a cloud stands over a pixel it called `sky_px`. But it only
+    takes that path for a cell it has already proved *plain* - the sun and the moon cannot be
+    over it, `sky_fill`'s own test - so all of `sky_px`'s celestial work (sun, moon, their
+    texture lookup) is dead there, and it re-tests the very cloud the caller found. The new
+    `sky_px_plain` does the gradient and the cloud blend only, with the same arithmetic, which
+    is what made the clouds of a clouded sky cost ~2% less.
+- **Measured (the M7, `bench_render.py`, instruction counts at 216 MHz).** `--fancy`
+  118.09 -> **113.51 M insns** (546.7 -> 525.5 ms), `--fancy --rain --mobs` 169.47 -> **164.85 M**
+  (784.6 -> 763.2 ms), fast 93.38 -> **89.55 M** (432.3 -> 414.6 ms), fast `--rain --mobs`
+  110.96 -> **107.31 M** (513.7 -> 496.8 ms): **-3.9% / -2.7% / -4.1% / -3.3%**, the same
+  pixels (all 18 checksums of each set match 1.5.16's). The device (`tools/emu.py`, a fixed
+  `-DBENCH=12345` build, 15 s): 377 -> **387 frames**, 25.1 -> **25.8 fps**, 39.8 -> **38.8 ms
+  a frame**, slowest 48 -> 47 ms, no violations.
+- **RAM and size.** `vmac`'s byte a region costs 450 B: `.data` 5,079 unchanged, `.bss`
+  118,616 -> **119,064**, the game's RAM 123,695 -> **124,143** - still inside `CUSTOM_RAM`
+  (133,652), with the bench's deepest stack 21,316 -> 21,320 B (`--fancy --rain --mobs`
+  22,296 -> 22,304). The shorter expressions shrank the links a little: `NumBlocks.nwa`
+  610,448 -> **609,568 B**, `numblocks-interest.nwa` 636,784 -> **635,896 B**, the `.bin`
+  540,732 -> **539,884 B**.
+- Recorded: `make test` passes (208 recipes); `make -C games/numblocks build host desktop`
+  builds; `games/numblocks-interest build` and both `.nwa`s `nwlink nwa-bin --ram-length
+  133652` fit; `tests/test_numblocks_progress.py build/apps/NumBlocks.nwa` and
+  `tests/test_games.py build/apps --game numblocks` pass; the host `./build/play` scenarios
+  run and the device build renders without violations.
+
 ## 1.5.16
 **Smaller and quicker: the download loses 131 KB to one linked piece, the pixel loops gain 5% at O3, and the game's RAM is 3 KB less**
 - **File size.** The standalone and Interest links now build as a **single LTO partition** and

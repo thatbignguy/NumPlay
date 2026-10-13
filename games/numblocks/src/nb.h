@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.16"
+#define NB_VERSION "1.5.17"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -136,14 +136,10 @@ static inline void vc_set(int i, int b) { b9_set(vc, i, b); }
 #define MCX (VCX / 4)
 #define MCY (VCY / 4)
 #define MCZ (VCZ / 4)
-extern uint8_t vmac[(MCY * MCZ * MCX + 3) / 4];   /* 2 bits a region (600 regions -> 150 B) */
+extern uint8_t vmac[MCY * MCZ * MCX];   /* one byte a region (600 regions -> 600 B) */
 #define MC_I(x, y, z) ((((y) >> 2) * MCZ + ((z) >> 2)) * MCX + ((x) >> 2))
-static inline int vmac_get(int mi) { return (vmac[mi >> 2] >> ((mi & 3) * 2)) & 3; }
-static inline void vmac_set(int mi, int v) {
-  uint8_t *p = &vmac[mi >> 2];
-  int s = (mi & 3) * 2;
-  *p = (uint8_t)((*p & ~(3 << s)) | ((v & 3) << s));
-}
+static inline int vmac_get(int mi) { return vmac[mi]; }
+static inline void vmac_set(int mi, int v) { vmac[mi] = (uint8_t)v; }
 static inline int light_at(int i) { return vl[i] & 15; }          /* sky light */
 static inline int block_light_at(int i) { return vl[i] >> 4; }   /* torches, lava, glowstone... */
 

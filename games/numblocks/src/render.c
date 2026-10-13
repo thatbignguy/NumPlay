@@ -334,6 +334,23 @@ static inline __attribute__((always_inline)) uint16_t sky_px(const SkyRow *k, fl
   return pack(r, g, b);
 }
 
+/* The pixel of a plain row (sky_fill) that a cloud stands in front of. A row is plain only
+ * where neither the sun nor the moon can be over the cell (sky_fill's own test), so all of
+ * sky_px's celestial work is dead here; what is left is its gradient and its cloud blend,
+ * with the same arithmetic (identical pixels). */
+static __attribute__((noinline)) uint16_t sky_px_plain(const SkyRow *k, float su) {
+  float l2 = k->len2 + su * su, len = 0, dy = k->dy;
+  int gi = 128;
+  if (dy * dy < 0.16f * l2) len = sqrtf(l2), gi = (int)(dy / len * 320);
+  int r = sky_grad[gi][0], g = sky_grad[gi][1], b = sky_grad[gi][2];
+  if (!len) len = sqrtf(l2);
+  float a = 0.8f * (1 - k->ct * len / 200);
+  r += (int)((cloud_r - r) * a);
+  g += (int)((cloud_g - g) * a);
+  b += (int)((cloud_b - b) * a);
+  return pack(r, g, b);
+}
+
 /* ---------------------------------------------------------------- tracing */
 /* blocks with a front (furnaces, pumpkins, chests) turn it to the first open
  * side: south, north, east, west; beds lie towards their other half */
@@ -996,7 +1013,7 @@ static __attribute__((unused)) void sky_fill(uint16_t (*cb)[RW], float (*zb)[RW]
           extern const uint8_t clouds[256 * 256 / 8];
           if (clouds[(iz * 256 + ix) >> 3] & (1 << (ix & 7))) {
             float pl2 = k->len2 + su * su;
-            if (k->ct * k->ct * pl2 < 200 * 200) c = sky_px(k, su, rb[r][2] + rgz * su);
+            if (k->ct * k->ct * pl2 < 200 * 200) c = sky_px_plain(k, su);
           }
         }
         cb[r][x] = c;
