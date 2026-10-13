@@ -1,3 +1,27 @@
+## 1.5.33
+**No more water on lava: the water table drops to -50 and its contact with the lava sea crusts to obsidian**
+
+- **Less water, and none of it floating.** The -44 table flooded ten rows; at -50 the
+  layer is four rows (-53..-50), so measured water drops from ~2.8% to ~0.7% of the
+  deep layer. And round rooms spanning the boundary used to hold a lens of water
+  sitting right on the lava. The contact now crusts to obsidian - exactly what the
+  fluid tick's own mixing makes of lava touching water (`mix` in tick.c turns a lava
+  source beside water to obsidian), so the crust is what the game would have built
+  there anyway, deterministically and at once. Checked over 100 chunks: 1,738 contact
+  cells crusted, **0 water cells with lava below**. The crust reads only in-window
+  cells and lava only ever exists at -54 and below, so it is identical in every slab
+  window (the deep-window check still reports 0 differ).
+- **Recorded.** The section dumps show water sitting flat at -50 with the obsidian
+  rind and the lava below it; `./build/play --caves ... --shots 5,29` shows the dry
+  caves above (a cavern with redstone in its walls, then its tunnel). `t_refcmp`
+  still 0 differ from y=5 up (the unit case gains the no-water-on-lava check).
+- **Cost.** No BSS growth; deepest stack 11,704 B unchanged. The deep window is 4.76 M
+  instructions (22.0 ms, from 4.67 M - the crust pass scans the window once) and the
+  straddling one 27.61 M (from 27.55 M). `NumBlocks.nwa` 616,792 -> **616,996 B**.
+  Recorded: `make test` passes; `make build && make check` and
+  `make -C games/numblocks-interest build check` fit; `tools/emu.py` boots the device
+  build; `build/desktop` rebuilt.
+
 ## 1.5.32
 **Fewer caves and honest water: a tenth less cave volume, and the water is a flat layer above the lava sea instead of floating balls**
 

@@ -2209,15 +2209,17 @@ int main(void) {
     /* chunk (1, 2) holds a cavern system */
     gen_slab(1, 2, -64, 64, full);
     gen_scratch(NULL);
-    int air = 0, rock = 0;
+    int air = 0, rock = 0, bad = 0;
     for (int r = 0; r < 64; r++)
       for (int i = 0; i < 256; i++) {
         int a = b9_get(full, r * 256 + i);
         if (a == B_AIR) air++; else if (a != B_WATER && a != B_LAVA) rock++;
+        if (a == B_WATER && r > 0 && b9_get(full, (r - 1) * 256 + i) == B_LAVA) bad++;
       }
     CHECK(diff == 0);       /* the same in any slab window */
     CHECK(air > 1500);      /* rooms and tunnels to walk */
     CHECK(rock > air);      /* with rock dominant between them */
+    CHECK(bad == 0);        /* no water sits directly on lava (obsidian crusts the contact) */
   }
   {
     /* a column whose chunk is still to be made: it is reported pending - so the pick ray

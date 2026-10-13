@@ -6269,8 +6269,8 @@ static int deep_bedrock(int x, int z) {
  * thin (its noodle); water pools and the lava sea fill the carved cells as before. */
 
 #define DEEP_LAVA_Y (-54)   /* 1.18's lava level: an open deep cell at or below it is the lava sea */
-#define DEEP_WATER_Y (-44)   /* the water table: open cells below it (down to the lava sea) are water,
-                              * a flat layer like the lava's - never floating balls in the rock above it */
+#define DEEP_WATER_Y (-50)   /* the water table: open cells below it (down to the lava sea) are water,
+                              * a thin flat layer like the lava's - never floating balls in the rock above it */
 /* A walk never travels more than 32 blocks sideways from its chunk (20-30 steps of
  * 0.9 blocks, radius under 3.2; rooms sit inset with radius under 13), so the 5 x 5
  * chunks around the one being carved hold every walk that can reach it. */
@@ -6398,6 +6398,22 @@ HOT static void deep_caves(int cx, int cz, int y0, int deep, uint8_t *out) {
             c.ccz = cz;
             deep_walks(cx + ox, cz + oz, &c);
         }
+    /* Where the water layer meets the lava sea, the contact crusts to obsidian - exactly
+     * what the fluid tick's own mixing makes of lava touching water (tick.c's mix), so no
+     * water sits directly on lava. Lava only exists at wy <= DEEP_LAVA_Y, so only water at
+     * -53 can meet it, and every slab window holding -53 holds -54 too - the crust is the
+     * same whichever window asks. */
+    for (int zl = 0; zl < 16; zl++)
+        for (int xl = 0; xl < 16; xl++)
+            for (int yl = 0; yl < deep; yl++) {
+                int wy = y0 + yl;
+                if (wy <= WORLD_MIN_Y || wy >= 0) continue;
+                int o = yl * 256 + zl * 16 + xl;
+                if (b9_get(out, o) != B_WATER) continue;
+                int below = wy - 1;
+                if (below < y0 || below >= y0 + deep) continue;   /* outside the window: left for the tick */
+                if (b9_get(out, o - 256) == B_LAVA) b9_set(out, o, B_OBSIDIAN);
+            }
 }
 
 /* One ore vein in the deep layer: WorldGenMinable's shape (a chain of spheres along a
