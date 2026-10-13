@@ -41,6 +41,9 @@
  *                         side - looking down, the water under the block and the lava
  *                         beside it are the faces the rock hides; 1.5.9 draws the sand
  *                         under the water and the stone behind the lava instead)
+ *        [--contrast]   (Personalisation: High Contrast Block Outlines on)
+ *        [--panorama N] (Personalisation: the title's backdrop; 0 Random, 1 World,
+ *                         2 1.16, 3 1.20, 4 1.21)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
@@ -85,7 +88,7 @@ int main(int argc, char **argv) {
   int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
-  int cheats = 0;
+  int cheats = 0, contrast = 0, panorama = -1;
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--ms-per-frame") && i + 1 < argc) mspf = atoi(argv[++i]);
@@ -114,6 +117,8 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--xray")) xray = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
+    else if (!strcmp(argv[i], "--contrast")) contrast = 1;
+    else if (!strcmp(argv[i], "--panorama") && i + 1 < argc) panorama = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--build")) build = 1;
     else if (!strcmp(argv[i], "--spawner")) spawner = 1;
     else if (!strcmp(argv[i], "--rain")) rain = 1;
@@ -274,6 +279,9 @@ int main(int argc, char **argv) {
     pl.yaw = 0, pl.pitch = 0;
   }
   if (cheats) world_cheats = true;   /* the new world starts without them; the switcher needs them */
+  if (contrast) opt.contrast = 1;
+  /* (after game_init: the title's backdrop re-picks when the option changed under it) */
+  if (panorama >= PAN_RANDOM && panorama <= PAN_1_21) opt.panorama = (uint8_t)panorama;
   if (distance >= 1 && distance <= 2) opt.distance = (uint8_t)distance;
   if (rain) {
     /* raining (and storming) from the start, for long enough */

@@ -23,24 +23,56 @@ static uint32_t last, acc, keys_held, autosave;
 static float px, py, pz;
 static bool in_world;      /* playing; else the title screens, the world turning behind */
 static float title_yaw;
+/* The title's backdrop comes from Personalisation's Panorama pick (opt.panorama). This
+ * is the whole state of it, packed into one byte: the pick showing (PAN_WORLD..PAN_1_21),
+ * the setting it was picked for (Random re-picks each entry), and whether the backdrop
+ * world is up. One byte: the feature's own BSS is that one byte and nothing else. */
+static struct {
+  uint8_t show : 3, pick : 3, world : 1;
+} title_pan;
 
 void camera_reset(void) {
   px = pl.x, py = pl.y, pz = pl.z;
   player_look(pl.x, pl.y + 1.62f, pl.z, pl.yaw, pl.pitch);
 }
 
-/* the title's backdrop: the saved world where the player is, else a world of seed 0 */
-static void title(void) {
-  in_world = false;
+/* The title's backdrop (Personalisation's Panorama): a fixed pick keeps itself every
+ * visit; Random rolls one of the four. The roll mixes the clock as parse_seed mixes
+ * it - never the world's rnd() stream, which the tests replay - and happens on every
+ * entry, so Random shows a different one on different visits. */
+static void title_pick(void) {
+  uint8_t p = opt.panorama <= PAN_1_21 ? opt.panorama : PAN_RANDOM;
+  if (p == PAN_RANDOM) {
+    uint64_t r = (uint64_t)plat_millis() * 0x9E3779B97F4A7C15ull + perf_frames;
+    r ^= r >> 30;
+    r *= 0xBF58476D1CE4E5B9ull;
+    r ^= r >> 31;
+    title_pan.show = (uint8_t)(PAN_WORLD + r % 4);
+  } else title_pan.show = p;
+  title_pan.pick = p;
+}
+
+/* the backdrop world: the saved world where the player is, else a world of seed 0 */
+static void title_world(void) {
+  if (title_pan.world) return;
   if (!opt.last_world || !load_world(opt.last_world)) {
     world_type = WT_DEFAULT;
     memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
     world_new(0, "nbt");
     player_spawn();
   }
-  gui_menu(GUI_TITLE);
   world_follow(pl.x, pl.y, pl.z);
   camera_reset();
+  title_pan.world = 1;
+}
+
+/* the title's backdrop pick, and the world behind it where that is the one */
+static void title(void) {
+  in_world = false;
+  title_pan.world = 0;
+  title_pick();
+  if (title_pan.show == PAN_WORLD) title_world();
+  gui_menu(GUI_TITLE);
 }
 
 /* the loading screen, drawn once before the world is built */
@@ -207,10 +239,16 @@ bool game_frame(void) {
     }
   }
   if (!in_world) {
-    /* the title: the world turns slowly, nothing moves */
+    /* the title: its backdrop turns slowly (the world, or a version's panorama), nothing moves */
+    if (opt.panorama != title_pan.pick) {
+      /* the setting changed under the title (Options, Personalisation): pick again */
+      title_pick();
+      if (title_pan.show == PAN_WORLD) title_world();
+    }
     title_yaw += dt * 0.006f;
     Camera c = {pl.x, pl.y + 1.62f, pl.z, title_yaw, 8};
-    render_frame(gui == GUI_TITLE ? &c : NULL, game_time);
+    if (title_pan.show != PAN_WORLD && gui == GUI_TITLE) render_panorama(&c, title_pan.show - PAN_1_16);
+    else render_frame(gui == GUI_TITLE ? &c : NULL, game_time);
     perf_frames++;
     return true;
   }
@@ -233,7 +271,7 @@ bool game_frame(void) {
     if (pl.pitch > 90) pl.pitch = 90;
     if (pl.pitch < -90) pl.pitch = -90;
   }
-  bool paused = gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_OPTIONS || gui == GUI_CTRLMENU || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS || gui == GUI_MODS;
+  bool paused = gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_OPTIONS || gui == GUI_CTRLMENU || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS || gui == GUI_MODS || gui == GUI_PERSONAL;
   if (!paused) acc += dt;
   /* a key pressed on a frame between ticks waits for the next tick (else that press is lost) */
   static uint32_t game_pressed;

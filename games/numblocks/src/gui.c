@@ -1291,7 +1291,7 @@ enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCE
        B_CONTROLS, B_CONTROLS_DONE, B_NAME, B_RENAME, B_DORENAME, B_RECREATE, B_CHEATS, B_LAN, B_LAN_MODE,
        B_LAN_CHEATS, B_LAN_START, B_TYPE, B_CUSTOMIZE, B_FLAT_FIELD, B_FLAT_USE, B_FLAT_DONE, B_FLAT_RESET,
        B_FLAT_CANCEL, B_DIST, B_VIDEO, B_VIDEO_DONE, B_CTRL_SHEET, B_CTRL_SPRINT, B_CTRL_KEYS, B_CTRL_DONE,
-       B_BRIGHT, B_MODS, B_FULLBRIGHT, B_MODS_DONE };
+       B_BRIGHT, B_MODS, B_FULLBRIGHT, B_MODS_DONE, B_PERSONAL, B_CONTRAST, B_PANORAMA, B_PERSONAL_DONE };
 int menu_choice;            /* an action for main.c (ACT_*) */
 int create_mode;            /* the new world's game mode */
 bool create_cheats;         /* and whether it allows cheats */
@@ -1579,6 +1579,17 @@ static void cat_brightness(char *t) {
   }
 }
 
+/* Personalisation: the Panorama row's picks (opt.panorama), as the row writes them */
+static const char *pan_name(uint8_t p) {
+  switch (p) {
+    case PAN_WORLD: return "World";
+    case PAN_1_16: return "1.16";
+    case PAN_1_20: return "1.20";
+    case PAN_1_21: return "1.21";
+    default: return "Random";
+  }
+}
+
 /* the screen's buttons, in a buffer of the caller's (N_BUTTONS of them at most); the labels
  * follow the screen, so they are filled before each use */
 static void menu(Button *buf, int screen) {
@@ -1651,7 +1662,8 @@ static void menu(Button *buf, int screen) {
       add_button(w / 2 + 5, h / 6 - 12, 150, 1, B_DIFF, t);
       add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_VIDEO, "Video Settings...");
       add_button(w / 2 + 5, h / 6 + 36, 150, 1, B_CONTROLS, "Controls...");
-      add_button(w / 2 - 100, h / 6 + 60, 200, 1, B_MODS, "Mods and Cheats...");
+      add_button(w / 2 - 155, h / 6 + 60, 150, 1, B_MODS, "Mods and Cheats...");
+      add_button(w / 2 + 5, h / 6 + 60, 150, 1, B_PERSONAL, "Personalisation...");
       add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_DONE, "Done");
       break;
     }
@@ -1662,6 +1674,17 @@ static void menu(Button *buf, int screen) {
       cat(t, "Fullbright: ", opt.fullbright ? "ON" : "OFF");
       add_button(w / 2 - 100, h / 6 - 12, 200, 1, B_FULLBRIGHT, t);
       add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_MODS_DONE, "Done");
+      break;
+    }
+    case GUI_PERSONAL: {
+      /* Personalisation: the block outlines and the title's backdrop. Two rows, each as
+       * wide as the screen likes, with Done under them; Panorama steps with left and
+       * right as well as OK (the sliders' way) */
+      cat(t, "High Contrast Block Outlines: ", opt.contrast ? "ON" : "OFF");
+      add_button(w / 2 - 155, h / 6 - 12, 310, 1, B_CONTRAST, t);
+      cat(t, "Panorama: ", pan_name(opt.panorama));
+      add_button(w / 2 - 155, h / 6 + 12, 310, 1, B_PANORAMA, t);
+      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_PERSONAL_DONE, "Done");
       break;
     }
     case GUI_VIDEO: {
@@ -1944,14 +1967,12 @@ static void press(Button *buttons, int id) {
       gui_menu(options_from);
       break;
     case B_MODS:
-      /* The screen is the world's: cheats are the world's property, so from the title's
-       * Options (options_from is GUI_TITLE) there is no world to be cheating in and the
-       * answer is no even when the world the title shows behind was played with cheats
-       * (load_world left world_cheats set). The refusal is the game mode switcher's: a
-       * line in the chat, and no screen opens. (The chat draws over the world only: in a
-       * world the line is there once Options closes; at the title it is added but not
-       * drawn, and the button there cannot open the screen.) */
-      if (options_from != GUI_PAUSE || !cheats_on()) {
+      /* The screen is the world's: cheats are the world's property. From the title's
+       * Options there is no world to be cheating in, so the press does nothing and
+       * nothing is said; in a world whose cheats are off the refusal is the game mode
+       * switcher's: a line in the chat (there once Options closes), and no screen opens. */
+      if (options_from != GUI_PAUSE) break;
+      if (!cheats_on()) {
         chat_add("Mods and cheats are only available if you turned cheats on when creating a world", CHAT_RED);
         break;
       }
@@ -1959,6 +1980,13 @@ static void press(Button *buttons, int id) {
       break;
     case B_FULLBRIGHT: opt.fullbright = !opt.fullbright; break;
     case B_MODS_DONE:
+      save_options();
+      gui_menu(GUI_OPTIONS);
+      break;
+    case B_PERSONAL: gui_menu(GUI_PERSONAL); break;
+    case B_CONTRAST: opt.contrast = !opt.contrast; break;
+    case B_PANORAMA: opt.panorama = (uint8_t)(opt.panorama >= PAN_1_21 ? PAN_RANDOM : opt.panorama + 1); break;
+    case B_PERSONAL_DONE:
       save_options();
       gui_menu(GUI_OPTIONS);
       break;
@@ -2001,7 +2029,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     pressed &= ~(uint32_t)(K_UP | K_DOWN);
   }
   /* Minecraft's sliders: left/right on one slides it instead of moving selection */
-  if ((gui == GUI_OPTIONS || gui == GUI_VIDEO) && nbuttons && buttons[bcur].on &&
+  if ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_PERSONAL) && nbuttons && buttons[bcur].on &&
       (pressed & (K_LEFT | K_RIGHT))) {
     if (buttons[bcur].id == B_DIST) {
       int d = opt.distance >= 1 && opt.distance <= 2 ? opt.distance : 2;
@@ -2029,6 +2057,13 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
       menu(buttons, gui);
       return;
     }
+    if (buttons[bcur].id == B_PANORAMA) {
+      /* the picks wrap: Random, World, 1.16, 1.20, 1.21, round again */
+      if (pressed & K_RIGHT) opt.panorama = (uint8_t)(opt.panorama >= PAN_1_21 ? PAN_RANDOM : opt.panorama + 1);
+      else opt.panorama = (uint8_t)(opt.panorama == PAN_RANDOM ? PAN_1_21 : opt.panorama - 1);
+      menu(buttons, gui);
+      return;
+    }
   }
   int dir = (pressed & (K_DOWN | K_RIGHT)) ? 1 : (pressed & (K_UP | K_LEFT)) ? -1 : 0;
   if (dir)
@@ -2043,6 +2078,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     else if (gui == GUI_OPTIONS) press(buttons, B_DONE);
     else if (gui == GUI_VIDEO) press(buttons, B_VIDEO_DONE);
     else if (gui == GUI_MODS) press(buttons, B_MODS_DONE);
+    else if (gui == GUI_PERSONAL) press(buttons, B_PERSONAL_DONE);
     else if (gui == GUI_CTRLMENU) press(buttons, B_CTRL_DONE);
     else if (gui == GUI_CONTROLS) press(buttons, B_CONTROLS_DONE);
     else if (gui == GUI_FLAT) press(buttons, B_FLAT_CANCEL);
@@ -2478,6 +2514,7 @@ static void menu_screen(void) {
     }
     case GUI_OPTIONS: text_center("Options", w / 2, 15, 0xFFFF); break;
     case GUI_MODS: text_center("Mods and Cheats", w / 2, 15, 0xFFFF); break;
+    case GUI_PERSONAL: text_center("Personalisation", w / 2, 15, 0xFFFF); break;
     case GUI_CTRLMENU: text_center("Controls", w / 2, 15, 0xFFFF); break;
     case GUI_VIDEO: text_center("Video Settings", w / 2, 15, 0xFFFF); break;
     case GUI_CONTROLS: key_sheet(); break;
@@ -2768,7 +2805,8 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
     tint_rect(0, y0, SCREEN_W, rows, 0x0841, a > 30 ? 30 : a);
   }
   if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_DEATH || gui == GUI_LAN ||
-      ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CTRLMENU || gui == GUI_KEYS || gui == GUI_MODS) && options_from == GUI_PAUSE))
+      ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CTRLMENU || gui == GUI_KEYS || gui == GUI_MODS ||
+        gui == GUI_PERSONAL) && options_from == GUI_PAUSE))
     hud();
   if (gui == GUI_NONE || gui == GUI_CHAT) chat_lines();
   if (pl.hurt_time > 0 && gui == GUI_NONE) {
@@ -2793,6 +2831,7 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
       break;
     case GUI_CHAT: chat_screen(); break;
     case GUI_OPTIONS: case GUI_VIDEO: case GUI_CTRLMENU: case GUI_CONTROLS: case GUI_KEYS: case GUI_MODS:
+    case GUI_PERSONAL:
       if (options_from == GUI_PAUSE) dark_background();
       else dirt_background();
       if (gui == GUI_KEYS) keys_screen();

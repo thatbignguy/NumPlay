@@ -14,8 +14,8 @@
  * difficulty, fancy, look speed, clouds, bobbing, key sheet version, last world,
  * plays, the keys, debug overlay, render distance, sprint toggle, brightness
  * (8, just over the middle of Moody..Bright: a dark room can be made out at once),
- * fullbright (off) */
-Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 8, 0};
+ * fullbright (off), high contrast outlines (off), panorama (Random) */
+Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 8, 0, 0, 0};
 int64_t world_seed;
 uint8_t world_type;
 uint8_t world_dim;   /* the dimension (DIM_*): the overworld, or the nether */
@@ -473,6 +473,8 @@ void load_options(void) {
   if (opt.distance < 1 || opt.distance > 2) opt.distance = 2;
   if (opt.sprint_toggle) opt.sprint_toggle = 1;
   if (opt.fullbright) opt.fullbright = 1;
+  if (opt.contrast) opt.contrast = 1;
+  if (opt.panorama > PAN_1_21) opt.panorama = PAN_RANDOM;
   /* (an older record is shorter than the struct: the fields it has no room for stay
    * as they were initialised above; a value past what the field holds is never set) */
   if (opt.brightness > 15) opt.brightness = 0;

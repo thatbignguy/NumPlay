@@ -604,6 +604,30 @@ int main(void) {
     remove("build/unit-saves/numblocks.cfg");
   }
   {
+    /* Personalisation's two picks are kept the same way, in the last of the bytes the
+     * struct had as padding (42 and 43): the record stays 44, a record from before
+     * them reads as off/Random, and a value a record cannot hold is put back on the
+     * default */
+    CHECK(offsetof(Options, contrast) == 42 && offsetof(Options, panorama) == 43 && sizeof opt == 44);
+    remove("build/unit-saves/numblocks.cfg");
+    opt.contrast = 1, opt.panorama = PAN_1_20;
+    save_options();
+    opt.contrast = 0, opt.panorama = PAN_RANDOM;
+    load_options();
+    CHECK(opt.contrast == 1 && opt.panorama == PAN_1_20);
+    remove("build/unit-saves/numblocks.cfg");
+    plat_save("numblocks.cfg", &opt, offsetof(Options, contrast));   /* (the record older versions wrote) */
+    opt.contrast = 0, opt.panorama = PAN_RANDOM;
+    load_options();
+    CHECK(opt.contrast == 0 && opt.panorama == PAN_RANDOM);   /* (off and Random, as fresh options have them) */
+    opt.panorama = 200;
+    save_options();
+    opt.panorama = PAN_1_21;
+    load_options();
+    CHECK(opt.panorama == PAN_RANDOM);   /* (past the last pick: back on the default) */
+    remove("build/unit-saves/numblocks.cfg");
+  }
+  {
     /* the cache moving up a step at a time (new rows above the terrain are not generated, only
      * aired) holds the same blocks and light as one made there at once. The two can come to
      * rest in different bands (the climb flies, arriving at once does not yet know to), so

@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.12"
+#define NB_VERSION "1.5.13"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -347,7 +347,7 @@ bool settle_fall(int x, int y, int z);   /* the settle pass: drop a sand/gravel 
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU, GUI_MODE, GUI_MODS };
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU, GUI_MODE, GUI_MODS, GUI_PERSONAL };
 extern int gui;            /* the screen open */
 void gui_open(int screen, int x, int y, int z);
 void gui_close(void);
@@ -381,7 +381,12 @@ typedef struct {
   uint8_t sprint_toggle;   /* Sprint: 0 hold the key while walking, 1 a tap switches it on and off (1.15) */
   uint8_t brightness;   /* Brightness (Video Settings): 0 Moody to 15 Bright (its default, 8) */
   uint8_t fullbright;   /* Fullbright (Mods and Cheats): with cheats on, every block drawn as if lit at 15 */
+  uint8_t contrast;     /* High Contrast Block Outlines (Personalisation): the block looked at outlined in cyan */
+  uint8_t panorama;     /* the title's backdrop (Personalisation): PAN_*, Random by default */
 } Options;
+/* The title's backdrop: Random rolls one of the four each time the title is entered; the
+ * versions are Minecraft's own title panoramas (panorama.h, tools/panorama.py). */
+enum { PAN_RANDOM, PAN_WORLD, PAN_1_16, PAN_1_20, PAN_1_21 };
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,
        A_LEFT, A_RIGHT, A_BACK, A_FORWARD, A_CHAT, A_COMMAND, A_DEBUG, N_ACTIONS };
@@ -456,6 +461,10 @@ extern const int n_give;
 #define RH 120
 typedef struct { float x, y, z, yaw, pitch; } Camera;
 void render_frame(const Camera *c, uint32_t time_of_day);
+/* the title's backdrop when it is a version's panorama (Personalisation): the six
+ * faces of the version (0 = 1.16, 1 = 1.20, 2 = 1.21, panorama.h) instead of a
+ * world; only the camera's yaw and pitch are read */
+void render_panorama(const Camera *c, int version);
 /* the HUD and screens draw over each strip of the screen before it is sent
  * (hand: the hand's state for this frame, on render_frame's stack) */
 void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand);

@@ -1,3 +1,64 @@
+## 1.5.13
+**Personalisation: High Contrast Block Outlines and the title's panorama, at the most detail the app space holds**
+- Options gains a **Personalisation...** row beside **Mods and Cheats...** (both 150 wide
+  now, the two side by side as the rows above them), and behind it the list screen the
+  next switch will go on: **High Contrast Block Outlines: ON/OFF** and **Panorama:
+  Random/World/1.16/1.20/1.21** (OK switches and steps; left and right step the Panorama
+  row, which wraps; Done saves). The two option bytes are the last of the bytes `Options`
+  had as padding (42 and 43), so the record stays 44 bytes and an older one reads them as
+  off and Random; the title's own state is one packed byte (`main.c`), so the feature adds
+  1 byte of BSS (121941 -> 121942).
+- **High Contrast** draws the block under the crosshair outlined in the reference's own
+  cyan, #57FFE1 (the 1.21.2 accessibility option, whose line is that cyan with a small
+  black edge - at these one-pixel edges the cyan alone is the readable one), blended at
+  24/32 instead of the usual black at 13/32: on a dark cave wall or a night scene the
+  usual line is invisible and the cyan one is not, which is the point. With it off the
+  frames are byte-identical to 1.5.12's (`--place` and the 120-frame `--mobs --torches
+  --rain` run: every pixel the same).
+- **Panorama** picks the title's backdrop. The versions are the clients' own title
+  cubemaps, fetched from the Minecraft Wiki (1024 x 1024 a face: 1.16 from
+  Category:Outdated panorama textures, 1.20 and 1.21 from Category:Panorama textures) by
+  `tools/panorama.py --fetch`, which keeps 256 x 256 copies in the texture dump; the pack
+  (`make data-panorama`) writes `src/panorama.c`: **six 160 x 160 RGB565 faces a version**
+  - a texel a picture pixel, since the picture is 160 x 120 and 86 degrees of a face's 90
+  fill its width - 921,600 bytes of tables in all. The faces run 0..5 as the client shoots
+  them (0..3 the horizon clockwise south/west/north/east, 4 up, 5 down; `render.c`'s
+  `render_panorama` samples them by the ray's direction, exactly the mapping the wiki's
+  `/camera` shots define; each face re-rendered from its own camera reproduces the source
+  image). The file is a screenshot: no world light, no fog, no clouds, full bright.
+- **No world is loaded behind a version's panorama**: `title()` picks first and only
+  builds the backdrop world (the last played, else seed 0) for the **World** pick -
+  the panorama needs none, and its frames cost the calculator less than the world's do.
+  The roll happening on each entry to the title (startup, quit to title, back to title)
+  is **Random**'s: it mixes the clock as `parse_seed` does (never the world's `rnd()`
+  stream, which the tests replay), so different visits show different ones; a fixed pick
+  keeps itself. Changing the pick under the title (Options -> Personalisation -> Done)
+  picks again at once.
+- **Mods and Cheats** from the *title's* Options says nothing and opens nothing now: with
+  no world there is nothing to cheat in, and the chat is the world's (the refusal line,
+  "Mods and cheats are only available if you turned cheats on when creating a world", is
+  for a world whose cheats are off, where it is there once Options closes, as before).
+- Recorded (the host harness, **not** `build/desktop`): `./build/play --title --panorama
+  2/3/4 --frames 40 --keys "5:ok" --shots 39 --out /tmp/pan` shows each version's
+  panorama behind the menus, and `--panorama 0` rolls one per entry (the same script at
+  `--ms-per-frame` 50, 60 and 70 landed on 1.16, 1.21 and 1.16 again - different entries,
+  different picks); `--place --contrast` against `--place` shows the hovered block
+  outlined in the cyan where the plain run's line is black (and `--place --time 18000
+  --bright 0` shows the same in the dark); the Options/Personalisation screenshots show
+  the two rows and their labels cycling. The bench's 18 `--fancy --rain --mobs` frames are
+  **pixel-identical** (checksums) and the deepest stack is 20032 B; the instruction count
+  reads 180.53 M against 177.38 M, which is the link's own shuffling rather than the
+  feature: bumping only the version string gives 180.40 M on the 1.5.12 tree, with the
+  same pixels. The device run (`tools/emu.py`: 4000 ms, 864.0 M instructions, 234 frames,
+  58.5 fps, 17.1 ms of work a frame) is on a title showing a version panorama, whose
+  frames cost less than the world backdrop's (the 1.5.12 build in the same harness draws
+  155 frames at 25.8 ms behind the same screen). `make test` passes; `make build && make
+  check` fits (bss 121942, the one byte above 1.5.12's 121941; text and data as the
+  tables say). `tests/test_numblocks_progress.py` passes (`numblocks.cfg` still 44
+  bytes) and `make -C games/numblocks-interest build check` passes. The app grows with
+  the panoramas: `.nwa` 742,884 -> 1,664,968 bytes (the calculator's app space is
+  2,031,616, so 366,648 to spare); numblocks-interest 793,328 -> 1,677,368.
+
 ## 1.5.12
 **The moving fluids wear the modern client's pictures now - the flow at its own size, and daylight water lit as the air is**
 - The four fluid pictures are the modern dump's (`minecraft-textures/`): water_still,
