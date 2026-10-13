@@ -376,12 +376,13 @@ int main(int argc, char **argv) {
     static const float yaw_of[4] = {0, 180, 270, 90};   /* +z, -z, +x, -x */
     pl.yaw = yaw_of[dir], pl.pitch = 10.0f;
     /* a little glowstone in the ceiling about the camera and along the way (the deep layer
-     * is dark; a light every few blocks is what a player would bring) */
+     * is dark; lights high in the ceiling stay out of the way and read as a player's
+     * torches, and the dark past them is the cave going on) */
     int fx = dir == 2 ? 1 : dir == 3 ? -1 : 0, fz = dir == 0 ? 1 : dir == 1 ? -1 : 0;
-    world_set(vc_x0 + bx, vc_y0 + by + 2, vc_z0 + bz, B_GLOWSTONE);
-    for (int k = 1; k <= 3; k++) {
-      int gx = bx + fx * k * 4, gz = bz + fz * k * 4;
-      if (gx >= 0 && gx < VCX && gz >= 0 && gz < VCZ) world_set(vc_x0 + gx, vc_y0 + by + 2, vc_z0 + gz, B_GLOWSTONE);
+    world_set(vc_x0 + bx, vc_y0 + by + 3, vc_z0 + bz, B_GLOWSTONE);
+    for (int k = 1; k <= 4; k++) {
+      int gx = bx + fx * k * 3, gz = bz + fz * k * 3;
+      if (gx >= 0 && gx < VCX && gz >= 0 && gz < VCZ) world_set(vc_x0 + gx, vc_y0 + by + 3, vc_z0 + gz, B_GLOWSTONE);
     }
     pl.mode = 1, pl.flying = true;   /* (hover in the cavern) */
     opt.difficulty = 0;

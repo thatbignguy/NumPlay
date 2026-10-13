@@ -6254,66 +6254,26 @@ static int deep_bedrock(int x, int z) {
     return WORLD_MIN_Y + (int)(h % (unsigned)(BEDROCK_TOP - WORLD_MIN_Y + 1));
 }
 
-/* ---- the deep layer's caves (1.17-1.19's noise caves) ---------------------
+/* ---- the deep layer's caves ---------------------------------------------------
  * The 1.8 carver (WorldGenCaves, above) stops at the old floor, so under y = 0 the
- * deepslate was solid rock. 1.18 does not walk tunnels there: it carves its caves
- * from noise fields - a broad "cheese" field for the open rooms, two crossing
- * "spaghetti" fields whose intersection is a winding tunnel, and a thin "noodle"
- * field. This is that idea sized for the calculator: a few perlin octaves over the
- * deep rows, sampled on a 4 x 4 x 4 lattice and trilinearly interpolated (the way
- * Minecraft interpolates its density), drawn from the existing perlin permutation
- * with offsets of this world's seed. It is a pure function of a block's world
- * position, so a chunk comes out the same in any slab window, and it touches
- * nothing of 1.8's own streams (t_refcmp stays exact) or of deep_ores'. */
+ * deepslate was solid rock. Modern Minecraft carves its caves from noise fields;
+ * tried here first (1.5.27-1.5.30), that read as glitchy, faceted terrain: on the
+ * 4-block lattice this calculator can afford, thin tubes alias into beads and gaps
+ * and the thresholded union into grid-aligned diamonds - never round holes. So the
+ * deep layer is carved the way its surface caves are, by walking: every chunk draws
+ * its own walks from a stream of its own (nothing of 1.8's terrain, population or
+ * ore streams), and a chunk is carved by the walks of the 5 x 5 chunks around it, so
+ * a tunnel runs whole across chunk borders and comes out the same whichever chunk -
+ * and whichever slab window - asks. Rooms are single big ellipsoids (modern's cheese
+ * caverns), tunnels walk 20-30 steps of round section (its spaghetti) and veins walk
+ * thin (its noodle); water pools and the lava sea fill the carved cells as before. */
 
-#define DEEP_LS 4           /* the lattice's horizontal step (blocks) */
-#define DEEP_VS 4           /* and its vertical step */
 #define DEEP_LAVA_Y (-54)   /* 1.18's lava level: an open deep cell at or below it is the lava sea */
-
-/* One perlin octave of the deep field at world (X, Y, Z): the scales sx/sy give the
- * feature size, o0/o1/o2 are this world's seed offsets, and ex/ey/ez a per-field cell
- * shift so two fields never coincide. (Out of line: the six calls deep_open makes would
- * otherwise each carry their own copy of the inlined perlin sampler.) */
-static NOINLINE float cave_pt(u64 o0, u64 o1, u64 o2, u64 sx, u64 sy, int X, int Y, int Z, u64 ex, u64 ey, u64 ez) {
-    u64 px = (u64)((i64)X * (i64)sx) + o0 + ex;
-    u64 py = (u64)((i64)Y * (i64)sy) + o1 + ey;
-    u64 pz = (u64)((i64)Z * (i64)sx) + o2 + ez;
-    return perlin_pt(perm_grass, px, py, pz);
-}
-
-/* How open the deep field is at a lattice point: > 0 means carved. The three shapes
- * are unioned (the largest wins), so a cavern can open into a tunnel. The thresholds
- * follow the modern density functions in 26.3.jar
- * (data/minecraft/worldgen/density_function/overworld/...): its 3D spaghetti carves
- * where max(|n1|, |n2|) runs under ~0.08 (its thickness noise times -0.0115, minus
- * 0.0765) and its noodle where the two ridge fields' max runs under ~0.05, so both
- * are thin tubes - never sheets, which would slice the rock into floating slabs -
- * and the cheese rooms stay a minority of the layer, separated by rock. About a
- * fifth of the deep layer ends up open; past about a third the air connects and the
- * rock itself breaks into floating islands instead. */
-HOT static float deep_open(u64 o0, u64 o1, u64 o2, int X, int Y, int Z) {
-    /* cheese: broad rooms from a low-frequency field, with one detail octave */
-    float ch = cave_pt(o0, o1, o2, FX(1.0f / 46.0f), FX(1.0f / 26.0f), X, Y, Z, 0, 0, 0) +
-               0.5f * cave_pt(o0, o1, o2, FX(1.0f / 23.0f), FX(1.0f / 13.0f), X, Y, Z, 0, 0, 0);
-    float o = ch - 0.34f;
-    /* spaghetti: two crossing families; only where both are near zero is there a tube */
-    float a = cave_pt(o0, o1, o2, FX(1.0f / 30.0f), FX(1.0f / 20.0f), X, Y, Z, 0, 0, 0);
-    float b = cave_pt(o0, o1, o2, FX(1.0f / 30.0f), FX(1.0f / 20.0f), X, Y, Z,
-                      (u64)129 << 32, (u64)71 << 32, (u64)199 << 32);
-    float ma = a < 0 ? -a : a, mb = b < 0 ? -b : b;
-    float sp = 0.10f - (ma > mb ? ma : mb);
-    if (sp > o) o = sp;
-    /* noodle: two crossing high-frequency families, a ~1-block vein where both run
-     * near zero (never one field alone: a sheet would cut the layer into slabs) */
-    float n1 = cave_pt(o0, o1, o2, FX(1.0f / 15.0f), FX(1.0f / 15.0f), X, Y, Z,
-                       (u64)53 << 32, (u64)211 << 32, (u64)17 << 32);
-    float n2 = cave_pt(o0, o1, o2, FX(1.0f / 15.0f), FX(1.0f / 15.0f), X, Y, Z,
-                       (u64)97 << 32, (u64)31 << 32, (u64)167 << 32);
-    float m1 = n1 < 0 ? -n1 : n1, m2 = n2 < 0 ? -n2 : n2;
-    float nd = 0.06f - (m1 > m2 ? m1 : m2);
-    if (nd > o) o = nd;
-    return o;
-}
+/* A walk never travels more than 32 blocks sideways from its chunk (20-30 steps of
+ * 0.9 blocks, radius under 3.2; rooms sit inset with radius under 13), so the 5 x 5
+ * chunks around the one being carved hold every walk that can reach it. */
+#define DEEP_REACH 2
+#define DEEP_SALT 0xCA9E5A1EULL   /* the walks' own stream (deep_ores has its own beside it) */
 
 /* The aquifer's water level at column (X, Z): where the caverns hold water (a smooth
  * low-frequency field says which), a chosen level that reads as pools; elsewhere the
@@ -6325,52 +6285,132 @@ HOT static int deep_water_level(int X, int Z) {
     return wl > -2 ? -2 : wl;
 }
 
-/* Carve the deep rows [y0, y0 + deep) of the chunk (cx, cz) into out (the deep window
- * deep_ores writes into): every cell whose openness is positive becomes air, water
- * (below its column's aquifer level) or the lava sea (at or below DEEP_LAVA_Y). The
- * bedrock floor is never carved. */
-HOT static void deep_caves(int cx, int cz, int y0, int deep, uint8_t *out) {
-    int dlo = y0 < WORLD_MIN_Y ? WORLD_MIN_Y : y0;
-    int dhi = y0 + deep > 0 ? 0 : y0 + deep;
-    if (dlo >= dhi) return;
-    /* this world's offsets: the same everywhere, so the caves are one world's */
-    u64 o0, o1, o2;
-    {
-        JRand r;
-        jr_seed(&r, (u64)g_seed ^ 0x5CA1E5A1ULL);
-        o0 = (u64)jr_long(&r), o1 = (u64)jr_long(&r), o2 = (u64)jr_long(&r);
+typedef struct { float x, y, z, rx, ry, rz; } DeepSpot;   /* one ellipsoid to carve */
+typedef struct { float x0, x1, y0, y1, z0, z1; } DeepBox;   /* what a chunk's walks may touch */
+
+typedef struct {
+    int raster;          /* 0: widen the box only; 1: carve into out */
+    int y0, deep;        /* the window out holds */
+    uint8_t *out;
+    int ccx, ccz;        /* the chunk being carved */
+    const int8_t *wlcol;   /* its columns' aquifer levels */
+    DeepBox *box;
+} DeepCtx;
+
+/* One ellipsoid spot: widen the box, or carve it where the window holds deepslate.
+ * Carved cells become air, water (below the column's aquifer level) or the lava sea;
+ * the bedrock floor is never carved and nothing above y = 0 is touched. */
+HOT static void deep_spot(const DeepSpot *s, DeepCtx *c) {
+    if (!c->raster) {
+        DeepBox *b = c->box;
+        if (s->x - s->rx < b->x0) b->x0 = s->x - s->rx;
+        if (s->x + s->rx > b->x1) b->x1 = s->x + s->rx;
+        if (s->y - s->ry < b->y0) b->y0 = s->y - s->ry;
+        if (s->y + s->ry > b->y1) b->y1 = s->y + s->ry;
+        if (s->z - s->rz < b->z0) b->z0 = s->z - s->rz;
+        if (s->z + s->rz > b->z1) b->z1 = s->z + s->rz;
+        return;
     }
-    int jlo = (dlo - WORLD_MIN_Y) / DEEP_VS;
-    int jhi = (dhi - 1 - WORLD_MIN_Y) / DEEP_VS;
-    int nlev = jhi + 2 - jlo;
-    float lat[5][17][5];
-    for (int i = 0; i < 5; i++)
-        for (int j = 0; j < nlev; j++)
-            for (int k = 0; k < 5; k++)
-                lat[i][j][k] = deep_open(o0, o1, o2, cx * 16 + i * DEEP_LS,
-                                         WORLD_MIN_Y + (jlo + j) * DEEP_VS, cz * 16 + k * DEEP_LS);
-    for (int zl = 0; zl < 16; zl++)
-        for (int xl = 0; xl < 16; xl++) {
-            int i = xl / DEEP_LS, k = zl / DEEP_LS;
-            float fx = (float)(xl % DEEP_LS) * (1.0f / DEEP_LS), fz = (float)(zl % DEEP_LS) * (1.0f / DEEP_LS);
-            int wl = deep_water_level(cx * 16 + xl, cz * 16 + zl);
-            for (int yl = 0; yl < deep; yl++) {
-                int wy = y0 + yl;
-                if (wy >= 0 || wy < WORLD_MIN_Y) continue;
-                int j = (wy - WORLD_MIN_Y) / DEEP_VS - jlo;
-                float fy = (float)(wy - (WORLD_MIN_Y + (jlo + j) * DEEP_VS)) * (1.0f / DEEP_VS);
-                float c00 = lat[i][j][k] + (lat[i + 1][j][k] - lat[i][j][k]) * fx;
-                float c10 = lat[i][j + 1][k] + (lat[i + 1][j + 1][k] - lat[i][j + 1][k]) * fx;
-                float c01 = lat[i][j][k + 1] + (lat[i + 1][j][k + 1] - lat[i][j][k + 1]) * fx;
-                float c11 = lat[i][j + 1][k + 1] + (lat[i + 1][j + 1][k + 1] - lat[i][j + 1][k + 1]) * fx;
-                float e0 = c00 + (c10 - c00) * fz, e1 = c01 + (c11 - c01) * fz;
-                float v = e0 + (e1 - e0) * fy;
-                if (v <= 0.0f) continue;
-                int o = yl * 256 + zl * 16 + xl;
-                uint8_t b = (uint8_t)b9_get(out, o);
+    int cx0 = c->ccx * 16, cz0 = c->ccz * 16;
+    int wx0 = floor_f_i(s->x - s->rx), wx1 = floor_f_i(s->x + s->rx);
+    int wy0 = floor_f_i(s->y - s->ry), wy1 = floor_f_i(s->y + s->ry);
+    int wz0 = floor_f_i(s->z - s->rz), wz1 = floor_f_i(s->z + s->rz);
+    if (wx0 < cx0) wx0 = cx0;
+    if (wx1 > cx0 + 15) wx1 = cx0 + 15;
+    if (wz0 < cz0) wz0 = cz0;
+    if (wz1 > cz0 + 15) wz1 = cz0 + 15;
+    if (wy0 < c->y0) wy0 = c->y0;
+    if (wy1 > c->y0 + c->deep - 1) wy1 = c->y0 + c->deep - 1;
+    if (wy0 < WORLD_MIN_Y) wy0 = WORLD_MIN_Y;
+    if (wy1 > -1) wy1 = -1;
+    if (wx0 > wx1 || wy0 > wy1 || wz0 > wz1) return;
+    float ix2 = 1.0f / (s->rx * s->rx), iy2 = 1.0f / (s->ry * s->ry), iz2 = 1.0f / (s->rz * s->rz);
+    for (int wy = wy0; wy <= wy1; wy++)
+        for (int wz = wz0; wz <= wz1; wz++)
+            for (int wx = wx0; wx <= wx1; wx++) {
+                float dx = (float)wx + 0.5f - s->x, dy = (float)wy + 0.5f - s->y, dz = (float)wz + 0.5f - s->z;
+                if (dx * dx * ix2 + dy * dy * iy2 + dz * dz * iz2 > 1.0f) continue;
+                int o = (wy - c->y0) * 256 + (wz - cz0) * 16 + (wx - cx0);
+                uint8_t b = (uint8_t)b9_get(c->out, o);
                 if (b == B_AIR || b == B_BEDROCK) continue;
-                b9_set(out, o, wy <= DEEP_LAVA_Y ? B_LAVA : (wy <= wl ? B_WATER : B_AIR));
+                int wl = c->wlcol[(wz - cz0) * 16 + (wx - cx0)];
+                b9_set(c->out, o, wy <= DEEP_LAVA_Y ? B_LAVA : (wy <= wl ? B_WATER : B_AIR));
             }
+}
+
+/* One walk: len round spots along a wandering heading, the radius breathing slowly
+ * (tunnels bulge and narrow the way dug ones do). Draws come in a fixed order, so the
+ * walk is identical every time its chunk is replayed. */
+HOT static void deep_walk(JRand *r, DeepCtx *c, float x, float y, float z, float yaw, float pitch, int len,
+                          float r0, float squash) {
+    float ph = jr_float(r) * 6.2831853f;
+    float dip = (jr_float(r) - 0.5f) * 0.7f;   /* the walk's own slope: without it a pitch
+                                                * random walk barely leaves its start depth */
+    for (int i = 0; i < len; i++) {
+        yaw += (jr_float(r) - 0.5f) * 0.55f;
+        pitch += (jr_float(r) - 0.5f) * 0.5f;
+        if (pitch > 0.8f) pitch = 0.8f;
+        if (pitch < -0.8f) pitch = -0.8f;
+        float rr = r0 * (0.82f + 0.36f * mh_sin_i(ph + (float)i * 0.35f));
+        DeepSpot s = {x, y, z, rr, rr * squash, rr};
+        deep_spot(&s, c);
+        float cp = mh_cos_i(pitch);
+        x += mh_sin_i(yaw) * cp * 0.9f;
+        y += (mh_sin_i(pitch) + dip) * 0.9f;
+        z += mh_cos_i(yaw) * cp * 0.9f;
+        if (y < -60.0f) { y = -60.0f; pitch = 0.45f; }
+        if (y > -4.0f) { y = -4.0f; pitch = -0.45f; }
+    }
+}
+
+/* The walks of chunk (cx, cz): two tunnels, sometimes a room, one thin vein. A fixed
+ * draw order - the same walks wherever they are replayed from. */
+HOT static void deep_walks(int cx, int cz, DeepCtx *c) {
+    JRand r;
+    jr_seed(&r, (i64)(((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ DEEP_SALT ^ (u64)g_seed));
+    for (int t = 0; t < 3; t++)
+        deep_walk(&r, c, (float)(cx * 16 + jr_int(&r, 16)), -58.0f + (float)jr_int(&r, 43),
+                  (float)(cz * 16 + jr_int(&r, 16)), jr_float(&r) * 6.2831853f,
+                  (jr_float(&r) - 0.5f) * 1.0f, 20 + jr_int(&r, 11), 1.6f + jr_float(&r) * 1.1f, 1.0f);
+    if (jr_int(&r, 4) < 3) {
+        float rxz = 6.0f + jr_float(&r) * 7.0f;
+        DeepSpot s = {(float)(cx * 16 + 3 + jr_int(&r, 10)), -50.0f + (float)jr_int(&r, 35),
+                      (float)(cz * 16 + 3 + jr_int(&r, 10)), rxz, rxz * (0.45f + jr_float(&r) * 0.25f), rxz};
+        deep_spot(&s, c);
+    }
+    deep_walk(&r, c, (float)(cx * 16 + jr_int(&r, 16)), -58.0f + (float)jr_int(&r, 43),
+              (float)(cz * 16 + jr_int(&r, 16)), jr_float(&r) * 6.2831853f,
+              (jr_float(&r) - 0.5f) * 1.0f, 15 + jr_int(&r, 16), 1.0f, 1.0f);
+}
+
+/* Carve the deep rows of chunk (cx, cz): replay the walks of the 5 x 5 chunks around
+ * it, rasterizing the ones whose box reaches it. Cells outside the window (or the
+ * chunk) are left - a chunk comes out the same whichever slab window asks. */
+HOT static void deep_caves(int cx, int cz, int y0, int deep, uint8_t *out) {
+    int8_t wlcol[256];   /* the aquifer level of each column, once */
+    for (int zl = 0; zl < 16; zl++)
+        for (int xl = 0; xl < 16; xl++)
+            wlcol[zl * 16 + xl] = (int8_t)deep_water_level(cx * 16 + xl, cz * 16 + zl);
+    float bx0 = (float)(cx * 16), bx1 = (float)(cx * 16 + 16);
+    float bz0 = (float)(cz * 16), bz1 = (float)(cz * 16 + 16);
+    for (int oz = -DEEP_REACH; oz <= DEEP_REACH; oz++)
+        for (int ox = -DEEP_REACH; ox <= DEEP_REACH; ox++) {
+            DeepCtx c;
+            DeepBox box = {1e30f, -1e30f, 1e30f, -1e30f, 1e30f, -1e30f};
+            c.raster = 0;
+            c.box = &box;
+            deep_walks(cx + ox, cz + oz, &c);
+            if (box.x1 < bx0 || box.x0 > bx1 || box.z1 < bz0 || box.z0 > bz1 ||
+                box.y1 < (float)WORLD_MIN_Y || box.y0 > 0.0f)
+                continue;   /* none of its walks reach this chunk */
+            c.raster = 1;
+            c.y0 = y0;
+            c.deep = deep;
+            c.out = out;
+            c.ccx = cx;
+            c.ccz = cz;
+            c.wlcol = wlcol;
+            deep_walks(cx + ox, cz + oz, &c);
         }
 }
 

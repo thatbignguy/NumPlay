@@ -1,3 +1,46 @@
+## 1.5.31
+**The deep caves are walked, not noised: round rooms and tunnels with circular sections instead of the faceted, glitchy noise shapes**
+
+- **What was wrong.** 1.5.27-1.5.30 carved the caves from noise fields sampled on a
+  4-block lattice. That is all this calculator can afford, and it is too coarse for
+  2-3-wide tubes: tunnels aliased into beads and gaps, and the thresholded union came
+  out as grid-aligned diamonds - glitchy almost-Far-Lands terrain instead of round
+  holes. No threshold tuning removes that; the method is wrong for the hardware.
+- **The fix.** The deep layer is carved the way its surface caves are, by walking:
+  every chunk draws three tunnels (20-30 steps, radius 1.6-2.7, breathing slowly so
+  they bulge and narrow), sometimes a room (a single 6-13-wide ellipsoid, squashed
+  flat) and one thin vein from a stream of its own, and a chunk is carved by the
+  walks of the 5 x 5 chunks around it - a tunnel runs whole across chunk borders and
+  comes out the same whichever chunk, and whichever slab window, asks. A rasterized
+  sphere is round by construction: rooms are rooms and tunnels are circular in
+  section, with no lattice to alias against. The lava sea, the water pools (the
+  aquifer table is kept) and the bedrock floor work as before, and the ores still
+  come after the caves, onto their walls.
+- **Two bugs caught on the way.** The walks first shipped without the world seed in
+  their stream, so every world grew the same caves (fixed: the stream mixes `g_seed`,
+  like the 1.8 carver's); and a pitch random walk barely leaves its start depth, so
+  nothing ever descended to the lava - each walk now has its own persistent slope.
+- **Measured.** Air averages ~11-15% over 25 chunks on five seeds (lava ~1%, water
+  ~1%), the rock connected everywhere; sections show distinct rooms, tunnels and a
+  lava lake with the surface intact. `t_refcmp` still 0 differ from y=5 up; the deep
+  windows still 0 differ over 144 chunks (the unit case now checks two chunks'
+  windows and a cavern chunk with rock dominant).
+- **Recorded.** `./build/play --caves --creative --bright 15 --time 18000 --keys
+  "6-29:fwd" --frames 30 --shots 5,29` (**not** `build/desktop`): frame 5 a lit
+  cavern with its tunnel, frame 29 inside that tunnel - rock all around, nothing
+  floating, nothing grid-aligned.
+- **Cost.** A fully-deep slab window is 4.94 M instructions (22.9 ms at 216 MHz, from
+  3.92 M - the 5 x 5 replay's walks cost more than the lattice did, but stay far
+  below a surface chunk's ~128 ms) and one straddling y=0 27.81 M (from 26.76 M);
+  deepest stack 11,704 B unchanged, no BSS growth. `NumBlocks.nwa` 617,676 ->
+  **617,056 B** (the lattice code is gone). Recorded: `make test` passes; `make build
+  && make check` and `make -C games/numblocks-interest build check` fit; `tools/emu.py`
+  boots the device build; `build/desktop` rebuilt.
+- **Found, not fixed.** The deep ores' stream (and the nether's quartz/glowstone one)
+  never mixed in the world seed either, so those veins sit in the same places in
+  every world. Same one-line shape as this fix; left for its own item since it moves
+  existing worlds' content.
+
 ## 1.5.30
 **The deep caves read as caves again: vanilla's own thresholds replace 1.5.29's blown-out ones, so the layer is rock with rooms, tunnels and veins instead of a floating-island mess**
 

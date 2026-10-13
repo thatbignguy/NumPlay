@@ -2197,17 +2197,17 @@ int main(void) {
     /* the same in any slab window, on a nearly-solid chunk and a cavern one */
     int diff = 0;
     for (int t = 0; t < 2; t++) {
-      int cx = t ? 2 : 0;
-      gen_slab(cx, 0, -64, 64, full);
-      gen_slab(cx, 0, -64, 24, part);
-      gen_slab(cx, 0, -40, 24, part + 24 * 288);
-      gen_slab(cx, 0, -16, 16, part + 48 * 288);
+      int cx = t ? 0 : 1, cz = t ? 2 : 0;
+      gen_slab(cx, cz, -64, 64, full);
+      gen_slab(cx, cz, -64, 24, part);
+      gen_slab(cx, cz, -40, 24, part + 24 * 288);
+      gen_slab(cx, cz, -16, 16, part + 48 * 288);
       for (int r = 0; r < 64; r++)
         for (int i = 0; i < 256; i++)
           if (b9_get(full, r * 256 + i) != b9_get(part, r * 256 + i)) diff++;
     }
-    /* chunk (2, 0) holds a cavern system */
-    gen_slab(2, 0, -64, 64, full);
+    /* chunk (0, 2) holds a cavern system */
+    gen_slab(0, 2, -64, 64, full);
     gen_scratch(NULL);
     int air = 0, rock = 0;
     for (int r = 0; r < 64; r++)
