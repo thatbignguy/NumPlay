@@ -226,6 +226,8 @@ static const char *biome_name(int id) {
     case 5: return "Taiga";
     case 6: return "Swampland";
     case 7: return "River";
+    case 8: return "Hell";
+    case 9: return "The End";
     case 10: return "FrozenOcean";
     case 11: return "FrozenRiver";
     case 12: return "Ice Plains";
@@ -329,7 +331,7 @@ static void debug_overlay(void) {
     int cx = chunk_of(bx), cy = chunk_of(by), cz = chunk_of(bz);
     /* the biome of the column the player is in, as the renderer has it (the same answer
      * gen_biome gives for a column of the cache, without calling the generator) */
-    int bio = world_loaded(bx, 1, bz) ? vbiome[(bz - vc_z0) * VCX + bx - vc_x0] : -1;
+    int bio = world_loaded(bx, by, bz) ? vbiome[(bz - vc_z0) * VCX + bx - vc_x0] : -1;
     int sky = 0, blk = 0;
     if (world_loaded(bx, by, bz)) {
       int i = VC_I(bx - vc_x0, by - vc_y0, bz - vc_z0);

@@ -4,7 +4,7 @@ Work list for `games/numblocks`. Each item: what it is, where the code lives,
 what "done" means. Order matters only where noted.
 
 - [x] **Make skeletons look at you when they are shooting at you**
-- [ ] **Fix biome: unkown glitch**
+- [x] **Fix biome: unknown glitch**
 - [ ] **[15] Nether mobs** — the nether has no life of its own: add the piglin
       and the zombified piglin as its mobs (spawning, models, skins, drops,
       spawn eggs, `/summon`); the enderman is the stretch past them.

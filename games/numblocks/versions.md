@@ -1,3 +1,33 @@
+## 1.5.34
+**The F3 biome line reads again: the nether shows Hell and the overworld its own biome, instead of Unknown everywhere**
+
+- **Two bugs behind one Unknown.** The overlay read the column's cached biome
+  (`vbiome`) only when `world_loaded(bx, 1, bz)` held (`gui.c`) - but the cache
+  is 24 blocks tall and follows the player, so y = 1 is outside it whenever the
+  player is away from the floor (since 1.3.12 traded the direct `gen_biome` call
+  for the cache read): the line fell back to -1, Unknown, almost everywhere. It
+  reads `world_loaded(bx, by, bz)` now - the player's own cell, which the cache
+  always holds - so a loaded column shows the renderer's own answer again, and
+  only a truly unloaded one reads Unknown. And even a loaded nether column read
+  Unknown: `biome_name` knew every overworld id but had no case 8 or 9, while
+  the nether's `gen_biome` answers 8 (`BI_HELL`) for every column.
+- **The names, from 1.8.8's `client.jar`.** Case 8 returns `Hell` and case 9
+  `The End`: `ady.class` (BiomeGenBase) lists them in id order (Ocean, Plains,
+  Desert, Extreme Hills, Forest, Taiga, Swampland, River, **Hell**, **The End**,
+  FrozenOcean ...) and `anp.class` (BiomeGenEnd) carries `The End`. No other
+  name moves (`MushroomShore` and the rest stay as they were - out of scope).
+- **Recorded.** `./build/play --nether --frames 12 --raws "5:24" --shots 10`
+  (**not** `build/desktop`): frame 10 shows `Biome: Hell` under `Dimension:
+  Nether`; `./build/play --frames 12 --shots 10` with the overlay left on shows
+  `Biome: Plains` under `Dimension: Overworld`. Before, both read Unknown.
+- **Cost.** No new state; `.data` 5,079 and `.bss` 119,064 unchanged (the game's
+  124,143 B inside `CUSTOM_RAM` 133,652). `NumBlocks.nwa` 616,996 ->
+  **617,012 B** (+16: the two names), `numblocks-interest.nwa` 644,332 ->
+  **644,276 B** (LTO layout noise the other way). Recorded: `make test` passes
+  (208 recipes, all good); `make build && make check` and
+  `make -C games/numblocks-interest build check` fit; `tools/emu.py` boots the
+  device build (132 frames, 44.0 fps); `build/desktop` rebuilt.
+
 ## 1.5.33
 **No more water on lava: the water table drops to -50 and its contact with the lava sea crusts to obsidian**
 
