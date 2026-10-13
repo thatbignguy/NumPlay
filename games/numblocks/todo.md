@@ -29,6 +29,9 @@ what "done" means. Order matters only where noted.
 - [ ] **[26] Liquids at the cache's edge** — a stream whose source leaves the
       loaded cache drains to nothing: an unloaded neighbour must read unknown,
       not air, so the liquid stands until the world that feeds it is whole.
+- [ ] **[27] Deepslate caves** — the deep layer is solid rock: carve it with
+      caves of 1.17-1.19's kind (bigger and more open than the 1.8 tunnels), so
+      there is somewhere to walk, to fall into and to light under y=0.
 
 ---
 
@@ -593,6 +596,98 @@ beside a loaded stream still drains it as before (the edge does not freeze live
 flow); `make test` passes; `make build && make check` fits; and the recorded
 `./build/play` frames (**not** `build/desktop`) show the fall intact with the
 source above the cache.
+
+---
+
+## [27] Deepslate caves
+
+**What.** The deep layer (below y=0, [16]) is solid deepslate: the 1.8 carver
+stops at y=0, so under it there is nothing but rock and the ores. Carve it with
+caves of **1.17-1.19's kind** - the noise caves 1.18 added, not the narrow 1.8
+tunnels: big **cheese** caverns (wide open rooms), long **spaghetti** tunnels (a
+burrowing loop that wanders the layer) and thin **noodle** tunnels, so the deep
+has somewhere to walk, to fall into and to light. The surface world stays exact
+(1.8's terrain and its own caves above y=0, `t_refcmp` untouched); the deep caves
+are a second pass over the deep layer, the way the deepslate ores (`deep_ores`)
+are a second pass, with their own deterministic stream so the 1.8 generator's
+random order never moves.
+
+**Where.**
+- `src/gen.c:2608,2632` - `cv_get`/`cv_set` (the carver's block access) both
+  reject `y < 0` (`if (y < 0 || y > 255) return ...`), and the carve walk's
+  window (`slab_caves`, `gen.c:5777`, and `crep_lo` at `gen.c:5794-5798`) comes
+  from the slab asked for, so no 1.8 cave reaches the deep rows today. The
+  carve tests (`gen.c:2660-2700`) look for `B_STONE`, `IS_DIRTISH`, `B_SAND`,
+  `B_GRAVEL`... - a deep cave has to carve `B_DEEPSLATE` (and the deep `B_STONE`
+  of the transition zone, [16]) too.
+- `src/gen.c:6314-6370` - `gen_slab`'s overworld path: the deep rows are written
+  by the fill loop and the deepslate ores by `deep_ores` (`gen.c:6298`), straight
+  into `out`, **before** the terrain rows (at `tout`, the 288-byte-a-row offset)
+  and `slab_caves` (`gen.c:6411`). A deep cave pass belongs there, over the deep
+  rows, its own carver beside `deep_ores`; or `slab_caves` grows a deep branch
+  (see the `uint8_t` note). Its result goes into `out` before the same
+  `edits_apply` (`world.c`) overlays the player's changes.
+- `src/gen.c:2557` - `sum_block` returns `B_BEDROCK` for `y < 0` (a stand-in:
+  the column summaries are `uint8_t`), and the carver's out-of-slab reads go
+  through it. A deep carver that reads the ground outside its own rows wants the
+  deep layer's real block there (deepslate/stone); the `uint8_t` limit is the
+  first thing to settle.
+- **The stream and the slabs.** `deep_ores` (`gen.c:6298-6310`) is the pattern: a
+  `JRand` seeded from the chunk alone
+  (`cx * 341873128712 + cz * 132897987541 ^ salt`), every draw in a fixed order,
+  cells written only where the window holds them, so the same chunk comes out the
+  same whichever slab window asks (the glowstone lesson of 1.5.4, and [22]'s
+  "same whichever window"). Build the deep carver the same way, and draw from
+  **nothing** the 1.8 terrain (`r`) or population (`PR`) streams use, or `t_refcmp`
+  stops reading 0 differ.
+- **The shapes.** 1.18 makes its caves from noise fields (a "spaghetti" field's
+  two tunnel families, a "cheese" cavern field, the thin "noodle" field and an
+  aquifer level), thresholded with a vertical shape that is flatter and wider
+  deep down; 1.8's carver is a walk of fixed-point tunnels. A faithful but
+  calculator-sized version: a few simplex/perlin octaves (the generator already
+  has `simplex2`, `perm_*`, the octave builders and `jr_seed`) evaluated over the
+  deep rows, tuned so the layer is mostly rock with big open caverns, long
+  tunnels and water at a chosen level. The seams matter: a 1.8 surface cave that
+  reaches y=0 may open into a deep cavern (the two carvers meeting at the
+  boundary), and a deep cavern that reaches y=0 must not break the 1.8 surface
+  terrain (carve only under the surface `gen_top`/the `ColSum` give).
+- **Falling and the cache.** Deep caves change what `settle_fall`/`fluid_wake`
+  and the light see; the settle pass (`world.c`'s `settle_cache`) already runs
+  over the whole cache after a move, so a sand shelf or standing water the caves
+  leave is handled as above ground. The deep ores are not liquid or sand.
+- **Cost.** A noise carver over the deep rows can be slow; measure `gen_slab`
+  with `tests/gen/arm/bench.py` before and after and quote it, as [16] and [22]
+  do, and keep the fill one chunk a frame. No BSS growth is the standing rule; a
+  new noise field's statics are the documented exception (numbers in the commit).
+
+**Notes / the work.**
+- **The `uint8_t` block.** `cv_get`/`cv_set` and `sum_block` are `uint8_t`
+  (states below 256); `B_DEEPSLATE` is 434 and does not fit. Either write the
+  deep carver as its own function with `uint16_t` blocks (clean: it never touches
+  the exact 1.8 walk), or widen `cv_get`/`cv_set` to `uint16_t` (ripples through
+  the cave code). Prefer the former unless it proves awkward, and say which in
+  the commit.
+- **The reference.** `26.3.jar` (repo root) and `minecraft-textures/` are the
+  source for the modern shapes and numbers (the carver in the jar is
+  `NoiseChunk`/`CaveDensityFunctions`, names and all); the **1.17-1.19 look** is
+  the target, not one jar's block-for-block result.
+- **The light.** A deep cavern open to a dug shaft or a surface cave reads the
+  sky down to it (`vtop` lowers through the changes, 1.5.26); a fully closed deep
+  cavern is dark, and lighting it is the player's job, as in Minecraft.
+- **Tests.** A `tests/unit.c` case that a chosen seed's deep chunk holds a cavern
+  (the same size whatever slab window is asked); a `--caves` scenario in
+  `tests/play.c` beside `--deep` that lands the camera in a deep cavern; the
+  reference comparison stays 0 differ from y=5 up.
+- One `versions.md` entry (title on the first line, as always).
+
+**Done when.** Standing at the deepslate (from a dug shaft or a surface cave that
+reaches it) there are big open caverns and long tunnels down to the floor - not
+the 1.8 tunnels - with water where it pools; they are the same whichever way the
+world is walked (a chunk replayed in any slab window comes out the same, and the
+same from every direction); the surface is unchanged and `tests/gen/t_refcmp` is
+0 differ from y=5 up; `make test` passes; `make build && make check` fits (numbers
+in the commit); and scripted `./build/play --frames ... --shots ...` frames
+(**not** `build/desktop`) show a cavern and a tunnel.
 
 ---
 
