@@ -3,6 +3,10 @@
  *   play [--frames N] [--ms-per-frame M] [--keys "10-40:fwd,50:use,..."] [--shots 30,60] [--out DIR]
  *        [--showcase]   (the hotbar of the README's GIF: TNT, flint and steel, water and lava, blocks)
  *        [--animals]    (a sheep, a cow, a pig and a chicken ahead, on the ground where they stand)
+ *        [--mobs]       (a row of every mob, four blocks ahead, facing the player, on a cleared field)
+ *        [--skeleton]   (one skeleton ahead but looking the other way, on a cleared field, Survival
+ *                         and Normal: it sees the player within a few ticks and shoots - the frames
+ *                         show it turn to face - or keep its head on - the player as it fires)
  *        [--spawner]    (a monster spawner hanging in the air in front of the player, unset, and the eggs to set it with)
  *        [--distance 1..2]   (render distance, default: the saved option, 2 chunks)
  *        [--fancy]           (graphics: Fancy, see-through leaves; the default is what the options say, Fast)
@@ -86,6 +90,7 @@ static uint32_t key_bit(const char *s) {
 int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
+  int skeleton = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
   int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0;
@@ -101,6 +106,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--showcase")) showcase = 1;
     else if (!strcmp(argv[i], "--title")) title_screen = 1;
     else if (!strcmp(argv[i], "--mobs")) mobs = 1;
+    else if (!strcmp(argv[i], "--skeleton")) skeleton = 1;
     else if (!strcmp(argv[i], "--animals")) animals = 1;
     else if (!strcmp(argv[i], "--torches")) torches = 1;
     else if (!strcmp(argv[i], "--water")) water = 1;
@@ -509,6 +515,28 @@ int main(int argc, char **argv) {
       if (e) e->health = 20, e->yaw = 180, e->gx = e->x, e->gz = e->z;
     }
     if (ride >= 0 && ride < N_ENT) spectate = (int8_t)ride;   /* the spectator's camera on the k-th mob */
+  }
+  if (skeleton) {
+    /* One skeleton on a cleared field, seven blocks ahead of the player but looking the
+     * other way (its body's yaw points away from the player). Survival on Normal: within
+     * a few ticks it sees the player, draws its bow and shoots. The frames show it turn
+     * to face the player as it fires, instead of shooting over its shoulder. */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 4; z <= pz + 12; z++)
+      for (int x = px - 9; x <= px + 9; x++)
+        for (int y = fy - 1; y < fy + 8; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
+    /* a slab of stone over it, so the daylight does not set it alight: it is its aim the
+     * frames are of, not the burn */
+    for (int dz = -1; dz <= 1; dz++)
+      for (int dx = -1; dx <= 1; dx++) world_set(px + dx, fy + 3, pz + 7 + dz, B_STONE);
+    opt.difficulty = 2;
+    Entity *e = ent_new(E_SKELETON, px + 0.5f, (float)fy, pz + 7.5f);
+    if (e) e->health = 20, e->yaw = 0, e->gx = e->x, e->gz = e->z;   /* (facing +z: away from the player) */
+    pl.yaw = 0, pl.pitch = -4;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    camera_reset();
+    fprintf(stderr, "skeleton: it stands at %d %d facing +z (away), the player at %d %d facing it\n", px, pz + 7, px, pz);
   }
   if (cave) {
     /* a sealed stone room, the player standing inside it, for what the dark is: a cave with

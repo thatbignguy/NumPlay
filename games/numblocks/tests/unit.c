@@ -281,6 +281,31 @@ int main(void) {
     CHECK(zb->type == E_ZOMBIE && zb->y >= y + 1 && zb->x > 10);
     plat_remove_prefix("ut3z");
   }
+  /* a skeleton stopped to shoot turns all the way round to face the player: EntityAIArrowAttack
+   * looks at its target, so the 60-degree limiter that keeps a walking mob on its path must not
+   * leave it firing over its shoulder once the player steps behind it */
+  {
+    extern uint32_t game_time;
+    world_new(0, "ut3s");
+    world_follow(8, 70, 8);
+    int y = 70;
+    for (int z = 0; z <= 16; z++)
+      for (int x = 0; x <= 16; x++) {
+        world_set(x, y - 1, z, B_STONE);
+        for (int k = 0; k < 4; k++) world_set(x, y + k, z, B_AIR);
+      }
+    memset(ents, 0, sizeof ents);
+    opt.difficulty = 2, pl.mode = 0, pl.dead = false, pl.health = 20;
+    pl.x = 8.5f, pl.y = (float)y, pl.z = 8.5f;
+    game_time = 18000;   /* (midnight: no burning) */
+    Entity *sk = ent_new(E_SKELETON, 8.5f, (float)y, 15.5f);   /* seven ahead */
+    sk->health = 20, sk->yaw = 0, sk->panic = 60;             /* (facing +z: away from the player) */
+    CHECK(fabsf(sk->yaw) < 1);
+    for (int t = 0; t < 30; t++) ticks_run++, ents_tick(), game_time++;
+    /* (the shortest way round lands on -180, which faces the player just as +180 does) */
+    CHECK(sk->type == E_SKELETON && fabsf(fabsf(sk->yaw) - 180) < 1);   /* (it turned to face the player) */
+    plat_remove_prefix("ut3s");
+  }
   {
     /* a mob near the player looks at them for a short while, then looks away and idles: the
      * head is not held on the player (EntityAIWatchClosest's maxRandomLookTime), and its pitch

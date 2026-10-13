@@ -3,7 +3,7 @@
 Work list for `games/numblocks`. Each item: what it is, where the code lives,
 what "done" means. Order matters only where noted.
 
-- [ ] **Make skeletons look at you when they are shooting at you**
+- [x] **Make skeletons look at you when they are shooting at you**
 - [ ] **Fix biome: unkown glitch**
 - [ ] **[15] Nether mobs** — the nether has no life of its own: add the piglin
       and the zombified piglin as its mobs (spawning, models, skins, drops,
@@ -20,6 +20,15 @@ what "done" means. Order matters only where noted.
 - [ ] **[23] Basic structures** — the world makes terrain, dungeons and lakes
       and no structures: a placement pass, the desert pyramid first, working
       and looking exactly as modern Minecraft makes it (`26.3.jar`).
+- [ ] **[24] Under-lava fog and overlay** — the eye in lava reads like the eye
+      beside it: give it Java's dense orange fog and the orange screen wash,
+      as `under_water` already gives water its blue (`render.c`).
+- [ ] **[25] Water evaporates in the nether** — a water bucket emptied in the
+      nether places nothing: the fizz and a puff of smoke, and the bucket
+      comes back empty, as Java's ultra-warm dimension does.
+- [ ] **[26] Liquids at the cache's edge** — a stream whose source leaves the
+      loaded cache drains to nothing: an unloaded neighbour must read unknown,
+      not air, so the liquid stands until the world that feeds it is whole.
 
 ---
 
@@ -403,6 +412,187 @@ direction meets the same temple; its plate sets off the TNT; its four chests
 hold the modern loot when opened; the documented `./build/play --frames ...
 --shots ...` frames show it; `make test` passes and `make build && make
 check` fits.
+
+---
+
+## [24] Under-lava fog and overlay
+
+**What.** The eye in lava reads almost exactly like the eye beside it: the fog
+and the sky keep the dimension's colour, and the only case the renderer knows
+is water (`under_water`). Java has its own for lava — `FogRenderer`/
+`getFogColor` gives the eye in lava a dense orange fog (colour **0.6, 0.1,
+0.0** = `#991900`, near full within a block or two, much shorter than water's)
+and `EntityRenderer` washes the whole picture with the lava overlay — so the
+screen is unmistakably orange. Add the same here: `under_lava` beside
+`under_water`, its own colour and distances, and the orange screen wash.
+
+**Where.**
+- `src/render.c:106` — `static int under_water;` gains `under_lava` beside it,
+  set at `render.c:2556` (`under_water = is_water(cam_b)`) from `cam_b`
+  (`render.c:2551`, the block at the eye): `under_lava = is_lava(cam_b)`
+  (`is_lava`'s all-states form, `nb.h:75`, so a flowing cell counts too).
+- **The fog.** The nether's is set at `render.c:2417-2433`, the overworld's at
+  `render.c:2457-2547`, and water's override sits after both at
+  `render.c:2567-2571` (`fog_r/g/b = 10,30,110; fog0 = 0; fog1 = 9`). Lava's
+  goes with it: colour `#991900` and Java's reach (`fog0 = 0`, `fog1` about 2),
+  applied whichever dimension branch ran.
+- **The tinted sky and faces.** Every `under_water` colour wants a lava arm —
+  `sky()` (`render.c:214,221`), `sky_px()` (`render.c:316`), the face path
+  (`render.c:1316`) and the `plain` test (`render.c:1002`) — but tinted orange
+  (Java's overlay), not the water blue.
+- **The screen wash.** A translucent orange over the whole picture, so a wall
+  of blocks right in front reads as lava and not only the fog does: `gui.c`'s
+  `tint_rect` (`gui.c:111`) as the hurt flash uses it (`gui.c:2835-2837`), or
+  `portal_overlay` (`gui.c:127`) as the pattern.
+- **The frames.** `tests/play.c`'s `--lava` (`play.c:323-365`) puts the camera
+  over the sea (nether) or over a fall (overworld), four blocks up; it needs a
+  shot with the eyes *in* a lava cell (drop the camera into the source) for the
+  recorded run.
+
+**Notes / the work.**
+- Java's numbers: `FogRenderer.setupColor`/`getFogColor` lava `(0.6F, 0.1F,
+  0.0F)`; the eye's own wash is `EntityRenderer`'s lava overlay (a textured
+  orange), which here is a flat `tint_rect`.
+- The colour is the same in both dimensions, as Java's is; `NETHER_R/G/B`
+  (`render.c:207-209`) are the nether *sky*, not this.
+- No state, no RAM, no flash: one flag and a few constants. The camera's own
+  cell is already read (`cam_b`), so this is the same hook water uses.
+- Eyes in water and lava at once is impossible (one cell); if it mattered, lava
+  wins.
+- One `versions.md` entry.
+
+**Done when.** Standing with the head in lava, the view is a dense orange haze
+with the picture washed orange; standing beside lava with the eyes in air is
+unchanged; `make test` passes; `make build && make check` fits; and the
+recorded `./build/play --lava --nether --frames … --shots …` (**not**
+`build/desktop`) shows both the surface and the inside.
+
+---
+
+## [25] Water evaporates in the nether
+
+**What.** A water bucket used in the nether places water as if it were the
+overworld: the block stands and the stream runs. Java's nether is an
+**ultra-warm** dimension (`NetherDimension` sets `ultraWarm`), and
+`ItemBucket`/`BucketItem` checks `dimension.isUltraWarm()` before it places:
+a bucket emptied there places **nothing** — the water evaporates on the spot —
+puffs a burst of smoke, and the player keeps the empty bucket. Give the nether
+the same: the block is never placed, the fizz shows, the bucket comes back.
+
+**Where.**
+- `src/player.c:769-778` — the `IK_WATER_BUCKET`/`IK_LAVA_BUCKET` case:
+  `set_block(px, py, pz, k == IK_WATER_BUCKET ? B_WATER : B_LAVA)`
+  (`player.c:774`). In the nether (`world_dim == DIM_NETHER`, `nb.h:404-405`;
+  `dim_nether()`, `render.c:210`) a **water** bucket skips the `set_block`,
+  spawns the smoke at the target cell, and still returns the bucket
+  (`h->id = I_BUCKET`, as the lava branch already does at `player.c:775`).
+  Lava is untouched.
+- `src/entity.c:14,44,51-58` — `SMOKE` (`entity.c:14`) and `particle_add`
+  (`entity.c:44`); add a small helper beside `particles_spawner` (a
+  `particles_evaporate(x, y, z)`) puffing a few grey puffs up and out of the
+  cell. `N_PART` is 64 (`nb.h:268`) — a handful per use, no new storage.
+- `src/player.c:754-768` — the `IK_BUCKET` branch fills from a *source* the
+  eyes look at (`pick_liquid`, `player.c:519-532`); nothing there changes (the
+  nether has no water to pick up).
+- The nether's other water entries: rain is off (`tick.c:611`), the generator
+  makes none, and the portal lands above liquid (`portal.c`), so the bucket is
+  the only place water arrives. A `/setblock water` still places water — it is
+  not a bucket — decide and say so in the commit.
+- `tests/unit.c` — a case that a water bucket used on a nether face leaves the
+  target `B_AIR` and the hand an empty bucket; `tests/play.c` — reuse
+  `--nether` with a water bucket in hand (the `--showcase` rig already holds
+  water and lava, `play.c:4`) and a recorded frame sequence.
+
+**Notes / the work.**
+- Java plays the fizz as a sound; with no sound here the particles are the
+  tell, so make them read clearly (a short, dense burst at the placement cell).
+- The bucket is consumed either way; Creative keeps it exactly as the lava
+  branch does (`player.c:775`).
+- `neighbours_changed` must not run for the evaporated cell, or the empty
+  placement would wake its neighbours for nothing.
+- Reference: Java's `ItemBucket`/`BucketItem` + `isUltraWarm`, particle types
+  `SMOKE`/`LARGE_SMOKE`; read the exact step from `26.3.jar`.
+- One `versions.md` entry.
+
+**Done when.** In the nether, a water bucket in hand used on a block puffs
+smoke and leaves air (no water block, no flow), the hand holds the empty
+bucket, and a lava bucket still places lava; `make test` passes;
+`make build && make check` fits; and the recorded `./build/play --nether
+--frames … --shots …` (**not** `build/desktop`) frames show the puff where the
+water would have been.
+
+---
+
+## [26] Liquids at the cache's edge
+
+**What.** A liquid whose source (or supply) leaves the loaded cache drains.
+Place a water or lava source high in the nether, let it run down, then go down
+until the source is above the cache: the stream's cells recompute with the
+source unseen, and an unloaded cell reads as **air** (`world_get`,
+`world.c:527`), so `fluid_update` finds no same-liquid neighbour, takes the
+level to nothing (`nl < 0`), and airs the block (`tick.c:162-166`); the next
+cell down does the same, and the stream is gone. `settle_fall` already has the
+right rule for its own case — out of the cache is not air, so a fall waits
+until the ground is in sight (`player.c:355-373`) — and liquids need the same:
+an unloaded neighbour must read **unknown**, never "nothing", so a liquid
+stands until the world that feeds it is whole again.
+
+**Where.**
+- `src/tick.c:136-195` — `fluid_update`. The level comes from the four sides
+  (`tick.c:145-152`), the block above (`tick.c:155-156`), then four ways'
+  `open_to`/`slope_dist` (`tick.c:172-194`), every read through `world_get`, so
+  every cell outside the cache is `B_AIR`. It needs a loaded-aware read: if any
+  cell it depends on is unloaded (`world_loaded`, `world.c:521`) the update
+  does **nothing** this run and the cell is left standing — the same "wait for
+  the world to be whole" `settle_fall` uses — rather than re-levelling or
+  draining from an unseen side.
+- `src/tick.c:48-63` — `open_to` and `below`: the same guard, so an unloaded
+  side is not "somewhere to go" and a fall is not re-levelled against air.
+  (`flow_into`'s own write already refuses an unloaded target through
+  `world_set`, `world.c:533`, so the tail waits there too.)
+- `src/tick.c:72-87` — `fluid_wake`, the settle entry: `settle_cache`
+  (`world.c:227-237`) runs it once a move's chunks are whole, which is exactly
+  where a cell the update left standing gets re-asked. Make sure a flowing cell
+  whose supply was out of the cache is woken when the supply is back, and that
+  its level is recomputed then.
+- `src/tick.c:24-32,198-213` — `fluid_schedule`/`fluids_tick`: an entry whose
+  cell is outside the cache is dropped (`tick.c:208`), which is only safe
+  because `settle_cache` wakes liquids again when the region returns; the fix
+  leans on that, so keep it true for the waiting cell.
+- `src/world.c:521-530` — `world_get`/`world_loaded`: the fix belongs in the
+  fluid code, **not** in `world_get` (its air-for-unloaded is what every other
+  caller expects).
+- **Tests.** `tests/play.c:397-430` — `--settle` is the nearest rig (it already
+  slides the cache and back); add a `--drain` (or extend it): a source at the
+  top with a fall down, then move the cache down so the source is out of it and
+  assert the stream's cells are still liquid, and the same with the cache moved
+  back. `tests/unit.c` — the level arithmetic with an unloaded neighbour: a
+  level-1 flow beside a source two blocks outside the cache keeps its level.
+
+**Notes / the work.**
+- The nether is where it shows (a source high over the sea, the fall down to
+  it) but the overworld has the same edge; test both.
+- One rule for water and lava (the code is shared), but the reach differs
+  (water 4, lava 2 — `tick.c:181`) and the decay (1 vs 2 — `tick.c:141`); check
+  both.
+- No new state, no BSS growth: the guard is a few `world_loaded` calls. The
+  pending queue stays `N_PENDING` 160 (`tick.c:20`) — do not grow it.
+- Java has no such edge (its force-loaded chunks keep the region); this is the
+  game's own cache, so the rule is the game's own. Write the deliberate
+  difference down in the commit, as `below()`'s world-floor note does
+  (`tick.c:60-63`).
+- Watch a source the player placed: it lives in the edit records and returns
+  when the cache does, so only the standing stream has to be kept alive in
+  between.
+- One `versions.md` entry.
+
+**Done when.** A source placed high with its fall left behind as the cache
+moves down does not drain — the stream's cells stay liquid while the source is
+out of the cache, and are unchanged when it returns — while a source removed
+beside a loaded stream still drains it as before (the edge does not freeze live
+flow); `make test` passes; `make build && make check` fits; and the recorded
+`./build/play` frames (**not** `build/desktop`) show the fall intact with the
+source above the cache.
 
 ---
 

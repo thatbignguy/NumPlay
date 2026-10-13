@@ -1038,7 +1038,13 @@ void mob_tick(Entity *e) {
   if (chase) {
     float want = atan2f(-dx, dz) * 57.29578f;
     float turn = wrap(want - e->yaw);
-    if (fabsf(turn) < 60) e->yaw += turn * 0.5f;
+    /* A skeleton that has stopped to draw turns to face what it is shooting at
+     * (EntityAIArrowAttack looks at its target through EntityLookHelper). The 60-degree
+     * limiter keeps a walking mob steering to its path and not spinning at its goal, but
+     * it left a firing skeleton shooting over its shoulder once the player stepped past
+     * that cone; standing to shoot, the whole 180 is turned. */
+    if (e->type == E_SKELETON && !go) e->yaw += turn > 30 ? 30 : turn < -30 ? -30 : turn;
+    else if (fabsf(turn) < 60) e->yaw += turn * 0.5f;
     e->pitch = -atan2f(dy + 1.0f - mi->h * 0.85f, dist) * 57.29578f;
   } else {
     /* EntityLookHelper, and the two look tasks that drive it. They cannot run while another task

@@ -1,3 +1,30 @@
+## 1.5.23
+**Skeletons turn to face the player while they are shooting, instead of firing over their shoulder once the player steps outside the 60-degree cone**
+- **The bug.** `mob_tick`'s chase steers a hostile's body at the player only while it is
+  within 60 degrees of facing them (`mob.c`), the limiter that keeps a walking mob on its
+  path and stops it spinning at a goal it cannot reach. A skeleton that had stopped to draw
+  (bow range, 10 blocks, in sight) is past that cone the moment the player steps round it, so
+  it kept firing with the player over its shoulder.
+- **The fix.** Stopped to shoot - exactly the skeleton's `go == false` (in range and in
+  sight) - the whole turn is taken, capped at the same 30 degrees a tick the limiter allowed,
+  so the skull and the drawn bow come round to face what is being shot at
+  (`EntityAIArrowAttack`'s look at its target). Walking, the path still steers it and the
+  60-degree rule is untouched for it and every other mob.
+- **The body is the head here.** NumBlocks' mobs have no separate head yaw (the look AIs turn
+  the whole body), so this is the whole mob turning; the pitch that aims the bow at the
+  player's eyes is unchanged. Nothing else moves: a zombie or a spider still steers to its
+  path, and the row of `--mobs` frames is byte-identical.
+- **Cost.** Three instructions, no new state. `.data` 5,079 and `.bss` 119,056 (the game's
+  124,135 B inside `CUSTOM_RAM` 133,652). `NumBlocks.nwa` 611,080 -> **611,328 B**,
+  `numblocks-interest.nwa` 637,520 -> **637,616 B**, the `.bin` 541,164 -> **541,332 B**.
+  Recorded: `make test` passes (208 recipes; the new case has a skeleton seven blocks ahead
+  facing away turn +/-180 within a few ticks and keep firing); `make -C games/numblocks host
+  desktop build check` and `games/numblocks-interest build check` build; both `.nwa`s fit
+  `nwlink nwa-bin --ram-length 133652`; `tests/test_numblocks_progress.py`,
+  `tests/test_games.py build/apps --game numblocks` and `tools/emu.py` pass; the
+  `./build/play --skeleton --frames 160 --shots 2,8,20,60,159` run (**not** `build/desktop`)
+  shows it looking the other way, turning, and firing at the player.
+
 ## 1.5.22
 **The eye in lava is Java's dark orange again, reaching twelve blocks, with the far lava traced rather than filled so its grid of sample pixels is gone**
 - **Darker and further.** The fog colour goes back to Java's `(0.6, 0.1, 0.0)` = `#991900`
