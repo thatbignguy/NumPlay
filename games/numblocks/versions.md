@@ -1,3 +1,23 @@
+## 1.5.21
+**The eye in lava is brighter and sees further: a bright orange fog reaching six blocks, where it was Java's dark #991900 full at two**
+- **Brighter.** The lava fog colour goes from Java's `(0.6, 0.1, 0.0)` = `#991900` to `#FF6E00`
+  (255, 110, 0); the sky and plain-face tint and the `gui.c` screen wash follow it. Java's own
+  colour reads nearly black-orange on the calculator's screen - the whole view is one dark
+  wash - so it is not kept.
+- **Further.** The fog runs from 1 to 6 blocks (`fog0`/`fog1`; it was 0 to 2): near surfaces are
+  crisp and the fog is full at six blocks instead of two, so the sea floor and the shore read
+  through it and the eye can tell where it is. `render.c`'s comment says what was kept from
+  Java and what was overridden, and why.
+- **Nothing else moves.** No new state; where the eye is not in lava the pixels are unchanged
+  (the whole 18-frame `bench_render.py` set is still checksum-identical to 1.5.19, `85.80 M
+  insns`, deepest stack 21,200 B). `.data` 5,079 and `.bss` 119,056, the game's 124,135 B inside
+  `CUSTOM_RAM` 133,652. `NumBlocks.nwa` 611,000 -> **611,024 B**, `numblocks-interest.nwa`
+  637,384 -> **637,408 B**, the `.bin` 541,172 -> **541,196 B**. Recorded: `make test` passes
+  (208 recipes); `make -C games/numblocks host desktop build check` and
+  `games/numblocks-interest build check` build; the `./build/play --lava --nether --frames 90
+  --keys "10-40:sneak" --shots 2,45` run (**not** `build/desktop`) shows the brighter, wider
+  view.
+
 ## 1.5.20
 **The eye in lava reads as lava: Java's dense orange fog and the orange screen wash, where before it looked like the eye beside it**
 - **The state.** `render.c`'s single `under_water` flag becomes one `under_liq` (0 air, 1 water, 2

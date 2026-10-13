@@ -212,13 +212,16 @@ static inline int texel_rgb(int b, int tex, int u, int v, int col, int *r, int *
 #define NETHER_R 51
 #define NETHER_G 8
 #define NETHER_B 8
-/* the eye in lava: Java's FogRenderer gives the lava fog the colour (0.6, 0.1, 0.0) - a dense
- * orange, near full within a block or two - and its overlay washes what is seen through it.
- * Here the colour is this, and the sky and the plain faces the fog does not reach are tinted
- * towards it (half of what was there, half the orange), not the water blue. */
-#define LAVA_R 153
-#define LAVA_G 25
+/* the eye in lava: Java's FogRenderer gives the lava fog the colour (0.6, 0.1, 0.0) = #991900,
+ * a dense orange near full within a block or two, and its overlay washes what is seen through
+ * it. That reads too dark and too close on the calculator's screen, so the fog is a brighter
+ * orange and reaches further (LAVA_FOG0/FOG1), and the sky and the plain faces the fog does not
+ * reach are tinted towards it (half of what was there, half the orange), not the water blue. */
+#define LAVA_R 255
+#define LAVA_G 110
 #define LAVA_B 0
+#define LAVA_FOG0 1.0f
+#define LAVA_FOG1 6.0f
 static inline uint16_t lava_tint(int r, int g, int b) {
   return pack((r + LAVA_R) / 2, (g + LAVA_G) / 2, b / 4);
 }
@@ -2584,10 +2587,11 @@ nether_sky_done:;
   if (under_liq) {
     /* Java's own override for the eye in a liquid, whichever dimension branch ran */
     if (under_liq == 2) {
-      /* lava: dense and orange, near full within a block or two (shorter than water's) */
+      /* lava: a brighter orange, nearer than the overworld's fog but further than water's
+       * dead-short one, so the sea floor and the shore still read through it */
       fog_r = LAVA_R, fog_g = LAVA_G, fog_b = LAVA_B;
-      fog0 = 0;
-      fog1 = 2;
+      fog0 = LAVA_FOG0;
+      fog1 = LAVA_FOG1;
     } else {
       fog_r = 10, fog_g = 30, fog_b = 110;
       fog0 = 0;
