@@ -1,3 +1,43 @@
+## 1.5.27
+**The deepslate is hollowed out: 1.17-1.19's noise caves under y=0 - cheese caverns, spaghetti and noodle tunnels, water pools and a lava sea - carved in a pass of their own, so the 1.8 surface stays exact**
+
+- **The caves.** The 1.8 carver stops at the old floor, so under y=0 the deepslate was
+  solid rock. A new pass (`deep_caves`, `gen.c`) carves it the way 1.18 does: a broad
+  "cheese" field for the open rooms, two crossing "spaghetti" fields whose intersection is
+  a winding tunnel, and a thin "noodle" field. Each is a few perlin octaves over the deep
+  rows, sampled on a 4 x 4 x 4 lattice and trilinearly interpolated (as Minecraft
+  interpolates its density), drawn from the existing perlin permutation with offsets of
+  this world's seed. It is a pure function of a block's world position, so a chunk comes
+  out the same in any slab window (checked: 0 blocks differ over 144 chunks across four
+  window splits and four seeds), and it draws from nothing 1.8's terrain or population
+  streams use.
+- **The liquids.** An open deep cell at or below y = -54 (1.18's lava level) becomes the
+  lava sea; above it a smooth, low-frequency water table (`deep_water_level`) floods some
+  caverns and leaves others dry, so water pools where the noise says. The bedrock floor is
+  never carved, and the surface (y >= 0) is untouched.
+- **The order.** The caves are carved first and the deepslate ores (`deep_ores`) after, so
+  a vein never hangs in a cavern and the ores a cave cut into show on its wall. `t_refcmp`
+  still reports **0 / 3,212,800 blocks differ in 50 chunks from y=5 up** (seeds 12345 and
+  987654321).
+- **The tests, and two tools.** `tests/unit.c` checks a chosen seed's deep chunk holds a
+  cavern and that it is the same in three slab windows; `tests/play.c` gains `--caves`
+  (the camera in the biggest deep cavern, lit with a little glowstone, facing the most open
+  way). `tests/gen/t_slabs` is fixed for the 9-bit slabs (its buffers were 256 bytes a row
+  and overflowed; it reads the same blocks either way now). `gen_slab`'s local `H` is
+  renamed `Htop` so `tests/gen/arm/bench.py`'s `-DH` no longer collides with it.
+- **Recorded.** `./build/play --caves --creative --bright 15 --time 18000 --keys
+  "6-29:fwd" --frames 30 --shots 5,29 --out /tmp/caves` (**not** `build/desktop`) shows
+  the cavern (frame 5) and a tunnel through it (29).
+- **Cost.** No BSS growth: `.data` 5,079 and `.bss` 119,064 (the game's 124,143 B inside
+  `CUSTOM_RAM` 133,652). The deep pass costs +0.70 M instructions a fully-deep slab window
+  (3.16 -> 3.86 M, 14.6 -> 17.8 ms at 216 MHz) and +0.51 M one straddling y=0 (26.20 ->
+  26.71 M), measured with `tests/gen/arm/bench.py --y0 -64 --h 24 --game-flags` before and
+  after the pass; the surface windows never run it. `NumBlocks.nwa` 614,188 -> **617,548 B**,
+  `numblocks-interest.nwa` 641,140 -> **644,496 B**, the `.bin` 547,508 -> **550,224 B**
+  (this machine's toolchain). Recorded: `make test` passes (208 recipes; the new deep-cave
+  case); `make build && make check` and `make -C games/numblocks-interest build check` fit;
+  `tests/gen/t_refcmp` 0 differ from y=5 up.
+
 ## 1.5.26
 **A dug shaft keeps its sky light as the cache follows the player down below the surface: the sky top is a signed world y now and lowers through a dug shaft, where before the whole deep column went black just after the deepslate began**
 

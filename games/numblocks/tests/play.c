@@ -45,6 +45,9 @@
  *                         the player stands in it and travels when the wait is over)
  *        [--deep]       (the deepslate family in a row - deepslate and its seven ores - on a
  *                         deepslate floor, four blocks ahead: the deep layer's blocks)
+ *        [--caves]      (the deep layer's 1.17-1.19 caves: the camera dropped into a deep
+ *                         cavern, lit by glowstone, looking along it - the noise caves under
+ *                         the surface world; Creative, Peaceful)
  *        [--xray]       (the spectator's water and lava holes: the head inside the stone
  *                         block over a pool of water, a lava block against the block's
  *                         side - looking down, the water under the block and the lava
@@ -95,7 +98,7 @@ int main(int argc, char **argv) {
   int skeleton = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0, deep = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0, deep = 0, caves = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0, contrast = 0, panorama = -1;
@@ -127,6 +130,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--xray")) xray = 1;
     else if (!strcmp(argv[i], "--deep")) deep = 1;
+    else if (!strcmp(argv[i], "--caves")) caves = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
     else if (!strcmp(argv[i], "--contrast")) contrast = 1;
@@ -335,6 +339,57 @@ int main(int argc, char **argv) {
     for (int k = 0; k < 8; k++)
       for (int h = 0; h < 3; h++) world_set(px - 3 + k, fy + h, pz + 4, fam[k]);
     pl.yaw = 0, pl.pitch = 0;
+  }
+  if (caves) {
+    /* the deep layer's 1.17-1.19 noise caves: drop the camera into the middle of the
+     * biggest deep cavern the cache holds, light it with a little glowstone and face the
+     * most open way, so the frames show a cavern and its tunnels under the surface world
+     * (Creative, Peaceful, so nothing spoils the view) */
+    pl.x = 8.5f, pl.z = 8.5f, pl.y = -40.0f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int bx = VCX / 2, by = VCY / 2, bz = VCZ / 2, best = -1;
+    for (int ly = 3; ly < VCY - 3; ly++)
+      for (int lz = 3; lz < VCZ - 3; lz++)
+        for (int lx = 3; lx < VCX - 3; lx++) {
+          if (vc_y0 + ly >= 0 || vc_get(VC_I(lx, ly, lz)) != B_AIR) continue;
+          int fl = vc_get(VC_I(lx, ly - 1, lz));
+          if (fl == B_AIR || fl == B_WATER || fl == B_LAVA) continue;   /* (a floor to stand on) */
+          int s = 0;
+          for (int dy = -3; dy <= 3; dy++)
+            for (int dz = -3; dz <= 3; dz++)
+              for (int dx = -3; dx <= 3; dx++) {
+                int b = vc_get(VC_I(lx + dx, ly + dy, lz + dz));
+                s += b == B_AIR ? 1 : (b == B_WATER || b == B_LAVA) ? -4 : 0;
+              }
+          if (s > best) best = s, bx = lx, by = ly, bz = lz;
+        }
+    pl.x = vc_x0 + bx + 0.5f, pl.y = (float)(vc_y0 + by), pl.z = vc_z0 + bz + 0.5f;
+    /* face the most open way (the longest air run of the four) */
+    int run[4] = {0, 0, 0, 0};
+    for (int d = 1; d <= 20 && bz + d < VCZ && vc_get(VC_I(bx, by, bz + d)) == B_AIR; d++) run[0]++;
+    for (int d = 1; d <= 20 && bz - d >= 0 && vc_get(VC_I(bx, by, bz - d)) == B_AIR; d++) run[1]++;
+    for (int d = 1; d <= 20 && bx + d < VCX && vc_get(VC_I(bx + d, by, bz)) == B_AIR; d++) run[2]++;
+    for (int d = 1; d <= 20 && bx - d >= 0 && vc_get(VC_I(bx - d, by, bz)) == B_AIR; d++) run[3]++;
+    int dir = 0;
+    for (int k = 1; k < 4; k++) if (run[k] > run[dir]) dir = k;
+    static const float yaw_of[4] = {0, 180, 270, 90};   /* +z, -z, +x, -x */
+    pl.yaw = yaw_of[dir], pl.pitch = 10.0f;
+    /* a little glowstone in the ceiling about the camera and along the way (the deep layer
+     * is dark; a light every few blocks is what a player would bring) */
+    int fx = dir == 2 ? 1 : dir == 3 ? -1 : 0, fz = dir == 0 ? 1 : dir == 1 ? -1 : 0;
+    world_set(vc_x0 + bx, vc_y0 + by + 2, vc_z0 + bz, B_GLOWSTONE);
+    for (int k = 1; k <= 3; k++) {
+      int gx = bx + fx * k * 4, gz = bz + fz * k * 4;
+      if (gx >= 0 && gx < VCX && gz >= 0 && gz < VCZ) world_set(vc_x0 + gx, vc_y0 + by + 2, vc_z0 + gz, B_GLOWSTONE);
+    }
+    pl.mode = 1, pl.flying = true;   /* (hover in the cavern) */
+    opt.difficulty = 0;
+    fprintf(stderr, "caves: the camera at %d %d %d (open score %d), runs %d %d %d %d\n",
+            vc_x0 + bx, vc_y0 + by, vc_z0 + bz, best, run[0], run[1], run[2], run[3]);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    camera_reset();
   }
   if (water) {
     /* a cleared field with a water source on a step */

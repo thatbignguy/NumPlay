@@ -2187,6 +2187,30 @@ int main(void) {
     delete_world(8);
   }
   {
+    /* the deep layer is carved: the caves are a pure function of a block's world position,
+     * so a chunk comes out the same whichever slab window asks for it, and the deepslate
+     * holds a cavern to walk into (with mostly rock around it) */
+    world_new(12345, "utcave");
+    uint8_t gs[GEN_SCRATCH];
+    static uint8_t full[64 * 288 + 4], part[64 * 288 + 4];
+    gen_scratch(gs);
+    gen_slab(0, 0, -64, 64, full);
+    gen_slab(0, 0, -64, 24, part);
+    gen_slab(0, 0, -40, 24, part + 24 * 288);
+    gen_slab(0, 0, -16, 16, part + 48 * 288);
+    gen_scratch(NULL);
+    int diff = 0, air = 0, rock = 0;
+    for (int r = 0; r < 64; r++)
+      for (int i = 0; i < 256; i++) {
+        int a = b9_get(full, r * 256 + i);
+        if (a != b9_get(part, r * 256 + i)) diff++;
+        if (a == B_AIR) air++; else if (a != B_WATER && a != B_LAVA) rock++;
+      }
+    CHECK(diff == 0);       /* the same in any slab window */
+    CHECK(air > 500);       /* a cavern */
+    CHECK(rock > air);      /* and mostly rock around it */
+  }
+  {
     /* a column whose chunk is still to be made: it is reported pending - so the pick ray
      * passes it over instead of mining a block that would then stay - but reads as stone,
      * so nothing falls through it */

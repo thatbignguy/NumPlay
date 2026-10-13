@@ -29,7 +29,7 @@ what "done" means. Order matters only where noted.
 - [ ] **[26] Liquids at the cache's edge** — a stream whose source leaves the
       loaded cache drains to nothing: an unloaded neighbour must read unknown,
       not air, so the liquid stands until the world that feeds it is whole.
-- [ ] **[27] Deepslate caves** — the deep layer is solid rock: carve it with
+- [x] **[27] Deepslate caves** — the deep layer is solid rock: carve it with
       caves of 1.17-1.19's kind (bigger and more open than the 1.8 tunnels), so
       there is somewhere to walk, to fall into and to light under y=0.
 
