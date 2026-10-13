@@ -33,7 +33,10 @@
  *                         neighbours leaves it hanging)
  *        [--lava]       (a lava source standing in the air over a cleared field: the
  *                         stream runs down and spreads - the flowing layers' picture,
- *                         with the still source's over it; Creative, so nothing burns)
+ *                         with the still source's over it; Creative, so nothing burns.
+ *                         With --nether it is the lava sea, and holding sneak sinks the
+ *                         eye into it - --keys "10-40:sneak" and a shot past frame 30
+ *                         show the eye in lava: the dense orange fog and screen wash)
  *        [--portal]     (a lit obsidian frame in front of the player, flint and steel in hand:
  *                         the player stands in it and travels when the wait is over)
  *        [--xray]       (the spectator's water and lava holes: the head inside the stone

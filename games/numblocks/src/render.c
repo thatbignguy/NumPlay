@@ -103,7 +103,12 @@ static int cloud_r, cloud_g, cloud_b;   /* the clouds' colour (0..255) */
 static float sun_a;                     /* how much of the sun or moon shows (rain hides it) */
 static bool night;
 static bool xray;                       /* (a spectator's head inside a solid block: see through the rock) */
-static int under_water;
+/* The liquid the eye is in: 0 air, 1 water, 2 lava. render_frame sets it from the camera's own
+ * cell, and the fog, the sky tint and (gui.c's) screen wash follow it, as Java's FogRenderer
+ * does. One value, so the hot sky paths test it once; lava wins if a cell were both, which one
+ * cell cannot be. */
+static int under_liq;
+bool render_under_lava(void) { return under_liq == 2; }   /* (gui.c: the orange screen wash) */
 static int cam_x, cam_y, cam_z, cam_i, cam_b;   /* the camera's cell, its index (-1 outside the cache), its block */
 static int cam_mi, cam_liq;      /* its region, the liquid it is in (lshape, 255: none) */
 static float cam_fr[3][2];       /* from the eye to its cell's sides: [axis][0 low side, 1 high] */
@@ -207,18 +212,29 @@ static inline int texel_rgb(int b, int tex, int u, int v, int col, int *r, int *
 #define NETHER_R 51
 #define NETHER_G 8
 #define NETHER_B 8
+/* the eye in lava: Java's FogRenderer gives the lava fog the colour (0.6, 0.1, 0.0) - a dense
+ * orange, near full within a block or two - and its overlay washes what is seen through it.
+ * Here the colour is this, and the sky and the plain faces the fog does not reach are tinted
+ * towards it (half of what was there, half the orange), not the water blue. */
+#define LAVA_R 153
+#define LAVA_G 25
+#define LAVA_B 0
+static inline uint16_t lava_tint(int r, int g, int b) {
+  return pack((r + LAVA_R) / 2, (g + LAVA_G) / 2, b / 4);
+}
 static bool dim_nether(void) { return world_dim == DIM_NETHER; }
 
 static __attribute__((noinline)) uint16_t sky(float dx, float dy, float dz, float len) {
   if (dim_nether()) {
-    if (under_water) return pack(NETHER_R / 4, NETHER_G / 3, NETHER_B / 2 + 40);
+    if (under_liq) return under_liq == 2 ? lava_tint(NETHER_R, NETHER_G, NETHER_B)
+                                         : pack(NETHER_R / 4, NETHER_G / 3, NETHER_B / 2 + 40);
     return pack(NETHER_R, NETHER_G, NETHER_B);
   }
   float e = dy / len;   /* elevation, -1..1 */
   /* horizon (fog colour) to the sky's colour above; below the horizon, fog */
   int gi = e <= 0 ? 0 : e >= 0.4f ? 128 : (int)(e * 320);
   int r = sky_grad[gi][0], g = sky_grad[gi][1], b = sky_grad[gi][2];
-  if (under_water) return pack(r / 4, g / 3, b / 2 + 40);
+  if (under_liq) return under_liq == 2 ? lava_tint(r, g, b) : pack(r / 4, g / 3, b / 2 + 40);
   /* the sunrise and sunset glow (RenderGlobal's fan): towards the sun, on the horizon, fading above
    * it and below it alike (the fan straddles it: cut there, it hung over a line in the air) */
   if (ss_a > 0) {
@@ -313,7 +329,7 @@ static inline __attribute__((always_inline)) uint16_t sky_px(const SkyRow *k, fl
   if (dy <= 0) gi = 0;
   else if (dy * dy < 0.16f * l2) len = sqrtf(l2), gi = (int)(dy / len * 320);
   int r = sky_grad[gi][0], g = sky_grad[gi][1], b = sky_grad[gi][2];
-  if (under_water) return pack(r / 4, g / 3, b / 2 + 40);
+  if (under_liq) return under_liq == 2 ? lava_tint(r, g, b) : pack(r / 4, g / 3, b / 2 + 40);
   if (sun_a > 0) {
     float sd = k->sd0 + k->sds * su, tx = k->tx0 + k->txs * su, s2 = sd * sd;
     int sp = -1;
@@ -999,7 +1015,7 @@ static __attribute__((unused)) void sky_fill(uint16_t (*cb)[RW], float (*zb)[RW]
   for (int r = 0; r < SR; r++) {
     const SkyRow *k = &skr[r];
     float dy = k->dy, l2 = k->len2 + lo2;
-    bool plain = !under_water && !mid;
+    bool plain = !under_liq && !mid;
     if (plain && sun_a > 0) {
       float a = fabsf(k->sd0 + k->sds * s0), b = fabsf(k->sd0 + k->sds * s3), m = fmaxf(a, b);
       plain = m * m <= 0.81f * l2;
@@ -1313,7 +1329,7 @@ static uint16_t agreed(float dx, float dy, float dz, const Sample *a, bool one) 
     ST(st_sky++);
     if (dy <= 0 && ss_a <= 0) {
       int r = sky_grad[0][0], g = sky_grad[0][1], b = sky_grad[0][2];
-      return under_water ? pack(r / 4, g / 3, b / 2 + 40) : pack(r, g, b);
+      return under_liq == 1 ? pack(r / 4, g / 3, b / 2 + 40) : under_liq == 2 ? lava_tint(r, g, b) : pack(r, g, b);
     }
     return sky(dx, dy, dz, sqrtf(dx * dx + dy * dy + dz * dz));
   }
@@ -1802,7 +1818,7 @@ static uint32_t col_hash(int x, int z) {
 
 static void rain_frame(void) {
   nsheets = 0;
-  if (rain_str <= 0 || under_water) return;
+  if (rain_str <= 0 || under_liq) return;   /* (rain is not drawn with the eye in a liquid) */
   int nmax = 6144 / (int)sizeof(Sheet);
   sheets = (Sheet *)world_scratch(nmax * sizeof(Sheet));
   if (!sheets) return;
@@ -2384,7 +2400,8 @@ void render_frame(const Camera *c, uint32_t tod) {
     return;
   }
   if (!c) {
-    /* no world: only what the screens draw */
+    /* no world: only what the screens draw (and nothing of a liquid the last frame's eye was in) */
+    under_liq = 0;
     for (int py = 0; py < RH; py += SR) {
       memset(strip, 0, STRIP_N * sizeof *strip);
       hud_strip(strip, py * 2, SR * 2, &hand);
@@ -2553,7 +2570,7 @@ nether_sky_done:;
   cam_fr[0][0] = cam_x - ox, cam_fr[0][1] = cam_x + 1 - ox;
   cam_fr[1][0] = cam_y - oy, cam_fr[1][1] = cam_y + 1 - oy;
   cam_fr[2][0] = cam_z - oz, cam_fr[2][1] = cam_z + 1 - oz;
-  under_water = is_water(cam_b);
+  under_liq = is_lava(cam_b) ? 2 : is_water(cam_b) ? 1 : 0;
   /* A spectator's head in a solid block: what it sees is through the rock (cell_hit):
    * a face buried in the rock (rock on both sides of it) does not draw, so the ray
    * walks on until it meets one that is not. It costs what it costs to see through
@@ -2564,10 +2581,18 @@ nether_sky_done:;
    * where the rock was. Tracing every pixel instead - the reference build - costs
    * three times the frame. */
   xray = pl.mode == 2 && cam_i >= 0 && (blk_flags[cam_b] & BF_OPAQUE) != 0;
-  if (under_water) {
-    fog_r = 10, fog_g = 30, fog_b = 110;
-    fog0 = 0;
-    fog1 = 9;
+  if (under_liq) {
+    /* Java's own override for the eye in a liquid, whichever dimension branch ran */
+    if (under_liq == 2) {
+      /* lava: dense and orange, near full within a block or two (shorter than water's) */
+      fog_r = LAVA_R, fog_g = LAVA_G, fog_b = LAVA_B;
+      fog0 = 0;
+      fog1 = 2;
+    } else {
+      fog_r = 10, fog_g = 30, fog_b = 110;
+      fog0 = 0;
+      fog1 = 9;
+    }
   }
   fog_k = 1 / (fog1 - fog0);
   fog565 = pack(fog_r, fog_g, fog_b);

@@ -1,3 +1,38 @@
+## 1.5.20
+**The eye in lava reads as lava: Java's dense orange fog and the orange screen wash, where before it looked like the eye beside it**
+- **The state.** `render.c`'s single `under_water` flag becomes one `under_liq` (0 air, 1 water, 2
+  lava), set from the camera's own cell with `is_lava` (any state, so a flowing cell counts too)
+  after `is_water`, lava winning if a cell could be both. It is the whole of the new state: the
+  hot sky paths test the one value once, so nothing of the picture where the eye is not in lava
+  moves or slows.
+- **The fog.** Java's `FogRenderer.getFogColor` gives the eye in lava the colour
+  `(0.6, 0.1, 0.0)` = `#991900`, and `setupColor` puts its fog near full within a block or two -
+  much shorter than water's nine. The override sits after both dimensions' fog, so it holds in
+  the nether and the overworld alike, as Java's dimension-independent `getFogColor` does.
+- **The sky and the plain faces.** Every arm water had gains its lava arm - `sky()`, `sky_px()`,
+  the below-horizon face path (`agreed`) and `sky_fill`'s `plain` test - tinted towards that
+  orange (half of what was there, half the fog colour, its blue cut), not the water blue, so the
+  sky above and the faces the dense fog has not reached read as lava too. Rain is not drawn with
+  the eye in a liquid now, lava as well as water.
+- **The screen wash.** `gui.c`'s `hud_strip` lays Java's lava overlay (`EntityRenderer`'s
+  textured orange, here a flat `tint_rect` the way the hurt flash already is) over the whole
+  picture at half opacity, so a wall of blocks right in front reads as lava and not only the fog
+  does. `render_under_lava()` is all `gui.c` asks render.c.
+- **The recorded run.** `./build/play --lava --nether --frames 90 --keys "10-40:sneak" --shots
+  2,45 --out /tmp/lava-nether` (scripted keys, **not** `build/desktop`): frame 2 the sea's
+  surface under the camera, frame 45 the eye sunk into it - a dense orange haze with the near
+  lava faintly through it and the picture washed orange. `tests/play.c`'s `--lava` header says
+  how; the overworld (`--lava`, no `--nether`) shows the same with the sky above tinted.
+- **The pixels and the cost.** `.data` 5,079 and `.bss` 119,056, the game's 124,135 B inside
+  `CUSTOM_RAM` 133,652. Where the eye is not in lava nothing moves: the whole 18-frame
+  `bench_render.py` set is checksum-identical to 1.5.19 in Fast and Fancy, `85.80 / 112.60 M
+  insns` (from 85.67 / 112.43 - noise), deepest stack 21,200 B. `NumBlocks.nwa` 610,256 ->
+  **611,000 B**, `numblocks-interest.nwa` 636,612 -> **637,384 B**, the `.bin` 540,460 ->
+  **541,172 B**. Recorded: `make test` passes (208 recipes); `make -C games/numblocks host
+  desktop build check` and `games/numblocks-interest build check` build; both `.nwa`s fit
+  `nwlink nwa-bin --ram-length 133652`; `tests/test_numblocks_progress.py` and
+  `tests/test_games.py build/apps --game numblocks` pass; `tools/emu.py` runs the app clean.
+
 ## 1.5.19
 **Fast graphics stops tracing a centre sample the corners already decide: ~3% fewer instructions a frame, the same pixels**
 - **CPU.** The 3D view draws each 4 x 4 cell from five traced samples - the four corners and the

@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.19"
+#define NB_VERSION "1.5.20"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -463,6 +463,7 @@ extern const int n_give;
 #define RH 120
 typedef struct { float x, y, z, yaw, pitch; } Camera;
 void render_frame(const Camera *c, uint32_t time_of_day);
+bool render_under_lava(void);   /* the eye is in lava: gui.c's orange screen wash (render.c) */
 /* the HUD and screens draw over each strip of the screen before it is sent
  * (hand: the hand's state for this frame, on render_frame's stack) */
 void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand);

@@ -2836,6 +2836,12 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
     /* (Minecraft tilts the camera; a red flash says the same here) */
     tint_rect(0, y0, SCREEN_W, rows, RGB(0xFF, 0, 0), pl.hurt_time * 2 / 3);
   }
+  if (gui == GUI_NONE && render_under_lava()) {
+    /* the eye in lava: Java's lava overlay washes the whole picture orange, so a wall of
+     * blocks right in front reads as lava and not only the fog does. Half opaque, in the
+     * lava fog's own colour (render.c's LAVA_R/G/B) */
+    tint_rect(0, y0, SCREEN_W, rows, RGB(0x99, 0x19, 0x00), 16);
+  }
   if (gui == GUI_NONE && portal_anim() > 0) {
     /* standing in a portal: the portal's swirl over the world, worse until you go through */
     portal_overlay(y0, rows, portal_anim());
