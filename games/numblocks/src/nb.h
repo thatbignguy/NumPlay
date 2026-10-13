@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.14"
+#define NB_VERSION "1.5.15"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -389,9 +389,10 @@ typedef struct {
   uint8_t contrast;     /* High Contrast Block Outlines (Personalisation): the block looked at outlined in cyan */
   uint8_t panorama;     /* the title's backdrop (Personalisation): PAN_*, Random by default */
 } Options;
-/* The title's backdrop: Random rolls one of the four each time the title is entered; the
- * versions are Minecraft's own title panoramas (panorama.h, tools/panorama.py). */
-enum { PAN_RANDOM, PAN_WORLD, PAN_1_16, PAN_1_20, PAN_1_21 };
+/* The title's backdrop (Personalisation's Panorama): the world played last, or a fixed
+ * world's own overworld or nether (seed 123, the camera at the spot main.c keeps);
+ * Random rolls one of the three each time the title is entered. */
+enum { PAN_RANDOM, PAN_WORLD, PAN_OVER, PAN_NETHER };
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,
        A_LEFT, A_RIGHT, A_BACK, A_FORWARD, A_CHAT, A_COMMAND, A_DEBUG, N_ACTIONS };
@@ -466,10 +467,6 @@ extern const int n_give;
 #define RH 120
 typedef struct { float x, y, z, yaw, pitch; } Camera;
 void render_frame(const Camera *c, uint32_t time_of_day);
-/* the title's backdrop when it is a version's panorama (Personalisation): the six
- * faces of the version (0 = 1.16, 1 = 1.20, 2 = 1.21, panorama.h) instead of a
- * world; only the camera's yaw and pitch are read */
-void render_panorama(const Camera *c, int version);
 /* the HUD and screens draw over each strip of the screen before it is sent
  * (hand: the hand's state for this frame, on render_frame's stack) */
 void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand);

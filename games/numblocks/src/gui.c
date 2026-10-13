@@ -1583,9 +1583,8 @@ static void cat_brightness(char *t) {
 static const char *pan_name(uint8_t p) {
   switch (p) {
     case PAN_WORLD: return "World";
-    case PAN_1_16: return "1.16";
-    case PAN_1_20: return "1.20";
-    case PAN_1_21: return "1.21";
+    case PAN_OVER: return "Overworld";
+    case PAN_NETHER: return "Nether";
     default: return "Random";
   }
 }
@@ -1985,7 +1984,7 @@ static void press(Button *buttons, int id) {
       break;
     case B_PERSONAL: gui_menu(GUI_PERSONAL); break;
     case B_CONTRAST: opt.contrast = !opt.contrast; break;
-    case B_PANORAMA: opt.panorama = (uint8_t)(opt.panorama >= PAN_1_21 ? PAN_RANDOM : opt.panorama + 1); break;
+    case B_PANORAMA: opt.panorama = (uint8_t)(opt.panorama >= PAN_NETHER ? PAN_RANDOM : opt.panorama + 1); break;
     case B_PERSONAL_DONE:
       save_options();
       gui_menu(GUI_OPTIONS);
@@ -2059,8 +2058,8 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     }
     if (buttons[bcur].id == B_PANORAMA) {
       /* the picks wrap: Random, World, 1.16, 1.20, 1.21, round again */
-      if (pressed & K_RIGHT) opt.panorama = (uint8_t)(opt.panorama >= PAN_1_21 ? PAN_RANDOM : opt.panorama + 1);
-      else opt.panorama = (uint8_t)(opt.panorama == PAN_RANDOM ? PAN_1_21 : opt.panorama - 1);
+      if (pressed & K_RIGHT) opt.panorama = (uint8_t)(opt.panorama >= PAN_NETHER ? PAN_RANDOM : opt.panorama + 1);
+      else opt.panorama = (uint8_t)(opt.panorama == PAN_RANDOM ? PAN_NETHER : opt.panorama - 1);
       menu(buttons, gui);
       return;
     }

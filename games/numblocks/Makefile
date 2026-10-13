@@ -10,7 +10,7 @@ BUILD_DIR = output
 STRIP ?= arm-none-eabi-strip --strip-unneeded
 CLIENT_JAR ?= client.jar
 GEN ?= src/gen.c
-GAME = src/main.c src/world.c src/edits.c src/portal.c src/render.c src/player.c src/phys.c src/inv.c src/entity.c src/mob.c src/tick.c src/gui.c src/hand.c src/save.c src/data.c src/panorama.c src/names.c src/command.c $(GEN)
+GAME = src/main.c src/world.c src/edits.c src/portal.c src/render.c src/player.c src/phys.c src/inv.c src/entity.c src/mob.c src/tick.c src/gui.c src/hand.c src/save.c src/data.c src/names.c src/command.c $(GEN)
 HEADERS = $(wildcard src/*.h) ../common/epsilon_app.h ../common/epsilon_files.h Makefile
 
 CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device)
@@ -83,11 +83,6 @@ data-modern:
 # 1.8.8 jar: the bed and the GUI have no modern file to come from)
 data-fluids:
 	python3 tools/data_add.py --replace water_still,water_flow,lava_still,lava_flow $(MODERN_TEX)
-
-# the title's panoramas packed into src/panorama.c (tools/panorama.py: the pictures
-# come from the Minecraft Wiki; `--fetch` puts the dump's copies of them there)
-data-panorama:
-	python3 tools/panorama.py
 
 clean:
 	$(Q) rm -rf $(BUILD_DIR) build

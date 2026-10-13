@@ -43,7 +43,7 @@
  *                         under the water and the stone behind the lava instead)
  *        [--contrast]   (Personalisation: High Contrast Block Outlines on)
  *        [--panorama N] (Personalisation: the title's backdrop; 0 Random, 1 World,
- *                         2 1.16, 3 1.20, 4 1.21)
+ *                         2 Overworld, 3 Nether)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
@@ -281,7 +281,7 @@ int main(int argc, char **argv) {
   if (cheats) world_cheats = true;   /* the new world starts without them; the switcher needs them */
   if (contrast) opt.contrast = 1;
   /* (after game_init: the title's backdrop re-picks when the option changed under it) */
-  if (panorama >= PAN_RANDOM && panorama <= PAN_1_21) opt.panorama = (uint8_t)panorama;
+  if (panorama >= PAN_RANDOM && panorama <= PAN_NETHER) opt.panorama = (uint8_t)panorama;
   if (distance >= 1 && distance <= 2) opt.distance = (uint8_t)distance;
   if (rain) {
     /* raining (and storming) from the start, for long enough */

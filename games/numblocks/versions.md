@@ -1,3 +1,29 @@
+## 1.5.15
+**Panorama: the fixed overworld and nether of one seed, and the three images gone**
+- Personalisation's Panorama offers **Random / World / Overworld / Nether** now. **Random**
+  (the default) rolls one of the three each time the title is entered; **World** is the
+  world played last with the player where they left off (a seed-0 world where there is
+  none, as before); **Overworld** and **Nether** are a fixed world of the game's own -
+  seed 123, its own nether - drawn live, the camera at one spot each (138/63/548 in the
+  overworld, 4/33/106 in the nether) and turning as the title does. So a fresh install
+  shows a world without one having been played, and the nether without walking to a
+  portal, and none of it is a stored picture.
+- The three image panoramas (1.16/1.20/1.21) are **out**: `src/panorama.c` and
+  `panorama.h`, `tools/panorama.py`, the `make data-panorama` target, and the fetched
+  1.16/1.20/1.21 dump pictures (18 PNGs) are gone. They were 921,600 bytes of the app
+  (the 160 x 160 RGB565 tables); the live views cost nothing, and the whole feature is
+  now ~1 KB of code.
+- A record from 1.5.13/1.5.14 reads on: pick 2 (was 1.16) is Overworld, 3 (was 1.20) is
+  Nether, and 4 (was 1.21) clamps to Random.
+- Recorded (the host harness, **not** `build/desktop`): `--panorama 1/2/3` show the World
+  (the seed-0 world), the seed-123 overworld (a forest with a sunny hill) and its nether
+  (the shore over the lava sea - four yaws checked, open on every side); nine
+  `--panorama 0` runs landed World 4, Overworld 4, Nether 1. The app is back to **741,964
+  bytes** (1.5.12's 742,884 before any of this) and numblocks-interest 752,224. `make
+  test` passes; the bench's 18 `--fancy --rain --mobs` frames are pixel-identical with the
+  same deepest stack (20032 B); the device run boots (164 frames, 24.4 ms of work a frame
+  behind a world backdrop) and `tests/test_numblocks_progress.py` passes.
+
 ## 1.5.14
 **Random rolls on the first open now: the host's clock said the same thing every run**
 - The title's Random pick mixed `plat_millis()` only: on the calculator that is the real

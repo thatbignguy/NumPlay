@@ -610,11 +610,11 @@ int main(void) {
      * default */
     CHECK(offsetof(Options, contrast) == 42 && offsetof(Options, panorama) == 43 && sizeof opt == 44);
     remove("build/unit-saves/numblocks.cfg");
-    opt.contrast = 1, opt.panorama = PAN_1_20;
+    opt.contrast = 1, opt.panorama = PAN_NETHER;
     save_options();
     opt.contrast = 0, opt.panorama = PAN_RANDOM;
     load_options();
-    CHECK(opt.contrast == 1 && opt.panorama == PAN_1_20);
+    CHECK(opt.contrast == 1 && opt.panorama == PAN_NETHER);
     remove("build/unit-saves/numblocks.cfg");
     plat_save("numblocks.cfg", &opt, offsetof(Options, contrast));   /* (the record older versions wrote) */
     opt.contrast = 0, opt.panorama = PAN_RANDOM;
@@ -622,7 +622,7 @@ int main(void) {
     CHECK(opt.contrast == 0 && opt.panorama == PAN_RANDOM);   /* (off and Random, as fresh options have them) */
     opt.panorama = 200;
     save_options();
-    opt.panorama = PAN_1_21;
+    opt.panorama = PAN_OVER;
     load_options();
     CHECK(opt.panorama == PAN_RANDOM);   /* (past the last pick: back on the default) */
     remove("build/unit-saves/numblocks.cfg");

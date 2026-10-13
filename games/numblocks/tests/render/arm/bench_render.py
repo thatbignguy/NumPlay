@@ -35,7 +35,7 @@ NTICKS = 1 if "--ticks" in sys.argv else 0
 
 ELF = os.path.join(OUT, "render_bench.elf")
 GAME = ["world.c", "edits.c", "portal.c", "render.c", "player.c", "phys.c", "inv.c", "entity.c", "mob.c",
-        "tick.c", "gui.c", "hand.c", "save.c", "data.c", "panorama.c", "names.c", "command.c", "gen.c"]
+        "tick.c", "gui.c", "hand.c", "save.c", "data.c", "names.c", "command.c", "gen.c"]
 # the device build's flags (games/numblocks/Makefile), so the code matches the calculator's
 CFLAGS = ["-std=gnu11", "-mcpu=cortex-m7", "-mthumb", "-mfloat-abi=hard", "-mfpu=fpv5-sp-d16", "-O2",
           "-fno-math-errno", "-fsingle-precision-constant", "-ffast-math", "-fno-tree-loop-distribute-patterns",

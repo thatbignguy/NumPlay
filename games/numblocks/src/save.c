@@ -474,7 +474,7 @@ void load_options(void) {
   if (opt.sprint_toggle) opt.sprint_toggle = 1;
   if (opt.fullbright) opt.fullbright = 1;
   if (opt.contrast) opt.contrast = 1;
-  if (opt.panorama > PAN_1_21) opt.panorama = PAN_RANDOM;
+  if (opt.panorama > PAN_NETHER) opt.panorama = PAN_RANDOM;
   /* (an older record is shorter than the struct: the fields it has no room for stay
    * as they were initialised above; a value past what the field holds is never set) */
   if (opt.brightness > 15) opt.brightness = 0;

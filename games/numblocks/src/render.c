@@ -14,7 +14,6 @@
 #include <stdio.h>
 #endif
 #include "nb.h"
-#include "panorama.h"
 
 #define SR 4                       /* picture rows per strip (8 screen rows) */
 #define STRIP_N (SCREEN_W * SR * 2)
@@ -2680,70 +2679,4 @@ nether_sky_done:;
     send_strip(py, still);
   }
   strips_sent(still);
-}
-
-/* ---------------------------------------------------------------- the title's panoramas
- * Personalisation's Panorama pick: a Minecraft version's own title backdrop (panorama.h,
- * tools/panorama.py) - a cube of six faces - drawn instead of a world behind the title
- * screen. Minecraft turns the camera, not the faces, so the ray's direction samples the
- * cube; the six faces are the client's own shots (0..3 the horizon clockwise, 4 up,
- * 5 down) with their texels where that camera put them. The panorama is a screenshot,
- * drawn as it was taken: no world light, no fog, no clouds. */
-static uint16_t pan_texel(int v, int f, float u, float w) {
-  int x = (int)(u * PAN_FACE), y = (int)(w * PAN_FACE);
-  if (x < 0) x = 0; else if (x >= PAN_FACE) x = PAN_FACE - 1;
-  if (y < 0) y = 0; else if (y >= PAN_FACE) y = PAN_FACE - 1;
-  return pan_px[v][f][y * PAN_FACE + x];
-}
-/* the face the direction points at, and where in its picture (one camera a face) */
-static uint16_t pan_at(int v, float dx, float dy, float dz) {
-  float ax = fabsf(dx), ay = fabsf(dy), az = fabsf(dz);
-  int f;
-  float s, u, w;
-  if (ax >= ay && ax >= az) {
-    if (dx > 0) f = 3, s = dx, u = 0.5f + 0.5f * dz / s, w = 0.5f - 0.5f * dy / s;
-    else f = 1, s = -dx, u = 0.5f - 0.5f * dz / s, w = 0.5f - 0.5f * dy / s;
-  } else if (ay >= az) {
-    if (dy > 0) f = 4, s = dy, u = 0.5f - 0.5f * dx / s, w = 0.5f + 0.5f * dz / s;
-    else f = 5, s = -dy, u = 0.5f - 0.5f * dx / s, w = 0.5f - 0.5f * dz / s;
-  } else {
-    if (dz > 0) f = 0, s = dz, u = 0.5f - 0.5f * dx / s, w = 0.5f - 0.5f * dy / s;
-    else f = 2, s = -dz, u = 0.5f + 0.5f * dx / s, w = 0.5f - 0.5f * dy / s;
-  }
-  return pan_texel(v, f, u, w);
-}
-
-void render_panorama(const Camera *c, int version) {
-  uint16_t buf[STRIP_N] __attribute__((aligned(4)));
-  strip = buf;
-  uint16_t cbuf[SR][RW];
-  HandFrame hand;
-  hand_none(&hand);
-  if (version < 0 || version >= PAN_N) version = 0;
-  for (int px = 0; px <= RW; px++) col_su[px] = (2 * (px + 0.5f) / RW - 1) * TAN_H;
-  float yaw = c->yaw * 0.017453292f, pitch = c->pitch * 0.017453292f;
-  float cy = cosf(yaw), sy = sinf(yaw), cp = cosf(pitch), sp = sinf(pitch);
-  float fwx = -sy * cp, fwy = -sp, fwz = cy * cp;
-  float rgx = -cy, rgz = -sy;
-  float upx = -rgz * fwy, upy = rgz * fwx - rgx * fwz, upz = rgx * fwy;
-  for (int py = 0; py < RH; py += SR) {
-    for (int r = 0; r < SR; r++) {
-      float sv = (1 - 2 * (py + r + 0.5f) / RH) * TAN_V;
-      float bx = fwx + upx * sv, by = fwy + upy * sv, bz = fwz + upz * sv;
-      for (int x = 0; x < RW; x++) cbuf[r][x] = pan_at(version, bx + rgx * col_su[x], by, bz + rgz * col_su[x]);
-    }
-    /* 2 x 2 screen pixels each, as render_frame's */
-    for (int r = 0; r < SR; r++) {
-      uint32_t *d = (uint32_t *)(strip + r * 2 * SCREEN_W), *d2 = d + SCREEN_W / 2;
-      const uint16_t *c = cbuf[r];
-      for (int x = 0; x < RW; x += 2) {
-        uint32_t lo = c[x] * 0x10001u, hi = c[x + 1] * 0x10001u;
-        d[x] = d2[x] = lo;
-        d[x + 1] = d2[x + 1] = hi;
-      }
-    }
-    hud_strip(strip, py * 2, SR * 2, &hand);
-    send_strip(py, false);   /* the title's backdrop turns: never still */
-  }
-  strips_sent(false);
 }
