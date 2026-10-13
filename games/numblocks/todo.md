@@ -5,10 +5,6 @@ what "done" means. Order matters only where noted.
 
 - [ ] **Make skeletons look at you when they are shooting at you**
 - [ ] **Fix biome: unkown glitch**
-- [ ] **Fix generation/world bugs** — sand and gravel hang in the air after
-      generation until a block update makes them fall; water and lava sit still
-      until a block update makes them flow; and any other terrain/generation
-      issues found along the way.
 - [ ] **[15] Nether mobs** — the nether has no life of its own: add the piglin
       and the zombified piglin as its mobs (spawning, models, skins, drops,
       spawn eggs, `/summon`); the enderman is the stretch past them.
@@ -16,110 +12,14 @@ what "done" means. Order matters only where noted.
       moves to -64, deepslate runs from y=0 down to it, stone and everything
       above stay; the cache, the generator, the edits and every height guard
       move with it.
-- [ ] **[17] Concrete** — the concrete pair, all sixteen colours: concrete
-      powder that falls and turns solid the moment water touches it, and the
-      concrete it becomes.
-- [ ] **[18] Modern water and lava textures** — swap the modern (1.17+) water
-      and lava files in from `minecraft-textures/`; the lava as it is now looks
-      horrible.
-
----
-
-## Fix generation/world bugs
-
-**What.** Three related problems, all stemming from the same root cause: the
-world generator places blocks but never triggers the reactions that should
-follow.
-
-1. **Sand and gravel hang in the air.** After a chunk is generated, sand and
-   gravel blocks float unsupported until something else changes a nearby block
-   (a block break, a placement, etc.). Only then does `neighbours_changed()`
-   notice and make them fall. This is most visible on beaches, in caves, and
-   under overhangs.
-
-2. **Water and lava do not flow.** Liquids placed during generation (in
-   caves, ravines, lakes, springs) sit frozen until a block update triggers
-   `fluid_schedule()` via `neighbours_changed()`. They should start flowing
-   on their own once the chunk is generated.
-
-3. **Other terrain/generation issues.** Any additional bugs found while
-   investigating the above — e.g. incorrect block placement during
-   generation, missing decorators, or lighting issues.
-
-**Where.**
-
-- `src/player.c:293-309` — `neighbours_changed()` is the function that
-  triggers both sand falling and liquid scheduling. It checks the 6
-  neighbours of a changed block: if a liquid neighbour exists, it calls
-  `fluid_schedule()`; if a sand/gravel neighbour is unsupported, it drops it.
-
-- `src/tick.c:24-32` — `fluid_schedule()` adds a liquid block to the
-  `pend[]` array (max 160 entries). The liquid updates on its scheduled tick
-  via `fluid_update()`.
-
-- `src/player.c:300-307` — sand/gravel falling logic inside
-  `neighbours_changed()`: checks if the block below is `replaceable()`, then
-  drops the sand straight down to the lowest available spot.
-
-- `src/world.c:153-323` — chunk generation via `fill_chunk()`. This is where
-  terrain is placed. After generation, no `neighbours_changed()` call is
-  made, so sand and liquids never get their initial update.
-
-- `src/gen.c` — the generator itself. Springs are placed at line 5056
-  (`spring()`), which places water/lava source blocks and flowing blocks
-  but does not schedule them.
-
-**Notes / the work.**
-
-- **Sand falling.** The fix is to call `neighbours_changed()` (or a lighter
-  version) on sand/gravel blocks after they are placed during generation.
-  However, doing this for every sand block in a chunk would be expensive.
-  Options:
-  - After generating a chunk, scan it once for unsupported sand/gravel and
-    drop them in a single pass. This is O(n) per chunk but only runs once
-    at generation time.
-  - Alternatively, defer: when a chunk is first loaded/rendered, run a
-    single pass to fix any floating sand. This spreads the cost across
-    frames.
-
-- **Liquid flowing.** Same approach: after generating a chunk, call
-  `fluid_schedule()` on every liquid block (or at least every source block
-  and every block with air below it). The `pend[]` array already caps at
-  160, so excess liquids will simply be skipped until their neighbours
-  change — acceptable.
-
-- **Keeping RAM/CPU low.** The key insight from the user's note is that
-  caves should get their block update "when the player renders it in."
-  This suggests a lazy approach: rather than fixing everything at
-  generation time, mark chunks as "needs update" and process them when
-  they enter the render distance. This avoids the cost of scanning every
-  chunk at generation time and only pays for chunks the player actually
-  sees.
-
-  Implementation idea: when a chunk is generated, set a flag. When the
-  chunk is first rendered (in `fill_chunk()` or the render loop), run a
-  single pass: for each sand/gravel with air below, drop it; for each
-  liquid with air below or beside it, call `fluid_schedule()`. Clear the
-  flag. This is O(n) but only once per chunk, and only for visible chunks.
-
-- **Other issues.** While investigating, check:
-  - Are there blocks that should be decorators (flowers, grass, trees)
-    that are not being placed?
-  - Are springs creating infinite water sources correctly?
-  - Do cave liquids interact correctly with each other (lava + water =
-    obsidian/cobblestone)?
-  - Are there any blocks that should fall but are not sand/gravel?
-
-**Done when.**
-
-- Sand and gravel do not float after generation — they either fall during
-  generation or when the chunk is first rendered, without a visible pause.
-- Water and lava flow naturally after generation without waiting for a
-  separate block update.
-- The fix does not cause noticeable frame drops (amortized or lazy).
-- `make test` passes, `make build && make check` still fits in budget.
-- `./build/play --frames …` frames show sand fallen and liquids flowing
-  in newly generated chunks without player interaction.
+- [ ] **[22] Nether biomes** — the nether is one biome: give it the modern
+      three — Crimson Forest, Warped Forest and Soul Sand Valley — and not
+      Basalt Deltas; each with its own surface, its own blocks (the crimson
+      and warped nyliums, stems, planks, roots and vines, soul soil and soul
+      fire, bone blocks) and its own fog.
+- [ ] **[23] Basic structures** — the world makes terrain, dungeons and lakes
+      and no structures: a placement pass, the desert pyramid first, working
+      and looking exactly as modern Minecraft makes it (`26.3.jar`).
 
 ---
 
@@ -318,72 +218,191 @@ and `./build/play --frames … --shots …` frames (scripted keys, **not**
 
 ---
 
-## [17] Concrete
+## [22] Nether biomes
 
-**What.** The modern concrete pair, in all sixteen colours: **concrete powder**,
-which falls like sand and gravel, and **concrete**, which is what a powder
-block becomes the moment water touches it (a source or a flow). Powder without
-water stays powder; the water does the setting; no other mechanic.
+**What.** The nether is one biome — Nether Wastes, `BI_HELL` (1.8's id 8,
+`gen.c:539`), the constant `gen_biome` answers for every column
+(`gen.c:6307`) — and the request is the three modern biomes beside it:
+**Crimson Forest**, **Warped Forest** and **Soul Sand Valley**, and **no
+Basalt Deltas**. Nether Wastes stays, the ground the other three sit in.
+Each is its own surface, its own growth, its own blocks and its own fog:
+
+- **Crimson Forest.** Crimson nylium where the netherrack meets air, huge
+  crimson fungi to walk under (a stem with wart blocks and shroomlight about
+  it), crimson fungi and crimson roots on the ground, weeping vines hanging
+  from the ceiling. Fog `#330303` (the client's own).
+- **Warped Forest.** Warped nylium, huge warped fungi, warped fungi, warped
+  roots and nether sprouts, twisting vines growing up. Fog `#1a051a`.
+- **Soul Sand Valley.** Netherrack broken by soul sand and **soul soil**,
+  **soul fire** wherever fire lights on either, **bone blocks** in the
+  ground (modern's fossils: whole skeletons where cheap, bunches of bone
+  blocks where not), crimson roots about. Fog `#1b4745`. **Basalt pillars**
+  are the valley's silhouette in modern; they need basalt and polished
+  basalt and the request only rules the *biome* out — decide and say in the
+  commit.
 
 **Where.**
-- `src/blocks.h` / `tools/blocks.py` — 32 new states (16 powder + 16 concrete),
-  appended after the last state; `tools/blocks.py` carries names, models,
-  hardness, tool and texture (powder: like sand and gravel — shovel, drops
-  itself; concrete: like stone — pickaxe). The quartz family (1.5.3) is the
-  recent example of appending a family; the wool and stained clay loops
-  (`blocks.py:103`) are the pattern for sixteen of a kind.
-- `tools/pack.py` + `minecraft-textures/` — the pictures are already in the
-  modern dump (`textures/block/<colour>_concrete.png` and
-  `<colour>_concrete_powder.png`, all 32 there).
-- `tools/items.py` — the item names, labels, icons, the creative tabs and the
-  recipe: modern's concrete powder is shapeless (4 sand + 4 gravel + 1 dye →
-  8 powder; `shapeless()` and `DYES` are there, `items.py:326-330` is the
-  dyed-family pattern). Concrete is not crafted.
-- `tools/names.py` — the `/give` names.
-- **The fall**: `src/player.c:303-310`, `neighbours_changed()`'s sand and
-  gravel drop (straight down, at once) — the powder joins that list.
-- **The water contact**: the same `neighbours_changed()`, which runs on every
-  set and break and on every liquid move (`tick.c:65-68`'s `set()`), so the
-  powder finds a water neighbour there and becomes its concrete; that covers
-  water placed by the player, water flowing in (`flow_into`, `tick.c:84`) and
-  powder falling into or beside water. The floor guard (`tick.c:63`) is the
-  world's floor, which [16]'s world may be moving.
+- **The split.** Modern chooses its nether biomes with its multi-noise source
+  (temperature, humidity and the rest of its climate parameters) — machinery
+  this generator does not have. A reading of the patch noise the soul
+  sand/gravel patches already use (`grass_noise_div(X, Z, 24)`,
+  `gen.c:5577`) or a new low-frequency field splits a column into the four.
+  One rule, read by both the terrain and `gen_biome` (`gen.c:6307`), so the
+  biome line and the ground agree, and the same biome comes out whichever
+  slab window is asked (the glowstone lesson of 1.5.4).
+- **The surface and the growth.** `nether_slab` (`gen.c:5492`) leaves every
+  column netherrack; each biome gives the column's exposed top faces its own
+  surface (the patch code at `gen.c:5574-5584` is the pattern — it reaches
+  only the rows about the lava sea today; the biomes cover the whole
+  column), and its fungi, roots, vines and shroomlight arrive as per-chunk
+  features beside the quartz and the glowstone (`gen.c:5606-5613`), drawn
+  from the chunk's own `JRand` so a chunk's growth is the same whichever
+  window is asked.
+- **The blocks.** Appended past the concrete states the way [17] did
+  (`B_CONCRETE_BLACK` is 433 now, `B_COUNT` 434): crimson and warped
+  **nylium** (top and side textures), crimson and warped **fungus** and
+  **roots**, **nether sprouts** (cross plants, `M_CROSS`), **weeping** and
+  **twisting vines** (the vine model is there), **crimson** and **warped
+  stems** with their axis states (the logs' `_X`/`_Z`/bark pattern,
+  `tools/blocks.py:78-84`) and the stripped pair, **crimson** and **warped
+  planks**, the two **wart blocks** (1.8's nether wart block never made it
+  into the nether set), **shroomlight** (light 15), **soul soil**, **soul
+  fire** and the **bone block** (with its axis states). The request's own
+  list is the floor, not the ceiling: trim what does not earn its flash and
+  say what was left out. The pictures are all in the modern dump
+  (`minecraft-textures/textures/block/`: `crimson_nylium`, `warped_stem`,
+  `soul_soil`, `bone_block_side`, `shroomlight`, the vines ...), packed by
+  `tools/pack.py`; labels, tabs and recipes in `tools/items.py` (planks from
+  stems, the modern four a stem), the `/give` names in `tools/names.py`.
+- **Soul fire.** Fire is one block everywhere (`fire_can_stay`, `tick.c:246`;
+  `fire_update`, `tick.c:277`): fire lit on soul soil or soul sand becomes
+  its own blue state now — the pictures are `soul_fire_0/1.png` — which
+  burns out as fire does, where ordinary fire does not stay on the soul
+  blocks, and soul fire stays nowhere else.
+- **The fog and the sky.** The nether's red is two constants
+  (`NETHER_R/G/B`, `render.c:203-205`) read by the sky's early-out
+  (`render.c:209`) and the per-frame block (`render.c:2378-2395`); they
+  become the colour of the biome under the camera (the wastes keep
+  `#330808`), which is how modern's fog follows the camera.
+- **The F3 line.** `biome_name` (`gui.c:205`) gains the three (and Nether
+  Wastes for 8); `vbiome` already carries the answer per column
+  (`world.c:201`, read at `gui.c:318`).
 
 **Notes / the work.**
-- 32 states of the ~110 free (B_COUNT 402 of 512) and 32 pictures (128 B + a
-  palette each of flash): `make build && make check` (`.nwa` + BSS
-  <= 153676 B) must still fit.
-- Keep the powder's floor guard consistent with the sand one, so it never
-  falls out of the world (and so it agrees with [16] if deepslate lands first).
-- `versions.md` gets its next entry.
+- Biome ids: 1.16's own 49, 50 and 51 (8 stays Nether Wastes);
+  `biome_temp`/`biome_rain` (`data.c:2365-2366`, from `tools/pack.py`'s
+  `BIOMES`, `pack.py:284`) take their rows; the nether has no weather, rain
+  or snow, so the values are nominal — write down what they are.
+- **Mobs.** The nether's piglins and zombified piglins are [15]; what each
+  biome spawns (endermen in the warped forest, skeletons and ghasts in the
+  valley) is [15]'s pass reading `vbiome` — note in the commit what it reads.
+- **Cost.** Each new state is ~35 B of `.rodata` rows plus its picture
+  (128 B and a palette each); `make build && make check` (`.nwa` + BSS
+  <= 153676 B) must still fit. A new noise field grows the generator's
+  statics: measure (`tests/gen/arm/bench.py`) and quote it if one is added.
+- One `versions.md` entry.
 
-**Done when.** All sixteen colours: the powder places, falls when the block
-under it goes, and sets into its concrete when water reaches it (placed *or*
-flowing); concrete sits still; the powder crafts from sand, gravel and dye; the
-pieces show in the creative tabs and by `/give`; `make test` passes;
-`make build && make check` fits; and `./build/play` frames (scripted keys,
-**not** `build/desktop`) show a powder column falling and a water stream
-setting one.
+**Done when.** The wastes show the forests and the valley with their own
+surfaces, growth and fog; the same seed gives the same biomes and the same
+growth whichever way the world is walked; soul fire burns blue on soul soil
+and soul sand and nowhere else; every new block places, breaks, drops, shows
+in the creative tabs and by `/give`; `make test` passes; `make build &&
+make check` fits; and `./build/play --nether --frames ... --shots ...`
+(scripted keys, **not** `build/desktop`) shows each biome's surface and fog.
 
 ---
 
-## [18] Modern water and lava textures
+## [23] Basic structures: the desert pyramid
 
-**What.** Swap the water and lava pictures for the modern ones in
-`minecraft-textures/`, because the lava texture as it is now looks horrible.
-The four files: `textures/block/water_still.png`, `water_flow.png`,
-`lava_still.png`, `lava_flow.png`.
+**What.** The generator makes terrain, caves, lakes and dungeons, and no
+structures at all (`gen.c:78-79`, the same TODO inside `populate`,
+`gen.c:5351`). Add the structure pass and the first structure through it, the
+**desert pyramid**, working and looking exactly as modern Minecraft makes it:
+the same 21 x 21 step pyramid of sandstone, cut sandstone and chiselled
+sandstone, the same orange and blue terracotta, the same hidden chamber with
+its four chests, and the same stone pressure plate over nine TNT. The client
+for 26.3 the owner placed in the folder (`26.3.jar`, the repo root) is the
+reference for all of it.
 
-**Where.** The pictures live in `src/data.c` (`tex_px`/`tex_pal`; the
-`TX_WATER_STILL`, `TX_WATER_FLOW`, `TX_LAVA_STILL`, `TX_LAVA_FLOW` rows in
-`data.h` name them). `tools/pack.py --modern` (`make data-modern`) rewrites the
-whole file from the dump; `tools/data_add.py` patches pieces into it. Water is
-grey and takes `biome_water`'s tint (`pack.py:270-318`); lava is untinted.
-Swap the four and nothing else.
+**Where.**
+- **The reference, in `26.3.jar`** (a modern client, names and all):
+  - `net/minecraft/world/level/levelgen/structure/structures/DesertPyramidPiece.class`
+    and `DesertPyramidStructure.class`: the piece's whole build — one piece,
+    no NBT asset — a decompiler (or the bytecode and its constant pool)
+    gives the block-by-block code and the palette it names: `SANDSTONE`,
+    `CUT_SANDSTONE`, `CHISELED_SANDSTONE`, `SANDSTONE_SLAB`,
+    `SANDSTONE_STAIRS`, the dyed terracotta, `TNT`, `STONE_PRESSURE_PLATE`
+    and `createChest`. Read the build out of it, not out of memory: the
+    modern pyramid is what is owed.
+  - `data/minecraft/worldgen/structure/desert_pyramid.json` and
+    `data/minecraft/worldgen/structure_set/desert_pyramids.json`: the
+    placement — a random spread, **spacing 32** chunks, **separation 8**,
+    **salt 14357617**, at the surface step — and
+    `tags/worldgen/biome/has_structure/desert_pyramid.json`, which says
+    deserts only.
+  - `data/minecraft/loot_table/chests/desert_pyramid.json`: the chests'
+    items (the main pool's 2-4 rolls and the bone pool's four).
+- **The pass.** Ride the population pass the dungeons already ride
+  (`populate`, `gen.c:5329`; `dungeon`, `gen.c:3709`): the pyramid's grid
+  cell is computed from the population's chunk and the modern salt (the
+  `RandomSpreadStructurePlacement` class sits in the jar beside the piece),
+  so a replayed population makes the same decision and the memo
+  (`pmemo_begin`, the `dungeons[]` bits, `gen.c:3540-3548`) keeps its
+  outcome — the same temple whichever direction the world is walked, as the
+  dungeons are. Writes go through `put_c`/`cget` (`gen.c:3445-3470`) and land
+  in each chunk as it is generated, which is how the dungeons' cross-chunk
+  pieces come out whole. The surface y and the biome come from the column
+  summary (`ColSum`, `cs_top`/`b00`).
+- **The blocks it needs.** `STONE_PRESSURE_PLATE` (1.8's id 70) and
+  `SANDSTONE_STAIRS` (128, with their four facings as the oak stairs have
+  them, `tools/blocks.py:235-237`) are not in the game; `CUT_SANDSTONE` may
+  need its own state (the 24:0-24:2 trio maps to modern sandstone,
+  chiselled sandstone and smooth sandstone today, `tools/modern_map.py:36-37`
+  — audit the pyramid's palette against it); sandstone slabs, orange and
+  blue terracotta, TNT and the chest are in.
+- **The trap.** The plate is the trap: stood on, it lights the nine TNT
+  under it (the game lights TNT from fire and flint and steel, `tick.c:274`,
+  `player.c:820`). The pyramid needs no redstone anywhere; say in the commit
+  that the plate is the one place a redstone block behaves.
+- **The chests.** A pyramid's four chests open with the modern table's
+  items, the table's own rolls and weights. The game places dungeon chests
+  empty today — `dungeon_loot` (`gen.c:3697`) only replays the draws of the
+  population's stream — and chests are tiles filled by whoever opens them
+  (`gui.c:704-751`). Draw the loot where a chest is first opened, from the
+  world seed and the chest's own place, so nothing new is stored and the
+  same world always gives the same loot; the items the game has no item for
+  (the horse armours, the enchanted golden apple, the armour trim template)
+  are dropped, and say which. If the dungeons' chests can take their 1.8
+  loot through the same path for a little more, take it; else say so.
+- **The chamber floor.** Modern plants suspicious sand (archaeology) under
+  the floor; there is no brushing here — leave it out and say so.
 
-**Done when.** `./build/play` frames show the modern water and the modern lava
-(a pool, and the nether's lava sea); `make test` passes; `make build &&
-make check` fits.
+**Notes / the work.**
+- **The reference comparison.** `tests/gen`'s reference comparison
+  (`t_refcmp.c`, `ref_terrain.h`) is 1.8's terrain and knows no structures:
+  pick a seed and an area no temple falls in, or teach the tool to skip the
+  pieces' boxes — say which.
+- **Determinism.** A structure spanning chunks must come out whole and the
+  same from every direction (the dungeons' memo is the pattern), and it must
+  not move what another population draws beyond the draws it makes itself.
+- **Tests.** `tests/unit.c` for the placement grid (neighbouring chunks see
+  the same temple), the piece's blocks, the trap and the chest loot; a
+  `--temple` scenario in `tests/play.c` (or a seed that puts one under the
+  player) with the documented `./build/play --frames ... --shots ...` run —
+  scripted keys, **not** `build/desktop`.
+- **The next ones.** The pass takes the next structure as its own row
+  (jungle pyramid, witch hut, igloo ...); nothing of the machinery should
+  need rebuilding for them.
+- Cost: the piece's build is code, not tables, and the placement is a few
+  dozen bytes; `make build && make check` must still fit. One `versions.md`
+  entry.
+
+**Done when.** A desert holds the pyramid; its blocks and shape match
+`26.3.jar`'s piece block for block; walking to the same place from any
+direction meets the same temple; its plate sets off the TNT; its four chests
+hold the modern loot when opened; the documented `./build/play --frames ...
+--shots ...` frames show it; `make test` passes and `make build && make
+check` fits.
 
 ---
 

@@ -39,7 +39,7 @@ GAME = ["world.c", "edits.c", "portal.c", "render.c", "player.c", "phys.c", "inv
 # the device build's flags (games/numblocks/Makefile), so the code matches the calculator's
 CFLAGS = ["-std=gnu11", "-mcpu=cortex-m7", "-mthumb", "-mfloat-abi=hard", "-mfpu=fpv5-sp-d16", "-O2",
           "-fno-math-errno", "-fsingle-precision-constant", "-ffast-math", "-fno-tree-loop-distribute-patterns",
-          "-flto", "-ffunction-sections", "-fdata-sections", "-g", "-Wall", "-Wextra", "-Wno-unused-parameter",
+          "-flto", "-flto-partition=one", "-g", "-Wall", "-Wextra", "-Wno-unused-parameter",
           f"-I{SRC}"]
 subprocess.check_call(["arm-none-eabi-gcc", *CFLAGS, "-nostartfiles", "--specs=nano.specs", "--specs=nosys.specs",
                        "-T", os.path.join(HERE, "bench.ld"), "-Wl,--gc-sections",

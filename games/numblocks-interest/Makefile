@@ -20,7 +20,7 @@ FIN_SRC = ../finance/src/main.c
 CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device)
 CFLAGS += -O2 -Wall -Wextra -Wno-unused-parameter -fno-math-errno -fsingle-precision-constant -ffast-math
 CFLAGS += -fno-tree-loop-distribute-patterns -flto -fno-fat-lto-objects -fvisibility=internal
-CFLAGS += -ffunction-sections -fdata-sections -I$(NB)/src
+CFLAGS += -flto-partition=one -I$(NB)/src
 LDFLAGS = -Wl,--relocatable -nostartfiles --specs=nano.specs
 LDFLAGS += -Wl,-e,main -Wl,-u,eadk_app_name -Wl,-u,eadk_app_icon -Wl,-u,eadk_api_level
 LDFLAGS += -Wl,--gc-sections -flinker-output=nolto-rel

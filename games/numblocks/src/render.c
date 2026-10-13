@@ -9,6 +9,11 @@
  * draws them; glass, plants and water let the ray go on through their
  * see-through texels. The sky has its gradient, the sun or the moon, and
  * Minecraft's flat clouds at y = 128. */
+/* O3 for this file alone: the pixel loops are where the game's time is, and the
+ * inlining and unrolling it adds there is worth ~5% of the frame for ~20 KB of code
+ * (the rest of the game stays at O2, where O3 buys nothing). The one file was
+ * measured against the whole game at O3: same frames, a twentieth of the size. */
+#pragma GCC optimize("O3")
 #include <math.h>
 #ifdef HOST
 #include <stdio.h>
@@ -77,12 +82,12 @@ static float sun_x, sun_y, sun_z;  /* towards the sun */
 static float sun_tx, sun_ty;       /* the way the sun moves */
 static float cos_c, sin_c;         /* the sky's turn (the celestial angle) */
 /* ...and what is addressed once a pixel in the innermost loops, which is why it stays here in
- * RAM rather than in the frame (Frame, at the top): the depth a pixel's ray reached, the sky's
- * colours, the light tables and the rays of the columns */
-static float zbuf[SR][RW];         /* and how far each pixel's ray went (entities are hidden behind) */
+ * RAM rather than in the frame (Frame, at the top): the sky's colours, the light tables and the
+ * rays of the columns. (zbuf moved into render_frame: the strip helpers take the depth buffer
+ * as a parameter already, so as a local it is the same code with 2.5 KB less RAM.) */
 static float col_su[RW + 1];       /* the ray of each picture column: its sideways part */
-static int shade[4][16];           /* face shade x sky light level -> 0..32 */
-static int shade_blk[4][16];       /* face shade x block light level -> 0..32 */
+static uint8_t shade[4][16];           /* face shade x sky light level -> 0..32 */
+static uint8_t shade_blk[4][16];       /* face shade x block light level -> 0..32 */
 /* the Brightness setting's lift at its top (15): how much of the light table's dark end it
  * adds (setup_light: level 0 goes from 0.03, the pitch black, to 0.405) */
 #define LIFT_MAX 0.375f
@@ -100,7 +105,7 @@ static bool night;
 static bool xray;                       /* (a spectator's head inside a solid block: see through the rock) */
 static int under_water;
 static int cam_x, cam_y, cam_z, cam_i, cam_b;   /* the camera's cell, its index (-1 outside the cache), its block */
-static int cam_mi, cam_liq;      /* its region, the liquid it is in (liquid[], 255: none) */
+static int cam_mi, cam_liq;      /* its region, the liquid it is in (lshape, 255: none) */
 static float cam_fr[3][2];       /* from the eye to its cell's sides: [axis][0 low side, 1 high] */
 
 static const float TAN_V = 0.70020754f;   /* 70 degree vertical field of view */
@@ -467,6 +472,8 @@ static int hit_kind, hit_f, hit_i;
 static int hit_l;   /* 1: the light the face was lit with (its cell: hit_i) */
 static int hit_p;   /* 1, 4: the face's plane, its coordinate along the face's axis (sixteenths) */
 static int hit_w;   /* 4: a face seen through the top of water, whose plane is this (sixteenths) */
+/* the hit cell's place and block, kept with hit_i so sample_at needs no divide to find them */
+static int hit_cx, hit_cy, hit_cz, hit_b;
 static float last_t;   /* where the last pixel's ray stopped (in lengths of its direction), 1e9 for the sky */
 static int brk_i = -1, brk_stage;   /* the block being broken (cache index) and its crack stage */
 static inline int cracked(int tc, int i, int u, int v) {
@@ -562,7 +569,8 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
         c = pack_nc((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
                  (b5(c) * (256 - R->wa) + R->wb * R->wa) >> 8);
         if (face >= 0 && hit_w >= 0) hit_kind = 4, hit_f = f;
-      } else if (face >= 0) hit_kind = 1, hit_f = f, hit_i = i, hit_l = lt;
+      } else if (face >= 0)
+        hit_kind = 1, hit_f = f, hit_i = i, hit_l = lt, hit_cx = x, hit_cy = y, hit_cz = z, hit_b = b;
       hit_p = (((f >> 1) == 0 ? y : (f >> 1) == 1 ? z : x) + (f & 1)) * 16;
       return c;
     }
@@ -632,7 +640,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
         if (!R->wa && one_box(b) && i != cam_i) {
           /* a face of a block of one box (slab, snow layer...): the pixels between can find it too */
           int a = h.face >> 1, k = a == 0 ? 1 : a == 1 ? 2 : 0;
-          hit_kind = 1, hit_f = h.face, hit_i = i, hit_l = lt;
+          hit_kind = 1, hit_f = h.face, hit_i = i, hit_l = lt, hit_cx = x, hit_cy = y, hit_cz = z, hit_b = b;
           hit_p = (a == 0 ? y : a == 1 ? z : x) * 16 + bxs[0][k + ((h.face & 1) ? 3 : 0)];
         }
         if (m == M_LIQUID && !R->wa) {
@@ -654,20 +662,23 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
   return -1;
 }
 
-/* the top of each block's shape, sixteenths (16: whole, or shaped by its place): a ray going
- * over a lower one (a snow layer, a slab) has nothing to meet in its cell */
-static uint8_t shape_top[NSTATES];
-static uint8_t liquid[NSTATES];   /* 1 water, 2 lava (a ray in one goes through more of it) */
+/* One byte a block state: the top of its shape, sixteenths (16: whole, or shaped by its
+ * place - a ray going over a lower one, a snow layer or a slab, has nothing to meet in
+ * its cell), in the low five bits, and its liquid kind (1 water, 2 lava: a ray in one
+ * goes through more of it) in bits 5-6. Two arrays of a byte became one. */
+static uint8_t lshape[NSTATES];
+static inline int shape_top(int b) { return lshape[b] & 31; }
+static inline int liquid_of(int b) { return lshape[b] >> 5; }
 static void shape_tops(void) {
   for (int b = 0; b < NSTATES; b++) {
-    liquid[b] = blk_model[b] != M_LIQUID ? 0 : is_water(b) ? 1 : is_lava(b) ? 2 : 0;
+    int kind = blk_model[b] != M_LIQUID ? 0 : is_water(b) ? 1 : is_lava(b) ? 2 : 0;
     int m = blk_model[b], top = 16;
     if (blk_nbox[b] && !(m == M_LIQUID || m == M_LADDER || m == M_VINE || m == M_FENCE || m == M_PANE || m == M_DOOR)) {
       top = 0;
       for (int k = 0; k < blk_nbox[b]; k++)
         if (blk_box[b][k][4] > top) top = blk_box[b][k][4];
     }
-    shape_top[b] = (uint8_t)top;
+    lshape[b] = (uint8_t)(top | (kind << 5));
   }
   /* pillow east (white at u = 15, v = 8) in 1.8.8's bed_head_top, north
    * (white at u = 8, v = 0) from the modern bed entity: sample the east middle */
@@ -768,10 +779,10 @@ static uint16_t trace(float dx, float dy, float dz) {
   for (;;) {
     ST(st_steps++);
     int b = vc_get(i);
-    if (b != B_AIR && liquid[b] != in_liq) {
+    if (b != B_AIR && liquid_of(b) != in_liq) {
       float te = fminf(fminf(tx, ty), tz);
       /* (over a low shape the whole way through its cell: nothing there) */
-      if (shape_top[b] >= 16 || oy + dy * (dy > 0 ? t : te) - y <= shape_top[b] * (1 / 16.0f)) {
+      if (shape_top(b) >= 16 || oy + dy * (dy > 0 ? t : te) - y <= shape_top(b) * (1 / 16.0f)) {
         float px = tx - idx, py = ty - idy, pz = tz - idz;
         int face = t == tj ? jf : px > py ? (px > pz ? fx : fz) : (py > pz ? fy : fz);
         /* a spectator's head in solid rock: this cell's face is hidden only where the
@@ -781,7 +792,7 @@ static uint16_t trace(float dx, float dy, float dz) {
         if (!(xray && (blk_flags[b] & BF_OPAQUE) && (blk_flags[vc_get(came_from(i, face, x, y, z))] & BF_OPAQUE))) {
           int c = cell_hit(&R, b, i, x, y, z, face, t, te - t);
           if (c >= 0) return (uint16_t)c;
-          in_liq = liquid[R.inside] ? liquid[R.inside] : 255;   /* (it may have gone into water) */
+          in_liq = liquid_of(R.inside) ? liquid_of(R.inside) : 255;   /* (it may have gone into water) */
         }
       }
     }
@@ -1212,7 +1223,7 @@ static void sample_at(Sample *s, int px, int py) {
   s->plane = (int16_t)hit_p;
   s->cell = (uint16_t)hit_i;
   if (hit_kind == 1) {
-    int x = hit_i % VCX, z = hit_i / VCX % VCZ, y = hit_i / (VCX * VCZ), b = vc_get(hit_i), m = blk_model[b], f = hit_f;
+    int x = hit_cx, z = hit_cz, y = hit_cy, b = hit_b, m = blk_model[b], f = hit_f;
     s->x = (uint8_t)x, s->z = (uint8_t)z, s->y = (uint8_t)y;
     s->light = (uint8_t)hit_l;
     s->tex = (uint16_t)(blk_front[b] ? face_tex(b, f, x, y, z) : blk_tex[b][f]);
@@ -2314,6 +2325,7 @@ void render_frame(const Camera *c, uint32_t tod) {
    * (Frame) and the hand's model (HandFrame). On the stack, as the strip buffer already
    * is, not in the app's RAM. */
   uint16_t cbuf[SR][RW];      /* a strip of the picture */
+  float zbuf[SR][RW];         /* how far each pixel's ray went (entities are hidden behind) */
   Frame frame;
   Frame *F = &frame;
   HandFrame hand;
@@ -2566,7 +2578,7 @@ nether_sky_done:;
   for (int px = 0; px <= RW; px++) col_su[px] = (2 * (px + 0.5f) / RW - 1) * TAN_H;
   static bool tops;
   if (!tops) shape_tops(), tops = true;
-  cam_liq = liquid[cam_b] ? liquid[cam_b] : 255;
+  cam_liq = liquid_of(cam_b) ? liquid_of(cam_b) : 255;
   bool fast_sky = sky_fast();
   /* The camera under the world (below the cache's bottom plane): the plane the five samples
    * of a cell agree on can be a ceiling a nearer face of a hole in it stands in front of,

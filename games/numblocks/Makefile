@@ -16,7 +16,11 @@ HEADERS = $(wildcard src/*.h) ../common/epsilon_app.h ../common/epsilon_files.h 
 CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device)
 CFLAGS += -O2 -Wall -Wextra -Wno-unused-parameter -fno-math-errno -fsingle-precision-constant -ffast-math
 CFLAGS += -fno-tree-loop-distribute-patterns -flto -fno-fat-lto-objects -fwhole-program -fvisibility=internal
-CFLAGS += -ffunction-sections -fdata-sections $(EXTRA)
+# One LTO partition and no per-function/per-data sections: the relocatable .nwa then carries few
+# relocations, so the file the owner downloads drops ~155 KB (the calculator's .bin by ~2 KB too);
+# the frames are byte-identical. -flto-partition=one is where most of it comes from, -fdata-sections
+# the rest. (LTO's own dead-code pass removes what --gc-sections would have without the sections.)
+CFLAGS += -flto-partition=one $(EXTRA)
 LDFLAGS = -Wl,--relocatable -nostartfiles --specs=nano.specs
 LDFLAGS += -Wl,-e,main -Wl,-u,eadk_app_name -Wl,-u,eadk_app_icon -Wl,-u,eadk_api_level
 LDFLAGS += -Wl,--gc-sections -flinker-output=nolto-rel

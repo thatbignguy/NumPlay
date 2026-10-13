@@ -1,3 +1,38 @@
+## 1.5.16
+**Smaller and quicker: the download loses 131 KB to one linked piece, the pixel loops gain 5% at O3, and the game's RAM is 3 KB less**
+- **File size.** The standalone and Interest links now build as a **single LTO partition** and
+  no longer split code and data into per-function/per-data sections (`games/numblocks/Makefile`,
+  `games/numblocks-interest/Makefile`): the relocatable `.nwa` then carries almost no
+  relocations, and the file the owner downloads drops from **741,964 to 610,448 bytes**
+  (-131,516, -17.7%); `numblocks-interest` from 752,224 to 636,784 (-15.4%). `--gc-sections`
+  was doing nothing there an LTO dead-code pass does not. The layout change alone also shrank
+  the linked `.bin` by ~2 KB and left every frame byte-identical (the 18 documented
+  `bench_render.py` checksums unchanged).
+- **CPU.** `render.c` now compiles at `-O3` (a file pragma) while the rest of the game stays at
+  `-O2`, where the extra inlining bought nothing (measured: one file at O3 equals the whole
+  game at O3 in frames, for a twentieth of the code). The pixel loops gain ~5%: the 18
+  documented `bench_render.py --fancy --rain --mobs` frames fall 177.66 -> 169.47 M insns
+  (the `--fancy` set 125.80 -> 118.09 M, checksums identical), and the device (`tools/emu.py`,
+  a fixed `-DBENCH=12345` build, 15 s) 23.7 -> 25.1 fps / 42.1 -> 39.8 ms a frame. It costs
+  ~21 KB of code, so the linked `.bin` grows 521,652 -> 540,732 bytes - the only number here
+  that goes up, and well inside the app space.
+- **RAM.** `zbuf` moved into `render_frame` (the strip helpers take the depth buffer as a
+  parameter already, so it was a plain move off the app's RAM and onto the frame's stack) -
+  2,560 B; the per-state shape top and liquid kind are one packed byte array (`lshape`)
+  instead of two - 512 B; the light tables are `uint8_t` - 384 B; and the tracer keeps the hit
+  cell's place and block alongside `hit_i`, so `sample_at` needs none of its three divides.
+  `.bss` 121,942 -> 118,616, `.data` 5,073 -> 5,079: the game's RAM 127,015 -> 123,695
+  (-3,320, -2.6%). The bench's deepest stack grows 20,016 -> 22,296 B (the moved `zbuf`),
+  still under the 32 KB the calculator gives the stack; the RAM freed widens the unused room
+  below it, so the margin a stack overrun would eat is ~1.6 KB larger than before.
+- **Menus.** `dirt_background` unpacks its 16 x 16 tile once a strip and paints each screen row
+  from the table, instead of a divide and a palette read a pixel on every menu frame.
+- Recorded: `make test` passes; `make build && make check` and
+  `make -C games/numblocks-interest build check` fit; `tests/test_numblocks_progress.py`,
+  `tests/test_games.py --game numblocks` and the host `./build/play` scenarios pass; the 18
+  documented `bench_render.py --fancy --rain --mobs` checksums are unchanged
+  (`7bb6bf7a ...`) and so are the `--fancy` ones.
+
 ## 1.5.15
 **Panorama: the fixed overworld and nether of one seed, and the three images gone**
 - Personalisation's Panorama offers **Random / World / Overworld / Nether** now. **Random**

@@ -2140,17 +2140,27 @@ static void splash(const char *s, int cx, int cy, float scale) {
 }
 
 static void dirt_background(void) {
-  /* GuiScreen.drawBackground: the options background, 32 pixel tiles, darkened */
+  /* GuiScreen.drawBackground: the options background, 32 pixel tiles (16 x 16 sprite
+   * pixels at 2x), darkened. The tile is the same every frame, so unpack its 16 rows
+   * once into a strip-local table and paint each screen row from it: no divide and no
+   * palette read a pixel, which is what this cost when every menu redrew it. */
   int id = SP_DIRT_BG;
   const uint8_t *px = spr_px + spr_off[id];
   const uint16_t *pal = spr_pal[id];
-  for (int y = clip_y0; y < clip_y1; y++) {
-    uint16_t *d = row_at(y);
-    const uint8_t *s = px + ((y / 2) & 15) * 8;
-    for (int x = 0; x < SCREEN_W; x++) {
-      int u = (x / 2) & 15;
-      d[x] = pal[(u & 1) ? s[u >> 1] >> 4 : s[u >> 1] & 15];
+  uint16_t tile[16][32];
+  for (int r = 0; r < 16; r++) {
+    const uint8_t *s = px + r * 8;
+    uint16_t *t = tile[r];
+    for (int u = 0; u < 16; u++) {
+      uint8_t b = s[u >> 1];
+      uint16_t c = pal[(u & 1) ? b >> 4 : b & 15];
+      t[2 * u] = c, t[2 * u + 1] = c;
     }
+  }
+  for (int y = clip_y0; y < clip_y1; y++) {
+    const uint16_t *t = tile[(y / 2) & 15];
+    uint16_t *d = row_at(y);
+    for (int x = 0; x < SCREEN_W; x++) d[x] = t[x & 31];
   }
 }
 
