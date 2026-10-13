@@ -37,13 +37,14 @@ void camera_reset(void) {
 }
 
 /* The title's backdrop (Personalisation's Panorama): a fixed pick keeps itself every
- * visit; Random rolls one of the four. The roll mixes the clock as parse_seed mixes
- * it - never the world's rnd() stream, which the tests replay - and happens on every
- * entry, so Random shows a different one on different visits. */
+ * visit; Random rolls one of the four. The roll mixes the clock - never the world's
+ * rnd() stream, which the tests replay - with plat_entropy(), which says where this
+ * run began, so even a run's first pick is a roll rather than always the same one.
+ * It happens on every entry, so Random shows a different one on different visits. */
 static void title_pick(void) {
   uint8_t p = opt.panorama <= PAN_1_21 ? opt.panorama : PAN_RANDOM;
   if (p == PAN_RANDOM) {
-    uint64_t r = (uint64_t)plat_millis() * 0x9E3779B97F4A7C15ull + perf_frames;
+    uint64_t r = (uint64_t)(plat_millis() ^ plat_entropy() * 2654435761u) * 0x9E3779B97F4A7C15ull + perf_frames;
     r ^= r >> 30;
     r *= 0xBF58476D1CE4E5B9ull;
     r ^= r >> 31;

@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.13"
+#define NB_VERSION "1.5.14"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -43,6 +43,11 @@ enum {
   RK_OK = 4, RK_BACK = 5, RK_SHIFT = 12, RK_ALPHA = 13, RK_BACKSPACE = 17, RK_EXE = 52
 };
 uint32_t plat_millis(void);
+/* A number that differs between runs, for what wants one without touching the world's
+ * rnd() stream: main.c's Random panorama pick mixes it, so even the first pick of a
+ * run is a roll (the host's simulated clock below starts at 0 every run and would say
+ * the same thing every time; this is the real clock, or on the calculator its uptime) */
+uint32_t plat_entropy(void);
 void plat_sleep(uint32_t ms);
 void plat_push(int x, int y, int w, int h, const uint16_t *px);
 void plat_pull(int x, int y, int w, int h, uint16_t *px);   /* what the screen shows there */

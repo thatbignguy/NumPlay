@@ -1,3 +1,20 @@
+## 1.5.14
+**Random rolls on the first open now: the host's clock said the same thing every run**
+- The title's Random pick mixed `plat_millis()` only: on the calculator that is the real
+  uptime, so it rolled as it should, but the host's simulated clock starts at 0 every run
+  (tests/play.c drives it), so the desktop player's first title screen always rolled the
+  same backdrop - the World - and only the later visits rolled. The pick also mixes
+  `plat_entropy()` now: on the host it is the real clock (`plat_host.c`: CLOCK_MONOTONIC's
+  nanoseconds mixed with the pid), on the calculator its uptime, so a run's first pick is
+  a roll like any other. A run that wants a fixed backdrop passes `--panorama N`, which
+  the harness always could.
+- Recorded: `./build/play --title --frames 30 --keys "5:ok" --shots 29` twelve times over,
+  each with a fresh save dir, landed on World 4, 1.20 3, 1.16 3, 1.21 2 (the shots
+  identified against the `--panorama 1/2/3/4` reference frames); the same loop before the
+  change was the World every time. `make test` passes; `make build && make check` fits and
+  `make -C games/numblocks-interest build check` passes (the `.nwa` is 24 bytes over
+  1.5.13's - 1,664,992 against 1,664,968 - the entropy code; no data changed).
+
 ## 1.5.13
 **Personalisation: High Contrast Block Outlines and the title's panorama, at the most detail the app space holds**
 - Options gains a **Personalisation...** row beside **Mods and Cheats...** (both 150 wide
