@@ -8,7 +8,7 @@ what "done" means. Order matters only where noted.
 - [x] **[15] Nether mobs** — the nether has no life of its own: add the piglin
       and the zombified piglin as its mobs (spawning, models, skins, drops,
       spawn eggs, `/summon`); the enderman is the stretch past them.
-- [ ] **[16] Deepslate** — extend the world down to -64: the bedrock floor
+- [x] **[16] Deepslate** — extend the world down to -64: the bedrock floor
       moves to -64, deepslate runs from y=0 down to it, stone and everything
       above stay; the cache, the generator, the edits and every height guard
       move with it.
@@ -20,7 +20,7 @@ what "done" means. Order matters only where noted.
 - [x] **[23] Basic structures** — the world makes terrain, dungeons and lakes
       and no structures: a placement pass, the desert pyramid first, working
       and looking exactly as modern Minecraft makes it (`26.3.jar`).
-- [ ] **[24] Under-lava fog and overlay** — the eye in lava reads like the eye
+- [x] **[24] Under-lava fog and overlay** — the eye in lava reads like the eye
       beside it: give it Java's dense orange fog and the orange screen wash,
       as `under_water` already gives water its blue (`render.c`).
 - [x] **[25] Water evaporates in the nether** — a water bucket emptied in the
