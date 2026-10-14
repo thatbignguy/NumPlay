@@ -1,3 +1,84 @@
+## 1.5.36
+**The desert pyramid: the first structure, placed by modern's own random spread and built block for block from `26.3.jar`**
+
+- **The pass.** `populate` (`gen.c`) has held the dungeons' shape - a replayed
+  population, its outcomes kept in the memo - and now takes the next structure as its own
+  row: `temple_try` runs before the lakes and dungeons, draws nothing from the
+  population's stream, and remembers what it decided (`PMemo.temple`), so the same temple
+  comes out whichever direction the world is walked, exactly as the dungeons' `pm_known`
+  bits do. Every write goes through `put`/`cget` and lands in each chunk's own slab as
+  that chunk is generated, which is how the piece spans its 2 x 2 chunks whole.
+- **The placement** is `RandomSpreadStructurePlacement` read out of the jar: spacing 32
+  chunks, separation 8, salt 14357617, LINEAR (two `nextInt(24)`s on a `LegacyRandomSource`
+  seeded `gridX * 341873128712 + gridZ * 132897987541 + seed + salt`), from the
+  population's own chunk. The biome check is `Structure.couldValidBiomeExistOnTopOfChunkCenter`:
+  deserts only (the `has_structure/desert_pyramid` tag), asked at the origin chunk's
+  centre (block +8, +8) and answered before the populations run, because the biome layers
+  and the population view share one scratch buffer (`gen_scratch`) and the layers may not
+  be run inside a population. `SinglePieceStructure`'s guard is in too: the lowest of the
+  21 x 21's four corners against the sea level. The base row is
+  `updateHeightPositionToLowestGroundHeight(level, -nextInt(3))`: the minimum
+  `cs_top` over the whole 21 x 21, plus one (the heightmap's first free cell), minus a
+  draw of the temple's own stream - never the population's, so nothing else moves.
+- **The piece** is `DesertPyramidPiece.postProcess`, transcribed block for block: the
+  base box, the nine stepped rings, the foundation that fills down through what is
+  replaceable, the four corner towers with their stairs, the entrance and its cut
+  sandstone, the gallery, the side aisles with the chiselled pillars, the orange and blue
+  terracotta patterns on the floor and the outer walls, and the burial chamber with its
+  stone pressure plate, the nine TNT under it and the four chests. `CUT_SANDSTONE` is the
+  existing `B_SANDSTONE_SMOOTH` (`24:2`, modern's `cut_sandstone` texture), the terracotta
+  reuses `STAINED_CLAY_ORANGE`/`BLUE`; only `B_STONE_PRESSURE_PLATE` (`70:0`) and the four
+  `SANDSTONE_STAIRS` states (`128:0..3`) are new blocks (B_COUNT 442 -> 447, sprites
+  appended at 503/504 by `tools/patch_temple_data.py`, so no existing sprite index moves
+  and `SP_EYE` stays).
+- **The orientation is fixed** (the entrance always on the pyramid's low-z side). Modern
+  hands the piece a random horizontal direction, but that direction only rotates the four
+  stair states and the block states are the only thing it changes: the 21 x 21 is square,
+  so the footprint and shape are the same. The four stair facings of the reference piece
+  are what this draws.
+- **The trap.** `temple_trap` (`player.c`) lights the 3 x 3 TNT two blocks under the
+  plate when a player or a mob stands on it (stone pressure plates take mobs), lighting
+  the TNT the way fire and flint and steel do (`tnt_light`, 80-tick fuse). The pyramid
+  needs no redstone anywhere: the plate is the one place a redstone block behaves.
+- **The chests** hold modern's `desert_pyramid.json` loot, drawn when a chest is first
+  opened from the world seed and the chest's own place (`gui.c`'s `temple_fill`), so
+  nothing new is stored and the same world always gives the same loot: the main pool's
+  2-4 rolls over its 16 entries and 247 weight (the counts as the table has them: 2-7 gold,
+  4-6 bone, ...), the bone pool's four rolls of 1-8, each item in a random empty slot as
+  the table's container fill does. The items this game has no item for are dropped and
+  said here: the four horse armours, the enchanted golden apple and the dune armour trim
+  (the enchanted book is a plain book). The `temple_chest_at` check is the placement cell
+  plus the chamber's own blocks under and over the chest, so it needs no generator call
+  when a chest is opened.
+- **Left out, said here:** the cellar under the chamber (suspicious sand, the collapsed
+  roof and the stairs down from it) - there is no brushing in this game.
+- **The reference check.** The piece's whole box was replayed in Python from the
+  decompiled `DesertPyramidPiece` (cellar aside) and compared against the generator's own
+  slab: 4388 cells written, 0 mismatches, and the four chunks come out byte for byte the
+  same in two different generation orders. `tests/gen/t_refcmp.c` is unaffected: it
+  compares `chunk_terrain`, which runs before any population.
+- **Tests.** `tests/unit.c`: the placement grid finds the temple at chunk (86, -14) for
+  seed 12345 (the nearest desert cell) and the same chunk comes out the same in two
+  orders; the piece's counts (191 cut, 39 chiselled, 54 + 1 terracotta, 3/3/2/6 stairs,
+  2 slabs, 1 plate, 9 TNT, 4 chests) and 38 cells it is known by; the world's cache holds
+  the same temple and the plate lights exactly the nine TNT (and nothing five blocks
+  west); a chest's first open draws 4-8 stacks, all of the table's items within the
+  table's counts, and the same chest draws them again; and the sandstone stairs place
+  the four ways a player looks. `tests/play.c` has `--temple` (the player outside the
+  entrance looking at it) and `--templetrap` (in the chamber on the plate, the frames
+  running past the fuse, the log counting the TNT gone).
+- **Recorded.** `./build/play --temple --seed 12345 --frames 10 --shots 5 --out
+  /tmp/temple` (**not** `build/desktop`): frame 5 stands over the north slope - the
+  stepped face, the corner towers with their terracotta, the cut-sandstone entrance and
+  the pattern band all in view, `temple: ... plate 1402 51 -1190, TNT 9 ... chests 4` in
+  the log. `./build/play --templetrap --seed 12345 --frames 100 --shots 5,85 --out
+  /tmp/ttrap`: frame 5 the lit chamber with the chests and the plate underfoot, frame 85
+  the crater the blast left with the player thrown, and
+  `templetrap: after 100 frames, 9 of the 9 TNT blocks are gone from the chamber`.
+- **Cost.** The piece is code, not tables: `NumBlocks.nwa` 617,092 -> **623,416 B**
+  (+6,324), `numblocks.bin` 550,360 -> 556,476 B; `.bss` 119,064 -> 119,072
+  (`temple_pb[4]` and its padding, the only new state - the population memo's new byte
+  fits its padding). `make test` passes (210 recipes) and `make build && make check` fits.
 ## 1.5.35
 **Liquids at the cache's edge stand instead of draining: a stream whose source leaves the loaded cache no longer empties to air**
 

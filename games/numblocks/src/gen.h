@@ -88,6 +88,10 @@ unsigned gen_ram_bytes(void);
  * the tests leave it unset, and nothing in them asks a spawner for its mob. */
 extern void (*gen_spawner_hook)(int x, int y, int z, int mob);
 
+/* The desert pyramid's placement grid (gen.c's temple_origin): is the chunk holding
+ * (x, z) a cell the modern random spread picks? Flat worlds and the nether: no. */
+int temple_cell(int x, int z);
+
 /* The generator's scratch: its passes never overlap (layers, then terrain, then caves and
  * populations), so they share one buffer, which the caller gives it -- a local of a function
  * that makes the world is what it is for, and where the game would otherwise keep 7.7 KB of

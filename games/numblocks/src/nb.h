@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.35"
+#define NB_VERSION "1.5.36"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -302,6 +302,7 @@ void spawners_load(const uint8_t *b, int len); /* (len 0: none saved) */
 #define SPAWNERS_MAX 24                       /* the monster spawners the world remembers */
 void explode(float x, float y, float z, float power, bool blocks);
 void tnt_light(int x, int y, int z, int fuse);
+void temple_trap(float x, float y, float z);   /* the pyramid's plate: stood on, it lights its nine TNT (player.c) */
 void throw_item(int id, float speed, bool from_player);   /* arrows, snowballs, eggs */
 bool mob_attack(const Entity *e);   /* the player hits this mob (with the held item) */
 bool mob_use(Entity *e);            /* the player uses the held item on it (shears, bucket) */

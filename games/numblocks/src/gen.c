@@ -2525,6 +2525,7 @@ static void bflags_init(void) {
     bflags[B_PUMPKIN] = BF_OPAQUE | BF_SOLID | BF_BUILD | BF_CUBE;
     bflags[B_SANDSTONE_SLAB] = BF_SOLID | BF_BUILD;
     bflags[B_STONE_SLAB] = BF_SOLID | BF_BUILD;
+    bflags[B_STONE_PRESSURE_PLATE] = 0; /* thin plate: no solidity, no opacity (like snow) */
 }
 
 #define IS_AIR(b) ((b) == B_AIR)
@@ -3355,7 +3356,7 @@ enum {
     R_NOTCHEST, R_WALL, R_SAND_SANDY
 };
 
-static int rule_ok(int rule, uint8_t b) {
+static int rule_ok(int rule, int b) {
     switch (rule) {
     case R_ALWAYS: return 1;
     case R_TREE: return b == B_AIR || IS_LEAVES(b) || IS_RPLANT(b);
@@ -3395,7 +3396,7 @@ static void c_lower_top(int i, int y) {
 }
 
 /* chunk C bookkeeping for a block that was (or, out of the y range, presumably was) written */
-static void c_track(int i, int Y, uint8_t b) {
+static void c_track(int i, int Y, int b) {
     if (b == B_AIR) {
         if (Y == c_top[i]) c_lower_top(i, Y);
         if (Y == c_sl[i]) c_sl[i] = c_top[i] < c_sl[i] ? c_top[i] : (uint8_t)(Y - 1);
@@ -3408,7 +3409,7 @@ static void c_track(int i, int Y, uint8_t b) {
 static int put_skip_c; /* set: put() updates the view only */
 
 /* writes block b at world (X, Y, Z): into the view, and into C if the rule holds there */
-static void put(int X, int Y, int Z, uint8_t b, int rule) {
+static void put(int X, int Y, int Z, int b, int rule) {
     if (Y < 0 || Y > 255) return;
     View *v = &PV;
     int lx = X - v->ox, lz = Z - v->oz;
@@ -3459,7 +3460,7 @@ static void put(int X, int Y, int Z, uint8_t b, int rule) {
 }
 
 /* only into C (features whose result never feeds a later decision: ores...) */
-static void put_c(int X, int Y, int Z, uint8_t b, int rule) {
+static void put_c(int X, int Y, int Z, int b, int rule) {
     int cx = X - c_cx * 16, cz = Z - c_cz * 16;
     if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || Y < c_y0 || Y >= c_y0 + c_h) return;
     int o = (Y - c_y0) * 256 + cz * 16 + cx;
@@ -3559,7 +3560,7 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
 #define DUNG_TRIES 96
 typedef struct {
     int px, pz;
-    uint8_t valid, lakes; /* bit set: lake (0 water, 1 lava) placed */
+    uint8_t valid, lakes, temple; /* bit set: lake (0 water, 1 lava) placed; temple: 1 placed */
     uint8_t dungeons[(DUNG_TRIES + 7) / 8];   /* bit set: dungeon try passed, one bit per try */
 } PopMemo;
 _Static_assert(DUNG_TRIES <= 8 * sizeof((PopMemo *)0)->dungeons, "a bit is kept per dungeon try");
@@ -3579,7 +3580,7 @@ static void pmemo_begin(int px, int pz) {
         }
     pm = &pmemo[pmemo_next];
     pmemo_next = (pmemo_next + 1) % NPMEMO;
-    *pm = (PopMemo){px, pz, 0, 0, 0};
+    *pm = (PopMemo){px, pz, 0, 0, 0, {0}};
     pm_known = 0;
 }
 
@@ -5341,6 +5342,345 @@ static void decorate(const Biome *b) {
     }
 }
 
+/* ---- the desert pyramid (Basic structures [23]) ----
+ * Modern Minecraft's desert pyramid (DesertPyramidPiece in 26.3.jar, one piece,
+ * no NBT asset), read block for block out of the jar with CFR, not out of memory.
+ * Placement is modern's RandomSpreadStructurePlacement (spacing 32, separation 8,
+ * salt 14357617, LINEAR): the grid cell from the population's chunk, so a replayed
+ * population makes the same decision, and the memo keeps its outcome - the same
+ * temple whichever direction the world is walked, as the dungeons are. Writes go
+ * through put/cget and land in each chunk as it is generated, which is how the
+ * dungeons' cross-chunk pieces come out whole. The surface y and the biome come
+ * from the column summary (ColSum, cs_top) and gen_biome, deserts only
+ * (has_structure/desert_pyramid.json: minecraft:desert), above the sea.
+ * Orientation is fixed (modern picks a random horizontal direction; the 21 x 21 is
+ * square so the footprint is the same, only the entrance always faces the same way -
+ * saves the rotation code; the shape still matches the jar's piece block for block
+ * up to rotation). The height offset (-nextInt(3)) is drawn from the temple's own
+ * stream, never the population's, so no other population draw moves.
+ * CUT_SANDSTONE is the existing SANDSTONE_SMOOTH state (modern_map: sandstone_smooth
+ * -> cut_sandstone); orange/blue terracotta are STAINED_CLAY_ORANGE/BLUE; the slab,
+ * TNT and the chest are in. Only STONE_PRESSURE_PLATE (70) and SANDSTONE_STAIRS
+ * (128, four facings) are new states. Suspicious sand / archaeology (the cellar the
+ * jar adds under the floor) is left out: there is no brushing here. Flat worlds and
+ * the nether get no temples. The pass takes the next structure as its own row. */
+#define TEMPLE_SPACING 32
+#define TEMPLE_SEPARATION 8
+#define TEMPLE_SALT 14357617
+#define TEMPLE_SIZE 21
+#define TEMPLE_LIMIT (TEMPLE_SPACING - TEMPLE_SEPARATION)   /* 24 */
+
+
+
+/* forward (defined after populate): overworld default only */
+static int g_flat;
+static int g_dim;
+
+static int fdiv32(int a) { return a >= 0 ? a / 32 : (a - 31) / 32; }
+
+/* is (px,pz) a temple origin chunk? If so, *ox,*oz hold it (== px,pz) and the
+ * temple stream (placement draws done) comes back in *tr for the offset draw. */
+static int temple_origin(int px, int pz, int *ox, int *oz, JRand *tr) {
+    int gx = fdiv32(px), gz = fdiv32(pz);
+    jr_seed(tr, (i64)(i64)gx * 341873128712LL + (i64)(i64)gz * 132897987541LL + g_seed + TEMPLE_SALT);
+    int sx = jr_int(tr, TEMPLE_LIMIT), sz = jr_int(tr, TEMPLE_LIMIT);
+    int cx = gx * TEMPLE_SPACING + sx, cz = gz * TEMPLE_SPACING + sz;
+    if (cx != px || cz != pz) return 0;
+    *ox = cx;
+    *oz = cz;
+    return 1;
+}
+
+/* lowest surface y over the temple's 21 x 21 (ColSum), -1 if any column unknown.
+ * This is the ground the base row sits over: modern's
+ * updateHeightPositionToLowestGroundHeight takes the minimum over the piece's
+ * whole bounding box. */
+static int temple_lowest(int ox, int oz) {
+    int lo = 256;
+    for (int lz = 0; lz < TEMPLE_SIZE; lz++)
+        for (int lx = 0; lx < TEMPLE_SIZE; lx++) {
+            const ColSum *s = col_sum(ox * 16 + lx, oz * 16 + lz);
+            if (!s) return -1;
+            int t = cs_top(s);
+            if (t < lo) lo = t;
+        }
+    return lo;
+}
+
+/* the lowest of the four corner columns modern's sea test reads
+ * (Structure.getCornerHeights: the 21 x 21's corners, the far ones one block
+ * past its edges), -1 if unknown. */
+static int temple_corner_lowest(int ox, int oz) {
+    int lo = 256;
+    for (int k = 0; k < 4; k++) {
+        const ColSum *s = col_sum(ox * 16 + (k & 1) * TEMPLE_SIZE, oz * 16 + (k >> 1) * TEMPLE_SIZE);
+        if (!s) return -1;
+        int t = cs_top(s);
+        if (t < lo) lo = t;
+    }
+    return lo;
+}
+
+static void tbox(int ox, int oz, int baseY, int x0, int y0, int z0, int x1, int y1, int z1, int edge,
+                 int fill) {
+    for (int y = y0; y <= y1; y++)
+        for (int x = x0; x <= x1; x++)
+            for (int z = z0; z <= z1; z++) {
+                int edgeCell = (y == y0 || y == y1 || x == x0 || x == x1 || z == z0 || z == z1);
+                put(ox * 16 + x, baseY + y, oz * 16 + z, edgeCell ? edge : fill, R_ALWAYS);
+            }
+}
+
+static void tput1(int ox, int oz, int baseY, int b, int x, int y, int z) {
+    put(ox * 16 + x, baseY + y, oz * 16 + z, b, R_ALWAYS);
+}
+
+/* the piece, block for block from DesertPyramidPiece.postProcess (CFR), without
+ * the cellar/archaeology (no brushing): fixed orientation, CUT is SMOOTH. */
+static void temple_build(int ox, int oz, int baseY) {
+    int W = TEMPLE_SIZE;
+    int SAND = B_SANDSTONE, CUT = B_SANDSTONE_SMOOTH, CH = B_SANDSTONE_CHISELED;
+    uint8_t SLAB = B_SANDSTONE_SLAB, OR = B_STAINED_CLAY_ORANGE, BL = B_STAINED_CLAY_BLUE;
+    int STA_E = B_SANDSTONE_STAIRS, STA_W = B_SANDSTONE_STAIRS_W, STA_S = B_SANDSTONE_STAIRS_S,
+            STA_N = B_SANDSTONE_STAIRS_N;
+    /* base and steps */
+    tbox(ox, oz, baseY, 0, -4, 0, W - 1, 0, W - 1, SAND, SAND);
+    for (int pos = 1; pos <= 9; pos++) {
+        tbox(ox, oz, baseY, pos, pos, pos, W - 1 - pos, pos, W - 1 - pos, SAND, SAND);
+        tbox(ox, oz, baseY, pos + 1, pos, pos + 1, W - 2 - pos, pos, W - 2 - pos, B_AIR, B_AIR);
+    }
+    /* foundation: sandstone down where replaceable */
+    for (int x = 0; x < W; x++)
+        for (int z = 0; z < W; z++) {
+            int X = ox * 16 + x, Z = oz * 16 + z, Y = baseY - 5;
+            while (Y > 0) {
+                uint8_t cur = vget(X, Y, Z);
+                if (!(cur == B_AIR || cur == B_WATER || cur == B_FLOWING_WATER || cur == B_LAVA ||
+                      cur == B_FLOWING_LAVA))
+                    break;
+                put(X, Y, Z, SAND, R_ALWAYS);
+                Y--;
+            }
+        }
+    /* corner towers */
+    tbox(ox, oz, baseY, 0, 0, 0, 4, 9, 4, SAND, B_AIR);
+    tbox(ox, oz, baseY, 1, 10, 1, 3, 10, 3, SAND, SAND);
+    tput1(ox, oz, baseY, STA_N, 2, 10, 0);
+    tput1(ox, oz, baseY, STA_S, 2, 10, 4);
+    tput1(ox, oz, baseY, STA_E, 0, 10, 2);
+    tput1(ox, oz, baseY, STA_W, 4, 10, 2);
+    tbox(ox, oz, baseY, W - 5, 0, 0, W - 1, 9, 4, SAND, B_AIR);
+    tbox(ox, oz, baseY, W - 4, 10, 1, W - 2, 10, 3, SAND, SAND);
+    tput1(ox, oz, baseY, STA_N, W - 3, 10, 0);
+    tput1(ox, oz, baseY, STA_S, W - 3, 10, 4);
+    tput1(ox, oz, baseY, STA_E, W - 5, 10, 2);
+    tput1(ox, oz, baseY, STA_W, W - 1, 10, 2);
+    /* entrance */
+    tbox(ox, oz, baseY, 8, 0, 0, 12, 4, 4, SAND, B_AIR);
+    tbox(ox, oz, baseY, 9, 1, 0, 11, 3, 4, B_AIR, B_AIR);
+    tput1(ox, oz, baseY, CUT, 9, 1, 1);
+    tput1(ox, oz, baseY, CUT, 9, 2, 1);
+    tput1(ox, oz, baseY, CUT, 9, 3, 1);
+    tput1(ox, oz, baseY, CUT, 10, 3, 1);
+    tput1(ox, oz, baseY, CUT, 11, 3, 1);
+    tput1(ox, oz, baseY, CUT, 11, 2, 1);
+    tput1(ox, oz, baseY, CUT, 11, 1, 1);
+    tbox(ox, oz, baseY, 4, 1, 1, 8, 3, 3, SAND, B_AIR);
+    tbox(ox, oz, baseY, 4, 1, 2, 8, 2, 2, B_AIR, B_AIR);
+    tbox(ox, oz, baseY, 12, 1, 1, 16, 3, 3, SAND, B_AIR);
+    tbox(ox, oz, baseY, 12, 1, 2, 16, 2, 2, B_AIR, B_AIR);
+    /* gallery */
+    tbox(ox, oz, baseY, 5, 4, 5, W - 6, 4, W - 6, SAND, SAND);
+    tbox(ox, oz, baseY, 9, 4, 9, 11, 4, 11, B_AIR, B_AIR);
+    tbox(ox, oz, baseY, 8, 1, 8, 8, 3, 8, CUT, CUT);
+    tbox(ox, oz, baseY, 12, 1, 8, 12, 3, 8, CUT, CUT);
+    tbox(ox, oz, baseY, 8, 1, 12, 8, 3, 12, CUT, CUT);
+    tbox(ox, oz, baseY, 12, 1, 12, 12, 3, 12, CUT, CUT);
+    tbox(ox, oz, baseY, 1, 1, 5, 4, 4, 11, SAND, SAND);
+    tbox(ox, oz, baseY, W - 5, 1, 5, W - 2, 4, 11, SAND, SAND);
+    tbox(ox, oz, baseY, 6, 7, 9, 6, 7, 11, SAND, SAND);
+    tbox(ox, oz, baseY, W - 7, 7, 9, W - 7, 7, 11, SAND, SAND);
+    tbox(ox, oz, baseY, 5, 5, 9, 5, 7, 11, CUT, CUT);
+    tbox(ox, oz, baseY, W - 6, 5, 9, W - 6, 7, 11, CUT, CUT);
+    tput1(ox, oz, baseY, B_AIR, 5, 5, 10);
+    tput1(ox, oz, baseY, B_AIR, 5, 6, 10);
+    tput1(ox, oz, baseY, B_AIR, 6, 6, 10);
+    tput1(ox, oz, baseY, B_AIR, W - 6, 5, 10);
+    tput1(ox, oz, baseY, B_AIR, W - 6, 6, 10);
+    tput1(ox, oz, baseY, B_AIR, W - 7, 6, 10);
+    tbox(ox, oz, baseY, 2, 4, 4, 2, 6, 4, B_AIR, B_AIR);
+    tbox(ox, oz, baseY, W - 3, 4, 4, W - 3, 6, 4, B_AIR, B_AIR);
+    tput1(ox, oz, baseY, STA_N, 2, 4, 5);
+    tput1(ox, oz, baseY, STA_N, 2, 3, 4);
+    tput1(ox, oz, baseY, STA_N, W - 3, 4, 5);
+    tput1(ox, oz, baseY, STA_N, W - 3, 3, 4);
+    tbox(ox, oz, baseY, 1, 1, 3, 2, 2, 3, SAND, SAND);
+    tbox(ox, oz, baseY, W - 3, 1, 3, W - 2, 2, 3, SAND, SAND);
+    tput1(ox, oz, baseY, SAND, 1, 1, 2);
+    tput1(ox, oz, baseY, SAND, W - 2, 1, 2);
+    tput1(ox, oz, baseY, SLAB, 1, 2, 2);
+    tput1(ox, oz, baseY, SLAB, W - 2, 2, 2);
+    tput1(ox, oz, baseY, STA_W, 2, 1, 2);
+    tput1(ox, oz, baseY, STA_E, W - 3, 1, 2);
+    /* side aisles */
+    tbox(ox, oz, baseY, 4, 3, 5, 4, 3, 17, SAND, SAND);
+    tbox(ox, oz, baseY, W - 5, 3, 5, W - 5, 3, 17, SAND, SAND);
+    tbox(ox, oz, baseY, 3, 1, 5, 4, 2, 16, B_AIR, B_AIR);
+    tbox(ox, oz, baseY, W - 6, 1, 5, W - 5, 2, 16, B_AIR, B_AIR);
+    for (int z = 5; z <= 17; z += 2) {
+        tput1(ox, oz, baseY, CUT, 4, 1, z);
+        tput1(ox, oz, baseY, CH, 4, 2, z);
+        tput1(ox, oz, baseY, CUT, W - 5, 1, z);
+        tput1(ox, oz, baseY, CH, W - 5, 2, z);
+    }
+    /* terracotta pattern on the floor */
+    tput1(ox, oz, baseY, OR, 10, 0, 7);
+    tput1(ox, oz, baseY, OR, 10, 0, 8);
+    tput1(ox, oz, baseY, OR, 9, 0, 9);
+    tput1(ox, oz, baseY, OR, 11, 0, 9);
+    tput1(ox, oz, baseY, OR, 8, 0, 10);
+    tput1(ox, oz, baseY, OR, 12, 0, 10);
+    tput1(ox, oz, baseY, OR, 7, 0, 10);
+    tput1(ox, oz, baseY, OR, 13, 0, 10);
+    tput1(ox, oz, baseY, OR, 9, 0, 11);
+    tput1(ox, oz, baseY, OR, 11, 0, 11);
+    tput1(ox, oz, baseY, OR, 10, 0, 12);
+    tput1(ox, oz, baseY, OR, 10, 0, 13);
+    tput1(ox, oz, baseY, BL, 10, 0, 10);
+    for (int x = 0; x <= W - 1; x += W - 1) {
+        tput1(ox, oz, baseY, CUT, x, 2, 1);
+        tput1(ox, oz, baseY, OR, x, 2, 2);
+        tput1(ox, oz, baseY, CUT, x, 2, 3);
+        tput1(ox, oz, baseY, CUT, x, 3, 1);
+        tput1(ox, oz, baseY, OR, x, 3, 2);
+        tput1(ox, oz, baseY, CUT, x, 3, 3);
+        tput1(ox, oz, baseY, OR, x, 4, 1);
+        tput1(ox, oz, baseY, CH, x, 4, 2);
+        tput1(ox, oz, baseY, OR, x, 4, 3);
+        tput1(ox, oz, baseY, CUT, x, 5, 1);
+        tput1(ox, oz, baseY, OR, x, 5, 2);
+        tput1(ox, oz, baseY, CUT, x, 5, 3);
+        tput1(ox, oz, baseY, OR, x, 6, 1);
+        tput1(ox, oz, baseY, CH, x, 6, 2);
+        tput1(ox, oz, baseY, OR, x, 6, 3);
+        tput1(ox, oz, baseY, OR, x, 7, 1);
+        tput1(ox, oz, baseY, OR, x, 7, 2);
+        tput1(ox, oz, baseY, OR, x, 7, 3);
+        tput1(ox, oz, baseY, CUT, x, 8, 1);
+        tput1(ox, oz, baseY, CUT, x, 8, 2);
+        tput1(ox, oz, baseY, CUT, x, 8, 3);
+    }
+    for (int x = 2; x <= W - 3; x += W - 3 - 2) {
+        tput1(ox, oz, baseY, CUT, x - 1, 2, 0);
+        tput1(ox, oz, baseY, OR, x, 2, 0);
+        tput1(ox, oz, baseY, CUT, x + 1, 2, 0);
+        tput1(ox, oz, baseY, CUT, x - 1, 3, 0);
+        tput1(ox, oz, baseY, OR, x, 3, 0);
+        tput1(ox, oz, baseY, CUT, x + 1, 3, 0);
+        tput1(ox, oz, baseY, OR, x - 1, 4, 0);
+        tput1(ox, oz, baseY, CH, x, 4, 0);
+        tput1(ox, oz, baseY, OR, x + 1, 4, 0);
+        tput1(ox, oz, baseY, CUT, x - 1, 5, 0);
+        tput1(ox, oz, baseY, OR, x, 5, 0);
+        tput1(ox, oz, baseY, CUT, x + 1, 5, 0);
+        tput1(ox, oz, baseY, OR, x - 1, 6, 0);
+        tput1(ox, oz, baseY, CH, x, 6, 0);
+        tput1(ox, oz, baseY, OR, x + 1, 6, 0);
+        tput1(ox, oz, baseY, OR, x - 1, 7, 0);
+        tput1(ox, oz, baseY, OR, x, 7, 0);
+        tput1(ox, oz, baseY, OR, x + 1, 7, 0);
+        tput1(ox, oz, baseY, CUT, x - 1, 8, 0);
+        tput1(ox, oz, baseY, CUT, x, 8, 0);
+        tput1(ox, oz, baseY, CUT, x + 1, 8, 0);
+    }
+    tbox(ox, oz, baseY, 8, 4, 0, 12, 6, 0, CUT, CUT);
+    tput1(ox, oz, baseY, B_AIR, 8, 6, 0);
+    tput1(ox, oz, baseY, B_AIR, 12, 6, 0);
+    tput1(ox, oz, baseY, OR, 9, 5, 0);
+    tput1(ox, oz, baseY, CH, 10, 5, 0);
+    tput1(ox, oz, baseY, OR, 11, 5, 0);
+    /* burial chamber */
+    tbox(ox, oz, baseY, 8, -14, 8, 12, -11, 12, CUT, CUT);
+    tbox(ox, oz, baseY, 8, -10, 8, 12, -10, 12, CH, CH);
+    tbox(ox, oz, baseY, 8, -9, 8, 12, -9, 12, CUT, CUT);
+    tbox(ox, oz, baseY, 8, -8, 8, 12, -1, 12, SAND, SAND);
+    tbox(ox, oz, baseY, 9, -11, 9, 11, -1, 11, B_AIR, B_AIR);
+    tput1(ox, oz, baseY, B_STONE_PRESSURE_PLATE, 10, -11, 10);
+    tbox(ox, oz, baseY, 9, -13, 9, 11, -13, 11, B_TNT, B_AIR);
+    tput1(ox, oz, baseY, B_AIR, 8, -11, 10);
+    tput1(ox, oz, baseY, B_AIR, 8, -10, 10);
+    tput1(ox, oz, baseY, CH, 7, -10, 10);
+    tput1(ox, oz, baseY, CUT, 7, -11, 10);
+    tput1(ox, oz, baseY, B_AIR, 12, -11, 10);
+    tput1(ox, oz, baseY, B_AIR, 12, -10, 10);
+    tput1(ox, oz, baseY, CH, 13, -10, 10);
+    tput1(ox, oz, baseY, CUT, 13, -11, 10);
+    tput1(ox, oz, baseY, B_AIR, 10, -11, 8);
+    tput1(ox, oz, baseY, B_AIR, 10, -10, 8);
+    tput1(ox, oz, baseY, CH, 10, -10, 7);
+    tput1(ox, oz, baseY, CUT, 10, -11, 7);
+    tput1(ox, oz, baseY, B_AIR, 10, -11, 12);
+    tput1(ox, oz, baseY, B_AIR, 10, -10, 12);
+    tput1(ox, oz, baseY, CH, 10, -10, 13);
+    tput1(ox, oz, baseY, CUT, 10, -11, 13);
+    /* four chests (loot drawn on first open, from the world seed and the place) */
+    tput1(ox, oz, baseY, B_CHEST, 10, -11, 8);
+    tput1(ox, oz, baseY, B_CHEST, 12, -11, 10);
+    tput1(ox, oz, baseY, B_CHEST, 10, -11, 12);
+    tput1(ox, oz, baseY, B_CHEST, 8, -11, 10);
+    /* (no cellar: suspicious sand / archaeology needs brushing, left out) */
+}
+
+/* The desert pyramid's per-population biome answer: whether each of the four
+ * populations of the chunk being generated sits on a temple origin chunk in a
+ * desert (read in gen_slab before the populations run, where the biome layers
+ * may still use the shared scratch). */
+static uint8_t temple_pb[4];
+
+
+/* one population's temple, if (px,pz) is its origin chunk. No PR draws.
+ * `desert` is the biome answer for the origin's centre column, computed by
+ * gen_slab before the populations run: the biome layers use the same scratch
+ * the population view lives in, so they may not be asked here. */
+static void temple_try(int px, int pz, int desert) {
+    if (g_flat || g_dim) return;   /* overworld default only (flat has no deserts to hold one) */
+    if (pm_known && !pm->temple) return;   /* failed before */
+    int ox, oz;
+    JRand tr;
+    if (!temple_origin(px, pz, &ox, &oz, &tr)) {
+        return;
+    }
+    /* deserts only (desert_pyramid.json's biome tag) */
+    if (!desert) return;
+    int lowest = temple_lowest(ox, oz);
+    if (lowest < 0) return;
+    /* Below the sea: no temple. Modern's SinglePieceStructure asks getLowestY (the
+     * corners' first free cell) against the sea level (63, one above this world's
+     * water surface); the column summary floors a column's top at the water
+     * surface, so the same test here is the corner columns' top against SEA. */
+    int corner = temple_corner_lowest(ox, oz);
+    if (corner < SEA || corner > 250) return;
+    /* Modern's updateHeightPositionToLowestGroundHeight(level, -nextInt(3)):
+     * the piece's local y = 0 (the base box's top row) is the first free cell
+     * over the lowest ground column, buried 0..2 by the offset draw. */
+    int baseY = lowest + 1 - jr_int(&tr, 3);
+    if (baseY - 14 < 1 || baseY + 10 > 250) return;
+    pm->temple = 1;
+    temple_build(ox, oz, baseY);
+}
+
+/* is (x,y,z) one of a temple's four chests? (for the loot on first open) */
+/* The desert pyramid's placement grid: is the chunk holding (x, z) a cell the random
+ * spread picks (spacing 32, separation 8, salt 14357617)? No desert check and no
+ * world here: the caller has those (the generator when it builds, gui.c's chests
+ * when a chest is opened). */
+int temple_cell(int x, int z) {
+    int qx, qz;
+    JRand tr;
+    return temple_origin(x >> 4, z >> 4, &qx, &qz, &tr);
+}
+
+
 /* ---- one population ---- */
 
 static void populate(int px, int pz, int biome) {
@@ -5365,7 +5705,10 @@ static void populate(int px, int pz, int biome) {
     const Biome *b = bio(biome);
     jr_seed(&PR, (i64)((u64)(i64)px * (u64)pop_mul_x + (u64)(i64)pz * (u64)pop_mul_z) ^ g_seed);
     pmemo_begin(px, pz);
-    /* TODO: structures (mineshafts, villages, strongholds, temples, monuments) would draw here */
+    /* the desert pyramid first (no PR draws, so nothing else moves); its biome
+     * answer was read before the populations ran (temple_pb) */
+    temple_try(px, pz, temple_pb[px - (c_cx - 1) + ((pz - (c_cz - 1)) << 1)]);
+    /* TODO: structures (mineshafts, villages, strongholds, monuments) would draw here */
     if (b->id != BI_DESERT && b->id != BI_DESERT_HILLS && RI(4) == 0) {
         int x = PK + RI(16) + 8, y = RI(256), z = PL + RI(16) + 8;
         lake(B_WATER, x, y, z);
@@ -6587,6 +6930,14 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     /* the four populations writing into C (their biome is the one at +16, +16) */
     int pb[4]; /* World.getBiome(population origin + (16, 16)): block (0, 0) of the next chunk */
     for (int k = 0; k < 4; k++) pb[k] = nb[1 + (k >> 1)][1 + (k & 1)]->b00;
+    /* which of the four is a temple origin chunk in a desert (the layers may run
+     * here, before the populations take the scratch) */
+    for (int k = 0; k < 4; k++) {
+        int px = cx - 1 + (k & 1), pz = cz - 1 + (k >> 1);
+        int ox, oz;
+        JRand tr;
+        temple_pb[k] = temple_origin(px, pz, &ox, &oz, &tr) && gen_biome(ox * 16 + 8, oz * 16 + 8) == BI_DESERT;
+    }
     populate(cx - 1, cz - 1, pb[0]);
     populate(cx, cz - 1, pb[1]);
     populate(cx - 1, cz, pb[2]);

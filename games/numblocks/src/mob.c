@@ -1136,4 +1136,5 @@ void mob_tick(Entity *e) {
     }
   }
   if (e->y < (float)VOID_Y) e->type = E_NONE;   /* fell into the void */
+  else temple_trap(e->x, e->y, e->z);   /* the pyramid's plate (stone plates take mobs too) */
 }

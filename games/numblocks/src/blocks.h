@@ -446,7 +446,12 @@ enum {
   B_DEEPSLATE_DIAMOND_ORE = 439,   /* 253:5 */
   B_DEEPSLATE_LAPIS_ORE = 440,   /* 253:6 */
   B_DEEPSLATE_EMERALD_ORE = 441,   /* 253:7 */
-  B_COUNT = 442
+  B_STONE_PRESSURE_PLATE = 442,   /* 70:0 */
+  B_SANDSTONE_STAIRS = 443,   /* 128:0 */
+  B_SANDSTONE_STAIRS_W = 444,   /* 128:1 */
+  B_SANDSTONE_STAIRS_S = 445,   /* 128:2 */
+  B_SANDSTONE_STAIRS_N = 446,   /* 128:3 */
+  B_COUNT = 447
 };
 
 /* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the

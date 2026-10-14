@@ -274,7 +274,7 @@ static bool can_stay(int b, int x, int y, int z) {
   if (b == B_TORCH_W) return blk_flags[world_get(x + 1, y, z)] & BF_OPAQUE;
   if (b == B_TORCH_S) return blk_flags[world_get(x, y, z - 1)] & BF_OPAQUE;
   if (b == B_TORCH_N) return blk_flags[world_get(x, y, z + 1)] & BF_OPAQUE;
-  if (b == B_SNOW_LAYER || b == B_RAIL) return solid_top(below);
+  if (b == B_SNOW_LAYER || b == B_RAIL || b == B_STONE_PRESSURE_PLATE) return solid_top(below);
   if (b == B_DOOR_OAK_UPPER) return is_door_lower(world_get(x, y - 1, z));
   if (is_door_lower(b)) return solid_top(below) && world_get(x, y + 1, z) == B_DOOR_OAK_UPPER;
   if (b == B_BED_FOOT || b == B_BED_HEAD) {
@@ -565,10 +565,15 @@ static bool place(int b) {
   }
   /* the way the player looks: 0 south, 1 west, 2 north, 3 east */
   int way = (int)floorf(pl.yaw / 90 + 0.5f) & 3;
-  if (b == B_OAK_STAIRS || b == B_COBBLESTONE_STAIRS) {
+  if (b == B_OAK_STAIRS || b == B_COBBLESTONE_STAIRS || b == B_SANDSTONE_STAIRS) {
     /* BlockStairs: rising the way the player looks */
     static const int8_t off[4] = {2, 1, 3, 0};   /* _S, _W, _N, (east) */
-    if (way != 3) b = (b == B_OAK_STAIRS ? B_OAK_STAIRS_W : B_COBBLESTONE_STAIRS_W) + 2 * (off[way] - 1);
+    if (way != 3) {
+      /* (the oak and cobblestone states are laid out interleaved, two apart; the
+       * sandstone ones sit together) */
+      if (b == B_SANDSTONE_STAIRS) b = B_SANDSTONE_STAIRS + off[way];
+      else b = (b == B_OAK_STAIRS ? B_OAK_STAIRS_W : B_COBBLESTONE_STAIRS_W) + 2 * (off[way] - 1);
+    }
   }
   if (b == B_DOOR_OAK_LOWER) {
     static const uint8_t door[4] = {B_DOOR_OAK_LOWER_S, B_DOOR_OAK_LOWER_W, B_DOOR_OAK_LOWER_N, B_DOOR_OAK_LOWER};
@@ -1005,6 +1010,25 @@ static void spectate_tick(uint32_t keys, uint32_t pressed) {
   pl.in_water = in_liquid();
 }
 
+/* the desert pyramid's trap: the stone pressure plate lights its nine TNT.
+ * Stood on, it lights the 3 x 3 TNT two below it (the chamber floor in between),
+ * as fire and flint and steel light TNT elsewhere (tick.c, player.c's use).
+ * The pyramid needs no redstone anywhere; the plate is the one place a redstone
+ * block behaves. Player and mobs both set it off (stone plates do). */
+void temple_trap(float x, float y, float z) {
+  int bx = ifloor(x), bz = ifloor(z), by = ifloor(y + 0.1f);
+  if (world_get(bx, by, bz) != B_STONE_PRESSURE_PLATE) return;
+  for (int dx = -1; dx <= 1; dx++)
+    for (int dz = -1; dz <= 1; dz++) {
+      int tx = bx + dx, ty = by - 2, tz = bz + dz;
+      if (world_get(tx, ty, tz) == B_TNT) {
+        world_set(tx, ty, tz, B_AIR);
+        neighbours_changed(tx, ty, tz);
+        tnt_light(tx, ty, tz, 80);
+      }
+    }
+}
+
 void player_tick(uint32_t keys, uint32_t pressed) {
   if (pl.dead) return;
   if (pl.mode == 2) {
@@ -1124,6 +1148,7 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   pl.bob += (want - pl.bob) * 0.4f;
   if (pl.mode == 0) exhaust(moved * (pl.in_water ? 0.015f : pl.sprinting ? 0.1f : 0.0f));
   hazards(y0);
+  temple_trap(pl.x, pl.y, pl.z);
   portal_tick();
   effects_tick();
   if (pl.mode == 0) food_tick();

@@ -52,6 +52,15 @@
  *        [--caves]      (the deep layer's 1.17-1.19 caves: the camera dropped into a deep
  *                         cavern, lit by glowstone, looking along it - the noise caves under
  *                         the surface world; Creative, Peaceful)
+ *        [--temple]     (the desert pyramid: the nearest one by the modern grid -
+ *                         spacing 32, separation 8, salt 14357617, deserts only - the
+ *                         player outside its entrance looking at it, Creative,
+ *                         Peaceful; the log names its origin chunk, its base row,
+ *                         its plate, its TNT and its four chests)
+ *        [--templetrap] (with --temple: the player in the burial chamber on the
+ *                         plate instead, Creative, Peaceful, lit by the rig's own
+ *                         glowstone; the plate lights the nine TNT and the frames
+ *                         run past the fuse - the log counts the TNT gone)
  *        [--xray]       (the spectator's water and lava holes: the head inside the stone
  *                         block over a pool of water, a lava block against the block's
  *                         side - looking down, the water under the block and the lava
@@ -83,6 +92,7 @@ static Hold holds[512];
 static int nholds;
 static RHold rholds[64];
 static int nrholds;
+static int temple_plate[3], temple_tnt[9][3];   /* --templetrap's report after the frames */
 
 static uint32_t key_bit(const char *s) {
   static const struct { const char *n; uint32_t k; } t[] = {
@@ -103,6 +113,7 @@ int main(int argc, char **argv) {
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
   int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, drain = 0, placing = 0, xray = 0, lava = 0, deep = 0, caves = 0;
+  int temple = 0, templetrap = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0, contrast = 0, panorama = -1;
@@ -136,6 +147,8 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--xray")) xray = 1;
     else if (!strcmp(argv[i], "--deep")) deep = 1;
     else if (!strcmp(argv[i], "--caves")) caves = 1;
+    else if (!strcmp(argv[i], "--temple")) temple = 1;
+    else if (!strcmp(argv[i], "--templetrap")) temple = 1, templetrap = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
     else if (!strcmp(argv[i], "--contrast")) contrast = 1;
@@ -182,6 +195,136 @@ int main(int argc, char **argv) {
   start_in_world = !title_screen;
   start_type = flat ? WT_FLAT : WT_DEFAULT;
   game_init();
+  if (temple) {
+    /* The desert pyramid: the nearest one by the modern grid (spacing 32,
+     * separation 8, salt 14357617, deserts only). The placement is modern's
+     * RandomSpreadStructurePlacement, re-rolled here from the world seed (Java's
+     * Random, same as the generator's JRand, inlined so the rig does not touch
+     * the generator's streams); the biome is the cache's own vbiome after the
+     * candidate is generated (no gen_biome calls outside world_follow: the
+     * layers need their scratch). Each desert candidate gets its cache dropped
+     * to the chamber and is looked for the pyramid's own blocks (no desert makes
+     * cut or chiseled sandstone, stairs, terracotta, a plate or a chest); the
+     * first that stands is where the player goes. --templetrap stands the player
+     * in the chamber on the plate instead, lit by the rig's glowstone: the plate
+     * lights the nine TNT, the frames run past the 80-tick fuse, and the log's
+     * last line counts the TNT gone. Creative and Peaceful either way, Overworld
+     * only; the log names the origin chunk, the base row, the plate, the TNT and
+     * the four chests. */
+    nether = roof = 0;
+    extern int64_t world_seed;
+    int found = 0, plate[3] = {0, 0, 0}, tnt[9][3], ntnt = 0, ch[4][3] = {{0, 0, 0}}, nch = 0;
+    int cnt2 = 0, tox = 0, toz = 0;
+    {
+      int scx = (int)floorf(pl.x / 16), scz = (int)floorf(pl.z / 16);
+      int sgx = scx >= 0 ? scx / 32 : (scx - 31) / 32;
+      int sgz = scz >= 0 ? scz / 32 : (scz - 31) / 32;
+      for (int gr = 0; gr <= 8 && !found; gr++) {
+        for (int gz = sgz - gr; gz <= sgz + gr && !found; gz++)
+          for (int gx = sgx - gr; gx <= sgx + gr && !found; gx++) {
+            if (gr > 0 && gx > sgx - gr && gx < sgx + gr && gz > sgz - gr && gz < sgz + gr)
+              continue;
+            int64_t s = (int64_t)gx * 341873128712LL + (int64_t)gz * 132897987541LL + world_seed + 14357617;
+            uint64_t ts = ((uint64_t)s ^ 0x5DEECE66DLL) & ((1ULL << 48) - 1);
+            int sx, sz;
+            { /* nextInt(24) twice */
+              int n = 24, bits, val;
+              do { ts = (ts * 0x5DEECE66DLL + 0xBLL) & ((1ULL << 48) - 1); bits = (int)(ts >> 17); val = bits % n; }
+              while ((int)((unsigned)bits - (unsigned)val + (unsigned)(n - 1)) < 0);
+              sx = val;
+              do { ts = (ts * 0x5DEECE66DLL + 0xBLL) & ((1ULL << 48) - 1); bits = (int)(ts >> 17); val = bits % n; }
+              while ((int)((unsigned)bits - (unsigned)val + (unsigned)(n - 1)) < 0);
+              sz = val;
+            }
+            int ox = gx * 32 + sx, oz = gz * 32 + sz;
+            float oxf = ox * 16 + 10.5f, ozf = oz * 16 + 10.5f;
+            world_follow(oxf, 70, ozf);
+            while (world_pending()) world_follow(oxf, 70, ozf);
+            /* desert? (the cache's own biome at the chunk's centre: +8, +8 is where
+             * the piece's own check asks) */
+            int clx = (ox * 16 + 8) - vc_x0, clz = (oz * 16 + 8) - vc_z0;
+            if (clx < 0 || clx >= VCX || clz < 0 || clz >= VCZ) continue;
+            if (vbiome[clz * VCX + clx] != 2) continue;
+            /* the chamber sits 12..9 below the pyramid's base row: drop the cache
+             * there and count the pyramid's own blocks (never in a desert) */
+            world_follow(oxf, 50, ozf);
+            while (world_pending()) world_follow(oxf, 50, ozf);
+            int cnt = 0;
+            for (int z = oz * 16; z < oz * 16 + 21; z++)
+              for (int x = ox * 16; x < ox * 16 + 21; x++)
+                for (int y = 40; y < 64; y++) {
+                  int b = world_get(x, y, z);
+                  if (b == B_SANDSTONE_SMOOTH || b == B_SANDSTONE_CHISELED || b == B_STAINED_CLAY_ORANGE ||
+                      b == B_STAINED_CLAY_BLUE || b == B_SANDSTONE_STAIRS || b == B_SANDSTONE_STAIRS_W ||
+                      b == B_SANDSTONE_STAIRS_S || b == B_SANDSTONE_STAIRS_N || b == B_STONE_PRESSURE_PLATE ||
+                      b == B_CHEST || b == B_TNT || b == B_SANDSTONE_SLAB)
+                    cnt++;
+                }
+            if (cnt < 20) continue;
+            /* the plate, the TNT and the four chests of the chamber (in the cache) */
+            for (int z = oz * 16; z < oz * 16 + 21; z++)
+              for (int x = ox * 16; x < ox * 16 + 21; x++)
+                for (int y = 40; y < 64; y++) {
+                  int b = world_get(x, y, z);
+                  if (b == B_SANDSTONE_SMOOTH || b == B_SANDSTONE_CHISELED) cnt2++;
+                  if (b == B_STONE_PRESSURE_PLATE && !plate[0]) plate[0] = x, plate[1] = y, plate[2] = z;
+                  else if (b == B_TNT && ntnt < 9) tnt[ntnt][0] = x, tnt[ntnt][1] = y, tnt[ntnt][2] = z, ntnt++;
+                  else if (b == B_CHEST && nch < 4) ch[nch][0] = x, ch[nch][1] = y, ch[nch][2] = z, nch++;
+                }
+            if (!plate[0] || ntnt != 9 || nch != 4) continue;   /* not the temple after all */
+            found = 1, tox = ox, toz = oz;
+          }
+      }
+    }
+    if (found) {
+      int ox = tox, oz = toz;
+      pl.mode = 1; pl.flying = false;
+      opt.difficulty = 0;
+      if (templetrap) {
+        pl.x = plate[0] + 0.5f; pl.y = (float)plate[1]; pl.z = plate[2] + 0.5f;
+        pl.yaw = 0, pl.pitch = 6;   /* (the corridor out of the chamber is ahead) */
+      } else {
+        /* Over the pyramid's north slope, flying: the cache's 40 x 40 reaches the
+         * whole footprint only from here, and a whole pyramid is what the frame
+         * should show. */
+        int baseY = plate[1] + 11;   /* (the plate sits 11 below the base's top row) */
+        pl.x = ox * 16 + 10 + 0.5f;
+        pl.z = oz * 16 - 8 + 0.5f;
+        pl.y = (float)(baseY + 8);
+        pl.flying = true;
+        pl.yaw = 0;        /* (+z: the entrance face is the pyramid's low-z side) */
+        pl.pitch = 20;     /* (down a little: the stepped face and the towers) */
+      }
+      world_follow(pl.x, pl.y, pl.z);
+      while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+      if (templetrap) {
+        /* the chamber has no light of its own: the rig's four glowstone floor corners
+         * (bright, but inside the blast's reach) and two halfway up the shaft (out of
+         * its reach), so the room and then the crater are readable */
+        world_set(plate[0] - 1, plate[1], plate[2] - 1, B_GLOWSTONE);
+        world_set(plate[0] + 1, plate[1], plate[2] - 1, B_GLOWSTONE);
+        world_set(plate[0] - 1, plate[1], plate[2] + 1, B_GLOWSTONE);
+        world_set(plate[0] + 1, plate[1], plate[2] + 1, B_GLOWSTONE);
+        world_set(plate[0] - 1, plate[1] + 5, plate[2] - 1, B_GLOWSTONE);
+        world_set(plate[0] + 1, plate[1] + 5, plate[2] + 1, B_GLOWSTONE);
+      }
+      camera_reset();
+      for (int k = 0; k < 3; k++) temple_plate[k] = plate[k];
+      for (int k = 0; k < 9; k++) memcpy(temple_tnt[k], tnt[k], sizeof tnt[k]);
+      fprintf(stderr, "temple: origin chunk %d %d (blocks %d..%d, %d..%d), base row %d (plate row + 11)\n", ox, oz,
+              ox * 16, ox * 16 + 20, oz * 16, oz * 16 + 20, plate[1] + 11);
+      fprintf(stderr, "temple: %d cut/chiseled blocks, plate %d %d %d, TNT %d blocks from %d %d %d, chests %d:",
+              cnt2, plate[0], plate[1], plate[2], ntnt, tnt[0][0], tnt[0][1], tnt[0][2], nch);
+      for (int k = 0; k < nch; k++) fprintf(stderr, " %d %d %d", ch[k][0], ch[k][1], ch[k][2]);
+      fprintf(stderr, "\n");
+      fprintf(stderr, "temple: the player at %.1f %.1f %.1f %s\n", pl.x, pl.y, pl.z,
+              templetrap ? "on the plate (the TNT lights on the first tick)" : "outside the entrance");
+    } else {
+      fprintf(stderr, "temple: none found near spawn (seed %lld)\n", (long long)world_seed);
+      pl.mode = 1;
+      opt.difficulty = 0;
+    }
+  }
   if (nether) {
     /* the nether: the player stands where there is room (the lava and the glowstone
      * are what lights it, so a glowstone goes over the spot), looking down at the
@@ -750,6 +893,14 @@ int main(int argc, char **argv) {
   printf("between per frame: %.0f disagree, %.0f kind0, %.0f face fail, %.0f face ok, %.0f sky\n", (double)st_dis / frames, (double)st_k0 / frames, (double)st_fpfail / frames, (double)st_fpok / frames, (double)st_sky / frames);
   printf("per pixel: %.1f steps, %.2f texels, %.2f jumps\n", (double)st_steps / st_pixels, (double)st_texels / st_pixels, (double)st_jumps / st_pixels);
   printf("player: mode %d, %.1f %.1f %.1f, health %.1f, dead %d\n", pl.mode, pl.x, pl.y, pl.z, pl.health, pl.dead);
+  if (templetrap && temple_plate[0]) {
+    /* the plate lights the nine TNT at once; the fuse is 80 ticks (tnt.c), so a run
+     * of 100 frames or more ends past the blast */
+    int gone = 0;
+    for (int k = 0; k < 9; k++)
+      if (world_get(temple_tnt[k][0], temple_tnt[k][1], temple_tnt[k][2]) != B_TNT) gone++;
+    fprintf(stderr, "templetrap: after %d frames, %d of the 9 TNT blocks are gone from the chamber\n", frames, gone);
+  }
   printf("init %.1f ms, %.2f ms a frame (host), the slowest %.1f ms (frame %d)\n", init_ms,
          (clock() - c0) * 1000.0 / CLOCKS_PER_SEC / frames, slowest, slowest_at);
   return 0;

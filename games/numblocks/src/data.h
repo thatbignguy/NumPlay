@@ -366,7 +366,7 @@ extern const uint16_t it_icon[N_ITEMS], it_dur[N_ITEMS], it_fuel[N_ITEMS];
 extern const uint8_t it_kind[N_ITEMS], it_stack[N_ITEMS], it_tier[N_ITEMS], it_a[N_ITEMS], it_b[N_ITEMS];
 extern const uint8_t it_place[N_ITEMS];   /* the block it places (255: none) */
 typedef struct { uint16_t out; uint8_t n, w, h; uint16_t in[9]; } Recipe;   /* w 0: shapeless, h of them */
-#define N_RECIPES 208
+#define N_RECIPES 210
 extern const Recipe recipes[N_RECIPES];
 #define N_SMELTING 28
 extern const uint16_t smelting[N_SMELTING][2];

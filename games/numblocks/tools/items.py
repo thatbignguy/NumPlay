@@ -191,6 +191,7 @@ LABELS = {
     'DEEPSLATE_IRON_ORE': 'Deepslate Iron Ore', 'DEEPSLATE_GOLD_ORE': 'Deepslate Gold Ore',
     'DEEPSLATE_REDSTONE_ORE': 'Deepslate Redstone Ore', 'DEEPSLATE_DIAMOND_ORE': 'Deepslate Diamond Ore',
     'DEEPSLATE_LAPIS_ORE': 'Deepslate Lapis Lazuli Ore', 'DEEPSLATE_EMERALD_ORE': 'Deepslate Emerald Ore',
+    'STONE_PRESSURE_PLATE': 'Stone Pressure Plate', 'SANDSTONE_STAIRS': 'Sandstone Stairs',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
@@ -213,7 +214,9 @@ for c, l in zip(COLORS, CLAB):
 ITEM_OF = {'PORTAL_NS': None, 'PORTAL_EW': None,   # the nether portal: the game's own, never an item
            'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
            'COBBLESTONE_STAIRS_W': 'COBBLESTONE_STAIRS', 'COBBLESTONE_STAIRS_S': 'COBBLESTONE_STAIRS',
-           'COBBLESTONE_STAIRS_N': 'COBBLESTONE_STAIRS', 'GRASS_SNOWED': 'GRASS', 'FURNACE_LIT': 'FURNACE', 'TORCH_E': 'TORCH', 'TORCH_W': 'TORCH',
+           'COBBLESTONE_STAIRS_N': 'COBBLESTONE_STAIRS',
+           'SANDSTONE_STAIRS_W': 'SANDSTONE_STAIRS', 'SANDSTONE_STAIRS_S': 'SANDSTONE_STAIRS',
+           'SANDSTONE_STAIRS_N': 'SANDSTONE_STAIRS', 'GRASS_SNOWED': 'GRASS', 'FURNACE_LIT': 'FURNACE', 'TORCH_E': 'TORCH', 'TORCH_W': 'TORCH',
            'TORCH_S': 'TORCH', 'TORCH_N': 'TORCH', 'FARMLAND_WET': 'FARMLAND', 'DOOR_OAK_LOWER': 'I:WOODEN_DOOR',
            'DOOR_OAK_UPPER': 'I:WOODEN_DOOR', 'BED_FOOT': 'I:BED', 'BED_HEAD': 'I:BED', 'SUGAR_CANE': 'I:REEDS',
            'BROWN_MUSHROOM_INSIDE': 'BROWN_MUSHROOM_CAP', 'BROWN_MUSHROOM_STEM': 'BROWN_MUSHROOM_CAP',
@@ -405,6 +408,8 @@ shapeless('FLINT_AND_STEEL', 1, ['IRON_INGOT', 'FLINT'])
 shaped('BREAD', 1, ['###'], {'#': 'WHEAT'})
 shaped('OAK_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'PLANKS_OAK'})
 shaped('COBBLESTONE_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'COBBLESTONE'})
+shaped('SANDSTONE_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'SANDSTONE'})
+shaped('STONE_PRESSURE_PLATE', 1, ['##'], {'#': 'STONE'})
 shaped('GOLDEN_APPLE', 1, ['###', '#X#', '###'], {'#': 'GOLD_INGOT', 'X': 'APPLE'})
 shaped('CLOCK', 1, [' # ', '#X#', ' # '], {'#': 'GOLD_INGOT', 'X': 'REDSTONE'})
 shaped('COMPASS', 1, [' # ', '#X#', ' # '], {'#': 'IRON_INGOT', 'X': 'REDSTONE'})
@@ -456,7 +461,8 @@ NATURAL_ONLY = ('SNOW_LAYER', 'SOUL_SAND', 'NETHER_QUARTZ_ORE')   # natural, but
 # Snow Block is already in Building Blocks, and soul sand and quartz ore are the nether's
 # ground and veins (quartz ore groups with the other ores through tab_group's _ORE rule)
 # blocks that do something rather than just sit there (Minecraft's decoration tab, most of it)
-FUNC = ('TNT', 'TORCH', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'RAIL')
+FUNC = ('TNT', 'TORCH', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'RAIL',
+        'STONE_PRESSURE_PLATE')
 # of those, the ones that fill a whole cube, so they go first in their tab
 FUNC_FULL = ('TNT', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE')
 # what is left of Minecraft's decoration tab: plants, bushes and leaves

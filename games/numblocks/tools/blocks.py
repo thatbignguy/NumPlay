@@ -294,6 +294,23 @@ b('DEEPSLATE_REDSTONE_ORE', 253, 4, tex='deepslate_redstone_ore', hard=3.0, tool
 b('DEEPSLATE_DIAMOND_ORE', 253, 5, tex='deepslate_diamond_ore', hard=3.0, tool='pickaxe', level=2)
 b('DEEPSLATE_LAPIS_ORE', 253, 6, tex='deepslate_lapis_ore', hard=3.0, tool='pickaxe', level=1)
 b('DEEPSLATE_EMERALD_ORE', 253, 7, tex='deepslate_emerald_ore', hard=3.0, tool='pickaxe', level=2)
+# --- the desert pyramid's blocks (1.8 ids 70 and 128, the pyramid is the first
+# structure). The stone pressure plate is 1.8's id 70: a thin plate (the flat
+# model, one texel high), stone's picture (modern has no plate picture of its
+# own - its model textures the plate with stone). The sandstone stairs are 1.8's
+# id 128, with their four facings as the oak stairs have them (BlockStairs: 0
+# east, 1 west, 2 south, 3 north). CUT_SANDSTONE needs no state of its own: the
+# 24:0-24:2 trio maps to modern sandstone, chiselled sandstone and cut sandstone
+# (tools/modern_map.py: sandstone_smooth -> cut_sandstone), so the pyramid's cut
+# sandstone is the existing SANDSTONE_SMOOTH state; the orange and blue
+# terracotta are the existing STAINED_CLAY_ORANGE/BLUE, the slab, TNT and the
+# chest are in already.
+b('STONE_PRESSURE_PLATE', 70, 0, model='flat', tex='stone', hard=0.5, tool='pickaxe')
+_SANDSTAIRS_TEX = tsb('sandstone_top', 'sandstone_normal', 'sandstone_bottom')
+b('SANDSTONE_STAIRS', 128, 0, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
+b('SANDSTONE_STAIRS_W', 128, 1, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
+b('SANDSTONE_STAIRS_S', 128, 2, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
+b('SANDSTONE_STAIRS_N', 128, 3, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
 
 assert len(S) <= NSTATES, len(S)
 

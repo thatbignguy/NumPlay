@@ -777,6 +777,78 @@ void tiles_forget(int x, int y, int z) {
   if (f) f->used = 0;
 }
 
+/* The desert pyramid's chests: is (x, y, z) one of the four the piece holds? The
+ * placement grid (gen.c) says which chunks are a temple's; the chamber's own blocks
+ * about the chest say the chest is the piece's and not one put there later. The loot
+ * is drawn from the world seed and the place on the first open (temple_fill), so
+ * nothing new is stored. */
+static int temple_chest_at(int x, int y, int z) {
+  static const int8_t ch[4][2] = {{10, 8}, {12, 10}, {10, 12}, {8, 10}};
+  for (int k = 0; k < 4; k++) {
+    if (((x - ch[k][0]) & 15) != 0 || ((z - ch[k][1]) & 15) != 0) continue;   /* (the chests sit on the chunk's corner) */
+    if (!temple_cell(x - ch[k][0], z - ch[k][1])) continue;
+    /* the chamber about it: the piece's floor under the chest (cut sandstone; the
+     * chiselled and plain rows tolerated, a floor that has been dug at) and the air
+     * its niche was carved into */
+    int below = world_get(x, y - 1, z);
+    if (below != B_SANDSTONE_SMOOTH && below != B_SANDSTONE_CHISELED && below != B_SANDSTONE) continue;
+    if (world_get(x, y + 1, z) != B_AIR) continue;
+    return 1;
+  }
+  return 0;
+}
+
+/* The desert pyramid's four chests: modern's desert_pyramid.json loot, drawn on
+ * first open from the world seed and the chest's own place (no storage, same world
+ * same loot). Main pool 2-4 rolls, bone pool 4 rolls; the trim pool (dune trim, empty)
+ * gives nothing here. No item for horse armours, enchanted golden apple or trim:
+ * dropped (plain book for the enchanted book). Empty entries give nothing. */
+static void temple_fill(Chest *c, int x, int y, int z) {
+  uint32_t old = rnd_seed(0);
+  /* seed from world seed and place (deterministic, same world same loot) */
+  uint64_t h = (uint64_t)world_seed + (uint64_t)(x + 1) * 374761393ULL + (uint64_t)(y + 1) * 668265263ULL +
+               (uint64_t)(z + 1) * 1274126177ULL;
+  h = (h ^ (h >> 30)) * 0xBF58476D1CE4E5B9ULL;
+  h ^= h >> 27;
+  rnd_seed((uint32_t)(h ? h : 0x2545F491));
+  /* main pool (weight total 247) */
+  static const struct { uint16_t id; uint8_t w, lo, hi; } main[] = {
+    {I_DIAMOND, 5, 1, 3}, {I_IRON_INGOT, 15, 1, 5}, {I_GOLD_INGOT, 15, 2, 7}, {I_EMERALD, 15, 1, 3},
+    {I_BONE, 25, 4, 6}, {I_SPIDER_EYE, 25, 1, 3}, {I_ROTTEN_FLESH, 25, 3, 7}, {I_LEATHER, 20, 1, 5},
+    {0, 15, 0, 0}, {0, 15, 0, 0}, {0, 10, 0, 0}, {0, 5, 0, 0},   /* horse armours: none */
+    {I_BOOK, 20, 1, 1}, {I_GOLDEN_APPLE, 20, 1, 1}, {0, 2, 0, 0},   /* enchanted apple: none */
+    {0, 15, 0, 0},   /* empty */
+  };
+  int rolls = 2 + rnd(3);
+  for (int r = 0; r < rolls; r++) {
+    int pick = rnd(247), k = 0;
+    while (k < 15 && (pick -= main[k].w) >= 0) k++;
+    if (k >= 16 || !main[k].id) continue;
+    int n = main[k].lo + rnd(main[k].hi - main[k].lo + 1);
+    /* random empty slot */
+    int empty[27], ne = 0;
+    for (int i = 0; i < 27; i++) if (!c->s[i].id) empty[ne++] = i;
+    if (!ne) break;
+    int s = empty[rnd(ne)];
+    c->s[s].id = main[k].id;
+    c->s[s].aux = (uint16_t)n;
+  }
+  /* bone pool: 4 rolls, 5 entries weight 10 each, counts 1-8 */
+  static const uint16_t bone[] = {I_BONE, I_GUNPOWDER, I_ROTTEN_FLESH, I_STRING, B_SAND};
+  for (int r = 0; r < 4; r++) {
+    int k = rnd(5);
+    int n = 1 + rnd(8);
+    int empty[27], ne = 0;
+    for (int i = 0; i < 27; i++) if (!c->s[i].id) empty[ne++] = i;
+    if (!ne) break;
+    int s = empty[rnd(ne)];
+    c->s[s].id = bone[k];
+    c->s[s].aux = (uint16_t)n;
+  }
+  /* (trim pool: dune trim or empty - no item here, nothing) */
+  rnd_seed(old);
+}
+
 /* TileEntityFurnace.update */
 static bool can_smelt(const Furnace *f) {
   if (!f->s[0].id) return false;
@@ -952,15 +1024,18 @@ void gui_open(int screen, int x, int y, int z) {
         cur = 45;
       }
       break;
-    case GUI_CHEST:
+    case GUI_CHEST: {
+      bool fresh = !chest_at(x, y, z, false);
       chest = chest_at(x, y, z, true);
       if (!chest) {
         gui = GUI_NONE;
         return;
       }
+      if (fresh && temple_chest_at(x, y, z)) temple_fill(chest, x, y, z);
       panel_h = 167;
       cur = 27 + 27;
       break;
+    }
   }
   panel_x = (SCREEN_W - (screen == GUI_CREATIVE ? 195 : 176)) / 2;
   panel_y = (SCREEN_H - panel_h) / 2;

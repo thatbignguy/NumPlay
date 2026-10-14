@@ -17,7 +17,7 @@ what "done" means. Order matters only where noted.
       Basalt Deltas; each with its own surface, its own blocks (the crimson
       and warped nyliums, stems, planks, roots and vines, soul soil and soul
       fire, bone blocks) and its own fog.
-- [ ] **[23] Basic structures** — the world makes terrain, dungeons and lakes
+- [x] **[23] Basic structures** — the world makes terrain, dungeons and lakes
       and no structures: a placement pass, the desert pyramid first, working
       and looking exactly as modern Minecraft makes it (`26.3.jar`).
 - [ ] **[24] Under-lava fog and overlay** — the eye in lava reads like the eye

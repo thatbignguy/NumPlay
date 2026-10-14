@@ -2408,6 +2408,206 @@ int main(void) {
     opt.brightness = 0;
     remove("build/unit-saves/numblocks.cfg");
   }
+  {
+    /* ---- the desert pyramid (todo [23]) ------------------------------------------
+     * Placed by the jar's RandomSpreadStructurePlacement (spacing 32, separation 8,
+     * salt 14357617, LINEAR) over deserts (1.21.5-26.3's has_structure tag), built
+     * by DesertPyramidPiece block for block, its plate the trap over nine TNT, its
+     * four chests filled from the jar's desert_pyramid loot table when first opened.
+     * The reference for every number here: the decompiled classes, replayed side by
+     * side with the generator's own box (tools-check, not in this file). */
+    static uint8_t s1[4][64 * 288 + 4], s2[4][64 * 288 + 4];
+    uint8_t gs[GEN_SCRATCH];
+    gen_scratch(gs);
+    gen_init(12345);
+    /* the first temple out from the origin grid cell: the placement's own formula
+     * (the grid cell, Java's Random, nextInt(spacing - separation) twice), deserts
+     * only - the biome the generator itself asks - then the chunk itself for the
+     * piece's plate, which nothing else in a desert makes */
+    int ox = 0, oz = 0, found = 0;
+    for (int gr = 0; gr <= 6 && !found; gr++)
+      for (int gz = -gr; gz <= gr && !found; gz++)
+        for (int gx = -gr; gx <= gr && !found; gx++) {
+          if (gr && gx > -gr && gx < gr && gz > -gr && gz < gr) continue;
+          int64_t s = (int64_t)gx * 341873128712LL + (int64_t)gz * 132897987541LL + 12345 + 14357617;
+          uint64_t r = ((uint64_t)s ^ 0x5DEECE66DLL) & ((1ULL << 48) - 1);
+          int sx = 0, sz = 0;
+          for (int k = 0; k < 2; k++) {
+            int bits, val;
+            do {
+              r = (r * 0x5DEECE66DLL + 0xBLL) & ((1ULL << 48) - 1);
+              bits = (int)(r >> 17);
+              val = bits % 24;
+            } while ((int)((unsigned)bits - (unsigned)val + 23u) < 0);
+            if (k) sz = val; else sx = val;
+          }
+          int cx = gx * 32 + sx, cz = gz * 32 + sz;
+          if (gen_biome(cx * 16 + 8, cz * 16 + 8) != 2) continue;   /* (BI_DESERT, gen.c's own enum) */
+          gen_slab(cx, cz, 40, 64, s1[0]);
+          for (int row = 0; row < 64 && !found; row++)
+            for (int i = 0; i < 256; i++)
+              if (b9_get(s1[0], row * 256 + i) == B_STONE_PRESSURE_PLATE) {
+                ox = cx, oz = cz, found = 1;
+                break;
+              }
+        }
+    CHECK(found);
+    CHECK(ox == 86 && oz == -14);   /* (the placement's answer for seed 12345: the nearest desert cell) */
+    /* the same temple from any direction: the 2x2's four chunks, made in two
+     * different orders, come out the same - the memo keeps the outcome and every
+     * write lands in the chunk it belongs to */
+    static const int dx4[4] = {0, 1, 0, 1}, dz4[4] = {0, 0, 1, 1};
+    for (int k = 0; k < 4; k++) gen_slab(ox + dx4[k], oz + dz4[k], 40, 64, s1[k]);
+    for (int k = 3; k >= 0; k--) gen_slab(ox + dx4[k], oz + dz4[k], 40, 64, s2[k]);
+    int diff = 0;
+    for (int k = 0; k < 4; k++)
+      for (int row = 0; row < 64; row++)
+        for (int i = 0; i < 256; i++)
+          diff += b9_get(s1[k], row * 256 + i) != b9_get(s2[k], row * 256 + i);
+    CHECK(diff == 0);
+    /* the piece: the base's top row (local y = 0) sits 11 above the plate */
+    int pr = -1;
+    for (int row = 0; row < 64 && pr < 0; row++)
+      if (b9_get(s1[0], row * 256 + 10 * 16 + 10) == B_STONE_PRESSURE_PLATE) pr = 40 + row;
+    CHECK(pr > 0);
+    int base = pr + 11;
+    int cut = 0, chi = 0, orn = 0, blu = 0, slb = 0, plt = 0, tnt = 0, cst = 0, st[4] = {0, 0, 0, 0};
+    for (int ly = -14; ly <= 10; ly++)
+      for (int lx = 0; lx < 21; lx++)
+        for (int lz = 0; lz < 21; lz++) {
+          int y = base + ly;
+          if (y < 40 || y > 103) continue;
+          int b = b9_get(s1[(lz >= 16) * 2 + (lx >= 16)], (y - 40) * 256 + (lz % 16) * 16 + (lx % 16));
+          switch (b) {
+            case B_SANDSTONE_SMOOTH: cut++; break;
+            case B_SANDSTONE_CHISELED: chi++; break;
+            case B_STAINED_CLAY_ORANGE: orn++; break;
+            case B_STAINED_CLAY_BLUE: blu++; break;
+            case B_SANDSTONE_SLAB: slb++; break;
+            case B_STONE_PRESSURE_PLATE: plt++; break;
+            case B_TNT: tnt++; break;
+            case B_CHEST: cst++; break;
+            case B_SANDSTONE_STAIRS: st[0]++; break;      /* (BlockStairs: 0 east, 1 west, 2 south, 3 north) */
+            case B_SANDSTONE_STAIRS_W: st[1]++; break;
+            case B_SANDSTONE_STAIRS_S: st[2]++; break;
+            case B_SANDSTONE_STAIRS_N: st[3]++; break;
+          }
+        }
+    CHECK(cut == 191 && chi == 39 && orn == 54 && blu == 1);
+    CHECK(st[0] == 3 && st[1] == 3 && st[2] == 2 && st[3] == 6);
+    CHECK(slb == 2 && plt == 1 && tnt == 9 && cst == 4);
+    /* and the cells it is known by: the base, the entrance, the shafts, the chamber,
+     * the pattern, the stairs' four ways and the slab pair */
+    static const int spot[][4] = {
+      {10, -11, 10, B_STONE_PRESSURE_PLATE}, {9, -13, 9, B_TNT}, {10, -13, 10, B_TNT}, {11, -13, 11, B_TNT},
+      {10, -11, 8, B_CHEST}, {12, -11, 10, B_CHEST}, {10, -11, 12, B_CHEST}, {8, -11, 10, B_CHEST},
+      {9, -11, 9, B_AIR}, {10, -1, 10, B_AIR}, {10, -4, 10, B_AIR},
+      {10, 0, 10, B_STAINED_CLAY_BLUE}, {10, 0, 7, B_STAINED_CLAY_ORANGE}, {0, 2, 2, B_STAINED_CLAY_ORANGE},
+      {20, 7, 3, B_STAINED_CLAY_ORANGE},
+      {4, 1, 5, B_SANDSTONE_SMOOTH}, {4, 2, 5, B_SANDSTONE_CHISELED}, {10, 5, 0, B_SANDSTONE_CHISELED},
+      {9, 3, 1, B_SANDSTONE_SMOOTH},
+      {2, 10, 0, B_SANDSTONE_STAIRS_N}, {2, 10, 4, B_SANDSTONE_STAIRS_S}, {0, 10, 2, B_SANDSTONE_STAIRS},
+      {4, 10, 2, B_SANDSTONE_STAIRS_W}, {2, 1, 2, B_SANDSTONE_STAIRS_W}, {18, 1, 2, B_SANDSTONE_STAIRS},
+      {2, 3, 4, B_SANDSTONE_STAIRS_N}, {2, 4, 5, B_SANDSTONE_STAIRS_N},
+      {1, 2, 2, B_SANDSTONE_SLAB}, {19, 2, 2, B_SANDSTONE_SLAB},
+      {0, -4, 0, B_SANDSTONE}, {20, 0, 20, B_SANDSTONE}, {5, 4, 10, B_SANDSTONE}, {5, 0, 5, B_SANDSTONE},
+      {15, 4, 15, B_SANDSTONE}, {6, 7, 10, B_SANDSTONE}, {14, 7, 10, B_SANDSTONE}, {0, 0, 0, B_SANDSTONE},
+      {4, 9, 4, B_SANDSTONE},
+    };
+    for (unsigned k = 0; k < sizeof spot / sizeof spot[0]; k++) {
+      int lx = spot[k][0], ly = spot[k][1], lz = spot[k][2];
+      int b = b9_get(s1[(lz >= 16) * 2 + (lx >= 16)], (base + ly - 40) * 256 + (lz % 16) * 16 + (lx % 16));
+      CHECK(b == spot[k][3]);
+    }
+    gen_scratch(NULL);
+    /* the world itself: the same temple comes out of the cache there (the summaries
+     * and the memo make the population decide the same), the plate lights the nine
+     * TNT under it, and a chest draws the loot table's items on its first open */
+    world_new(12345, "uttemple");
+    int wx = ox * 16 + 10, wz = oz * 16 + 10;
+    world_follow((float)wx + 0.5f, (float)pr, (float)wz + 0.5f);
+    while (world_pending()) world_follow((float)wx + 0.5f, (float)pr, (float)wz + 0.5f);
+    CHECK(world_get(wx, pr, wz) == B_STONE_PRESSURE_PLATE);
+    /* (the chests sit at the plate's own row: one and two out of the chamber's centre) */
+    CHECK(world_get(wx, pr, wz - 2) == B_CHEST && world_get(wx + 2, pr, wz) == B_CHEST &&
+          world_get(wx, pr, wz + 2) == B_CHEST && world_get(wx - 2, pr, wz) == B_CHEST);
+    memset(ents, 0, sizeof ents);
+    temple_trap((float)wx + 0.5f, (float)pr, (float)wz + 0.5f);
+    int moved = 0, lit = 0, stays = 0;
+    for (int dx = -1; dx <= 1; dx++)
+      for (int dz = -1; dz <= 1; dz++)
+        if (world_get(wx + dx, pr - 2, wz + dz) != B_TNT) moved++;
+    for (int i = 0; i < N_ENT; i++) lit += ents[i].type == E_TNT;
+    CHECK(moved == 9 && lit == 9);
+    /* and only the plate: five west there is no plate at that row */
+    temple_trap((float)wx - 4.5f, (float)pr, (float)wz + 0.5f);
+    for (int i = 0; i < N_ENT; i++) stays += ents[i].type == E_TNT;
+    CHECK(stays == 9);
+    /* the loot: the main pool's 2-4 rolls and the bone pool's four, each item in the
+     * table's own range (the four horse armours, the enchanted apple and the trim
+     * template are dropped: this game has no item for them) */
+    int got[64][2], n1 = 0;
+    memset(ents, 0, sizeof ents);
+    gui_open(GUI_CHEST, wx, pr, wz - 2);
+    CHECK(gui == GUI_CHEST);
+    gui_close();
+    tiles_removed(wx, pr, wz - 2);
+    for (int i = 0; i < N_ENT && n1 < 64; i++)
+      if (ents[i].type == E_ITEM)
+        got[n1][0] = ents[i].item.id, got[n1][1] = ents[i].item.aux, n1++;
+    CHECK(n1 >= 4 && n1 <= 8);
+    for (int i = 0; i < n1; i++) {
+      int id = got[i][0], n = got[i][1];
+      CHECK(id == I_DIAMOND || id == I_IRON_INGOT || id == I_GOLD_INGOT || id == I_EMERALD || id == I_BONE ||
+            id == I_SPIDER_EYE || id == I_ROTTEN_FLESH || id == I_LEATHER || id == I_BOOK ||
+            id == I_GOLDEN_APPLE || id == I_GUNPOWDER || id == I_STRING || id == B_SAND);
+      if (id == I_DIAMOND || id == I_EMERALD) CHECK(n >= 1 && n <= 3);
+      else if (id == I_IRON_INGOT) CHECK(n >= 1 && n <= 5);
+      else if (id == I_GOLD_INGOT) CHECK(n >= 2 && n <= 7);
+      else if (id == I_LEATHER) CHECK(n >= 1 && n <= 5);
+      else if (id == I_BOOK || id == I_GOLDEN_APPLE) CHECK(n == 1);
+      else CHECK(n >= 1 && n <= 8);   /* bone, spider eye, rotten flesh, gunpowder, string, sand */
+    }
+    /* the same chest again: the same items (the seed is the world seed and the place,
+     * nothing of the loot is stored) */
+    memset(ents, 0, sizeof ents);
+    gui_open(GUI_CHEST, wx, pr, wz - 2);
+    gui_close();
+    tiles_removed(wx, pr, wz - 2);
+    int n2 = 0, same = 1;
+    for (int i = 0; i < N_ENT; i++)
+      if (ents[i].type == E_ITEM) {
+        if (n2 >= n1 || ents[i].item.id != got[n2][0] || ents[i].item.aux != got[n2][1]) same = 0;
+        n2++;
+      }
+    CHECK(same && n2 == n1);
+    /* the sandstone stairs place the four ways a player looks, as the oak ones do
+     * (BlockStairs: 0 east, 1 west, 2 south, 3 north; the sandstone states sit
+     * together, unlike the oak and cobblestone ones) */
+    {
+      int tx = 3000, tz = 3000, ty = 70;
+      world_follow((float)tx + 0.5f, (float)ty, (float)tz + 0.5f);
+      while (world_pending()) world_follow((float)tx + 0.5f, (float)ty, (float)tz + 0.5f);
+      for (int dz = -3; dz <= 3; dz++)
+        for (int dx = -3; dx <= 3; dx++)
+          for (int dy = -1; dy <= 3; dy++) world_set(tx + dx, ty + dy, tz + dz, dy == -1 ? B_STONE : B_AIR);
+      pl.mode = 0, pl.flying = false, pl.dead = 0;
+      pl.x = (float)tx + 0.5f, pl.z = (float)tz + 0.5f, pl.y = (float)ty, pl.vy = 0;
+      static const int st4[4] = {B_SANDSTONE_STAIRS_S, B_SANDSTONE_STAIRS_W, B_SANDSTONE_STAIRS_N, B_SANDSTONE_STAIRS};
+      static const float yaw4[4] = {0.0f, 90.0f, 180.0f, 270.0f};   /* south, west, north, east */
+      static const int wx4[4] = {0, -1, 0, 1}, wz4[4] = {1, 0, -1, 0};
+      for (int w = 0; w < 4; w++) {
+        int ax = tx + wx4[w], az = tz + wz4[w];
+        world_set(ax, ty, az, B_AIR);   /* (the cell the stair goes into) */
+        memset(pl.inv, 0, sizeof pl.inv);
+        pl.inv[0].id = B_SANDSTONE_STAIRS, pl.inv[0].aux = 1, pl.slot = 0;
+        pl.yaw = yaw4[w], pl.pitch = 60;   /* (the floor a block ahead: the cell above it) */
+        player_look(pl.x, pl.y + 1.62f, pl.z, pl.yaw, pl.pitch);   /* (as main.c looks each frame) */
+        player_tick(K_USE, K_USE);
+        CHECK(world_get(ax, ty, az) == st4[w]);
+      }
+    }
+  }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);
   return fails != 0;
 }
