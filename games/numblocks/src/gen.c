@@ -6075,7 +6075,7 @@ static int neth_seed_biome(int cx, int cz) {
     }
 }
 static int nether_biome_at(int x, int z) {
-    enum { CELL = 192, RADIUS = 112 };
+    enum { CELL = 192, RADIUS = 120 };
     int r2 = RADIUS * RADIUS + 1;
     int cx = x >= 0 ? x / CELL : -((-x + CELL - 1) / CELL);
     int cz = z >= 0 ? z / CELL : -((-z + CELL - 1) / CELL);
@@ -6084,7 +6084,7 @@ static int nether_biome_at(int x, int z) {
         for (int dx = -1; dx <= 1; dx++) {
             int bio = neth_seed_biome(cx + dx, cz + dz);
             if (bio == BI_HELL) continue;
-            int ox = x - (cx + dx) * CELL + CELL / 2, oz = z - (cz + dz) * CELL + CELL / 2;
+            int ox = x - ((cx + dx) * CELL + CELL / 2), oz = z - ((cz + dz) * CELL + CELL / 2);
             int d2 = ox * ox + oz * oz;
             if (d2 <= r2 && d2 <= RADIUS * RADIUS) best = bio, r2 = d2;
         }

@@ -1,3 +1,13 @@
+## 1.5.46
+**Nether biomes are evenly sized and centered; no off-by-one seed placement patches**
+
+- Fix the lattice offset so each 192-block biome seed is placed at its cell centre. The previous
+  offset shifted every seed by half a cell, which cut forest/valley/wastes regions into small
+  disconnected patches.
+- Seed radius raised to 120 blocks, giving roughly one quarter wastes / one quarter each of
+  Crimson Forest, Warped Forest and Soul Sand Valley in open nether, with large connected
+  regions rather than isolated cells.
+
 ## 1.5.45
 **Big contiguous nether biomes; soul sand valleys are soul ground throughout**
 
