@@ -62,12 +62,13 @@ static bool open_to(int water, int b) {
  * the void; there is nothing here under the world to drain it into). The floor is the
  * deepslate layer's (gen.h's WORLD_MIN_Y); the nether keeps 0. Out of the cache is not air
  * either (the settle_fall rule, player.c): a fall whose ground is out of sight waits where
- * it is, and the pass asks again once the cache has moved and the ground is there. Java has
- * no such edge (its force-loaded chunks keep the region); this is the game's own cache, so
- * the rule is the game's own. */
+ * it is, and the pass asks again once the cache has moved and the ground is there. A column
+ * still to be made reads as stone (world_get) - solid, but equally unknown: it waits too.
+ * Java has no such edge (its force-loaded chunks keep the region); this is the game's own
+ * cache, so the rule is the game's own. */
 static int below(int x, int y, int z) {
   if (y <= dim_min_y()) return B_BEDROCK;
-  if (!world_loaded(x, y - 1, z)) return B_BEDROCK;
+  if (!world_loaded(x, y - 1, z) || world_pending_at(x, y - 1, z)) return B_BEDROCK;
   return world_get(x, y - 1, z);
 }
 
@@ -115,7 +116,8 @@ static bool mix(int x, int y, int z, int b) {
 }
 
 static void flow_into(int water, int x, int y, int z, int level) {
-  if (!world_loaded(x, y, z)) return;   /* out of the cache is not somewhere to go: the tail waits there too */
+  if (!world_loaded(x, y, z) || world_pending_at(x, y, z))
+    return;   /* out of the cache, or not made yet, is not somewhere to go: the tail waits there too */
   int b = world_get(x, y, z);
   if (!open_to(water, b)) return;
   if (!water && is_water(b)) {
@@ -127,18 +129,19 @@ static void flow_into(int water, int x, int y, int z, int level) {
 }
 
 /* how far (up to 4 for water, 2 for lava) a way down is going this way, 1000 if none,
- * -1 if unknown: a cell the cache does not hold reads as air (world_get), so an unloaded
- * neighbour must read unknown, never "nothing" - the update waits until the world that feeds
- * it is whole again (the settle_fall rule). Java has no such edge; this is the game's own. */
+ * -1 if unknown: a cell the cache does not hold reads as air (world_get), and one still
+ * to be made reads as stone - both unknown, never "nothing" - so the update waits until the
+ * world that feeds it is whole again (the settle_fall rule). Java has no such edge; this is
+ * the game's own. */
 static int slope_dist(int water, int x, int y, int z, int dist, int from, int max) {
   int best = 1000;
   for (int f = 2; f < 6; f++) {
     if (f == (from ^ 1)) continue;
     int nx = x + NX[f], nz = z + NZ[f];
-    if (!world_loaded(nx, y, nz)) return -1;
+    if (!world_loaded(nx, y, nz) || world_pending_at(nx, y, nz)) return -1;
     int b = world_get(nx, y, nz);
     if ((blk_flags[b] & BF_SOLID) || (same(water, b) && level_of(b) == 0)) continue;
-    if (y > dim_min_y() && !world_loaded(nx, y - 1, nz)) return -1;
+    if (y > dim_min_y() && (!world_loaded(nx, y - 1, nz) || world_pending_at(nx, y - 1, nz))) return -1;
     if (open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))) return dist;
     if (dist < max) {
       int d = slope_dist(water, nx, y, nz, dist + 1, f, max);
@@ -153,20 +156,24 @@ static void fluid_update(int x, int y, int z) {
   int b = world_get(x, y, z);
   if (blk_model[b] != M_LIQUID) return;
   int water = is_water(b);
-  /* At the cache's edge an unloaded cell reads as air, so a stream whose source leaves the
-   * loaded cache drains to nothing: the update finds no same-liquid neighbour and airs the
-   * block. An unloaded neighbour is unknown, never "nothing", so the liquid stands until the
-   * world that feeds it is whole again - the same "wait for the world to be whole" settle_fall
-   * uses. If any cell the update reads is out of the cache it does nothing this run; the
-   * settle pass (world.c) wakes it again once the move's chunks are whole. */
-  if (!world_loaded(x + 1, y, z) || !world_loaded(x - 1, y, z) || !world_loaded(x, y, z + 1) ||
-      !world_loaded(x, y, z - 1))
+  /* At the cache's edge an unloaded cell reads as air, and one still to be made reads as
+   * stone - both unknown, never "nothing" - so a stream whose source leaves the loaded cache,
+   * or whose neighbour is still queued, drains to nothing without the guard: the update finds
+   * no same-liquid neighbour and airs the block. The liquid stands until the world that feeds
+   * it is whole again - the same "wait for the world to be whole" settle_fall uses. If any
+   * cell the update reads is out of the cache, or still to be made, it does nothing this run;
+   * the settle pass (world.c) wakes it again once the move's chunks are whole. Ticks run while
+   * a move's chunks are still queued (a jump down, then up, makes several), so without the
+   * pending half a fall re-levels against stone and leaves holes. */
+  if (!world_loaded(x + 1, y, z) || world_pending_at(x + 1, y, z) || !world_loaded(x - 1, y, z) ||
+      world_pending_at(x - 1, y, z) || !world_loaded(x, y, z + 1) || world_pending_at(x, y, z + 1) ||
+      !world_loaded(x, y, z - 1) || world_pending_at(x, y, z - 1))
     return;
-  if (y + 1 < dim_height() && !world_loaded(x, y + 1, z)) return;
-  if (y > dim_min_y() && !world_loaded(x, y - 1, z)) return;
+  if (y + 1 < dim_height() && (!world_loaded(x, y + 1, z) || world_pending_at(x, y + 1, z))) return;
+  if (y > dim_min_y() && (!world_loaded(x, y - 1, z) || world_pending_at(x, y - 1, z))) return;
   if (y > dim_min_y()) {
     for (int f = 2; f < 6; f++)
-      if (!world_loaded(x + NX[f], y - 1, z + NZ[f])) return;
+      if (!world_loaded(x + NX[f], y - 1, z + NZ[f]) || world_pending_at(x + NX[f], y - 1, z + NZ[f])) return;
   }
   if (mix(x, y, z, b)) return;
   int level = level_of(b), decay = water ? 1 : 2;

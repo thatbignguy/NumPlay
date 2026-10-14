@@ -1,3 +1,29 @@
+## 1.5.38
+**No more holes in a fall the cache moves through: ticks that run while the move is still queued wait too, not only ones past its edge**
+
+- **The holes.** 1.5.35 kept a stream whose source leaves the loaded cache, but the nether
+  still holed: a lava bucket placed high flows down whole, jumping down and flying back up
+  leaves gaps in the fall. The move queues several chunks (one a frame); ticks run in between,
+  while a column still to be made reads as stone (`world_get`, `world.c`) - solid, but equally
+  unknown. A fall re-levelled against that stone - no liquid neighbour above or beside, so the
+  level went to nothing and the block aired - and the next cell did the same, punching holes
+  the slow lava (30 ticks a move) never refills before it is seen.
+- **The fix (`src/tick.c`).** The 1.5.35 guard learns the queued half: `fluid_update` waits when
+  any cell it reads is still to be made (`world_pending_at`, `world.c`) as well as out of the
+  cache; `below()` answers bedrock below a queued cell; `flow_into()` refuses a queued target;
+  `slope_dist()` answers -1 (unknown) on meeting one and spreads it. `fluid_wake` needs nothing:
+  stone is not open, so a queued side never schedules. `fluids_tick` still drops an entry whose
+  own cell is outside; one whose cell is queued reads as stone (not liquid) and drops the same
+  way, and `settle_cache` wakes it once whole.
+- **Tests.** `tests/unit.c`: the two `utdrain` moves tick 60 times while queued
+  (`world_follow` + `world_tick` interleaved, as `game_frame` does) before waiting whole -
+  the edge flows and the falls stand through the queue as well as past it.
+- **Recorded.** `make test` passes (210 recipes, all good); the 1.5.35 `--drain` run still reads
+  the source outside with the fall `falling` inside.
+- **Cost.** No new state, no BSS growth: `.data` 5,079 and `.bss` 119,064; a few
+  `world_pending_at` calls beside the `world_loaded` ones, the queue stays `N_PENDING` 160.
+  Recorded: `make build && make check` and `make -C games/numblocks-interest build check` fit.
+
 ## 1.5.37
 **/locate: the nearest biome or structure, at [x, ~, z] in Minecraft's own words**
 

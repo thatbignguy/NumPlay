@@ -185,8 +185,10 @@ int main(void) {
     CHECK(world_get(24, y, 4) == B_FLOWING_WATER_2);
     CHECK(is_lava(world_get(24, y, 24)) && world_get(24, y, 24) != B_LAVA);
     int wl = world_get(24, y, 4), ll = world_get(24, y, 24);
-    /* the cache 16 right: the sources sit two blocks past its edge, the flows at it */
+    /* the cache 16 right: the sources sit two blocks past its edge, the flows at it.
+     * Ticks run while the move is still queued, as they do in play. */
     world_follow(40, 70, 8);
+    for (int t = 0; t < 60; t++) ticks_run++, world_tick(), world_follow(40, 70, 8);
     while (world_pending()) world_follow(40, 70, 8);
     CHECK(!world_loaded(22, y, 4) && world_loaded(24, y, 4));
     CHECK(!world_loaded(22, y, 24) && world_loaded(24, y, 24));
@@ -228,8 +230,12 @@ int main(void) {
     for (int t = 0; t < 900; t++) ticks_run++, world_tick();
     CHECK(world_get(8, 72, 8) == B_FALLING_WATER && world_get(8, 65, 8) == B_FALLING_WATER);
     CHECK(is_lava(world_get(20, 72, 8)) && world_get(20, 72, 8) == B_FALLING_LAVA);
-    /* the cache down to y0 48: the sources sit two blocks past its top, the falls in it */
+    /* the cache down to y0 48: the sources sit two blocks past its top, the falls in it.
+     * Ticks run while the move's chunks are still queued (a jump down makes several) -
+     * a neighbour still to be made reads as stone, equally unknown, so the falls wait
+     * through the queue too instead of re-levelling against it and leaving holes. */
     world_follow(8, 60, 8);
+    for (int t = 0; t < 60; t++) ticks_run++, world_tick(), world_follow(8, 60, 8);
     while (world_pending()) world_follow(8, 60, 8);
     CHECK(!world_loaded(8, 73, 8) && world_loaded(8, 71, 8));
     CHECK(!world_loaded(20, 73, 8) && world_loaded(20, 71, 8));
