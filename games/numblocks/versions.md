@@ -1,3 +1,14 @@
+## 1.5.44
+**Nether biomes are contiguous lattice patches, not noise pockets; soul sand valleys get nether sprouts**
+
+- **Biomes.** The nether's three modern biomes are now chosen from a coarse lattice of
+  biome seeds: each 64-block cell at its centre holds a seed about two times in three
+  (crimson forest, warped forest or soul sand valley), or nothing (nether wastes). A
+  column takes the seed it lies in, so a biome is one contiguous area with no pockets of
+  another biome inside it, and no forest runs on forever. The wastes stay the default.
+- **Soul sand valleys.** They now grow nether sprouts, not crimson roots, and at a
+  sparser rate, so their ground reads as soul sand/soil instead of a carpet of crops.
+
 ## 1.5.43
 **A third world type - Test: an empty world that is always the same, whatever the seed, with everything the game has in it once**
 

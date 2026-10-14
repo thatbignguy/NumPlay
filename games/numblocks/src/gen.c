@@ -6042,11 +6042,14 @@ static void quartz_vein(JRand *r, int cx, int cz, int n);
 static void glow_blob(JRand *r, int cx, int cz);
 
 /* ---- the nether's biomes (1.16, todo [22]) ----
- * Modern picks its nether biomes with its multi-noise climate source; here two
- * value-noise fields of the world seed split the wastes: the first into the
- * crimson and the warped forest (its two ends), the second cuts soul sand
- * valleys out of what is left. Both are pure functions of (x, z), so the terrain,
- * the growth, the fog and the F3 line all agree whichever slab window is asked. */
+ * Modern picks its nether biomes with its multi-noise climate source; here a
+ * coarse lattice of biome seeds (neth_seed_biome) splits the wastes: each
+ * 64-block cell at its centre holds a seed about two times in three, or
+ * nothing (the wastes). A column takes the seed it lies in, so every place has
+ * one biome with no foreign pockets inside it, while the lattice keeps forests
+ * and valleys from running on forever. It is a pure function of (x, z), so the
+ * terrain, the growth, the fog and the F3 line all agree whichever slab window
+ * is asked. */
 static uint32_t neth_mix(int x, int z, uint32_t salt) {
     uint32_t h = (uint32_t)x * 0x9E3779B1u ^ (uint32_t)z * 0x85EBCA77u ^ (uint32_t)(uint64_t)g_seed ^ salt;
     h ^= h >> 16;
@@ -6067,12 +6070,36 @@ static float neth_vnoise(int x, int z, int scale, uint32_t salt) {
     float d = (float)(neth_mix(xi + 1, zi + 1, salt) & 0xFFFF) / 32768.0f - 1.0f;
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
+/* The biome split (1.16's three, beside the wastes): a coarse lattice of biome
+ * seeds (one every 64-block cell at its centre, about two thirds of them
+ * seeded). A column takes the seed it lies in, so a biome is one contiguous
+ * area with no wastes holes inside it, instead of a thresholded smooth field
+ * that cuts tiny pockets of forest out of the wastes. Fatigue: the seeds are
+ * few enough that no forest runs forever, and the wastes stay the default. */
+static int neth_seed_biome(int cx, int cz) {
+    uint32_t h = neth_mix(cx, cz, 0x51A1u);
+    if ((uint16_t)(h >> 16) >= 0xA800u) return BI_HELL;   /* ~35%: unseeded, the wastes */
+    switch ((h >> 8) % 3u) {
+      case 0: return BI_CRIMSON_FOREST;
+      case 1: return BI_WARPED_FOREST;
+      default: return BI_SOUL_SAND_VALLEY;
+    }
+}
 static int nether_biome_at(int x, int z) {
-    float f = neth_vnoise(x, z, 240, 0x4E42u);   /* ~3x coarser: forests and valleys span several chunks */
-    if (f > 0.35f) return BI_CRIMSON_FOREST;
-    if (f < -0.35f) return BI_WARPED_FOREST;
-    if (neth_vnoise(x, z, 144, 0xB00Bu) > 0.38f) return BI_SOUL_SAND_VALLEY;
-    return BI_HELL;
+    enum { CELL = 64, RADIUS = 28 };
+    int r2 = RADIUS * RADIUS + 1;
+    int cx = x >= 0 ? x / CELL : -((-x + CELL - 1) / CELL);
+    int cz = z >= 0 ? z / CELL : -((-z + CELL - 1) / CELL);
+    int best = BI_HELL;
+    for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -1; dx <= 1; dx++) {
+            int bio = neth_seed_biome(cx + dx, cz + dz);
+            if (bio == BI_HELL) continue;
+            int ox = x - (cx + dx) * CELL + CELL / 2, oz = z - (cz + dz) * CELL + CELL / 2;
+            int d2 = ox * ox + oz * oz;
+            if (d2 <= r2 && d2 <= RADIUS * RADIUS) best = bio, r2 = d2;
+        }
+    return best;
 }
 
 /* one cell of the nether's growth, into the slab window (out of it: left for the
@@ -6154,7 +6181,7 @@ static void nether_growth(int cx, int cz, int y0, int h, uint8_t *out, const uin
                  * fire does not depend on whether its ground is in this window */
                 int sb = smap[z * 16 + x], k = jr_int_i(&r, 20);
                 if ((sb == 1 || sb == 2) && k == 0) neth_set(y0, h, out, x, g + 1, z, B_SOUL_FIRE);
-                else if (jr_int_i(&r, 40) == 0 && (sb == 1 || sb == 2)) neth_set(y0, h, out, x, g + 1, z, B_CRIMSON_ROOTS);
+                else if (jr_int_i(&r, 64) == 0 && (sb == 1 || sb == 2)) neth_set(y0, h, out, x, g + 1, z, B_NETHER_SPROUTS);
             }
         }
 }
