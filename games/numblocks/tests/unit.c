@@ -156,6 +156,92 @@ int main(void) {
     plat_remove_prefix("ut2");
   }
   {
+    /* liquids at the cache's edge: a stream whose source leaves the loaded cache stands
+     * instead of draining - an unloaded neighbour reads unknown, never air - and is
+     * unchanged when the source is back. A source removed beside a loaded stream still
+     * drains it (the edge does not freeze live flow). Java has no such edge; the game's
+     * cache does, so the rule is the game's own (tick.c). */
+    world_new(0, "utdrain");
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    int y = 70;
+    for (int z = 0; z <= 8; z++)
+      for (int x = 16; x <= 28; x++) {
+        world_set(x, y - 1, z, B_STONE);
+        for (int k = 0; k < 3; k++) world_set(x, y + k, z, B_AIR);
+      }
+    for (int z = 20; z <= 28; z++)
+      for (int x = 16; x <= 28; x++) {
+        world_set(x, y - 1, z, B_STONE);
+        for (int k = 0; k < 3; k++) world_set(x, y + k, z, B_AIR);
+      }
+    /* water spreads seven out; lava three (decay 2): one source each, far apart */
+    world_set(22, y, 4, B_WATER);
+    neighbours_changed(22, y, 4);
+    world_set(22, y, 24, B_LAVA);
+    neighbours_changed(22, y, 24);
+    for (int t = 0; t < 900; t++) ticks_run++, world_tick();
+    CHECK(world_get(23, y, 4) == B_FLOWING_WATER);
+    CHECK(world_get(24, y, 4) == B_FLOWING_WATER_2);
+    CHECK(is_lava(world_get(24, y, 24)) && world_get(24, y, 24) != B_LAVA);
+    int wl = world_get(24, y, 4), ll = world_get(24, y, 24);
+    /* the cache 16 right: the sources sit two blocks past its edge, the flows at it */
+    world_follow(40, 70, 8);
+    while (world_pending()) world_follow(40, 70, 8);
+    CHECK(!world_loaded(22, y, 4) && world_loaded(24, y, 4));
+    CHECK(!world_loaded(22, y, 24) && world_loaded(24, y, 24));
+    /* force their updates (the settle pass would only wake what can move): with an
+     * unloaded neighbour they stand instead of re-levelling from an unseen side */
+    fluid_schedule(24, y, 4);
+    fluid_schedule(24, y, 24);
+    for (int t = 0; t < 400; t++) ticks_run++, world_tick();
+    CHECK(world_get(24, y, 4) == wl && wl != B_AIR);
+    CHECK(world_get(24, y, 24) == ll && ll != B_AIR);
+    /* and back: the sources come back with the records, the streams unchanged */
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    CHECK(world_get(22, y, 4) == B_WATER && world_get(22, y, 24) == B_LAVA);
+    CHECK(world_get(24, y, 4) == wl && world_get(24, y, 24) == ll);
+    /* a source taken away beside a loaded stream still drains it */
+    world_set(22, y, 4, B_AIR);
+    neighbours_changed(22, y, 4);
+    for (int t = 0; t < 600; t++) ticks_run++, world_tick();
+    CHECK(world_get(24, y, 4) == B_AIR);
+    plat_remove_prefix("utdrain");
+  }
+  {
+    /* the same standing fall: a source high with its fall left behind as the cache moves
+     * down does not drain - the fall's cells stay liquid while the source is out of it */
+    world_new(0, "utdrain2");
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    for (int z = 6; z <= 10; z++)
+      for (int x = 6; x <= 10; x++)
+        for (int kk = 60; kk <= 80; kk++) world_set(x, kk, z, kk == 60 ? B_STONE : B_AIR);
+    for (int z = 6; z <= 10; z++)
+      for (int x = 18; x <= 22; x++)
+        for (int kk = 60; kk <= 80; kk++) world_set(x, kk, z, kk == 60 ? B_STONE : B_AIR);
+    world_set(8, 73, 8, B_WATER);
+    neighbours_changed(8, 73, 8);
+    world_set(20, 73, 8, B_LAVA);
+    neighbours_changed(20, 73, 8);
+    for (int t = 0; t < 900; t++) ticks_run++, world_tick();
+    CHECK(world_get(8, 72, 8) == B_FALLING_WATER && world_get(8, 65, 8) == B_FALLING_WATER);
+    CHECK(is_lava(world_get(20, 72, 8)) && world_get(20, 72, 8) == B_FALLING_LAVA);
+    /* the cache down to y0 48: the sources sit two blocks past its top, the falls in it */
+    world_follow(8, 60, 8);
+    while (world_pending()) world_follow(8, 60, 8);
+    CHECK(!world_loaded(8, 73, 8) && world_loaded(8, 71, 8));
+    CHECK(!world_loaded(20, 73, 8) && world_loaded(20, 71, 8));
+    for (int t = 0; t < 400; t++) ticks_run++, world_tick();
+    CHECK(world_get(8, 71, 8) == B_FALLING_WATER && world_get(8, 65, 8) == B_FALLING_WATER);
+    CHECK(world_get(20, 71, 8) == B_FALLING_LAVA);
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    CHECK(world_get(8, 73, 8) == B_WATER && world_get(20, 73, 8) == B_LAVA);
+    plat_remove_prefix("utdrain2");
+  }
+  {
     /* generation's own blocks get their first update: the generator places blocks, it does
      * not tick them, so a chunk it made holds sand and gravel hanging over the air a cave
      * carved out from under them. The settle pass (world.c) runs when a move of the cache is

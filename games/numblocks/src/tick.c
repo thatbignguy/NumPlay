@@ -60,8 +60,16 @@ static bool open_to(int water, int b) {
 /* what a liquid has under it: at the bottom of the world the void, which it does not fall
  * into - a liquid stops at the world's floor as it does at its top (Minecraft drains it into
  * the void; there is nothing here under the world to drain it into). The floor is the
- * deepslate layer's (gen.h's WORLD_MIN_Y); the nether keeps 0. */
-static int below(int x, int y, int z) { return y > dim_min_y() ? world_get(x, y - 1, z) : B_BEDROCK; }
+ * deepslate layer's (gen.h's WORLD_MIN_Y); the nether keeps 0. Out of the cache is not air
+ * either (the settle_fall rule, player.c): a fall whose ground is out of sight waits where
+ * it is, and the pass asks again once the cache has moved and the ground is there. Java has
+ * no such edge (its force-loaded chunks keep the region); this is the game's own cache, so
+ * the rule is the game's own. */
+static int below(int x, int y, int z) {
+  if (y <= dim_min_y()) return B_BEDROCK;
+  if (!world_loaded(x, y - 1, z)) return B_BEDROCK;
+  return world_get(x, y - 1, z);
+}
 
 /* The settle pass (world.c) asks here about a liquid generation left standing: a spring's
  * source in a cave wall, water a cave or a ravine was carved under. Nothing has ticked it,
@@ -107,6 +115,7 @@ static bool mix(int x, int y, int z, int b) {
 }
 
 static void flow_into(int water, int x, int y, int z, int level) {
+  if (!world_loaded(x, y, z)) return;   /* out of the cache is not somewhere to go: the tail waits there too */
   int b = world_get(x, y, z);
   if (!open_to(water, b)) return;
   if (!water && is_water(b)) {
@@ -117,17 +126,23 @@ static void flow_into(int water, int x, int y, int z, int level) {
   set(x, y, z, liquid(water, level));
 }
 
-/* how far (up to 4 for water, 2 for lava) a way down is going this way, 1000 if none */
+/* how far (up to 4 for water, 2 for lava) a way down is going this way, 1000 if none,
+ * -1 if unknown: a cell the cache does not hold reads as air (world_get), so an unloaded
+ * neighbour must read unknown, never "nothing" - the update waits until the world that feeds
+ * it is whole again (the settle_fall rule). Java has no such edge; this is the game's own. */
 static int slope_dist(int water, int x, int y, int z, int dist, int from, int max) {
   int best = 1000;
   for (int f = 2; f < 6; f++) {
     if (f == (from ^ 1)) continue;
     int nx = x + NX[f], nz = z + NZ[f];
+    if (!world_loaded(nx, y, nz)) return -1;
     int b = world_get(nx, y, nz);
     if ((blk_flags[b] & BF_SOLID) || (same(water, b) && level_of(b) == 0)) continue;
+    if (y > dim_min_y() && !world_loaded(nx, y - 1, nz)) return -1;
     if (open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))) return dist;
     if (dist < max) {
       int d = slope_dist(water, nx, y, nz, dist + 1, f, max);
+      if (d < 0) return -1;
       if (d < best) best = d;
     }
   }
@@ -138,6 +153,21 @@ static void fluid_update(int x, int y, int z) {
   int b = world_get(x, y, z);
   if (blk_model[b] != M_LIQUID) return;
   int water = is_water(b);
+  /* At the cache's edge an unloaded cell reads as air, so a stream whose source leaves the
+   * loaded cache drains to nothing: the update finds no same-liquid neighbour and airs the
+   * block. An unloaded neighbour is unknown, never "nothing", so the liquid stands until the
+   * world that feeds it is whole again - the same "wait for the world to be whole" settle_fall
+   * uses. If any cell the update reads is out of the cache it does nothing this run; the
+   * settle pass (world.c) wakes it again once the move's chunks are whole. */
+  if (!world_loaded(x + 1, y, z) || !world_loaded(x - 1, y, z) || !world_loaded(x, y, z + 1) ||
+      !world_loaded(x, y, z - 1))
+    return;
+  if (y + 1 < dim_height() && !world_loaded(x, y + 1, z)) return;
+  if (y > dim_min_y() && !world_loaded(x, y - 1, z)) return;
+  if (y > dim_min_y()) {
+    for (int f = 2; f < 6; f++)
+      if (!world_loaded(x + NX[f], y - 1, z + NZ[f])) return;
+  }
   if (mix(x, y, z, b)) return;
   int level = level_of(b), decay = water ? 1 : 2;
   if (level > 0) {
@@ -185,9 +215,12 @@ static void fluid_update(int x, int y, int z) {
       int n = world_get(nx, y, nz);
       dist[f - 2] = 1000;
       if ((blk_flags[n] & BF_SOLID) || (same(water, n) && level_of(n) == 0)) continue;
-      dist[f - 2] = open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))
-                        ? 0
-                        : slope_dist(water, nx, y, nz, 1, f, max);
+      if (open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))) dist[f - 2] = 0;
+      else {
+        int d = slope_dist(water, nx, y, nz, 1, f, max);
+        if (d < 0) return;   /* the way down runs out of the cache: unknown, so wait */
+        dist[f - 2] = d;
+      }
       if (dist[f - 2] < best) best = dist[f - 2];
     }
     for (int f = 2; f < 6; f++)

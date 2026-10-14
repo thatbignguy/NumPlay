@@ -25,6 +25,10 @@
  *        [--concrete]   (a powder column on a shelf over a pit, and a water stream reaching a
  *                         powder block: OK mines the shelf and the column falls, the stream
  *                         sets its block into concrete - the player holds white powder)
+ *        [--drain]      (a water source high with its fall to a stone floor: the cache
+ *                         slides down so the source is above it, and the fall stands
+ *                         instead of draining - the frames show the fall intact with
+ *                         the source out of sight above it)
  *        [--settle]     (sand hanging in the air and a water source standing beside it,
  *                         with no block update behind either - as generation and a save
  *                         leave blocks: the cache slides a little and back, and when the
@@ -98,7 +102,7 @@ int main(int argc, char **argv) {
   int skeleton = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
-  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, placing = 0, xray = 0, lava = 0, deep = 0, caves = 0;
+  int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, drain = 0, placing = 0, xray = 0, lava = 0, deep = 0, caves = 0;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0, contrast = 0, panorama = -1;
@@ -126,6 +130,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--roof")) roof = 1;
     else if (!strcmp(argv[i], "--concrete")) concrete = 1;
     else if (!strcmp(argv[i], "--settle")) settle = 1;
+    else if (!strcmp(argv[i], "--drain")) drain = 1;
     else if (!strcmp(argv[i], "--place")) placing = 1;
     else if (!strcmp(argv[i], "--portal")) portal = 1;
     else if (!strcmp(argv[i], "--xray")) xray = 1;
@@ -509,6 +514,35 @@ int main(int argc, char **argv) {
             world_get(sx, fy + 1, sz) == B_SAND ? "sand" : "NOT SAND", wx, fy + 2, wz,
             world_get(wx, fy + 2, wz) == B_WATER ? "a source" : "NOT A SOURCE", fy + 1,
             world_get(wx, fy + 1, wz) == B_FALLING_WATER ? "falling" : "not yet");
+  }
+  if (drain) {
+    /* Liquids at the cache's edge (tick.c): a source high with its fall to a stone
+     * floor stands instead of draining once the source leaves the loaded cache - an
+     * unloaded neighbour reads unknown, never air - so the fall is unchanged when the
+     * source is back. The cache slides down so the source sits above it; the frames
+     * show the fall intact with the source out of sight above it. */
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int z = pz - 2; z <= pz + 10; z++)
+      for (int x = px - 6; x <= px + 6; x++)
+        for (int y = fy - 10; y <= fy + 10; y++) world_set(x, y, z, y == fy - 10 ? B_STONE : B_AIR);
+    int sx = px, sz = pz + 8, sy = fy + 10;
+    world_set(sx, sy, sz, B_WATER);
+    neighbours_changed(sx, sy, sz);
+    for (int t = 0; t < 400; t++) ticks_run++, world_tick();
+    /* down 10: the source two blocks past the new top, the fall's top in it */
+    pl.y = (float)(fy - 10);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    pl.mode = 1, pl.flying = true;
+    pl.x = px + 0.5f, pl.y = (float)(fy - 5), pl.z = pz + 0.5f;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    pl.yaw = 0, pl.pitch = 0;
+    camera_reset();
+    fprintf(stderr, "drain: the source at %d %d %d (%s, loaded %d) and the fall at %d (%s) and %d (%s)\n",
+            sx, sy, sz, world_get(sx, sy, sz) == B_WATER ? "a source" : "NOT A SOURCE", world_loaded(sx, sy, sz),
+            sy - 9, world_get(sx, sy - 9, sz) == B_FALLING_WATER ? "falling" : "NOT FALLING",
+            sy - 15, world_get(sx, sy - 15, sz) == B_FALLING_WATER ? "falling" : "NOT FALLING");
   }
   if (placing) {
     /* A block placed in the air falls the moment it is placed: a placement runs

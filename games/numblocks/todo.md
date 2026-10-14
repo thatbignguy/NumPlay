@@ -26,7 +26,7 @@ what "done" means. Order matters only where noted.
 - [x] **[25] Water evaporates in the nether** — a water bucket emptied in the
       nether places nothing: the fizz and a puff of smoke, and the bucket
       comes back empty, as Java's ultra-warm dimension does.
-- [ ] **[26] Liquids at the cache's edge** — a stream whose source leaves the
+- [x] **[26] Liquids at the cache's edge** — a stream whose source leaves the
       loaded cache drains to nothing: an unloaded neighbour must read unknown,
       not air, so the liquid stands until the world that feeds it is whole.
 - [x] **[27] Deepslate caves** — the deep layer is solid rock: carve it with

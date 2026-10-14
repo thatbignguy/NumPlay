@@ -1,3 +1,46 @@
+## 1.5.35
+**Liquids at the cache's edge stand instead of draining: a stream whose source leaves the loaded cache no longer empties to air**
+
+- **The drain.** A liquid whose source (or supply) leaves the loaded cache drained: every
+  read goes through `world_get` (`world.c`), which answers `B_AIR` outside the cache, so
+  `fluid_update` found no same-liquid neighbour, took the level to nothing (`nl < 0`) and
+  aired the block (`tick.c`), and the next cell down did the same until the stream was gone.
+  `settle_fall` already had the right rule for its own case - out of the cache is not air,
+  so a fall waits until the ground is in sight (`player.c`) - and liquids have it now: an
+  unloaded neighbour reads **unknown**, never "nothing", so a liquid stands until the world
+  that feeds it is whole again.
+- **The fix (`src/tick.c`).** `fluid_update` does nothing this run when any cell it reads is
+  out of the cache - the four sides, the block above (unless past the build height, which is
+  air), the block below and the four below-sides - rather than re-levelling or draining from
+  an unseen side. `below()` answers `B_BEDROCK` (solid, not air) below an unloaded cell, so a
+  fall is not re-levelled against air; `flow_into()` refuses an unloaded target (its write
+  already did through `world_set`, so the tail waits there too); `slope_dist()` answers -1
+  (unknown) on meeting an unloaded cell and spreads it, so a way down that runs out of the
+  cache waits instead of reading air as a path. `fluids_tick` still drops an entry whose own
+  cell is outside (`tick.c`), which stays safe because `settle_cache` (`world.c`) wakes
+  liquids again once the move's chunks are whole. One rule for water and lava (reach 4 vs 2,
+  decay 1 vs 2 - both checked).
+- **Java has no such edge** (its force-loaded chunks keep the region); this is the game's own
+  cache, so the rule is the game's own, as `below()`'s world-floor note is.
+- **A player-placed source lives in the edit records** and comes back when the cache does, so
+  only the standing stream has to be kept alive in between; a source removed beside a loaded
+  stream still drains it as before (the edge does not freeze live flow).
+- **Tests.** `tests/unit.c`: a level-2 water flow (and a lava flow) two blocks past the edge
+  keeps its level when forced (`fluid_schedule`) while its source is out, and the same with
+  the cache moved back; a water fall and a lava fall two blocks past the top keep falling;
+  the old seven-out water still dries when its (loaded) source is taken. `tests/play.c`
+  gains `--drain`: a high source with its fall to a floor, the cache slid down so the source
+  sits above it - the frames show the fall intact with the source out of sight.
+- **Recorded.** `./build/play --drain --frames 60 --shots 59 --out /tmp/drain` (**not**
+  `build/desktop`): the log reads the source outside (`loaded 0`) with the fall `falling` at
+  two heights inside; frame 59 shows the pool the fall keeps on the floor. Without the fix the
+  new unit cases fail (the falls drain, the forced flows re-level).
+- **Cost.** No new state, no BSS growth: `.data` 5,079 and `.bss` 119,064 (the game's 124,143 B
+  inside `CUSTOM_RAM` 133,652); a few `world_loaded` calls a liquid update, the pending queue
+  stays `N_PENDING` 160. `NumBlocks.nwa` 617,012 -> **617,092 B** (+80). Recorded: `make test`
+  passes (208 recipes, all good); `make build && make check` and
+  `make -C games/numblocks-interest build check` fit.
+
 ## 1.5.34
 **The F3 biome line reads again: the nether shows Hell and the overworld its own biome, instead of Unknown everywhere**
 
