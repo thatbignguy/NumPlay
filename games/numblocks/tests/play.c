@@ -61,6 +61,9 @@
  *                         plate instead, Creative, Peaceful, lit by the rig's own
  *                         glowstone; the plate lights the nine TNT and the frames
  *                         run past the fuse - the log counts the TNT gone)
+ *        [--cmd "line"] (a line run when the world is up, up to four: the chat keeps the
+ *                         answer for the frames, so /locate's own reads in them; with
+ *                         --cheats where the command needs them)
  *        [--xray]       (the spectator's water and lava holes: the head inside the stone
  *                         block over a pool of water, a lava block against the block's
  *                         side - looking down, the water under the block and the lava
@@ -93,6 +96,8 @@ static int nholds;
 static RHold rholds[64];
 static int nrholds;
 static int temple_plate[3], temple_tnt[9][3];   /* --templetrap's report after the frames */
+static const char *cmds[4];   /* --cmd: lines run at the start, their answers in the chat */
+static int ncmds;
 
 static uint32_t key_bit(const char *s) {
   static const struct { const char *n; uint32_t k; } t[] = {
@@ -151,6 +156,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--templetrap")) temple = 1, templetrap = 1;
     else if (!strcmp(argv[i], "--spectate") && i + 1 < argc) ride = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--cheats")) cheats = 1;
+    else if (!strcmp(argv[i], "--cmd") && i + 1 < argc && ncmds < 4) cmds[ncmds++] = argv[++i];
     else if (!strcmp(argv[i], "--contrast")) contrast = 1;
     else if (!strcmp(argv[i], "--panorama") && i + 1 < argc) panorama = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--build")) build = 1;
@@ -443,6 +449,7 @@ int main(int argc, char **argv) {
     pl.yaw = 0, pl.pitch = 0;
   }
   if (cheats) world_cheats = true;   /* the new world starts without them; the switcher needs them */
+  for (int k = 0; k < ncmds; k++) command_run(cmds[k]);   /* (the answers in the chat, for the frames) */
   if (contrast) opt.contrast = 1;
   /* (after game_init: the title's backdrop re-picks when the option changed under it) */
   if (panorama >= PAN_RANDOM && panorama <= PAN_NETHER) opt.panorama = (uint8_t)panorama;

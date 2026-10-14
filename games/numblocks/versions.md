@@ -1,3 +1,48 @@
+## 1.5.37
+**/locate: the nearest biome or structure, at [x, ~, z] in Minecraft's own words**
+
+- **`/locate <biome|structure> <name>`**, as modern Minecraft has it: `biome` (a 1.8
+  name, in lower case with underscores, or a modern alias - "plains", "swampland" and
+  "swamp" all answer; a numeric id does too) and `structure` (this game's one, the
+  `desert_pyramid`, since [23] made it). The answer is Minecraft's:
+  "The nearest Plains is at [x, y, z] (n blocks away)" for a biome, and
+  "The nearest desert_pyramid is at [x, ~, z] (n blocks away)" for a structure - the y
+  is not known without making the chunk, so it is "~", as modern's is. Nothing found
+  says so in modern's words ("within a reasonable distance" / "nearby"), an unknown
+  name is a red "There is no such biome with name ...", and the toolbox key finishes
+  `biome`/`structure` and then the names. `/locate` needs cheats, as in Minecraft.
+- **The biomes' names** moved out of the F3 line into `gen.c`'s own table
+  (`gen_biome_name`, the F3 and the command share it) with the keys and the modern
+  aliases beside it, so the names cannot drift apart.
+- **The searches** are `gen.c`'s, and take its scratch for the call (as `world_follow`
+  does about its own): the structure by the placement grid's cells outward from the
+  player's - the same tests the piece itself makes (a desert at the origin chunk's
+  centre, dry ground at the piece's four corner columns, the summaries answering the
+  corners) - and the answer is the origin chunk's corner, which is modern's own
+  `getLocatePos`. The biome by modern's shape too: a spiral of 32-block sample cells
+  outward from the player's, and the cell that first holds the biome read at 4-block
+  steps, so the answer is within 4 blocks of the biome's edge (finer than modern, which
+  answers with the coarse sample). The work is bounded (1200 samples, ~1000 blocks of
+  reach: a chunk's biome layers cost about a hundredth of making the chunk, and
+  modern's 6400-block radius is out of the calculator's reach - the not-found message
+  is the one for it).
+- **Tests.** `tests/unit.c`: from a place in a known temple's own grid cell,
+  `/locate structure desert_pyramid` answers exactly "[1376, ~, -224] (302 blocks
+  away)"; `/locate biome desert`'s answer is read back (the biome there is the desert,
+  the y the column's own top + 1, the distance the 3D one), `biome 2` and `biome swamp`
+  answer as the id and the modern alias, the errors and the usage are Minecraft's
+  words, and the toolbox finishes `biome`, `minecraft:desert_pyramid` and
+  `minecraft:desert`. `tests/play.c` gains `--cmd "line"` (up to four lines run when
+  the world is up, their answers in the chat for the frames).
+- **Recorded.** `./build/play --cheats --cmd "/locate biome desert" --cmd
+  "/locate structure desert_pyramid" --frames 40 --shots 20 --out /tmp/locate`
+  (**not** `build/desktop`): frame 20's chat reads "The nearest Desert is at [-196, 66,
+  -100] (365 blocks away)" and "The nearest desert_pyramid is at [608, ~, 1680] (1606
+  blocks away)".
+- **Cost.** The biome tables and the two searches: `NumBlocks.nwa` 623,416 -> **628,400 B**,
+  `numblocks.bin` 556,476 -> 560,744 B, `.bss` 119,064 (the chat reader is a walk over
+  the lines, not a buffer; nothing new is kept). `make test` passes (210 recipes) and
+  `make build && make check` fits.
 ## 1.5.36
 **The desert pyramid: the first structure, placed by modern's own random spread and built block for block from `26.3.jar`**
 

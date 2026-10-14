@@ -180,11 +180,12 @@ static int give_of(int id, int data) {
 }
 
 /* ---------------------------------------------------------------- the commands */
-enum { C_CLEAR, C_DIFFICULTY, C_EFFECT, C_GAMEMODE, C_GAMERULE, C_GIVE, C_HELP, C_KILL, C_ME, C_SAY, C_SEED,
+enum { C_CLEAR, C_DIFFICULTY, C_EFFECT, C_GAMEMODE, C_GAMERULE, C_GIVE, C_HELP, C_KILL, C_LOCATE, C_ME, C_SAY, C_SEED,
        C_SETBLOCK, C_SPAWNPOINT, C_SUMMON, C_TIME, C_TOGGLEDOWNFALL, C_TP, C_WEATHER, C_XP, N_COMMANDS };
 static const char *const cmd_name[N_COMMANDS] = {"clear", "difficulty", "effect", "gamemode", "gamerule", "give",
-                                                 "help", "kill", "me", "say", "seed", "setblock", "spawnpoint",
-                                                 "summon", "time", "toggledownfall", "tp", "weather", "xp"};
+                                                 "help", "kill", "locate", "me", "say", "seed", "setblock",
+                                                 "spawnpoint", "summon", "time", "toggledownfall", "tp", "weather",
+                                                 "xp"};
 static const char *const cmd_usage[N_COMMANDS] = {
     "/clear [player] [item] [data] [maxCount] [dataTag]",
     "/difficulty <new difficulty>",
@@ -194,6 +195,7 @@ static const char *const cmd_usage[N_COMMANDS] = {
     "/give <player> <item> [amount] [data] [dataTag]",
     "/help [page|command name]",
     "/kill [player|entity]",
+    "/locate <biome|structure> <biome or structure>",
     "/me <action ...>",
     "/say <message ...>",
     "/seed",
@@ -351,6 +353,52 @@ static void cmd_difficulty(char **a, int n) {
   opt.difficulty = (uint8_t)d;
   save_options();
   ok("Set game difficulty to %s", diff_name[d], 0);
+}
+
+/* /locate <biome|structure> <name>: the nearest of it, in Minecraft's own words - "The
+ * nearest %s is at [x, ~, z] (n blocks away)", the y unknown for a structure. The
+ * generator's tables answer for the names (an optional "minecraft:" before them, as the
+ * chat's finish offers), and the searches are its own: the placement grid's cells for the
+ * pyramid, a spiral of sampled chunks for a biome. Both take the generator's scratch for
+ * the call (gen_biome and the summaries need it), as world_follow does about its own. */
+static void cmd_locate(char **a, int n) {
+  if (n != 2) return usage(cmd_usage[C_LOCATE]);
+  bool biome = !strcmp(a[0], "biome"), structure = !strcmp(a[0], "structure");
+  if (!biome && !structure) return usage(cmd_usage[C_LOCATE]);
+  const char *name = a[1];
+  if (!strncmp(name, "minecraft:", 10)) name += 10;
+  int kind = -1;
+  if (biome) {
+    kind = gen_biome_id(name);
+    if (kind < 0 && is_num(name, false)) {
+      kind = (int)num(name, 0, 255);
+      if (!gen_biome_known(kind)) kind = -1;
+    }
+    if (kind < 0) return error("There is no such biome with name %s", name, 0, 0);
+  } else if (strcmp(name, "desert_pyramid")) {
+    return error("There is no structure with type \"%s\"", name, 0, 0);
+  }
+  int fx = 0, fz = 0, fy = 0, found;
+  uint8_t gs[GEN_SCRATCH];
+  memset(gs, 0, GEN_SCRATCH);
+  gen_scratch(gs);
+  if (biome) found = gen_find_biome(kind, (int)floorf(pl.x), (int)floorf(pl.z), &fx, &fz, &fy);
+  else found = gen_find_temple((int)floorf(pl.x), (int)floorf(pl.z), &fx, &fz);
+  gen_scratch(NULL);
+  if (!found)
+    return biome ? error("Could not find a biome of type \"%s\" within a reasonable distance", name, 0, 0)
+                 : error("Could not find a structure of type \"%s\" nearby", name, 0, 0);
+  long long dx = fx - (int)floorf(pl.x), dz = fz - (int)floorf(pl.z);
+  long long dy = biome ? fy - (int)floorf(pl.y) : 0;
+  int distance = (int)sqrtf((float)(dx * dx + dy * dy + dz * dz));
+  out_n = 0;
+  put("The nearest "), put(biome ? gen_biome_name(kind) : name), put(" is at [");
+  put_int(fx), put(", ");
+  if (biome) put_int(fy);
+  else put("~");
+  put(", "), put_int(fz), put("] (");
+  put_int(distance), put(" blocks away)");
+  chat_add(out, CHAT_WHITE);
 }
 
 static void cmd_seed(void) {
@@ -619,6 +667,7 @@ void command_run(const char *line) {
     case C_GIVE: cmd_give(a, n); break;
     case C_HELP: cmd_help(a, n); break;
     case C_KILL: cmd_kill(a, n); break;
+    case C_LOCATE: cmd_locate(a, n); break;
     case C_ME:
     case C_SAY:
       if (n < 1) return usage(cmd_usage[c]);
@@ -717,6 +766,17 @@ bool command_complete(const char *line, int k, int *at, char *o, int max) {
         return offer_list(word, mob_name, 8, k, o, max) || offer_list(word, bolt_name, 1, k, o, max);
       }
       return false;
+    case C_LOCATE: {
+      static const char *const kinds[2] = {"biome", "structure"};
+      if (arg == 0) return offer_list(word, kinds, 2, k, o, max);
+      if (arg != 1) return false;
+      if (!strcmp(w[1], "biome")) {
+        for (int i = 0; gen_biome_key(i); i++)
+          if (offer(word, gen_biome_key(i), "minecraft:", k, o, max)) return true;
+        return false;
+      }
+      return !strcmp(w[1], "structure") && offer(word, "desert_pyramid", "minecraft:", k, o, max);
+    }
     case C_GIVE:
     case C_CLEAR:
       if (arg == 0) return offer_list(word, players, 1, k, o, max);

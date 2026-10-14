@@ -2607,6 +2607,44 @@ int main(void) {
         CHECK(world_get(ax, ty, az) == st4[w]);
       }
     }
+    /* ---- /locate (todo: the user's ask): the structure by the placement grid's own
+     * cells, a biome by sampled chunks, in Minecraft's own words ("~" for a structure's
+     * y, which is not known without making the chunk) */
+    {
+      bool was_cheats = world_cheats;   /* (as the command tests above: /locate needs them) */
+      world_cheats = true;
+      pl.x = 1100.5f, pl.z = -100.5f, pl.y = 70.0f;   /* (in the temple's own grid cell: its chunk is the nearest) */
+      command_run("/locate structure desert_pyramid");
+      CHECK(!strcmp(chat_last_line(), "The nearest desert_pyramid is at [1376, ~, -224] (302 blocks away)"));
+      command_run("/locate structure temple");
+      CHECK(!strcmp(chat_last_line(), "There is no structure with type \"temple\""));
+      command_run("/locate biome desert");
+      {
+        int x = 0, y = 0, z = 0, d = 0;
+        CHECK(sscanf(chat_last_line(), "The nearest Desert is at [%d, %d, %d] (%d blocks away)", &x, &y, &z, &d) == 4);
+        uint8_t lgs[GEN_SCRATCH];
+        gen_scratch(lgs);
+        CHECK(gen_biome(x, z) == 2 && gen_biome_known(2));
+        CHECK(y == gen_top(x, z) + 1);
+        long long dx = x - 1100, dz = z - (-101), dy = y - 70;
+        CHECK(d == (int)sqrtf((float)(dx * dx + dy * dy + dz * dz)));
+        gen_scratch(NULL);
+      }
+      command_run("/locate biome 2");   /* (an id answers too) */
+      CHECK(!strncmp(chat_last_line(), "The nearest Desert is at [", 26));
+      command_run("/locate biome swamp");   /* (a modern name for the 1.8 ground) */
+      CHECK(!strncmp(chat_last_line(), "The nearest Swampland is at [", 29));
+      command_run("/locate biome bogus");
+      CHECK(!strcmp(chat_last_line(), "There is no such biome with name bogus"));
+      command_run("/locate biome");
+      CHECK(!strcmp(chat_last_line(), "Usage: /locate <biome|structure> <biome or structure>"));
+      char o[64];
+      int at = 0;
+      CHECK(command_complete("/locate b", 0, &at, o, sizeof o) && !strcmp(o, "biome"));
+      CHECK(command_complete("/locate structure de", 0, &at, o, sizeof o) && !strcmp(o, "minecraft:desert_pyramid"));
+      CHECK(command_complete("/locate biome dese", 0, &at, o, sizeof o) && !strcmp(o, "minecraft:desert"));
+      world_cheats = was_cheats;
+    }
   }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);
   return fails != 0;

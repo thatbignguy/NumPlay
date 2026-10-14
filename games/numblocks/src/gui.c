@@ -216,72 +216,7 @@ static void number(int n, char *buf) {
 }
 
 /* ---------------------------------------------------------------- F3 debug overlay (GuiDebug) */
-static const char *biome_name(int id) {
-  switch (id) {
-    case 0: return "Ocean";
-    case 1: return "Plains";
-    case 2: return "Desert";
-    case 3: return "Extreme Hills";
-    case 4: return "Forest";
-    case 5: return "Taiga";
-    case 6: return "Swampland";
-    case 7: return "River";
-    case 8: return "Hell";
-    case 9: return "The End";
-    case 10: return "FrozenOcean";
-    case 11: return "FrozenRiver";
-    case 12: return "Ice Plains";
-    case 13: return "Ice Mountains";
-    case 14: return "MushroomIsland";
-    case 15: return "MushroomShore";
-    case 16: return "Beach";
-    case 17: return "DesertHills";
-    case 18: return "ForestHills";
-    case 19: return "TaigaHills";
-    case 20: return "Extreme Hills Edge";
-    case 21: return "Jungle";
-    case 22: return "JungleHills";
-    case 23: return "JungleEdge";
-    case 24: return "Deep Ocean";
-    case 25: return "Stone Beach";
-    case 26: return "Cold Beach";
-    case 27: return "Birch Forest";
-    case 28: return "Birch Forest Hills";
-    case 29: return "Roofed Forest";
-    case 30: return "Cold Taiga";
-    case 31: return "Cold Taiga Hills";
-    case 32: return "Mega Taiga";
-    case 33: return "Mega Taiga Hills";
-    case 34: return "Extreme Hills+";
-    case 35: return "Savanna";
-    case 36: return "Savanna Plateau";
-    case 37: return "Mesa";
-    case 38: return "Mesa Plateau F";
-    case 39: return "Mesa Plateau";
-    case 129: return "Sunflower Plains";
-    case 130: return "Desert M";
-    case 131: return "Extreme Hills M";
-    case 132: return "Flower Forest";
-    case 133: return "Taiga M";
-    case 134: return "Swampland M";
-    case 140: return "Ice Plains Spikes";
-    case 149: return "Jungle M";
-    case 151: return "JungleEdge M";
-    case 155: return "Birch Forest M";
-    case 156: return "Birch Forest Hills M";
-    case 157: return "Roofed Forest M";
-    case 158: return "Cold Taiga M";
-    case 160: return "Mega Spruce Taiga";
-    case 161: return "Mega Spruce Hills";
-    case 162: return "Extreme Hills+ M";
-    case 163: return "Savanna M";
-    case 164: return "Savanna Plateau M";
-    case 165: return "Mesa (Bryce)";
-    case 166: return "Mesa Plateau F M";
-    case 167: return "Mesa Plateau M";
-    default: return "Unknown";
-  }
-}
+/* the biome's name is the generator's own table (gen.c), which /locate biome reads too */
 /* floored chunk coordinate (like b >> 4 with floor for negatives) */
 static int chunk_of(int b) { return b >= 0 ? b >> 4 : -((-b + 15) >> 4); }
 /* a float with 3 decimals (XYZ) or 1 decimal (yaw/pitch), no sprintf */
@@ -387,7 +322,7 @@ static void debug_overlay(void) {
     *p++ = ')', *p = 0;
     p = lbio;
     memcpy(p, "Biome: ", 7), p += 7;
-    strcpy(p, biome_name(bio));
+    strcpy(p, gen_biome_name(bio));
     p = llight;
     memcpy(p, "Light: ", 7), p += 7;
     number(sky, p), p += strlen(p);
@@ -496,6 +431,15 @@ void chat_add(const char *s, int color) {
   chat_used += n + 4;
 }
 void gui_message(const char *s) { chat_add(s, CHAT_WHITE); }
+/* the last line in the chat, walked from its start (the tests read what a command said) */
+const char *chat_last_line(void) {
+  int at = 0, last = 0;
+  while (at < chat_used) {
+    last = at + 3;
+    at = last + (int)strlen(chat + last) + 1;
+  }
+  return chat + last;
+}
 static int chat_age(int i) { return (uint16_t)(chat_clock - ((uint8_t)chat[i + 1] | (uint8_t)chat[i + 2] << 8)); }
 
 /* how much of s fits on a line w pixels wide: up to a space if it can (FontRenderer.sizeStringToWidth) */

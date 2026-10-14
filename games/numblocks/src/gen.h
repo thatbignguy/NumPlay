@@ -92,6 +92,18 @@ extern void (*gen_spawner_hook)(int x, int y, int z, int mob);
  * (x, z) a cell the modern random spread picks? Flat worlds and the nether: no. */
 int temple_cell(int x, int z);
 
+/* The biomes' names and the keys /locate biome takes (gen.c's own tables): the F3
+ * line's name for an id, the id of a key (-1: none), and the i-th key (0: past the
+ * last), for the chat's finish. */
+const char *gen_biome_name(int id);
+int gen_biome_id(const char *key);
+const char *gen_biome_key(int i);
+int gen_biome_known(int id);   /* an id the world may hold (0: no such biome) */
+/* /locate's searches: the nearest block with a biome (fy: the ground there) and the
+ * nearest desert pyramid, to (x, z); 1 and the place when one is found. */
+int gen_find_biome(int id, int x, int z, int *fx, int *fz, int *fy);
+int gen_find_temple(int x, int z, int *fx, int *fz);
+
 /* The generator's scratch: its passes never overlap (layers, then terrain, then caves and
  * populations), so they share one buffer, which the caller gives it -- a local of a function
  * that makes the world is what it is for, and where the game would otherwise keep 7.7 KB of

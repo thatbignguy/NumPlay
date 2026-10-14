@@ -663,6 +663,101 @@ static const Biome *bio(int id) {
 
 static int bio_exists(int id) { return id >= 0 && id < 256 && biome_index[id] != 255; }
 
+/* ---------------------------------------------------------------- the biomes' names
+ * The F3 line's names (1.8's own, mutated variants and all) and the keys /locate biome
+ * takes: the name in lower case with underscores, plus the modern names where they
+ * differ, so "plains", "swampland" and "swamp" all answer. */
+static const struct { uint8_t id; const char *key, *name; } BIOME_NAMES[] = {
+    {0, "ocean", "Ocean"},
+    {1, "plains", "Plains"},
+    {2, "desert", "Desert"},
+    {3, "extreme_hills", "Extreme Hills"},
+    {4, "forest", "Forest"},
+    {5, "taiga", "Taiga"},
+    {6, "swampland", "Swampland"},
+    {7, "river", "River"},
+    {8, "hell", "Hell"},
+    {9, "the_end", "The End"},
+    {10, "frozen_ocean", "FrozenOcean"},
+    {11, "frozen_river", "FrozenRiver"},
+    {12, "ice_plains", "Ice Plains"},
+    {13, "ice_mountains", "Ice Mountains"},
+    {14, "mushroom_island", "MushroomIsland"},
+    {15, "mushroom_shore", "MushroomShore"},
+    {16, "beach", "Beach"},
+    {17, "desert_hills", "DesertHills"},
+    {18, "forest_hills", "ForestHills"},
+    {19, "taiga_hills", "TaigaHills"},
+    {20, "extreme_hills_edge", "Extreme Hills Edge"},
+    {21, "jungle", "Jungle"},
+    {22, "jungle_hills", "JungleHills"},
+    {23, "jungle_edge", "JungleEdge"},
+    {24, "deep_ocean", "Deep Ocean"},
+    {25, "stone_beach", "Stone Beach"},
+    {26, "cold_beach", "Cold Beach"},
+    {27, "birch_forest", "Birch Forest"},
+    {28, "birch_forest_hills", "Birch Forest Hills"},
+    {29, "roofed_forest", "Roofed Forest"},
+    {30, "cold_taiga", "Cold Taiga"},
+    {31, "cold_taiga_hills", "Cold Taiga Hills"},
+    {32, "mega_taiga", "Mega Taiga"},
+    {33, "mega_taiga_hills", "Mega Taiga Hills"},
+    {34, "extreme_hills_plus", "Extreme Hills+"},
+    {35, "savanna", "Savanna"},
+    {36, "savanna_plateau", "Savanna Plateau"},
+    {37, "mesa", "Mesa"},
+    {38, "mesa_plateau_f", "Mesa Plateau F"},
+    {39, "mesa_plateau", "Mesa Plateau"},
+    {129, "sunflower_plains", "Sunflower Plains"},
+    {130, "desert_m", "Desert M"},
+    {131, "extreme_hills_m", "Extreme Hills M"},
+    {132, "flower_forest", "Flower Forest"},
+    {133, "taiga_m", "Taiga M"},
+    {134, "swampland_m", "Swampland M"},
+    {140, "ice_plains_spikes", "Ice Plains Spikes"},
+    {149, "jungle_m", "Jungle M"},
+    {151, "jungle_edge_m", "JungleEdge M"},
+    {155, "birch_forest_m", "Birch Forest M"},
+    {156, "birch_forest_hills_m", "Birch Forest Hills M"},
+    {157, "roofed_forest_m", "Roofed Forest M"},
+    {158, "cold_taiga_m", "Cold Taiga M"},
+    {160, "mega_spruce_taiga", "Mega Spruce Taiga"},
+    {161, "mega_spruce_hills", "Mega Spruce Hills"},
+    {162, "extreme_hills_plus_m", "Extreme Hills+ M"},
+    {163, "savanna_m", "Savanna M"},
+    {164, "savanna_plateau_m", "Savanna Plateau M"},
+    {165, "mesa_bryce", "Mesa (Bryce)"},
+    {166, "mesa_plateau_f_m", "Mesa Plateau F M"},
+    {167, "mesa_plateau_m", "Mesa Plateau M"},
+};
+#define N_BIOME_NAMES ((int)(sizeof BIOME_NAMES / sizeof BIOME_NAMES[0]))
+/* the modern names for the same ground (1.16-1.21's), taken as keys too */
+static const struct { const char *key; uint8_t id; } BIOME_ALIASES[] = {
+    {"swamp", 6}, {"snowy_plains", 12}, {"snowy_mountains", 13}, {"snowy_taiga", 30}, {"snowy_taiga_hills", 31},
+    {"snowy_beach", 26}, {"mushroom_fields", 14}, {"mushroom_field_shore", 15}, {"dark_forest", 29},
+    {"dark_forest_hills", 157}, {"old_growth_birch_forest", 155}, {"giant_tree_taiga", 32},
+    {"old_growth_pine_taiga", 32}, {"old_growth_spruce_taiga", 160}, {"windswept_hills", 3},
+    {"windswept_forest", 34}, {"windswept_gravelly_hills", 162}, {"mountain_edge", 20}, {"stony_shore", 25},
+    {"wooded_hills", 18}, {"sparse_jungle", 22}, {"badlands", 37}, {"badlands_plateau", 39},
+    {"wooded_badlands_plateau", 38}, {"eroded_badlands", 165}, {"ice_spikes", 140}, {"shattered_savanna", 163},
+};
+#define N_BIOME_ALIASES ((int)(sizeof BIOME_ALIASES / sizeof BIOME_ALIASES[0]))
+
+const char *gen_biome_name(int id) {
+    for (int i = 0; i < N_BIOME_NAMES; i++)
+        if (BIOME_NAMES[i].id == id) return BIOME_NAMES[i].name;
+    return "Unknown";
+}
+int gen_biome_id(const char *key) {
+    for (int i = 0; i < N_BIOME_NAMES; i++)
+        if (!strcmp(key, BIOME_NAMES[i].key)) return BIOME_NAMES[i].id;
+    for (int i = 0; i < N_BIOME_ALIASES; i++)
+        if (!strcmp(key, BIOME_ALIASES[i].key)) return (int)BIOME_ALIASES[i].id;
+    return -1;
+}
+const char *gen_biome_key(int i) { return i >= 0 && i < N_BIOME_NAMES ? BIOME_NAMES[i].key : 0; }
+int gen_biome_known(int id) { return bio_exists(id); }
+
 /* GenLayer.a(int, int): same biome "kind" */
 static int bio_same(int i, int j) {
     if (i == j) return 1;
@@ -5378,13 +5473,19 @@ static int g_dim;
 
 static int fdiv32(int a) { return a >= 0 ? a / 32 : (a - 31) / 32; }
 
+/* the origin chunk a placement cell picks: the same draw as temple_origin's */
+static void temple_cell_origin(int gx, int gz, int *ox, int *oz, JRand *tr) {
+    jr_seed(tr, (i64)(i64)gx * 341873128712LL + (i64)(i64)gz * 132897987541LL + g_seed + TEMPLE_SALT);
+    *ox = gx * TEMPLE_SPACING + jr_int(tr, TEMPLE_LIMIT);
+    *oz = gz * TEMPLE_SPACING + jr_int(tr, TEMPLE_LIMIT);
+}
+
 /* is (px,pz) a temple origin chunk? If so, *ox,*oz hold it (== px,pz) and the
  * temple stream (placement draws done) comes back in *tr for the offset draw. */
 static int temple_origin(int px, int pz, int *ox, int *oz, JRand *tr) {
     int gx = fdiv32(px), gz = fdiv32(pz);
-    jr_seed(tr, (i64)(i64)gx * 341873128712LL + (i64)(i64)gz * 132897987541LL + g_seed + TEMPLE_SALT);
-    int sx = jr_int(tr, TEMPLE_LIMIT), sz = jr_int(tr, TEMPLE_LIMIT);
-    int cx = gx * TEMPLE_SPACING + sx, cz = gz * TEMPLE_SPACING + sz;
+    int cx, cz;
+    temple_cell_origin(gx, gz, &cx, &cz, tr);
     if (cx != px || cz != pz) return 0;
     *ox = cx;
     *oz = cz;
@@ -5419,6 +5520,80 @@ static int temple_corner_lowest(int ox, int oz) {
         if (t < lo) lo = t;
     }
     return lo;
+}
+
+/* ---------------------------------------------------------------- /locate's searches */
+/* The nearest desert pyramid to (x, z), or 0: the placement grid's cells outward from the
+ * player's own cell, and the same tests the piece itself makes - a desert at the origin
+ * chunk's centre, and dry ground (above the water line) at the piece's four corner columns,
+ * which is modern's SinglePieceStructure guard. The answer is the origin chunk's corner
+ * (modern's getLocatePos: the chunk's own corner, the piece's bounding box's), and the y is
+ * not known without making the chunk, so /locate says "~" for it, as modern does. */
+int gen_find_temple(int x, int z, int *fx, int *fz) {
+    int gx = fdiv32(x >> 4), gz = fdiv32(z >> 4);
+    for (int r = 0; r <= 8; r++) {   /* 8 cells, 32 chunks apart: within 256 chunks */
+        int bx = 0, bz = 0, found = 0;
+        long long bd = 0;
+        for (int dz = -r; dz <= r; dz++)
+            for (int dx = -r; dx <= r; dx++) {
+                if (r && dx > -r && dx < r && dz > -r && dz < r) continue;
+                JRand tr;
+                int ox, oz;
+                temple_cell_origin(gx + dx, gz + dz, &ox, &oz, &tr);
+                if (gen_biome(ox * 16 + 8, oz * 16 + 8) != BI_DESERT) continue;
+                int dry = 1;
+                for (int k = 0; k < 4 && dry; k++) {
+                    int wx = ox * 16 + (k & 1) * TEMPLE_SIZE, wz = oz * 16 + (k >> 1) * TEMPLE_SIZE;
+                    SumEntry *e = sum_get(wx >> 4, wz >> 4);
+                    if (cs_top(&e->s[(wx & 15) + (wz & 15) * 16]) < SEA) dry = 0;
+                }
+                if (!dry) continue;
+                long long d = (long long)(ox * 16 - x) * (ox * 16 - x) + (long long)(oz * 16 - z) * (oz * 16 - z);
+                if (!found || d < bd) bx = ox * 16, bz = oz * 16, bd = d, found = 1;
+            }
+        if (found) {
+            *fx = bx;
+            *fz = bz;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* The nearest place whose biome is `id`, or 0: modern's own shape - a spiral of 32-block
+ * sample cells outward from the player's, one sample at each cell's middle - and then the
+ * cell that first holds the biome is read at 4-block steps for the nearest cell its own
+ * grid has (so the answer is within 4 blocks of the biome's edge, finer than modern's,
+ * which answers with the coarse sample itself). A chunk's biome layers cost about a
+ * hundredth of making the chunk, and the budget below is the calculator's own: past it the
+ * talk is of "a reasonable distance", as modern says when 6400 blocks of it hold nothing.
+ * The y is where the ground is, the column's own heightmap - the biome here has no depth. */
+int gen_find_biome(int id, int x, int z, int *fx, int *fz, int *fy) {
+    int cx = x >> 5, cz = z >> 5, budget = 1200;
+    for (int r = 0; r <= 34; r++) {   /* 34 cells of 32 blocks: past 1000 blocks */
+        int bx = 0, bz = 0, found = 0;
+        long long bd = 0;
+        for (int dz = -r; dz <= r; dz++)
+            for (int dx = -r; dx <= r; dx++) {
+                if (r && dx > -r && dx < r && dz > -r && dz < r) continue;
+                if (--budget < 0) return 0;
+                if (gen_biome((cx + dx) * 32 + 16, (cz + dz) * 32 + 16) != id) continue;
+                for (int sz = 0; sz <= 28; sz += 4)
+                    for (int sx = 0; sx <= 28; sx += 4) {
+                        int wx = (cx + dx) * 32 + sx, wz = (cz + dz) * 32 + sz;
+                        if (gen_biome(wx, wz) != id) continue;
+                        long long d = (long long)(wx - x) * (wx - x) + (long long)(wz - z) * (wz - z);
+                        if (!found || d < bd) bx = wx, bz = wz, bd = d, found = 1;
+                    }
+            }
+        if (found) {
+            *fx = bx;
+            *fz = bz;
+            *fy = gen_top(bx, bz) + 1;
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static void tbox(int ox, int oz, int baseY, int x0, int y0, int z0, int x1, int y1, int z1, int edge,

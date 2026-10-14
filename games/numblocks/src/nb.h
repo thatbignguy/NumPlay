@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.36"
+#define NB_VERSION "1.5.37"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -460,6 +460,7 @@ enum { GR_KEEP_INVENTORY = 1, GR_DAYLIGHT_CYCLE = 2, GR_MOB_SPAWNING = 4, GR_MOB
 /* ---------------------------------------------------------------- chat and commands (command.c) */
 enum { CHAT_WHITE, CHAT_RED, CHAT_GREEN, CHAT_DARK_GREEN, CHAT_GRAY };
 void chat_add(const char *s, int color);   /* a line in the chat (gui.c) */
+const char *chat_last_line(void);   /* the last line in it (tests) */
 void command_run(const char *line);        /* a line sent from the chat: a command ("/...") or said */
 /* tab completion: the k-th way to finish the last word of line (the word starts at *at); false: no more */
 bool command_complete(const char *line, int k, int *at, char *out, int max);
