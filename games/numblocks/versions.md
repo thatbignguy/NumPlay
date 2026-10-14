@@ -1,3 +1,14 @@
+## 1.5.47
+**Equal quarter nether biomes; much rarer soul fire and fossils**
+
+- **Biomes.** The nether now uses exact quarter-cell biomes: 192-block cells are grouped
+  into 4x4 macros, and each macro always contains one quarter nether wastes, one quarter
+  each of Crimson Forest, Warped Forest and Soul Sand Valley, with a hashed ordering so
+  it is not a regular checkerboard. This removes small patches of one biome inside
+  another; each cell is entirely one biome.
+- **Soul Sand Valley.** Soul fire is now roughly 1-in-80 ground columns instead of
+  1-in-20, and fossils are roughly 1-in-211 instead of 1-in-37.
+
 ## 1.5.46
 **Nether biomes are evenly sized and centered; no off-by-one seed placement patches**
 

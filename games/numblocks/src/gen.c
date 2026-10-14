@@ -6059,36 +6059,38 @@ static uint32_t neth_mix(int x, int z, uint32_t salt) {
     h ^= h >> 16;
     return h;
 }
-/* The biome split (1.16's three, beside the wastes): a coarse lattice of biome
- * seeds (one every 192-block cell at its centre, about three quarters of them
- * seeded). A column takes the seed it lies in, so a biome is one contiguous
- * area with no wastes holes inside it, instead of a thresholded smooth field
- * that cuts tiny pockets of forest out of the wastes. Fatigue: the seeds are
- * few enough that no forest runs forever, and the wastes stay the default. */
-static int neth_seed_biome(int cx, int cz) {
-    uint32_t h = neth_mix(cx, cz, 0x51A1u);
-    if ((uint16_t)(h >> 16) >= 0xC000u) return BI_HELL;   /* ~25%: unseeded, the wastes */
-    switch ((h >> 8) % 3u) {
-      case 0: return BI_CRIMSON_FOREST;
-      case 1: return BI_WARPED_FOREST;
-      default: return BI_SOUL_SAND_VALLEY;
+/* The biome split (1.16's three, beside the wastes): every 192-block cell takes one
+ * biome, and every 4 x 4 cells hold four of each, so the four biomes cover equal
+ * areas with no small pockets of one biome inside another. The order inside each
+ * 4 x 4 macro is hashed, so the map is not a regular checkerboard, but a macro
+ * always has one quarter of each biome. The cells are large enough that a biome
+ * reads as one region, and it is a pure function of (x, z), so the terrain, the
+ * growth, the fog and the F3 line all agree whichever slab window is asked. */
+static inline int neth_idiv(int v, int d) {
+    int q = v / d;
+    if (v < 0 && v % d) q--;
+    return q;
+}
+static int neth_cell_biome(int cx, int cz) {
+    enum { MACRO = 4 };
+    int mx = neth_idiv(cx, MACRO), mz = neth_idiv(cz, MACRO);
+    int lx = cx - mx * MACRO, lz = cz - mz * MACRO;
+    int quad = (lx >> 1) + ((lz >> 1) << 1);
+    /* one permutation per macro: four slots, each biome exactly once */
+    uint32_t h = neth_mix(mx, mz, 0xB105Eu);
+    uint8_t p[4] = {BI_HELL, BI_CRIMSON_FOREST, BI_WARPED_FOREST, BI_SOUL_SAND_VALLEY};
+    for (int i = 3; i > 0; i--) {
+        int j = (int)(h % (uint32_t)(i + 1));
+        h /= (uint32_t)(i + 1);
+        uint8_t t = p[i];
+        p[i] = p[j];
+        p[j] = t;
     }
+    return p[quad];
 }
 static int nether_biome_at(int x, int z) {
-    enum { CELL = 192, RADIUS = 120 };
-    int r2 = RADIUS * RADIUS + 1;
-    int cx = x >= 0 ? x / CELL : -((-x + CELL - 1) / CELL);
-    int cz = z >= 0 ? z / CELL : -((-z + CELL - 1) / CELL);
-    int best = BI_HELL;
-    for (int dz = -1; dz <= 1; dz++)
-        for (int dx = -1; dx <= 1; dx++) {
-            int bio = neth_seed_biome(cx + dx, cz + dz);
-            if (bio == BI_HELL) continue;
-            int ox = x - ((cx + dx) * CELL + CELL / 2), oz = z - ((cz + dz) * CELL + CELL / 2);
-            int d2 = ox * ox + oz * oz;
-            if (d2 <= r2 && d2 <= RADIUS * RADIUS) best = bio, r2 = d2;
-        }
-    return best;
+    enum { CELL = 192 };
+    return neth_cell_biome(neth_idiv(x, CELL), neth_idiv(z, CELL));
 }
 
 /* one cell of the nether's growth, into the slab window (out of it: left for the
@@ -6168,7 +6170,7 @@ static void nether_growth(int cx, int cz, int y0, int h, uint8_t *out, const uin
             } else if (bio == BI_SOUL_SAND_VALLEY) {
                 /* the ground code (smap) came from the whole column, so the soul
                  * fire does not depend on whether its ground is in this window */
-                int sb = smap[z * 16 + x], k = jr_int_i(&r, 20);
+                int sb = smap[z * 16 + x], k = jr_int_i(&r, 80);
                 if ((sb == 1 || sb == 2) && k == 0) neth_set(y0, h, out, x, g + 1, z, B_SOUL_FIRE);
                 else if (jr_int_i(&r, 64) == 0 && (sb == 1 || sb == 2)) neth_set(y0, h, out, x, g + 1, z, B_NETHER_SPROUTS);
             }
@@ -6297,7 +6299,7 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                      * sand with grass patches in it either) */
                     for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
                         if (col[yy] == B_NETHERRACK) col[yy] = B_SOUL_SAND;
-                    if (neth_mix(X, Z, 0xB05Eu) % 37 == 0 && ground > 33) {
+                    if (neth_mix(X, Z, 0xB05Eu) % 211 == 0 && ground > 33) {
                         col[ground] = B_BONE_BLOCK;
                         if (col[ground - 1] == B_NETHERRACK) col[ground - 1] = B_BONE_BLOCK_X;
                     }
