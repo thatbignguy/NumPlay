@@ -873,26 +873,38 @@ static void update_result(void) {
 /* the creative inventory: the tab shown, how far down, what its 45 slots show */
 static int ctab = 0, cscroll;
 static bool csurv;   /* the Survival Inventory tab: the survival inventory, tabs still there */
-static Stack cshown[45], ctabs[13];
-static const uint16_t tab_icon[13] = {B_GRASS, B_BRICKS, B_PEONY_LOWER, B_CRAFTING_TABLE, I_LAVA_BUCKET,
+static Stack cshown[45], ctabs[14];
+static const uint16_t tab_icon[14] = {B_GRASS, B_BRICKS, B_PEONY_LOWER, B_CRAFTING_TABLE, I_LAVA_BUCKET,
                                       I_COMPASS, I_APPLE, I_IRON_AXE, I_GOLDEN_SWORD, 0, I_IRON_INGOT,
-                                      I_CREEPER_SPAWN_EGG, B_CHEST};
+                                      I_CREEPER_SPAWN_EGG, B_BARRIER, B_CHEST};
 #define TAB_SEARCH 5
 #define TAB_BREW 9     /* NumBlocks brews nothing: the tab is left out (tab_icon 0) */
 #define TAB_MOBS 11    /* the spawn eggs, on the bottom row right of Materials */
-#define TAB_SURV 12    /* Survival Inventory: a way out of the creative inventory */
+#define TAB_OP 12      /* the operator items (the barrier): Minecraft's Operator Utilities, one tab
+                        * left of the Survival Inventory tab, and with cheats on only */
+#define TAB_SURV 13    /* Survival Inventory: a way out of the creative inventory */
 #define SEARCH_RIGHT 167  /* the Search Items tab: on its own at the right end of the top row */
 #define TAB_RIGHT 167     /* the Survival Inventory tab: on its own at the right end of the bottom row */
-/* a tab's sprite x: the tabs of a row packed to the left (Brewing is left out), the Search Items tab
-   and the Survival Inventory on their own at the right end of their row, as in Minecraft */
+/* Which tabs there are: every one but Brewing, which NumBlocks has nothing to put in
+   (its tab_icon is 0), and the operator items tab - Minecraft's stands only while
+   cheats are on, and the world's own Allow Cheats (or Open to LAN with them) is what
+   says so here. GuiContainerCreative draws the tab row without it otherwise. */
+static bool tab_shown(int t) {
+  return t != TAB_BREW && (t != TAB_OP || cheats_on());
+}
+/* A tab's sprite x: the tabs of a row packed to the left (Brewing is left out, and the search and
+   the survival tabs stand alone at their row's right end, as in Minecraft) */
 static int tab_x(int t) {
   if (t == TAB_SEARCH) return SEARCH_RIGHT;
   if (t == TAB_SURV) return TAB_RIGHT;
   int col = 0;
   for (int i = 0; i < t; i++)
-    if (i != TAB_BREW && i != TAB_SEARCH && i != TAB_SURV && (i < 6) == (t < 6)) col++;
+    if (i != TAB_BREW && i != TAB_SEARCH && i != TAB_SURV && tab_shown(i) && (i < 6) == (t < 6)) col++;
   return col * 28;
 }
+/* the operator items: in the creative inventory with cheats on only, as Minecraft's are (its
+   search tab leaves them out without them too) */
+static bool op_only(int id) { return id == B_BARRIER; }
 static char csearch[16];   /* Search Items: what is typed (GuiContainerCreative.searchField) */
 /* an item whose name has what is typed in it (updateCreativeSearch) */
 static bool found(int id) {
@@ -908,7 +920,11 @@ static int tab_count(void) {
   int n = tab_start[ctab + 1] - tab_start[ctab];
   if (ctab != TAB_SEARCH || !csearch[0]) return n;
   int c = 0;
-  for (int i = 0; i < n; i++) c += found(tab_items[tab_start[ctab] + i]);
+  for (int i = 0; i < n; i++) {
+    int id = tab_items[tab_start[ctab] + i];
+    if (op_only(id) && !cheats_on()) continue;   /* as creative_refresh leaves them out */
+    c += found(id);
+  }
   return c;
 }
 static int tab_rows(void) { return (tab_count() + 8) / 9; }
@@ -917,12 +933,13 @@ static void creative_refresh(void) {
   for (int i = 0; i < n && k < 45; i++) {
     int id = tab_items[tab_start[ctab] + i];
     if (ctab == TAB_SEARCH && !found(id)) continue;
+    if (op_only(id) && !cheats_on()) continue;   /* the operator items: cheats on only */
     if (skip) skip--;
     /* a stack of one; a tool starts undamaged, and an undamaged tool has no durability bar to draw */
     else cshown[k].id = (uint16_t)id, cshown[k++].aux = item_dur(id) ? 0 : 1;
   }
   for (; k < 45; k++) cshown[k].id = 0;
-  for (int t = 0; t < 13; t++) ctabs[t].id = tab_icon[t], ctabs[t].aux = item_dur(tab_icon[t]) ? 0 : 1;
+  for (int t = 0; t < 14; t++) ctabs[t].id = tab_icon[t], ctabs[t].aux = item_dur(tab_icon[t]) ? 0 : 1;
 }
 
 static int origin_x, origin_y, origin_z;
@@ -963,6 +980,7 @@ void gui_open(int screen, int x, int y, int z) {
         cur = 4 + 27;   /* the first hotbar slot */
       } else {
         cscroll = 0;
+        if (!tab_shown(ctab)) ctab = 0;   /* (the operator items tab, with cheats gone) */
         creative_refresh();
         panel_h = 136;
         cur = 45;
@@ -1026,8 +1044,8 @@ static void layout_slots(Slot *buf) {
         for (int i = 0; i < 45; i++) add_slot(9 + (i % 9) * 18, 18 + (i / 9) * 18, SL_CREATIVE, (uint8_t)i, &cshown[i]);
         for (int c = 0; c < 9; c++) add_slot(9 + c * 18, 112, SL_NORMAL, 0, &pl.inv[c]);
       }
-      for (int t = 0; t < 13; t++)
-        if (t != TAB_BREW) add_slot(tab_x(t) + 6, t < 6 ? -28 + 9 : panel_h + 2, SL_TAB, (uint8_t)t, &ctabs[t]);
+      for (int t = 0; t < 14; t++)
+        if (tab_shown(t)) add_slot(tab_x(t) + 6, t < 6 ? -28 + 9 : panel_h + 2, SL_TAB, (uint8_t)t, &ctabs[t]);
       break;
     case GUI_CHEST:
       for (int i = 0; i < 27; i++) add_slot(8 + (i % 9) * 18, 18 + (i / 9) * 18, SL_NORMAL, 0, &chest->s[i]);
@@ -2747,8 +2765,9 @@ static void container(void) {
   if (gui == GUI_CREATIVE) {
     /* the open tab: the Survival Inventory tab shows selected while its inventory is open */
     int sel = csurv ? TAB_SURV : ctab;
-    for (int t = 0; t < 13; t++)
-      if (t != sel && t != TAB_BREW) sprite(t < 6 ? SP_TAB_TOP : SP_TAB_BOTTOM, px + tab_x(t), t < 6 ? py - 28 : py + panel_h - 4);
+    for (int t = 0; t < 14; t++)
+      if (t != sel && tab_shown(t))
+        sprite(t < 6 ? SP_TAB_TOP : SP_TAB_BOTTOM, px + tab_x(t), t < 6 ? py - 28 : py + panel_h - 4);
   }
   if (gui == GUI_CREATIVE && csurv)
     image(IMG_TAB_INVENTORY, px, py);   /* the survival tab's own panel, as wide as the tab row */

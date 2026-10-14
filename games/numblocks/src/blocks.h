@@ -489,7 +489,8 @@ enum {
   B_TWISTING_VINES = 482,   /* 247:6 */
   B_SOUL_SOIL = 483,   /* 247:7 */
   B_SOUL_FIRE = 484,   /* 247:8 */
-  B_COUNT = 485
+  B_BARRIER = 485,   /* 166:0 */
+  B_COUNT = 486
 };
 
 /* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the

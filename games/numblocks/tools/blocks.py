@@ -368,6 +368,16 @@ b('WEEPING_VINES', 247, 5, model='cross', tex='weeping_vines_plant', hard=0.2, t
 b('TWISTING_VINES', 247, 6, model='cross', tex='twisting_vines_plant', hard=0.2, tool='shears')
 b('SOUL_SOIL', 247, 7, tex='soul_soil', hard=0.5, tool='shovel')
 b('SOUL_FIRE', 247, 8, model='cross', tex='soul_fire_0', light=10, hard=0)
+# --- Minecraft's barrier (1.8's id 166): nothing to see unless one is held. A whole
+# block that stands in everything's way, gives no light, and breaks like bedrock does
+# (hard -1: unbreakable in survival, gone at once in creative, and nothing dropped).
+# What it shows you see only holding one in your hand, as Minecraft's does - the world
+# reads it as air (render.c's seen) - and it lives in the operator items tab
+# (tools/items.py's T_OP), which the creative inventory shows only with cheats on.
+# The model is glass's: the light of both kinds goes through it, as the modern
+# BarrierBlock's does (propagatesSkylightAbove, no occlusion), while the cube still
+# stands in the way of anything that moves.
+b('BARRIER', 166, model='glass', tex='barrier', hard=-1)
 
 assert len(S) <= NSTATES, len(S)
 

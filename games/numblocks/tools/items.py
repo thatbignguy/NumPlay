@@ -240,7 +240,7 @@ LABELS = {
     'CRIMSON_FUNGUS': 'Crimson Fungus', 'WARPED_FUNGUS': 'Warped Fungus',
     'CRIMSON_ROOTS': 'Crimson Roots', 'WARPED_ROOTS': 'Warped Roots', 'NETHER_SPROUTS': 'Nether Sprouts',
     'WEEPING_VINES': 'Weeping Vines', 'TWISTING_VINES': 'Twisting Vines', 'SOUL_SOIL': 'Soul Soil',
-    'SOUL_FIRE': 'Soul Fire',
+    'SOUL_FIRE': 'Soul Fire', 'BARRIER': 'Barrier',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
@@ -507,11 +507,14 @@ def fuel_of(iid):
 
 # the creative inventory's tabs, in the order they are shown: what the world is made of, what you build
 # with, what decorates it, what does something, then what you use. The Spawn Eggs tab is on the bottom
-# row, right of Materials. (Brewing is only there for the numbering, NumBlocks brews nothing; Survival
-# Inventory is a way out to the survival inventory.)
-T_NATURAL, T_BLOCK, T_DECO, T_FUNC, T_MISC, T_SEARCH, T_FOOD, T_TOOL, T_COMBAT, T_BREW, T_MAT, T_MOBS, T_SURV = range(13)
+# row, right of Materials, and Operator Utilities is Minecraft's own last-but-one: one tab left of
+# Survival Inventory, at the end of the bottom row, shown only with cheats on (gui.c's tab_shown).
+# (Brewing is only there for the numbering, NumBlocks brews nothing; Survival Inventory is a way out
+# to the survival inventory.)
+T_NATURAL, T_BLOCK, T_DECO, T_FUNC, T_MISC, T_SEARCH, T_FOOD, T_TOOL, T_COMBAT, T_BREW, T_MAT, T_MOBS, T_OP, T_SURV = range(14)
 TABS = ['Natural Blocks', 'Building Blocks', 'Decorative Items', 'Functional', 'Miscellaneous', 'Search Items',
-        'Foodstuffs', 'Tools', 'Combat', 'Brewing', 'Materials', 'Spawn Eggs', 'Survival Inventory']
+        'Foodstuffs', 'Tools', 'Combat', 'Brewing', 'Materials', 'Spawn Eggs', 'Operator Utilities',
+        'Survival Inventory']
 # what the world is made of: soil, stone, ores, ice; a natural block is a building block too, so it is
 # in both tabs (Minecraft keeps it in Building Blocks only)
 NATURAL = ('GRASS', 'DIRT', 'COARSE_DIRT', 'PODZOL', 'MYCELIUM', 'STONE', 'GRANITE', 'DIORITE', 'ANDESITE',
@@ -563,6 +566,8 @@ def tab_of(iid, block=False):
     n = BNAMES[iid]
     if ITEM_OF.get(n, n) != n or n not in LABELS:
         return None   # not in the creative inventory
+    if n == 'BARRIER':
+        return (T_OP,)   # an operator item: Minecraft's Operator Utilities tab (with cheats on)
     if n in FUNC:
         return (T_FUNC,)
     if n in NATURAL_ONLY:

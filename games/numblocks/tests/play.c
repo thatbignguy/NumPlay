@@ -10,6 +10,10 @@
  *                         and Normal: it sees the player within a few ticks and shoots - the frames
  *                         show it turn to face - or keep its head on - the player as it fires)
  *        [--spawner]    (a monster spawner hanging in the air in front of the player, unset, and the eggs to set it with)
+ *        [--barrier]    (Minecraft's barrier: a wall of them five blocks ahead of the player, one in
+ *                         the hand, so the wall shows its no-entry sign while it is held and is
+ *                         gone (see through it) the moment the hotbar moves to an empty slot;
+ *                         Creative, cheats on)
  *        [--distance 1..2]   (render distance, default: the saved option, 2 chunks)
  *        [--fancy]           (graphics: Fancy, see-through leaves; the default is what the options say, Fast)
  *        [--bright 0..15]    (the Brightness setting: 0 Moody, 15 Bright; default: the saved option)
@@ -121,6 +125,7 @@ static uint32_t key_bit(const char *s) {
 int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
   int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, spawner = 0;
+  int barrier = 0;
   int skeleton = 0;
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
@@ -173,6 +178,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--panorama") && i + 1 < argc) panorama = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--build")) build = 1;
     else if (!strcmp(argv[i], "--spawner")) spawner = 1;
+    else if (!strcmp(argv[i], "--barrier")) barrier = 1;
     else if (!strcmp(argv[i], "--rain")) rain = 1;
     else if (!strcmp(argv[i], "--storm")) rain = 2;
     else if (!strcmp(argv[i], "--distance") && i + 1 < argc) distance = atoi(argv[++i]);
@@ -552,6 +558,24 @@ int main(int argc, char **argv) {
                                  {B_CRAFTING_TABLE, 1}, {B_FURNACE, 2}, {B_CHEST, 3}, {I_IRON_HELMET, 1},
                                  {I_IRON_CHESTPLATE, 1}, {B_SAND, 40}};
     for (unsigned i = 0; i < sizeof kit / sizeof kit[0]; i++) inv_add(pl.inv, 36, kit[i][0], kit[i][1], 0);
+  }
+  if (barrier) {
+    /* A wall of barriers a few blocks ahead of the player, on the grass the world spawns
+     * him on, with one in the hand: the wall shows Minecraft's no-entry sign while one is
+     * held and is gone (you see the world through it) as soon as the hotbar moves to an
+     * empty slot - which is the barrier's whole trick (render.c's seen). Creative, with
+     * cheats on so the operator items tab of the creative inventory is there to browse to.
+     * The keys a screenshot needs: "5:2" moves to an empty slot to hide the wall again, and
+     * "5:inv,10:down,15:right,20:right,25:right,30:right,35:right,40:ok" opens the inventory
+     * on the Operator Utilities tab. */
+    creative = 1, cheats = 1;
+    int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+    for (int y = fy; y < fy + 4; y++)
+      for (int x = px - 2; x <= px + 2; x++)
+        for (int z = pz + 5; z <= pz + 6; z++) world_set(x, y, z, B_BARRIER);
+    inv_add(pl.inv, 36, B_BARRIER, 64, 0);
+    pl.slot = 0, pl.pitch = 0, pl.yaw = 0;
+    fprintf(stderr, "barrier: a wall at x %d..%d, z %d..%d, one in the hand\n", px - 2, px + 2, pz + 5, pz + 6);
   }
   if (start_time >= 0) {
     extern uint32_t game_time;

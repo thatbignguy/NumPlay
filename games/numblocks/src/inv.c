@@ -238,7 +238,7 @@ int block_drops(int b, int held, Stack *out) {
     case B_STONE_SLAB_DOUBLE: DROP(B_STONE_SLAB, 2); return n;
     case B_COBWEB: DROP(shears ? B_COBWEB : I_STRING, 1); return n;
     case B_GLASS: case B_GLASS_PANE: case B_ICE: case B_PACKED_ICE: case B_MOB_SPAWNER: case B_MONSTER_EGG_STONE:
-    case B_BEDROCK:
+    case B_BEDROCK: case B_BARRIER:
       return 0;
     case B_TALL_GRASS: case B_FERN: case B_DOUBLE_GRASS_LOWER: case B_DOUBLE_GRASS_UPPER: case B_LARGE_FERN_LOWER:
     case B_LARGE_FERN_UPPER:

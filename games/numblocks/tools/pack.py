@@ -143,6 +143,12 @@ def tex_image(jar, n):
     # 3D and too much for NumBlocks' low 9-high box (user asked for the old one)
     if n.startswith('@'):
         return custom_texture(jar, n)
+    # The barrier has no block picture of its own in either client: it is the item's
+    # (1.8.8 has items/barrier.png only, and modern's block/barrier.png is that same
+    # picture, since its block model has no elements - BlockBarrier is drawn by the
+    # client, not by its model)
+    if n == 'barrier':
+        return first_frame(jar.image('items/barrier'))
     if n in FLOW_TEX:
         # the flowing fluids: 32 x 32 a frame (two 16 x 16 tiles), and Minecraft
         # draws them at their own texel size - a face shows one 16 x 16 quarter -
@@ -387,6 +393,11 @@ def iso_icon(jar, s, names_px):
     """A block as the inventory shows it: three faces, the top lit, the left 0.8, the right 0.6 (16 x 16)."""
     t = s['tex']
     k = ICON_TINT.get(s['tint'])
+    if s['name'] == 'BARRIER':
+        # Minecraft's barrier is not a cube in the inventory: its item is the flat
+        # no-entry sign (models/item/barrier.json is item/generated) and its block
+        # model has no elements at all, so the sign is its icon, as the item's is
+        return tex_image(jar, s['tex'])
     if s['model'] in ('cross', 'flat', 'torch', 'vine', 'ladder', 'door', 'pane', 'portal'):
         n = t if isinstance(t, str) else t.get('side')
         im = tex_image(jar, n)

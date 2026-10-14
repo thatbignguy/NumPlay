@@ -15,7 +15,7 @@ Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it fo
 - **Fishing:** cast, wait for the bite, reel in fish, junk or treasure.
 - **Building:** over 230 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
 - **Fire:** light it with flint and steel. It spreads and burns wood, leaves and wool, like in 1.8.
-- **Creative mode:** fly, every block and item, break things at once, and search for any block.
+- **Creative mode:** fly, every block and item, break things at once, and search for any block. With cheats on, the Operator Utilities tab holds Minecraft's barrier — the block you only see holding one.
 - **Spectator mode:** fly through the blocks and see through them, nothing to touch, and OK on a mob sees the world through its eyes.
 - **Commands:** /gamemode, /give, /time, /weather, /tp and more, with cheats on (Allow Cheats, or Open to LAN).
 - **Your worlds:** keep several, give them names, and they save as you play and when you quit. A copy also goes into `numblocks_saves.py`, so installing the game again doesn't erase them.

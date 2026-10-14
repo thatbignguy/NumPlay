@@ -235,7 +235,9 @@ static bool replaceable(int b) {
          b == B_DOUBLE_GRASS_LOWER || b == B_LARGE_FERN_LOWER ||
          is_fire(b);
 }
-static bool solid_top(int b) { return (blk_flags[b] & BF_OPAQUE) != 0 || b == B_GLASS || b == B_LEAVES_OAK; }
+static bool solid_top(int b) {
+  return (blk_flags[b] & BF_OPAQUE) != 0 || b == B_GLASS || b == B_LEAVES_OAK || b == B_BARRIER;
+}
 static bool soil(int b) {
   return b == B_GRASS || b == B_DIRT || b == B_PODZOL || b == B_COARSE_DIRT || b == B_FARMLAND ||
          b == B_FARMLAND_WET || b == B_CRIMSON_NYLIUM || b == B_WARPED_NYLIUM || b == B_SOUL_SOIL;

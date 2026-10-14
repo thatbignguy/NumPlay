@@ -1,3 +1,34 @@
+## 1.5.42
+**Minecraft's barrier block: invisible until you hold one, and an Operator Utilities tab (cheats on) for it**
+
+- **The block.** The barrier (1.8's id 166, `barrier` for `/give` and `/setblock`) is a whole
+  cube that stands in the way of the player, the mobs and anything that moves, and gives no
+  light and no drop: bedrock-hard (`blk_hard` 255, so it is gone at once in Creative and
+  unbreakable in Survival) with no loot table, as Java's `BarrierBlock` has. Its picture is
+  the item's, since neither client has a block picture of its own (its block model has no
+  elements at all), and the inventory icon is that same flat no-entry sign, as the item's is.
+- **What it shows.** You see it only holding one in your hand, as Minecraft's does: the
+  renderer reads a barrier as air wherever it draws (render.c's `seen`, one test over the
+  world reads it makes), so the rays go through it, the faces beside it are faces against
+  air, and the world behind it shows. It still stands in the way, the crosshair still finds
+  it and Creative still breaks it, so a wall of them reads as an invisible boundary with the
+  outline of the one you look at. Holding one, the sign shows on its faces.
+- **The operator items tab.** Mine's second-to-last, one tab left of the Survival Inventory
+  tab at the end of the bottom row, shown only with cheats on (Allow Cheats, or Open to LAN
+  with them): gui.c's `tab_shown` leaves it out without them, and the Search Items tab
+  leaves the barrier out too, as Java's search does. The barrier is its only item; NumBlocks
+  has no command block, so the barrier is the tab's icon as well.
+- **The light goes through it** (both kinds), as the modern BarrierBlock's does
+  (`propagatesSkylightAbove`, no occlusion) - a wall of barriers casts no shadow - which is
+  the glass model here: solid, see-through, no light lost. 1.8.8's barrier was an opaque
+  cube; the modern one is not, and new blocks follow the modern game.
+- Everything that depends on a block below it stands on a barrier too, torches and redstone
+  as the wiki says, so an invisible floor is a floor; nothing else about placing changes.
+- Left out: the barrier particles modern spawns around barriers while one is held, and the
+  operator tab's Debug Stick / structure void (the block is the item here). `tests/play.c
+  --barrier` is the rig for it: a wall five blocks ahead of the player with one in the hand,
+  hidden again by moving to an empty hotbar slot.
+
 ## 1.5.41
 Nether biomes split into larger regions (crimson/warped forests and soul sand valleys now span several chunks); fixed ground-block glitch in generated nether terrain.
 

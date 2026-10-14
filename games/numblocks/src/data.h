@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "blocks.h"
 
-#define NTEX 298
+#define NTEX 299
 /* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */
 extern const uint8_t tex_px[NTEX][128];
 extern const uint16_t tex_pal[NTEX][16];
@@ -325,6 +325,7 @@ extern const uint8_t rain_run[][4], snow_run[][4], rain_idx[257], snow_idx[257];
 #define TX_TWISTING_VINES_PLANT 295
 #define TX_SOUL_SOIL 296
 #define TX_SOUL_FIRE_0 297
+#define TX_BARRIER 298
 
 extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];
 extern const uint32_t spr_off[];
@@ -359,31 +360,31 @@ extern const uint16_t blk_icon[NSTATES];   /* sprite of its icon */
 #define SP_MOON_5 26
 #define SP_MOON_6 27
 #define SP_MOON_7 28
-#define SP_FLAME 515
-#define SP_ARROW 516
-#define SP_ARMOR_FULL 517
-#define SP_ARMOR_HALF 518
-#define SP_BUBBLE_POP 519
-#define SP_HEART_HIT 520
-#define SP_TAB_TOP 521
-#define SP_TAB_TOP_SEL 522
-#define SP_TAB_BOTTOM 523
-#define SP_TAB_BOTTOM_SEL 524
-#define SP_SCROLLER 525
-#define SP_BUTTON 526
-#define SP_BUTTON_HOVER 527
-#define SP_BUTTON_OFF 528
-#define SP_GM_BG 529
-#define SP_GM_SLOT 530
-#define SP_GM_SEL 531
-#define SP_SLOT_HELMET 532
-#define SP_SLOT_CHESTPLATE 533
-#define SP_SLOT_LEGGINGS 534
-#define SP_SLOT_BOOTS 535
-#define SP_STEVE 536
-#define SP_ARM 537
-#define SP_DIRT_BG 538
-#define SP_EYE_ENDER 539
+#define SP_FLAME 516
+#define SP_ARROW 517
+#define SP_ARMOR_FULL 518
+#define SP_ARMOR_HALF 519
+#define SP_BUBBLE_POP 520
+#define SP_HEART_HIT 521
+#define SP_TAB_TOP 522
+#define SP_TAB_TOP_SEL 523
+#define SP_TAB_BOTTOM 524
+#define SP_TAB_BOTTOM_SEL 525
+#define SP_SCROLLER 526
+#define SP_BUTTON 527
+#define SP_BUTTON_HOVER 528
+#define SP_BUTTON_OFF 529
+#define SP_GM_BG 530
+#define SP_GM_SLOT 531
+#define SP_GM_SEL 532
+#define SP_SLOT_HELMET 533
+#define SP_SLOT_CHESTPLATE 534
+#define SP_SLOT_LEGGINGS 535
+#define SP_SLOT_BOOTS 536
+#define SP_STEVE 537
+#define SP_ARM 538
+#define SP_DIRT_BG 539
+#define SP_EYE_ENDER 540
 
 #include "items.h"
 extern const uint16_t blk_item[NSTATES];   /* the item a block state counts as (0xFFFF: none) */
@@ -406,8 +407,8 @@ extern const uint8_t skin_px[][1024];   /* mob skins, 64 x 32 */
 extern const uint16_t skin_pal[][16];
 enum { SKIN_ZOMBIE, SKIN_SKELETON, SKIN_CREEPER, SKIN_SPIDER, SKIN_PIG, SKIN_COW, SKIN_SHEEP, SKIN_SHEEP_FUR, SKIN_CHICKEN, SKIN_PIGLIN, SKIN_ZPIGLIN };
 extern const uint8_t cracks[10][32];   /* destroy stages, 1 bit a texel */
-extern const uint16_t tab_items[], tab_start[14];   /* the creative tabs' items */
-extern const char *const tab_name[13];
+extern const uint16_t tab_items[], tab_start[15];   /* the creative tabs' items */
+extern const char *const tab_name[14];
 extern const uint8_t font_bits[96 * 8], font_w[96];   /* characters 32-127 */
 extern const uint8_t img_rle[], img_w[], img_h[];
 extern const uint32_t img_rows[];

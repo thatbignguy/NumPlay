@@ -103,6 +103,14 @@ static int cloud_r, cloud_g, cloud_b;   /* the clouds' colour (0..255) */
 static float sun_a;                     /* how much of the sun or moon shows (rain hides it) */
 static bool night;
 static bool xray;                       /* (a spectator's head inside a solid block: see through the rock) */
+/* Minecraft's barrier: a whole block with nothing to show unless one is held in the hand
+ * (BlockBarrier, its render type -1), so the world reads it as air wherever it is drawn
+ * - the ray goes through it, the faces beside it are faces against air, and what stands
+ * behind it shows. It still stands in the way (a full cube, phys.c) and the crosshair
+ * still finds it (player.c's pick), as Java's does: holding one in creative you see them
+ * and break them, without one you see only the outline of the one you look at. */
+static bool barrier_shown;              /* (render_frame sets it: a barrier is what is held) */
+static inline int seen(int b) { return b == B_BARRIER && !barrier_shown ? B_AIR : b; }
 /* The liquid the eye is in: 0 air, 1 water, 2 lava. render_frame sets it from the camera's own
  * cell, and the fog, the sky tint and (gui.c's) screen wash follow it, as Java's FogRenderer
  * does. One value, so the hot sky paths test it once; lava wins if a cell were both, which one
@@ -832,7 +840,7 @@ static uint16_t trace(float dx, float dy, float dz) {
   if (!cam_reg || (cam_reg == 2 && in_liq == 1)) goto jump;
   for (;;) {
     ST(st_steps++);
-    int b = vc_get(i);
+    int b = seen(vc_get(i));
     if (b != B_AIR && liquid_of(b) != in_liq) {
       float te = fminf(fminf(tx, ty), tz);
       /* (over a low shape the whole way through its cell: nothing there) */
@@ -951,7 +959,7 @@ static int face_pixel(float dx, float dy, float dz, int plane, int f, bool wet) 
   else if (a == 1) z = c;
   else x = c;
   if ((unsigned)x >= VCX || (unsigned)y >= VCY || (unsigned)z >= VCZ) return -1;
-  int i = VC_I(x, y, z), b = vc_get(i), m = blk_model[b];
+  int i = VC_I(x, y, z), b = seen(vc_get(i)), m = blk_model[b];
   float lx = hx - x, ly = hy - y, lz = hz - z;
   int edge = plane - c * 16;   /* where the face is in its cell (0, 16: on its side) */
   bool cube = m == M_CUBE || m == M_LEAVES || m == M_GLASS;
@@ -972,10 +980,10 @@ static int face_pixel(float dx, float dy, float dz, int plane, int f, bool wet) 
     int px = x + nx[f], py = y + ny[f], pz = z + nz[f];
     light = 15;
     if ((unsigned)px < VCX && (unsigned)py < VCY && (unsigned)pz < VCZ) {
-      int fi = VC_I(px, py, pz);
+      int fi = VC_I(px, py, pz), fn = seen(vc_get(fi));
       /* hidden, or something stands in front: trace (wet: water in front is clear; a
        * spectator's head in the rock: only what is solid stands in its way) */
-      if (vc_get(fi) != B_AIR && !(wet && is_water(vc_get(fi))) && !(xray && !(blk_flags[vc_get(fi)] & BF_OPAQUE))) return -1;
+      if (fn != B_AIR && !(wet && is_water(fn)) && !(xray && !(blk_flags[fn] & BF_OPAQUE))) return -1;
       light = draw_light(vl[fi]);
     } else if (!(f == 0 && y == 0 && vc_y0 == 0))
       light = draw_light(vl[i]);   /* (outside the cache: as face_lit lights it, not the sky's 15) */
@@ -1183,7 +1191,7 @@ static __attribute__((unused)) void plane_fill(uint16_t (*cb)[RW], float (*zb)[R
       int i = VC_I(c[0], c[1], c[2]);
       if (i != last) {
         last = i;
-        int bk = vc_get(i), m = blk_model[bk];
+        int bk = seen(vc_get(i)), m = blk_model[bk];
         bool cube = m == M_CUBE || m == M_LEAVES || m == M_GLASS;
         q = NULL;
         if (cube) ok = !(edge & 15);
@@ -1195,8 +1203,8 @@ static __attribute__((unused)) void plane_fill(uint16_t (*cb)[RW], float (*zb)[R
           int px = c[0] + nx[f], py = c[1] + ny[f], pz = c[2] + nz[f];
           light = draw_light(15);
           if ((unsigned)px < VCX && (unsigned)py < VCY && (unsigned)pz < VCZ) {
-            int fi = VC_I(px, py, pz);
-            if (vc_get(fi) != B_AIR && !(wet && is_water(vc_get(fi))) && !(xray && !(blk_flags[vc_get(fi)] & BF_OPAQUE))) {
+            int fi = VC_I(px, py, pz), fn = seen(vc_get(fi));
+            if (fn != B_AIR && !(wet && is_water(fn)) && !(xray && !(blk_flags[fn] & BF_OPAQUE))) {
               ok = 0;
               goto miss;
             }
@@ -1249,7 +1257,7 @@ static int water_pixel(float dx, float dy, float dz, int wplane, int plane, int 
   float hx = ox + dx * t, hz = oz + dz * t;
   int x = (int)hx, y = (wplane - 1) >> 4, z = (int)hz;
   if (hx < 0 || hz < 0 || (unsigned)x >= VCX || (unsigned)y >= VCY - 1 || (unsigned)z >= VCZ) return -1;
-  int i = VC_I(x, y, z), b = vc_get(i), above = vc_get(i + VCX * VCZ);
+  int i = VC_I(x, y, z), b = seen(vc_get(i)), above = seen(vc_get(i + VCX * VCZ));
   if (!is_water(b) || above != B_AIR) return -1;
   static const int8_t LIQH[9] = {14, 12, 11, 9, 7, 5, 4, 2, 16};
   if (y * 16 + LIQH[blk_meta[b] > 8 ? 8 : blk_meta[b]] != wplane) return -1;   /* (not this height here) */
@@ -1287,7 +1295,7 @@ static void sample_at(Sample *s, int px, int py) {
     int flags = 0;
     if (hit_p & 15) flags |= 1;   /* (inside its cell: nothing else there) */
     else {
-      int fb = vc_get(came_from(hit_i, f, x, y, z));
+      int fb = seen(vc_get(came_from(hit_i, f, x, y, z)));
       if (fb == B_AIR || (is_water(fb) && is_water(cam_b)) || (xray && !(blk_flags[fb] & BF_OPAQUE))) flags |= 1;
     }
     if (m == M_CUBE || m == M_LEAVES || m == M_GLASS) flags |= 2;
@@ -2591,6 +2599,8 @@ nether_sky_done:;
   cam_x = (int)floorf(ox), cam_y = (int)floorf(oy), cam_z = (int)floorf(oz);
   cam_i = (unsigned)cam_x < VCX && (unsigned)cam_y < VCY && (unsigned)cam_z < VCZ ? VC_I(cam_x, cam_y, cam_z) : -1;
   cam_b = cam_i < 0 ? B_AIR : vc_get(cam_i);
+  /* what is held decides what the barriers of this frame show (seen) */
+  barrier_shown = held()->id == B_BARRIER;
   cam_mi = cam_i < 0 ? 0 : MC_I(cam_x, cam_y, cam_z);
   cam_fr[0][0] = cam_x - ox, cam_fr[0][1] = cam_x + 1 - ox;
   cam_fr[1][0] = cam_y - oy, cam_fr[1][1] = cam_y + 1 - oy;

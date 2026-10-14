@@ -1080,6 +1080,25 @@ int main(void) {
      * ground here, where the name is what is being checked) */
     command_run("/setblock ~ ~ ~ black_concrete_powder");
     CHECK(world_get(sx, sy, sz) == B_CONCRETE_POWDER_BLACK);
+    /* the barrier: one /give name, the operator items tab, and nothing out of it */
+    memset(pl.inv, 0, sizeof pl.inv);
+    command_run("/give @p barrier 1");
+    CHECK(pl.inv[0].id == B_BARRIER && !strcmp(item_label(B_BARRIER), "Barrier"));
+    CHECK(item_icon(B_BARRIER) >= 0 && blk_hard[B_BARRIER] == 255);   /* its own icon, bedrock-hard */
+    {
+      /* Operator Utilities (tab 12) is where it lives, one tab left of the Survival
+       * Inventory tab (13, empty as always), and Search (5) holds it once like everything */
+      int where = 0;
+      for (int t = 0; t < 14; t++)
+        for (int i = tab_start[t]; i < tab_start[t + 1]; i++)
+          if (tab_items[i] == B_BARRIER) where |= t == 12 || t == 5 ? 1 << t : 0x8000;
+      CHECK(where == (1 << 12 | 1 << 5) && tab_start[12] + 1 == tab_start[13] && tab_start[13] == tab_start[14]);
+      /* it gives nothing back (BlockBarrier has no loot table), even where a block is dropped */
+      Stack drop[2];
+      CHECK(block_drops(B_BARRIER, B_BARRIER, drop) == 0);
+    }
+    command_run("/setblock ~ ~3 ~ barrier");
+    CHECK(world_get(sx, sy + 3, sz) == B_BARRIER);
     /* /clear: a name clears the one item it names */
     memset(pl.inv, 0, sizeof pl.inv);
     command_run("/give @p red_wool 2");
@@ -3188,6 +3207,34 @@ int main(void) {
     player_tick(K_USE, K_USE);
     CHECK(world_get(8, 70, 9) == B_STRIPPED_CRIMSON_STEM_X);
     plat_remove_prefix("utstrip");
+  }
+  {
+    /* A torch stands on a barrier, as on any whole block (Block.canPlaceTorchOnTop):
+       an invisible floor is still a floor. */
+    world_new(28, "utbar");
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    for (int x = 7; x <= 9; x++)
+      for (int z = 7; z <= 9; z++) {
+        world_set(x, 69, z, B_GRASS);
+        for (int k = 1; k < 4; k++) world_set(x, 69 + k, z, B_AIR);
+      }
+    world_set(8, 69, 9, B_BARRIER);   /* one ahead of the player, its top at y = 70 */
+    memset(pl.inv, 0, sizeof pl.inv);
+    pl.mode = 0, pl.dead = false, pl.x = 8.5f, pl.y = 70, pl.z = 8.5f, pl.health = 20;
+    pl.inv[0] = (Stack){B_TORCH, 4}, pl.slot = 0;
+    player_look(pl.x, pl.y + 1.62f, pl.z, 0, 58);   /* down at the barrier's top, one block ahead */
+    player_tick(K_USE, K_USE);
+    CHECK(world_get(8, 70, 9) == B_TORCH && item_count(&pl.inv[0]) == 3);
+    /* and a wall of one still stands in the way of a player walking into it */
+    for (int y = 70; y < 72; y++) world_set(8, y, 10, B_BARRIER);
+    world_set(8, 69, 10, B_AIR);
+    {
+      float p[3] = {8.5f, 70, 9.5f}, v[3] = {0, 0, 0.5f};
+      phys_move(p, v, 0.6f, 1.8f);
+      CHECK(p[2] < 10.0f);
+    }
+    plat_remove_prefix("utbar");
   }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);
   return fails != 0;
