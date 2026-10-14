@@ -7,9 +7,11 @@ Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it fo
 - **The same worlds as Minecraft 1.8.8:** type a seed and you get the world Minecraft 1.8.8 makes, block for block: the same terrain, biomes, hills, caves, lakes and trees. Or a superflat world to build on.
 - **Survival:** health, hunger, day and night, zombies, skeletons, creepers and spiders, and pigs, cows, sheep and chickens.
 - **Weather:** rain, snow and thunderstorms with lightning, as often as in 1.8.
-- **The Nether:** netherrack, caverns, a lava sea and a red sky. Build an obsidian frame, light it
-  with flint and steel, stand in it, and you are in the Nether Wastes: nether quartz to find, soul
-  sand and glowstone, and the portal to come back by.
+- **The Nether:** netherrack, caverns, a lava sea and a red sky, with piglins and zombified
+  piglins in it - the piglin hunts you down, the zombified piglin keeps to itself until you hit
+  it (and then its neighbours come too). Build an obsidian frame, light it with flint and steel,
+  stand in it, and you are in the Nether Wastes: nether quartz to find, soul sand and glowstone,
+  and the portal to come back by.
 - **Crafting:** 129 items and all their 1.8 recipes, a furnace, chests, tools that wear out, armor.
 - **Fishing:** cast, wait for the bite, reel in fish, junk or treasure.
 - **Building:** 250 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.

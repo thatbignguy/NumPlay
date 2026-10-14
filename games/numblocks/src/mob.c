@@ -21,10 +21,13 @@ static const MobInfo info[] = {
     [E_CREEPER] = {0.6f, 1.7f, 0.25f, 20},  [E_SPIDER] = {1.4f, 0.9f, 0.3f, 16},
     [E_PIG] = {0.9f, 0.9f, 0.25f, 10},      [E_COW] = {0.9f, 1.3f, 0.2f, 10},
     [E_SHEEP] = {0.9f, 1.3f, 0.23f, 8},     [E_CHICKEN] = {0.4f, 0.7f, 0.25f, 4},
+    /* the nether's two (1.16): the piglin (16 health) and the zombified piglin (20,
+     * 1.8's PigZombie), both bipeds at the zombie's speed and size */
+    [E_PIGLIN] = {0.6f, 1.95f, 0.23f, 16}, [E_ZPIGLIN] = {0.6f, 1.95f, 0.23f, 20},
 };
-float mob_width(int t) { return t >= E_ZOMBIE && t <= E_CHICKEN ? info[t].w : 0.25f; }
-float mob_height(int t) { return t >= E_ZOMBIE && t <= E_CHICKEN ? info[t].h : 0.25f; }
-static bool hostile(int t) { return t >= E_ZOMBIE && t <= E_SPIDER; }
+float mob_width(int t) { return is_mob(t) ? info[t].w : 0.25f; }
+float mob_height(int t) { return is_mob(t) ? info[t].h : 0.25f; }
+static bool hostile(int t) { return is_hostile_mob(t); }
 
 float mob_scale(const Entity *e, float pt) {
   if (e->growth < 0) return 0.5f;   /* a baby */
@@ -172,6 +175,45 @@ int mob_parts(const Entity *e, float pt, Part *o) {
       box(-1, 0, -3, 1, 4, 6, 24, 13, 4, 13, 0, SKIN_CHICKEN)->rz = -flap;
       break;
     }
+    case E_PIGLIN:
+    case E_ZPIGLIN: {
+      /* The 1.16 piglin's model, read out of 26.3.jar (AbstractPiglinModel.addHead and
+       * AdultPiglinModel): a 10-wide skull at (0,0) with a 4 x 4 x 1 snout at (31,1),
+       * its two cream tusks at (2,0) and (2,4), and two 1 x 5 x 4 ears at (39,6) and
+       * (51,6) turned 30 degrees out from the skull's sides (4.5, -6); then the
+       * player's own body, arms and legs (HumanoidModel: (16,16), (40,16), (0,16)),
+       * the 1.8-scale ones this game has. 11 boxes all told - MAX_PARTS is 12. */
+      int sk = e->type == E_PIGLIN ? SKIN_PIGLIN : SKIN_ZPIGLIN;
+      box(-5, -8, -4, 10, 8, 8, 0, 0, 0, 0, 0, sk)->rx = pitch;       /* the skull */
+      box(-2, -4, -5, 4, 4, 1, 31, 1, 0, 0, 0, sk)->rx = pitch;       /* the snout */
+      box(-3, -2, -5, 1, 2, 1, 2, 0, 0, 0, 0, sk)->rx = pitch;        /* the tusks */
+      box(2, -2, -5, 1, 2, 1, 2, 4, 0, 0, 0, sk)->rx = pitch;
+      /* the ears: their boxes sit on their own origins at the skull's sides (4.5, -6, 0),
+       * turned 30 degrees out - the boxes' own coordinates are those origins' */
+      Part *er = box(0, 0, -2, 1, 5, 4, 51, 6, 4.5f, -6, 0, sk);
+      Part *el = box(-1, 0, -2, 1, 5, 4, 39, 6, -4.5f, -6, 0, sk);
+      er->rz = -0.5236f, er->rx = pitch;
+      el->rz = 0.5236f, el->rx = pitch;
+      box(-4, 0, -2, 8, 12, 4, 16, 16, 0, 0, 0, sk);
+      Part *ra = box(-3, -2, -2, 4, 12, 4, 40, 16, -5, 2, 0, sk);
+      Part *la = box(-1, -2, -2, 4, 12, 4, 40, 16, 5, 2, 0, sk);
+      Part *rl = box(-2, 0, -2, 4, 12, 4, 0, 16, -1.9f, 12, 0, sk);
+      Part *ll = box(-2, 0, -2, 4, 12, 4, 0, 16, 1.9f, 12, 0, sk);
+      la->mirror = ll->mirror = 1;
+      if (e->type == E_PIGLIN) {
+        /* the piglin swings its arms at its sides (the player's own walk) */
+        ra->rx = sw * 1.4f * a;
+        la->rx = swo * 1.4f * a;
+      } else {
+        /* the zombified piglin is 1.8's PigZombie: arms held out, swaying a little */
+        ra->rx = la->rx = -PI / 2 + sinf(age * 0.067f) * 0.05f;
+        ra->rz = cosf(age * 0.09f) * 0.05f + 0.05f;
+        la->rz = -ra->rz;
+      }
+      rl->rx = sw * 1.4f * a;
+      ll->rx = swo * 1.4f * a;
+      break;
+    }
   }
   return np;
 }
@@ -202,7 +244,7 @@ bool mob_can_stand(int x, int y, int z) {
 static int count(bool host) {
   int n = 0;
   for (int i = 0; i < N_ENT; i++)
-    if (ents[i].type >= E_ZOMBIE && ents[i].type <= E_CHICKEN && hostile(ents[i].type) == host) n++;
+    if (is_mob(ents[i].type) && hostile(ents[i].type) == host) n++;
   return n;
 }
 
@@ -216,14 +258,29 @@ static Entity *spawn(int type, float x, float y, float z) {
 }
 Entity *mob_summon(int type, float x, float y, float z) { return spawn(type, x, y, z); }
 
-/* the mob a spawn egg makes (ItemMonsterPlacer), in the order of items.h's I_*_SPAWN_EGG */
-static const uint8_t egg_mob[8] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN};
+/* the mob a spawn egg makes (ItemMonsterPlacer). The eggs are not contiguous (QUARTZ
+ * sits between the overworld's eight and the nether's two: 387..394, 395, 396,397),
+ * so this is a lookup, not the id - I_ZOMBIE_SPAWN_EGG arithmetic it was: that ran to
+ * egg_mob[8] for QUARTZ, hidden only because quartz is never asked as an egg. */
+static const uint8_t egg_mob[10] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN,
+                                    E_PIGLIN, E_ZPIGLIN};
+static const uint16_t egg_id[10] = {I_ZOMBIE_SPAWN_EGG, I_SKELETON_SPAWN_EGG, I_CREEPER_SPAWN_EGG, I_SPIDER_SPAWN_EGG,
+                                    I_PIG_SPAWN_EGG, I_COW_SPAWN_EGG, I_SHEEP_SPAWN_EGG, I_CHICKEN_SPAWN_EGG,
+                                    I_PIGLIN_SPAWN_EGG, I_ZOMBIFIED_PIGLIN_SPAWN_EGG};
 int mob_of_egg(int id) {
-  return id >= I_ZOMBIE_SPAWN_EGG && id < I_END ? egg_mob[id - I_ZOMBIE_SPAWN_EGG] : 0;
+  for (int i = 0; i < 10; i++)
+    if (egg_id[i] == id) return egg_mob[i];
+  return 0;
+}
+int egg_of_mob(int mob) {
+  for (int i = 0; i < 10; i++)
+    if (egg_mob[i] == mob) return egg_id[i];
+  return 0;
 }
 
 /* the mobs' names, for /summon and what the spawner says when it is set */
-const char *const mob_name[8] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig", "Cow", "Sheep", "Chicken"};
+const char *const mob_name[10] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig", "Cow", "Sheep", "Chicken",
+                                  "Piglin", "ZombifiedPiglin"};
 
 /* ---------------------------------------------------------------- monster spawners (MobSpawner) */
 /* Which mob a monster spawner makes: a spawn egg used on one sets it (ItemMonsterPlacer.onItemUse),
@@ -295,7 +352,7 @@ int spawners_get(int i, int *x, int *y, int *z) {
 static bool room_for_a_mob(void) {
   int n = 0;
   for (int i = 0; i < N_ENT; i++)
-    if (ents[i].type >= E_ZOMBIE && ents[i].type <= E_CHICKEN && ents[i].state != 255) n++;
+    if (is_mob(ents[i].type) && ents[i].state != 255) n++;
   return n < 32;
 }
 
@@ -385,8 +442,9 @@ void spawners_load(const uint8_t *b, int len) {
       spawners[n].x = (int32_t)((uint32_t)e[0] | (uint32_t)e[1] << 8 | (uint32_t)e[2] << 16 | (uint32_t)e[3] << 24);
       spawners[n].z = (int32_t)((uint32_t)e[4] | (uint32_t)e[5] << 8 | (uint32_t)e[6] << 16 | (uint32_t)e[7] << 24);
       spawners[n].y = e[8];
-      /* the mobs are E_ZOMBIE .. E_CHICKEN (2 .. 9): anything else in an old record is unset */
-      spawners[n].mob = e[9] >= E_ZOMBIE && e[9] <= E_CHICKEN ? e[9] : 0;
+      /* the mobs are E_ZOMBIE .. E_ZPIGLIN (2 .. 11): anything else in an old record is unset.
+       * Appending after E_CHICKEN keeps the old 2 .. 9 readable. */
+      spawners[n].mob = e[9] >= E_ZOMBIE && e[9] <= E_ZPIGLIN ? e[9] : 0;
       n++;
     }
   n_spawners = n;
@@ -395,6 +453,36 @@ void spawners_load(const uint8_t *b, int len) {
 /* SpawnerAnimals, made small: a try every second */
 void mobs_spawn(void) {
   if (pl.dead) return;
+  if (world_dim == DIM_NETHER) {
+    /* the nether's own rule (vanilla nether mobs ignore light level: no sky light exists
+     * there, so the overworld's light <= rnd(8) gate means nothing): on solid ground of
+     * the wastes, around the player, in small groups of 2-3, with the hostile cap in
+     * charge. mob_can_stand's opaque-below already refuses the lava sea (lava is not
+     * opaque), so a spawn never drops them in lava to swim. */
+    if (opt.difficulty == 0 || !rule(GR_MOB_SPAWNING)) return;
+    for (int k = 0; k < 4; k++) {
+      int x = ifl(pl.x) + rnd(41) - 20, z = ifl(pl.z) + rnd(41) - 20;
+      float dx = x + 0.5f - pl.x, dz = z + 0.5f - pl.z;
+      if (dx * dx + dz * dz < 14 * 14) continue;
+      int y0 = ifl(pl.y) + 8;
+      for (int y = y0; y > y0 - 20; y--) {
+        if (!world_loaded(x, y + 1, z) || !world_loaded(x, y - 1, z)) continue;
+        if (!mob_can_stand(x, y, z)) continue;
+        if (count(true) >= 8) return;
+        /* seven in ten a zombified piglin, the rest a piglin */
+        int t = rnd(10) < 7 ? E_ZPIGLIN : E_PIGLIN;
+        int n = 2 + rnd(2);
+        for (int i = 0; i < n; i++) {
+          int sx = x + (i ? rnd(5) - 2 : 0), sz = z + (i ? rnd(5) - 2 : 0);
+          if (!mob_can_stand(sx, y, sz)) continue;
+          if (!room_for_a_mob()) return;
+          spawn(t, sx + 0.5f, (float)y, sz + 0.5f);
+        }
+        return;
+      }
+    }
+    return;
+  }
   for (int k = 0; k < 4; k++) {
     int x = ifl(pl.x) + rnd(41) - 20, z = ifl(pl.z) + rnd(41) - 20;
     float dx = x + 0.5f - pl.x, dz = z + 0.5f - pl.z;
@@ -447,6 +535,13 @@ static void loot(Entity *e) {
       drop(I_STRING, rnd(3), e);
       if (rnd(3) == 0) drop(I_SPIDER_EYE, 1, e);
       break;
+    case E_PIGLIN: break;   /* modern's piglin loot is empty: nothing but XP */
+    case E_ZPIGLIN:
+      /* modern's zombified_piglin.json: rotten flesh 0-1 and gold nuggets 0-1 (plus a
+       * 2.5% gold ingot with looting, left out: no enchanting here) */
+      drop(I_ROTTEN_FLESH, rnd(2), e);
+      drop(I_GOLD_NUGGET, rnd(2), e);
+      break;
     case E_PIG: drop(e->fire > 0 ? I_COOKED_PORKCHOP : I_PORKCHOP, 1 + rnd(3), e); break;
     case E_COW:
       drop(e->fire > 0 ? I_COOKED_BEEF : I_BEEF, 1 + rnd(3), e);
@@ -480,6 +575,17 @@ static void hurt(Entity *e, float dmg, float kx, float kz) {
   if (!hostile(e->type)) e->panic = 100;
   else if (kx != 0 || kz != 0) e->panic = e->panic > 100 ? e->panic : 100;   /* EntityAIHurtByTarget */
   if (e->type == E_SPIDER) e->panic = 600;   /* a hit spider fights back, even by day */
+  if (e->type == E_ZPIGLIN) {
+    /* 1.8's zombie pigman trick: any hit (a knockback one or not) turns it and its
+     * neighbours on the player */
+    e->panic = e->panic > 100 ? e->panic : 100;
+    for (int i = 0; i < N_ENT; i++) {
+      Entity *o = &ents[i];
+      if (o == e || o->type != E_ZPIGLIN || o->state == 255) continue;
+      float ox = o->x - e->x, oz = o->z - e->z;
+      if (ox * ox + oz * oz < 32 * 32) o->panic = o->panic > 400 ? o->panic : 400;
+    }
+  }
   if (e->health <= 0) {
     e->state = 255;
     e->timer = 0;
@@ -493,7 +599,7 @@ Entity *entity_looked_at(float reach, float block_t) {
   Entity *hit = NULL;
   for (int i = 0; i < N_ENT; i++) {
     Entity *e = &ents[i];
-    if (e->type < E_ZOMBIE || e->type > E_CHICKEN || e->state == 255) continue;
+    if (!is_mob(e->type) || e->state == 255) continue;
     float w = info[e->type].w / 2 + 0.1f, h = info[e->type].h + 0.1f;
     float lo[3] = {e->x - w, e->y, e->z - w}, hi[3] = {e->x + w, e->y + h, e->z + w}, o[3] = {ex, ey, ez};
     float t0 = 0, t1 = best;
@@ -666,7 +772,7 @@ void explode(float x, float y, float z, float power, bool blocks) {
   }
   for (int i = 0; i < N_ENT; i++) {
     Entity *e = &ents[i];
-    if (e->type < E_ZOMBIE || e->type > E_CHICKEN) continue;
+    if (!is_mob(e->type)) continue;
     float ex = e->x - x, ez = e->z - z, ey = e->y - y;
     float d = sqrtf(ex * ex + ey * ey + ez * ez) / (power * 2);
     if (d <= 1) hurt(e, ((1 - d) * (1 - d) + (1 - d)) / 2 * 7 * power * 2 + 1, ex, ez);
@@ -726,7 +832,7 @@ static void arrow_tick(Entity *e) {
   if (e->item.aux)
     for (int i = 0; i < N_ENT; i++) {
       Entity *m = &ents[i];
-      if (m->type < E_ZOMBIE || m->type > E_CHICKEN || m->state == 255) continue;
+      if (!is_mob(m->type) || m->state == 255) continue;
       float w = info[m->type].w / 2 + 0.15f, mx = m->x - nx, mz = m->z - nz;
       if (fabsf(mx) < w && fabsf(mz) < w && ny > m->y - 0.1f && ny < m->y + info[m->type].h) {
         /* EntityArrow: damage 2 x speed, rounded up (a full draw sometimes more) */
@@ -962,9 +1068,14 @@ void mob_tick(Entity *e) {
   if (e->state != 255 && hostile(e->type)) {
     bool can = opt.difficulty > 0 && !pl.dead && pl.mode == 0;
     /* EntityAINearestAttackableTarget: seen within 16 (a spider only in the dark); EntityAITarget: kept
-     * while seen in the last 3 seconds, within 16 (zombies 35) */
+     * while seen in the last 3 seconds, within 16 (zombies 35). The nether's two ignore light
+     * (vanilla nether mobs do: no sky light exists there). 1.8's zombie pigman is the neutral
+     * one: EntityAIHurtByTarget only and no nearest-target task, so it never picks the player
+     * itself - it wanders until something hits it (hurt sets the panic it then chases by). */
     bool dark = e->type != E_SPIDER || light_there(bx, by + 1, bz) < 8 || !daylight();
-    if (can && dist < 16 && (dark || e->panic > 60) && (ticks_run + (unsigned)(e - ents)) % 4 == 0 && sees(e))
+    if (e->type == E_PIGLIN || e->type == E_ZPIGLIN) dark = true;
+    bool picks = e->type != E_ZPIGLIN;
+    if (picks && can && dist < 16 && (dark || e->panic > 60) && (ticks_run + (unsigned)(e - ents)) % 4 == 0 && sees(e))
       e->panic = e->panic > 60 ? e->panic : 60;
     chase = can && e->panic > 0 && dist < (e->type == E_ZOMBIE ? 35 : 16);
     if (!can) e->panic = 0;
@@ -1119,8 +1230,9 @@ void mob_tick(Entity *e) {
   /* attacks */
   if (chase && e->state != 255) {
     float reach = mi->w * 2 * mi->w * 2 + 0.6f;
-    if ((e->type == E_ZOMBIE || e->type == E_SPIDER) && dist * dist < reach + 0.5f && fabsf(dy) < 1.5f && !e->delay) {
-      player_hurt(scaled(e->type == E_ZOMBIE ? 3 : 2), DMG_MOB);
+    if ((e->type == E_ZOMBIE || e->type == E_SPIDER || e->type == E_PIGLIN || e->type == E_ZPIGLIN) &&
+        dist * dist < reach + 0.5f && fabsf(dy) < 1.5f && !e->delay) {
+      player_hurt(scaled(e->type == E_SPIDER ? 2 : 3), DMG_MOB);
       push_player(dx, dz, 0.4f);
       e->delay = 20;
     }

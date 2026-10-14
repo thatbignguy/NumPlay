@@ -360,11 +360,11 @@ extern const uint16_t blk_icon[NSTATES];   /* sprite of its icon */
 #include "items.h"
 extern const uint16_t blk_item[NSTATES];   /* the item a block state counts as (0xFFFF: none) */
 extern const uint16_t blk_fuel[NSTATES];   /* ticks it burns in a furnace */
-extern const char *const blk_label[NSTATES], *const it_label[N_ITEMS];
-extern const uint16_t it_icon[N_ITEMS], it_dur[N_ITEMS], it_fuel[N_ITEMS];
+extern const char *const blk_label[NSTATES], *const it_label[ITEM_SLOTS];
+extern const uint16_t it_icon[ITEM_SLOTS], it_dur[ITEM_SLOTS], it_fuel[ITEM_SLOTS];
 /* it_tier: the tool or armour material; it_a: attack damage, armour points or food; it_b: saturation x 10 */
-extern const uint8_t it_kind[N_ITEMS], it_stack[N_ITEMS], it_tier[N_ITEMS], it_a[N_ITEMS], it_b[N_ITEMS];
-extern const uint8_t it_place[N_ITEMS];   /* the block it places (255: none) */
+extern const uint8_t it_kind[ITEM_SLOTS], it_stack[ITEM_SLOTS], it_tier[ITEM_SLOTS], it_a[ITEM_SLOTS], it_b[ITEM_SLOTS];
+extern const uint8_t it_place[ITEM_SLOTS];   /* the block it places (255: none) */
 typedef struct { uint16_t out; uint8_t n, w, h; uint16_t in[9]; } Recipe;   /* w 0: shapeless, h of them */
 #define N_RECIPES 210
 extern const Recipe recipes[N_RECIPES];
@@ -376,7 +376,7 @@ extern const uint16_t group_log[];   /* ends with 0xFFFF */
 extern const uint16_t group_sapling[];   /* ends with 0xFFFF */
 extern const uint8_t skin_px[][1024];   /* mob skins, 64 x 32 */
 extern const uint16_t skin_pal[][16];
-enum { SKIN_ZOMBIE, SKIN_SKELETON, SKIN_CREEPER, SKIN_SPIDER, SKIN_PIG, SKIN_COW, SKIN_SHEEP, SKIN_SHEEP_FUR, SKIN_CHICKEN };
+enum { SKIN_ZOMBIE, SKIN_SKELETON, SKIN_CREEPER, SKIN_SPIDER, SKIN_PIG, SKIN_COW, SKIN_SHEEP, SKIN_SHEEP_FUR, SKIN_CHICKEN, SKIN_PIGLIN, SKIN_ZPIGLIN };
 extern const uint8_t cracks[10][32];   /* destroy stages, 1 bit a texel */
 extern const uint16_t tab_items[], tab_start[14];   /* the creative tabs' items */
 extern const char *const tab_name[13];

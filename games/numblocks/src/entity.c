@@ -134,7 +134,7 @@ Entity *ent_new(int type, float x, float y, float z) {
   e->y = e->py = y;
   e->z = e->pz = z;
   e->gx = x, e->gz = z;
-  if (type >= E_ZOMBIE && type <= E_CHICKEN) e->tx = (int16_t)floorf(x), e->tz = (int16_t)floorf(z);   /* (going nowhere yet) */
+  if (is_mob(type)) e->tx = (int16_t)floorf(x), e->tz = (int16_t)floorf(z);   /* (going nowhere yet) */
   return e;
 }
 
@@ -302,7 +302,7 @@ static void bobber_tick(Entity *e) {
   if (!e->on_ground)
     for (int i = 0; i < N_ENT; i++) {
       Entity *c = &ents[i];
-      if (c->type < E_ZOMBIE || c->type > E_CHICKEN || c->state == 255) continue;
+      if (!is_mob(c->type) || c->state == 255) continue;
       float w = mob_width(c->type) / 2 + 0.125f;
       if (fabsf(c->x - e->x) < w && fabsf(c->z - e->z) < w && e->y + 0.25f > c->y && e->y < c->y + mob_height(c->type)) {
         mob_hooked(c);
@@ -400,9 +400,10 @@ void ents_tick(void) {
   static int spawn_wait;
   if (++spawn_wait >= 20) {
     spawn_wait = 0;
-    if (world_dim != DIM_NETHER) {   /* the nether spawns nothing of its own */
-      if (rule(GR_MOB_SPAWNING)) mobs_spawn();
-      spawners_spawn();
-    }
+    /* the nether has its own spawn pass now (mobs_spawn learns dimensions); spawners work
+     * in both (a spawner set to a nether mob makes it in the nether, an animal's grass
+     * and light rules keep overworld animals out of it). */
+    if (rule(GR_MOB_SPAWNING)) mobs_spawn();
+    spawners_spawn();
   }
 }

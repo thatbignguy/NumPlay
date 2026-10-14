@@ -4,7 +4,10 @@
 CraftingManager and the Recipes* classes, RecipesFurnace, TileEntityFurnace).
 
 An item id is a block state (0 .. B_COUNT - 1, the blocks of tools/blocks.py
-that can be held) or 256 + the index of an item below. tools/pack.py writes
+that can be held), or 256 on with the item's own place in the it_* tables below:
+the two number spaces meet in the middle (the reserved states alias the items), so
+an item that needs an id of its own names one with `iid` (the nether's eggs, past
+every block state). tools/pack.py writes
 the tables into src/data.c; `items.py --header` writes src/items.h."""
 import sys
 import os
@@ -27,9 +30,9 @@ TOOL_DAMAGE = {'sword': 4, 'axe': 3, 'pickaxe': 2, 'shovel': 1, 'hoe': 0}
 I = []
 
 
-def item(name, label, tex, kind='none', stack=64, dur=0, tier=0, a=0, b=0, place=None, fuel=0):
+def item(name, label, tex, kind='none', stack=64, dur=0, tier=0, a=0, b=0, place=None, fuel=0, iid=None):
     I.append(dict(name=name, label=label, tex=tex, kind=kind, stack=stack, dur=dur, tier=tier, a=a, b=b, place=place,
-                  fuel=fuel))
+                  fuel=fuel, iid=iid))
 
 
 def food(name, label, tex, hunger, sat, stack=64, kind='food', place=None):
@@ -142,17 +145,53 @@ item('RAW_GOLD', 'Raw Gold', 'raw_gold')
 # (1.21.5's <mob>_spawn_egg.png, which 1.8.8's jar has none of: it only has the grey
 # spawn_egg and spawn_egg_overlay). The last tuple item is Minecraft's numeric id for the
 # mob (EntityList), the data value /give names a spawn egg by.
+# The nether's two (piglin, zombified piglin) go last in the list but take ids of their
+# own (see MOBS_NETHER below): an item id is what a save keeps, and so is a block
+# state's, and the two spaces meet.
 MOBS = (('zombie', 'Zombie', 54), ('skeleton', 'Skeleton', 51), ('creeper', 'Creeper', 50),
         ('spider', 'Spider', 52), ('pig', 'Pig', 90), ('cow', 'Cow', 92), ('sheep', 'Sheep', 91),
         ('chicken', 'Chicken', 93))
+# The third of each is the data value 1.8's one spawn_egg (383) is told apart by: the
+# mob's own EntityList id. 1.8's PigZombie was 57, the zombified piglin's predecessor,
+# so it keeps it; the piglin is new in 1.16 and takes 8, a value the eight 1.8 eggs
+# never used (2, 3, 4, 6, A, B, C, D say theirs). /give takes 383 with the value.
+MOBS_NETHER = (('piglin', 'Piglin', 8), ('zombified_piglin', 'Zombified Piglin', 57))
 for m, lab, _mc_id in MOBS:
     item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64)
 
 # (new items go last: their ids are what the saves keep)
 item('QUARTZ', 'Nether Quartz', 'quartz')
+# The nether's two eggs: the items' own id range (256 onwards, one an item) ends at 395
+# because the block states past it are blocks of their own (396: chiseled quartz block,
+# 397: quartz pillar, and on) - a holdable block's stack id is its own state's, so the
+# two may not cross. The state space's unused tail (447 on: past the last block state)
+# is where they go, named ids so nothing between 396 and 446 moves. (nb.h's is_item_id:
+# an id is an item's where the item tables have a row for it.)
+for m, lab, _mc_id in MOBS_NETHER:
+    iid = 447 if m == 'piglin' else 448
+    item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64, iid=iid)
+MOBS = MOBS + MOBS_NETHER
 
 INAMES = [x['name'] for x in I]
 assert len(set(INAMES)) == len(INAMES)
+
+# The item ids: 256 on, one an item, the table's own order - except the ones that name
+# their own (the nether's eggs, in the state space's unused tail: 396..446 are block
+# states of their own, so the item ids past the reserved range 258..395 may not use
+# them). ITEM_SLOTS is the tables' length: (the largest id) - 255.
+_next = 256
+for x in I:
+    if x['iid'] is None:
+        x['iid'] = _next
+    _next = max(_next, x['iid'] + 1)
+assert len(set(x['iid'] for x in I)) == len(I)
+ITEM_SLOTS = max(x['iid'] for x in I) - 255
+IEND = max(x['iid'] for x in I) + 1
+
+
+def item_id(name):
+    """an item's id by its name"""
+    return I[INAMES.index(name)]['iid']
 
 # --- the blocks you can hold: their names (en_US) and the item a block state counts as
 LABELS = {
@@ -249,10 +288,10 @@ BNAMES = [s['name'] for s in blocks.S]
 def resolve(n):
     """an item id from a name: 'I:NAME' or a known item name is an item, else a block state"""
     if n.startswith('I:'):
-        return 256 + INAMES.index(n[2:])
+        return item_id(n[2:])
     if n in INAMES:
         assert n not in BNAMES, n
-        return 256 + INAMES.index(n)
+        return item_id(n)
     if n.startswith('G_'):
         return GROUPS[n]
     return BNAMES.index(n)
@@ -428,8 +467,9 @@ SMELT += [(n, 'CHARCOAL') for n in GROUP_OF['G_LOG']]
 
 def fuel_of(iid):
     """burn time in ticks (TileEntityFurnace.fuelTime)"""
-    if 256 <= iid < 256 + len(I):
-        return I[iid - 256]['fuel']
+    it = next((x for x in I if x['iid'] == iid), None)
+    if it is not None:
+        return it['fuel']
     n = BNAMES[iid]
     if n == 'COAL_BLOCK':
         return 16000
@@ -474,10 +514,12 @@ DECO = ('SAPLING_', 'LEAVES_', 'DEAD_SHRUB', 'TALL_GRASS', 'FERN', 'DEAD_BUSH', 
 
 def tab_of(iid, block=False):
     """the tabs an item is in: a natural block is in Natural Blocks and in Building Blocks.
-    `block` says the id is a block state (the states 256 and up are items' ids too: a
-    caller walking the block states passes it, so the highest state is still a block)"""
-    if iid >= 256 and not block:
-        it = I[iid - 256]
+    `block` says the id is a block state: the state ids 256 and up share the number space
+    with the items' ids (256..256+ITEM_SLOTS-1 at most, with the block states' own in
+    between), and a caller walking the block states passes it so a state past the item
+    tables is still read as the block it is)"""
+    it = None if block else next((x for x in I if x['iid'] == iid), None)
+    if it is not None:
         k = it['kind']
         if k == 'spawn_egg':
             return (T_MOBS,)
@@ -528,17 +570,23 @@ def tab_group(tab, iid):
     if tab == T_FUNC:
         return 0 if iid < 256 and BNAMES[iid] in FUNC_FULL else 1
     if tab == T_COMBAT and iid >= 256:
-        if I[iid - 256]['kind'] in ARMOR_KINDS: return 0
-        if I[iid - 256]['kind'] == 'sword': return 1
+        it = item_of_id(iid)
+        if it['kind'] in ARMOR_KINDS: return 0
+        if it['kind'] == 'sword': return 1
         return 2   # the bow and the arrow
     return 0
+
+
+def item_of_id(iid):
+    """the item of an id (the slots between the ids are block states, not items)"""
+    return next(x for x in I if x['iid'] == iid)
 
 
 def tab_order(tab, ids):
     """a tab's ids in the order they are shown"""
     out = sorted(ids, key=lambda i: (tab_group(tab, i), i))
     for name, after in AFTER.items():
-        iid, anchor = 256 + INAMES.index(name[2:]), 256 + INAMES.index(after[2:])
+        iid, anchor = item_id(name[2:]), item_id(after[2:])
         if iid in out and anchor in out:
             out.remove(iid)
             out.insert(out.index(anchor) + 1, iid)
@@ -548,9 +596,11 @@ def tab_order(tab, ids):
 def header():
     out = ['/* Generated by tools/items.py: the items NumBlocks knows (ids 256 and up; below 256 a block state). */',
            '#ifndef NB_ITEMS_H', '#define NB_ITEMS_H', '#include <stdint.h>', '#include "blocks.h"', '', 'enum {']
-    for k, x in enumerate(I):
-        out.append(f'  I_{x["name"]} = {256 + k},')
-    out += [f'  I_END = {256 + len(I)}', '};', f'#define N_ITEMS {len(I)}', '']
+    for x in I:
+        out.append(f'  I_{x["name"]} = {x["iid"]},')
+    out += [f'  I_END = {IEND}', '};',
+            f'#define N_ITEMS {len(I)}   /* how many items there are */',
+            f'#define ITEM_SLOTS {ITEM_SLOTS}   /* the it_* tables: 256..256+ITEM_SLOTS-1, an id a slot */', '']
     out.append('enum { ' + ', '.join(f'IK_{k.upper()}' for k in KINDS) + ' };')
     out.append('enum { ' + ', '.join(f'G_{g[2:]} = 0x{v:X}' for g, v in GROUPS.items()) + ' };')
     out += ['', '#endif', '']
@@ -561,6 +611,6 @@ if __name__ == '__main__':
     if '--header' in sys.argv:
         sys.stdout.write(header())
     else:
-        for k, x in enumerate(I):
-            print(256 + k, x['name'], x['label'])
+        for x in I:
+            print(x['iid'], x['name'], x['label'])
         print(len(R), 'recipes')

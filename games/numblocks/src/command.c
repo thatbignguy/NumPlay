@@ -534,7 +534,7 @@ static void cmd_summon(char **a, int n) {
     ok("Object successfully summoned", NULL, 0);
     return;
   }
-  for (int i = 0; i < 8; i++)
+  for (int i = 0; i < 10; i++)
     if (!strcmp(a[0], mob_name[i])) {
       if (!mob_summon(E_ZOMBIE + i, x, y, z)) return error("Unable to summon object", NULL, 0, 0);
       ok("Object successfully summoned", NULL, 0);
@@ -763,7 +763,7 @@ bool command_complete(const char *line, int k, int *at, char *o, int max) {
     case C_SUMMON:
       if (arg == 0) {
         static const char *const bolt_name[1] = {"LightningBolt"};
-        return offer_list(word, mob_name, 8, k, o, max) || offer_list(word, bolt_name, 1, k, o, max);
+        return offer_list(word, mob_name, 10, k, o, max) || offer_list(word, bolt_name, 1, k, o, max);
       }
       return false;
     case C_LOCATE: {

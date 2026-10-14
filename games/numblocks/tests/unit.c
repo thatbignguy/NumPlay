@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "nb.h"
+#include "mob.h"
 #include "edits.h"
 #include "gen.h"
 
@@ -1367,12 +1368,14 @@ int main(void) {
     memset(ents, 0, sizeof ents);
     opt.difficulty = 0, pl.mode = 0, pl.dead = false, pl.health = 20;
     pl.x = 8.5f, pl.y = (float)y, pl.z = 8.5f, pl.vx = pl.vy = pl.vz = 0, pl.slot = 0;
-    static const int eggs[8] = {I_ZOMBIE_SPAWN_EGG, I_SKELETON_SPAWN_EGG, I_CREEPER_SPAWN_EGG,
+    static const int eggs[10] = {I_ZOMBIE_SPAWN_EGG, I_SKELETON_SPAWN_EGG, I_CREEPER_SPAWN_EGG,
                                I_SPIDER_SPAWN_EGG, I_PIG_SPAWN_EGG, I_COW_SPAWN_EGG, I_SHEEP_SPAWN_EGG,
-                               I_CHICKEN_SPAWN_EGG};
-    static const int mobs[8] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN};
-    for (int i = 0; i < 8; i++) {
+                               I_CHICKEN_SPAWN_EGG, I_PIGLIN_SPAWN_EGG, I_ZOMBIFIED_PIGLIN_SPAWN_EGG};
+    static const int mobs[10] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN,
+                                 E_PIGLIN, E_ZPIGLIN};
+    for (int i = 0; i < 10; i++) {
       CHECK(mob_of_egg(eggs[i]) == mobs[i]);
+      CHECK(egg_of_mob(mobs[i]) == eggs[i]);
       CHECK(item_label(eggs[i])[0] && item_kind(eggs[i]) == IK_SPAWN_EGG);
       CHECK(item_max(eggs[i]) == 64 && item_dur(eggs[i]) == 0 && item_icon(eggs[i]) >= 0);
       /* used on the ground two blocks ahead, in survival: the egg is spent, the mob is there */
@@ -1388,6 +1391,7 @@ int main(void) {
       pl.inv[0].id = 0, pl.inv[0].aux = 0;
     }
     CHECK(mob_of_egg(B_DIRT) == 0 && mob_of_egg(0) == 0 && mob_of_egg(I_END) == 0);
+    CHECK(mob_of_egg(I_QUARTZ) == 0 && egg_of_mob(0) == 0);   /* (QUARTZ sits between the eggs: not one) */
     /* nothing to look at: nothing spawns (creative: the egg stays) */
     pl.mode = 1;
     pl.inv[0].id = I_CREEPER_SPAWN_EGG, pl.inv[0].aux = 1;
@@ -1489,17 +1493,16 @@ int main(void) {
     CHECK(spawners_count() == 24 && spawner_mob_at(2000, 10, 2000) == E_ZOMBIE);
     spawners_set(2001, 10, 2000, E_SKELETON);
     CHECK(spawner_mob_at(2000, 10, 2000) == E_ZOMBIE && spawner_mob_at(2001, 10, 2000) == E_SKELETON);
-    /* every mob survives the save and load: the last two are the ones the old record
-     * read back as unset (E_SHEEP and E_CHICKEN are past the old "under 8" bound) */
+    /* every mob survives the save and load */
     {
       uint8_t b2[512];
       spawners_clear();
-      for (int i = 0; i < 8; i++) spawners_set(3000 + i * 2, 10, 3000, E_ZOMBIE + i);
+      for (int i = 0; i < 10; i++) spawners_set(3000 + i * 2, 10, 3000, E_ZOMBIE + i);
       int l2 = spawners_save(b2);
       spawners_clear();
       spawners_load(b2, l2);
-      for (int i = 0; i < 8; i++) CHECK(spawner_mob_at(3000 + i * 2, 10, 3000) == E_ZOMBIE + i);
-      CHECK(spawners_count() == 8 && spawners_save(NULL) == l2);
+      for (int i = 0; i < 10; i++) CHECK(spawner_mob_at(3000 + i * 2, 10, 3000) == E_ZOMBIE + i);
+      CHECK(spawners_count() == 10 && spawners_save(NULL) == l2);
     }
     spawners_load(buf, len);             /* (and a load puts the saved ones back) */
     CHECK(spawners_save(NULL) == len && spawners_count() == 1);
@@ -1532,7 +1535,7 @@ int main(void) {
       if (t % 20) continue;
       int c = 0, m = 0;
       for (int i = 0; i < N_ENT; i++) {
-        if (ents[i].type >= E_ZOMBIE && ents[i].type <= E_CHICKEN) m++;
+        if (is_mob(ents[i].type)) m++;
         if (ents[i].type == E_CREEPER && fabsf(ents[i].x - pl.x) < 7 && fabsf(ents[i].z - pl.z) < 7) c++;
       }
       if (c > near) near = c;
@@ -1718,6 +1721,295 @@ int main(void) {
         }
     CHECK(over > 100 && back == 0);   /* (a 1.8 world has ground in it; no netherrack) */
     plat_remove_prefix("utn");
+  }
+  {
+    /* ---- the nether's mobs (todo [15]): piglins and zombified piglins ----------------
+     * Spawning, models, skins, drops, spawn eggs, /summon; the enderman is the stretch
+     * past them and is not in (no ender pearl item, no teleport). Bartering, the
+     * golden-armour truce and any piglin anger beyond being hit are out of scope. */
+    extern uint32_t game_time;
+    /* models: the 1.16 piglin's own head (10 wide, snout, tusks, ears) on the player's
+     * body: 11 boxes for both; MAX_PARTS is 12. Skins from minecraft-textures/. */
+    {
+      Entity e;
+      memset(&e, 0, sizeof e);
+      Part parts[MAX_PARTS];
+      e.type = E_ZPIGLIN, e.limb_amt = 1;
+      CHECK(mob_parts(&e, 0, parts) == 11);
+      e.type = E_PIGLIN;
+      CHECK(mob_parts(&e, 0, parts) == 11);
+      CHECK(mob_width(E_PIGLIN) == 0.6f && mob_height(E_PIGLIN) == 1.95f);
+      CHECK(mob_width(E_ZPIGLIN) == 0.6f && mob_height(E_ZPIGLIN) == 1.95f);
+      CHECK(is_mob(E_PIGLIN) && is_mob(E_ZPIGLIN) && is_hostile_mob(E_PIGLIN) && is_hostile_mob(E_ZPIGLIN));
+      CHECK(!is_mob(E_ARROW) && !is_mob(0));
+      /* the ids: an item's id is one the item tables have a row for; the block states
+       * past the reserved range (396's chiseled quartz and on) are ids of their own,
+       * and the eggs sit in the state space's unused tail past every block (447, 448) */
+      CHECK(is_item_id(I_PIGLIN_SPAWN_EGG) && is_item_id(I_ZOMBIFIED_PIGLIN_SPAWN_EGG));
+      CHECK(is_item_id(I_WOODEN_SWORD) && is_item_id(I_QUARTZ));
+      CHECK(!is_item_id(B_CHISELED_QUARTZ_BLOCK) && !is_item_id(B_QUARTZ_PILLAR) && !is_item_id(B_DEEPSLATE));
+      CHECK(!is_item_id(I_END) && !is_item_id(0) && !is_item_id(B_STONE));
+      CHECK(!strcmp(item_label(I_PIGLIN_SPAWN_EGG), "Piglin Spawn Egg"));
+      CHECK(!strcmp(item_label(B_CHISELED_QUARTZ_BLOCK), "Chiseled Quartz Block"));
+    }
+    /* spawning: in the nether only, on solid ground of the wastes, around the player,
+     * in small groups, with the hostile cap; no sky light gate (vanilla nether mobs
+     * ignore light). A spawn never drops them in lava (mob_can_stand refuses it). */
+    {
+      world_new(99, "utnmob");
+      world_switch_dim(DIM_NETHER);
+      world_follow(8, 40, 8);
+      while (world_pending()) world_follow(8, 40, 8);
+      int y = 40, px = 8, pz = 8;
+      for (int z = pz - 20; z <= pz + 20; z++)
+        for (int x = px - 20; x <= px + 20; x++) {
+          world_set(x, y - 1, z, B_NETHERRACK);
+          for (int k = 0; k < 4; k++) world_set(x, y + k, z, B_AIR);
+        }
+      memset(ents, 0, sizeof ents);
+      opt.difficulty = 2, pl.mode = 0, pl.dead = false, pl.health = 20;
+      pl.x = px + 0.5f, pl.y = (float)y, pl.z = pz + 0.5f;
+      game_rules = GR_DEFAULT;
+      uint32_t rng0 = rnd_seed(123);
+      for (int t = 0; t < 200; t++) mobs_spawn();
+      int pig = 0, zpig = 0, other = 0;
+      for (int i = 0; i < N_ENT; i++) {
+        if (ents[i].type == E_PIGLIN) pig++;
+        else if (ents[i].type == E_ZPIGLIN) zpig++;
+        else if (is_mob(ents[i].type)) other++;
+      }
+      CHECK(pig + zpig > 0 && other == 0);   /* only the nether's two */
+      CHECK(pig + zpig <= 8);                /* the hostile cap */
+      for (int i = 0; i < N_ENT; i++)
+        if (ents[i].type == E_PIGLIN || ents[i].type == E_ZPIGLIN) {
+          int bx = (int)floorf(ents[i].x), by = (int)floorf(ents[i].y), bz = (int)floorf(ents[i].z);
+          CHECK(mob_can_stand(bx, by, bz) && world_get(bx, by - 1, bz) != B_LAVA);
+        }
+      /* peaceful: nothing (as overworld hostiles make nothing) */
+      memset(ents, 0, sizeof ents);
+      opt.difficulty = 0;
+      for (int t = 0; t < 100; t++) mobs_spawn();
+      int any = 0;
+      for (int i = 0; i < N_ENT; i++) any += is_mob(ents[i].type);
+      CHECK(any == 0);
+      opt.difficulty = 2;
+      /* the overworld still makes its own, never the nether's */
+      world_switch_dim(DIM_OVER);
+      world_follow(8, 70, 8);
+      while (world_pending()) world_follow(8, 70, 8);
+      for (int z = -12; z <= 28; z++)
+        for (int x = -12; x <= 28; x++) {
+          world_set(x, 69, z, B_GRASS);
+          for (int k = 0; k < 4; k++) world_set(x, 70 + k, z, B_AIR);
+        }
+      memset(ents, 0, sizeof ents);
+      game_time = 18000;   /* midnight: hostiles want the dark */
+      pl.x = 8.5f, pl.y = 70, pl.z = 8.5f;
+      for (int t = 0; t < 200; t++) mobs_spawn(), game_time++;
+      int nether_in_over = 0, over = 0;
+      for (int i = 0; i < N_ENT; i++) {
+        if (ents[i].type == E_PIGLIN || ents[i].type == E_ZPIGLIN) nether_in_over++;
+        else if (is_mob(ents[i].type)) over++;
+      }
+      CHECK(nether_in_over == 0 && over > 0);
+      rnd_seed(rng0);
+      plat_remove_prefix("utnmob");
+    }
+    /* behaviour: the piglin is hostile (the zombie's chase and bite); the zombified is
+     * neutral (wanders, and when hit it fights back and its neighbours join: 1.8's
+     * zombie pigman trick). No burning (the daylight burn is the zombie's and the
+     * skeleton's only). */
+    {
+      world_new(100, "utmobai");
+      world_follow(8, 70, 8);
+      int y = 70;
+      for (int z = 0; z <= 20; z++)
+        for (int x = 0; x <= 20; x++) {
+          world_set(x, y - 1, z, B_STONE);
+          for (int k = 0; k < 4; k++) world_set(x, y + k, z, B_AIR);
+        }
+      memset(ents, 0, sizeof ents);
+      opt.difficulty = 2, pl.mode = 0, pl.dead = false, pl.health = 20;
+      pl.x = 8.5f, pl.y = (float)y, pl.z = 8.5f;
+      game_time = 18000;
+      /* a piglin eight blocks off, seeing the player: it comes and bites */
+      Entity *pg = ent_new(E_PIGLIN, 8.5f, (float)y, 16.5f);
+      pg->health = 16;
+      float d0 = fabsf(pg->z - pl.z);
+      for (int t = 0; t < 200; t++) ticks_run++, ents_tick(), game_time++;
+      CHECK(pg->type == E_PIGLIN && fabsf(pg->z - pl.z) < d0);
+      CHECK(pl.health < 20);   /* (it bit) */
+      /* a zombified left alone wanders (no chase, no bite) */
+      memset(ents, 0, sizeof ents);
+      pl.health = 20;
+      Entity *zg = ent_new(E_ZPIGLIN, 8.5f, (float)y, 16.5f);
+      zg->health = 20;
+      for (int t = 0; t < 200; t++) ticks_run++, ents_tick(), game_time++;
+      CHECK(zg->type == E_ZPIGLIN && pl.health == 20 && zg->panic == 0);
+      /* hit it: it fights back, and its neighbours join */
+      Entity *n1 = ent_new(E_ZPIGLIN, 10.5f, (float)y, 16.5f);
+      Entity *n2 = ent_new(E_ZPIGLIN, 6.5f, (float)y, 16.5f);
+      n1->health = n2->health = 20;
+      pl.slot = 0, pl.inv[0].id = 0;
+      player_look(pl.x, pl.y + 1.62f, pl.z, 0, 60);
+      mob_attack(zg);
+      CHECK(zg->panic > 0 && n1->panic > 0 && n2->panic > 0);
+      /* (the player does not tick here, so the hit grace is cleared by hand: several
+       * bites have to land for the check to read one) */
+      for (int t = 0; t < 200; t++) pl.invuln = 0, ticks_run++, ents_tick(), game_time++;
+      CHECK(pl.health < 20);   /* (they bit back) */
+      /* daylight does not burn them (only the zombie and the skeleton burn) */
+      memset(ents, 0, sizeof ents);
+      game_time = 6000;   /* noon */
+      Entity *pz = ent_new(E_ZPIGLIN, 8.5f, (float)y, 8.5f);
+      Entity *pp = ent_new(E_PIGLIN, 9.5f, (float)y, 8.5f);
+      pz->health = 20, pp->health = 16;
+      for (int t = 0; t < 100; t++) ticks_run++, ents_tick(), game_time++;
+      CHECK(pz->type == E_ZPIGLIN && pp->type == E_PIGLIN && pz->fire == 0 && pp->fire == 0);
+      /* far away: gone (hostiles despawn past 32, as overworld hostiles do) */
+      pz->x = pl.x + 40;
+      for (int t = 0; t < 5; t++) ticks_run++, ents_tick(), game_time++;
+      CHECK(pz->type == E_NONE);
+      plat_remove_prefix("utmobai");
+    }
+    /* drops: the piglin's is empty (modern's piglin.json: nothing but XP); the
+     * zombified's is rotten flesh 0-1 and gold nuggets 0-1 (its gold-ingot 2.5% with
+     * looting is left out: no enchanting here). */
+    {
+      world_new(101, "utmobloot");
+      world_follow(8, 70, 8);
+      int y = 70;
+      for (int z = 0; z <= 8; z++)
+        for (int x = 0; x <= 8; x++) {
+          world_set(x, y - 1, z, B_STONE);
+          for (int k = 0; k < 3; k++) world_set(x, y + k, z, B_AIR);
+        }
+      pl.x = 8.5f, pl.y = (float)y, pl.z = 8.5f, pl.mode = 0, pl.dead = false;
+      opt.difficulty = 2;
+      game_rules = GR_DEFAULT;
+      uint32_t rng0 = rnd_seed(7);
+      /* a piglin killed drops nothing (but XP: the level moves). It dies three blocks
+       * off so the drops are not picked up as they land (the pickup box is one). */
+      memset(ents, 0, sizeof ents);
+      memset(pl.inv, 0, sizeof pl.inv);
+      int xp0 = pl.xp_total;
+      Entity *pg = ent_new(E_PIGLIN, 8.5f, (float)y, 11.5f);
+      pg->health = 1;
+      mob_attack(pg);
+      for (int t = 0; t < 30; t++) ticks_run++, ents_tick();
+      int pig_items = 0;
+      for (int i = 0; i < N_ENT; i++) pig_items += ents[i].type == E_ITEM;
+      CHECK(pg->type == E_NONE && pig_items == 0 && pl.xp_total > xp0);
+      /* a zombified drops only flesh and nuggets, 0-1 each */
+      int saw_flesh = 0, saw_nugget = 0;
+      for (int k = 0; k < 20; k++) {
+        memset(ents, 0, sizeof ents);
+        Entity *zg = ent_new(E_ZPIGLIN, 8.5f, (float)y, 11.5f);
+        zg->health = 1;
+        mob_attack(zg);
+        for (int t = 0; t < 30; t++) ticks_run++, ents_tick();
+        for (int i = 0; i < N_ENT; i++)
+          if (ents[i].type == E_ITEM) {
+            int id = ents[i].item.id, n = ents[i].item.aux;
+            CHECK((id == I_ROTTEN_FLESH || id == I_GOLD_NUGGET) && n >= 0 && n <= 1);
+            if (id == I_ROTTEN_FLESH && n) saw_flesh = 1;
+            if (id == I_GOLD_NUGGET && n) saw_nugget = 1;
+          }
+      }
+      CHECK(saw_flesh && saw_nugget);   /* (both drop over twenty kills) */
+      rnd_seed(rng0);
+      plat_remove_prefix("utmobloot");
+    }
+    /* spawn eggs, /summon and spawners: the eggs are in the Spawn Eggs tab and set
+     * into a spawner; /summon piglin works and completes. */
+    {
+      world_new(102, "utmobegg");
+      world_follow(8, 70, 8);
+      int y = 70;
+      for (int z = 0; z <= 8; z++)
+        for (int x = 0; x <= 8; x++) {
+          world_set(x, y - 1, z, B_GRASS);
+          for (int k = 0; k < 3; k++) world_set(x, y + k, z, B_AIR);
+        }
+      CHECK(item_kind(I_PIGLIN_SPAWN_EGG) == IK_SPAWN_EGG && item_kind(I_ZOMBIFIED_PIGLIN_SPAWN_EGG) == IK_SPAWN_EGG);
+      /* Spawn Eggs tab holds both (Search holds everything once) */
+      {
+        int lo = tab_start[11], hi = tab_start[12], has_pig = 0, has_zpig = 0;
+        for (int i = lo; i < hi; i++) {
+          if (tab_items[i] == I_PIGLIN_SPAWN_EGG) has_pig = 1;
+          if (tab_items[i] == I_ZOMBIFIED_PIGLIN_SPAWN_EGG) has_zpig = 1;
+        }
+        CHECK(has_pig && has_zpig);
+      }
+      /* /summon (and its completion) */
+      world_cheats = true;
+      memset(ents, 0, sizeof ents);
+      pl.x = 8.5f, pl.y = (float)y, pl.z = 8.5f;
+      command_run("/summon Piglin");
+      {
+        int n = 0;
+        for (int i = 0; i < N_ENT; i++) n += ents[i].type == E_PIGLIN;
+        CHECK(n == 1 && !strcmp(chat_last_line(), "Object successfully summoned"));
+      }
+      command_run("/summon ZombifiedPiglin");
+      {
+        int n = 0;
+        for (int i = 0; i < N_ENT; i++) n += ents[i].type == E_ZPIGLIN;
+        CHECK(n == 1);
+      }
+      {
+        char o[64];
+        int at = 0;
+        /* ("Pi" matches Pig first: the list's own order, as /summon's does) */
+        CHECK(command_complete("/summon Pi", 0, &at, o, sizeof o) && !strcmp(o, "Pig"));
+        CHECK(command_complete("/summon Pi", 1, &at, o, sizeof o) && !strcmp(o, "Piglin"));
+        CHECK(command_complete("/summon Zombified", 0, &at, o, sizeof o) && !strcmp(o, "ZombifiedPiglin"));
+      }
+      /* /give names (modern's piglin_spawn_egg, zombified_piglin_spawn_egg) */
+      memset(pl.inv, 0, sizeof pl.inv);
+      command_run("/give @p piglin_spawn_egg 1");
+      CHECK(pl.inv[0].id == I_PIGLIN_SPAWN_EGG);
+      command_run("/give @p zombified_piglin_spawn_egg 1");
+      {
+        int found = 0;
+        for (int i = 0; i < 36; i++) found += pl.inv[i].id == I_ZOMBIFIED_PIGLIN_SPAWN_EGG;
+        CHECK(found == 1);
+      }
+      /* an egg on a spawner sets it, and it makes that mob (in the nether too). The
+       * spawner sits at the player's own level one ahead, the crosshair down on it. */
+      world_switch_dim(DIM_NETHER);
+      world_follow(8, 40, 8);
+      while (world_pending()) world_follow(8, 40, 8);
+      for (int z = -4; z <= 8; z++)
+        for (int x = -4; x <= 12; x++) {
+          world_set(x, 40, z, B_NETHERRACK);
+          for (int k = 1; k <= 3; k++) world_set(x, 40 + k, z, B_AIR);
+        }
+      world_set(8, 41, 9, B_MOB_SPAWNER);
+      memset(ents, 0, sizeof ents);
+      pl.x = 8.5f, pl.y = 41, pl.z = 8.5f, pl.mode = 0, pl.slot = 0;
+      opt.difficulty = 2;
+      spawners_clear();
+      pl.inv[0] = (Stack){I_PIGLIN_SPAWN_EGG, 2};
+      player_look(pl.x, pl.y + 1.62f, pl.z, 0, 70);
+      CHECK(pl.hit_face >= 0 && world_get(pl.hit_x, pl.hit_y, pl.hit_z) == B_MOB_SPAWNER);
+      player_tick(K_USE, K_USE);
+      CHECK(spawner_mob_at(8, 41, 9) == E_PIGLIN);
+      {
+        uint8_t buf[512];
+        int len = spawners_save(buf);
+        spawners_clear();
+        spawners_load(buf, len);
+        CHECK(spawner_mob_at(8, 41, 9) == E_PIGLIN);
+      }
+      /* it draws (a frame with the egg turning in it) */
+      {
+        Camera c = {8.5f, 42.62f, 6.5f, 0, 12};
+        render_frame(&c, 6000);
+      }
+      world_cheats = false;
+      plat_remove_prefix("utmobegg");
+    }
   }
   {
     /* the nether's build height: blocks above its ceiling (y 128..199) place, break

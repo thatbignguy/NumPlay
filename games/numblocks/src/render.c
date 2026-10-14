@@ -47,7 +47,7 @@ typedef struct {
 typedef struct {
   float ex, ey, ez, yaw;   /* where it turns (cache coordinates), its spin */
   int16_t r[4];            /* its rectangle on the picture */
-  uint8_t light, egg;      /* its light, its spawn egg - I_ZOMBIE_SPAWN_EGG */
+  uint8_t light, egg;      /* its light, its mob (E_ZOMBIE .. E_ZPIGLIN: egg_of_mob points at the egg) */
 } SDraw;
 #define N_SDRAW 4
 
@@ -1462,7 +1462,7 @@ static void ents_frame(Frame *F) {
     else if (e->type == E_TNT) w = 1.2f, h = 1.1f;
     else if (e->type == E_ARROW || e->type == E_BOBBER) w = 0.6f, h = 0.6f, ey -= 0.3f;
     else w = mob_width(e->type) * 2.2f, h = mob_height(e->type) * 1.2f;
-    if (e->type >= E_ZOMBIE && e->type <= E_CHICKEN && e->state == 255) w = h = 2.4f;   /* dying: lying down */
+    if (is_mob(e->type) && e->state == 255) w = h = 2.4f;   /* dying: lying down */
     float c[8][3];
     for (int k = 0; k < 8; k++)
       c[k][0] = ex + ((k & 1) ? w : -w) / 2, c[k][1] = ey + ((k & 2) ? h : 0), c[k][2] = ez + ((k & 4) ? w : -w) / 2;
@@ -2213,7 +2213,7 @@ static void spawner_frame(Frame *F) {
     d->yaw = (game_time + tick_frac) * 0.0628319f;   /* a turn in five seconds */
     for (int k = 0; k < 4; k++) d->r[k] = (int16_t)r[k];
     d->light = draw_light(vl[VC_I(cx, cy, cz)]);
-    d->egg = (uint8_t)(set - E_ZOMBIE);
+    d->egg = (uint8_t)set;   /* the mob itself: egg_of_mob points at its egg (the eggs are not contiguous) */
   }
 }
 
@@ -2233,7 +2233,8 @@ static void spawner_strip(Frame *F, int py0, int rows, uint16_t (*cb)[RW], float
     Entity f;
     memset(&f, 0, sizeof f);
     f.type = E_ITEM;
-    f.item.id = (uint16_t)(I_ZOMBIE_SPAWN_EGG + sd->egg);
+    f.item.id = (uint16_t)egg_of_mob(sd->egg);
+    if (!f.item.id) continue;   /* (unset, or an old record's mob past the new A..: no egg) */
     f.yaw = sd->yaw;
     Draw dr = {&f, sd->r[0], sd->r[1], sd->r[2], sd->r[3], sd->ex, sd->ey, sd->ez, sd->light, 0};
     ItemCache h = {0};
@@ -2269,7 +2270,7 @@ static void ents_strip(Frame *F, int py0, int rows, uint16_t (*cb)[RW], float (*
     const Draw *dr = &F->draws[k];
     if (dr->y1 <= py0 || dr->y0 >= py0 + rows) continue;
     const Entity *e = dr->e;
-    bool mob = e->type >= E_ZOMBIE && e->type <= E_CHICKEN;
+    bool mob = is_mob(e->type);
     int n = mob ? make_boxes(dr, bx) : 0;
     /* hurt (and dying): a red tint; a creeper about to blow flashes white */
     int red = mob && (e->hurt > 0 || e->state == 255) ? 10 : 0;

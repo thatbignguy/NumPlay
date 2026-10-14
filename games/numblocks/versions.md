@@ -1,3 +1,75 @@
+## 1.5.39
+**The nether has life: piglins and zombified piglins spawn on the wastes - the piglin hostile, the zombified neutral until hit and then its neighbours with it - with the modern skins and models, drops, spawn eggs, `/summon` and spawners**
+
+- **Spawning.** The every-second pass (`entity.c`) no longer gates the nether off: `mobs_spawn`
+  (`mob.c`) takes the dimension. In the nether it rolls on solid ground of the wastes about the
+  player, 14 blocks out and more, in groups of two or three, with the hostiles' cap
+  (`count(true) < 8`) and the difficulty in charge - and it never looks at light: there is no
+  sky light there, so vanilla's nether mobs ignore the light level, and the overworld's
+  `light <= rnd(8)` gate would mean nothing. `mob_can_stand`'s opaque floor is what keeps a
+  spawn out of the lava sea. Seven in ten are zombified piglins, the rest piglins. Spawners
+  make their mob in the nether too now (they made nothing there).
+- **Behaviour.** The piglin is the hostile one: the sighted target, the zombie's chase (16
+  blocks) and the melee bite (3, scaled by difficulty), 16 health, 5 XP on the kill. The
+  zombified piglin is 1.8's zombie pigman: neutral - `EntityAIHurtByTarget` and no
+  nearest-target task, so it wanders and never picks the player itself; hit, it turns (the
+  panic it then chases by) and every zombified piglin within 32 blocks turns with it, the old
+  pigman's one good trick. 20 health. Neither burns in daylight (that rule is the zombie's and
+  the skeleton's, and it stays theirs).
+- **The models, from the jar.** `AbstractPiglinModel.addHead` read out of `26.3.jar`: a 10-wide
+  skull with the 4 x 4 x 1 snout at (31,1), the two cream tusks at (2,0) and (2,4), and the two
+  1 x 5 x 4 ears at (39,6) and (51,6) turned 30 degrees out about (4.5, -6, 0) - all on the
+  player's own body, arms and legs (the 1.8-scale ones this game has). The zombified piglin
+  holds its arms out (1.8's PigZombie pose); the piglin swings them at its sides. 11 boxes
+  each, `MAX_PARTS` is 12. The skins come from `minecraft-textures/`
+  (`entity/piglin/piglin.png`, `zombified_piglin.png`), folded 64 x 32 into two new `SKIN_*`.
+  The zombified piglin shows one ear, as its own art does.
+- **Drops.** The piglin's loot table is empty (modern's `piglin.json`: nothing but XP). The
+  zombified piglin drops 0-1 rotten flesh and 0-1 gold nuggets (`zombified_piglin.json`); its
+  2.5% gold ingot is a looting chance, so it is left out.
+- **Eggs, `/summon`, spawners.** `PIGLIN_SPAWN_EGG` and `ZOMBIFIED_PIGLIN_SPAWN_EGG` sit in the
+  Spawn Eggs tab, set into a monster spawner, and go by `/give` (the modern
+  `piglin_spawn_egg`, `zombified_piglin_spawn_egg`, or 1.8's one egg 383 with data 8 and 57 -
+  57 the old PigZombie's, 8 a value the eight 1.8 eggs never used). `/summon Piglin` and
+  `/summon ZombifiedPiglin` work and the toolbox finishes them. `mob_of_egg` and the new
+  `egg_of_mob` are lookup tables (the eggs are no longer a contiguous run) and the spawner's
+  egg (`render.c`) asks `egg_of_mob` rather than doing `set - E_ZOMBIE` arithmetic, which no
+  longer pointed at the right egg.
+- **The ids.** The new items could not simply follow QUARTZ: an item id is what a save keeps
+  and so is a block state's, and the two number spaces share 256 up - the reserved states
+  258..395 alias the items' ids, and past them the states are ids of their own (396's chiseled
+  quartz block and on). The two eggs therefore take **447 and 448**, in the state space's
+  unused tail past every block; the item tables now hold a row an id's slot (`ITEM_SLOTS` 193)
+  with the slots between left empty, and `is_item_id` reads an id as an item's where the tables
+  have a label for it (`nb.h`). No existing item, block state or save moves. (Item ids in the
+  tools are the items' own now - `items.py`'s `item_id`, `pack.py`, `names.py` - since the
+  table's index is no longer the id.)
+- **Left out, said here.** [15]'s stretch past the pair, the enderman: its teleport is what
+  makes it one, and its drop, the ender pearl, has no item in this game. Bartering, the
+  golden-armour truce and any piglin anger beyond being hit are out of scope too.
+- **Tests.** `make test` passes (210 recipes): the models' box counts (11 each), spawning in
+  the nether only - never the nether's mobs in the overworld, and nothing on a peaceful world -
+  the piglin's chase and bite, the zombified's quiet then its own and its neighbours' turn when
+  hit, no burning in daylight, the despawn, the drops' items and counts, the ids'
+  classification (`is_item_id`), the eggs in the Spawn Eggs tab, `/summon` and its completion,
+  and an egg on a spawner with the table's save and load.
+- **The rigs.** `tests/play.c`: `--mobs` places all ten types (the eight in their old row; the
+  nether's two just beyond its ends, so the frames it always gave are unchanged), and with
+  `--nether` it is the nether's pair instead, on cleared netherrack, Survival and Normal so the
+  piglin gives chase. `--spectate` goes to 0..9.
+- **Recorded.** `./build/play --nether --mobs --bright 12 --frames 60 --shots 2,15,35,59 --out
+  /tmp/nbmobs` (**not** `build/desktop`): frame 2 the pair on the wastes facing the player -
+  the zombified piglin green with its arms out, the piglin pink with its ears and snout -
+  frame 35 the piglin walking in, frame 59 it in the player's face, biting (the player at
+  Normal is down to 8.5 hearts).
+- **Cost.** No BSS growth: `.data` 5,079 and `.bss` 119,064 (the game's 124,135 B inside
+  `CUSTOM_RAM` 133,652). `NumBlocks.nwa` 628,912 -> **635,108 B** (+6,196: the two skins 2.2 KB,
+  the eggs' sprites, the item tables' slots the rest), `numblocks.bin` 560,744 -> **566,508 B**.
+  The picture is untouched: the 18-frame `bench_render.py --rain --mobs` set is
+  checksum-identical in Fast (104.91 -> 104.78 M insns) and Fancy (166.26 -> 166.08 M, noise),
+  deepest stack 22,224 B unchanged. No new `-Wall -Wextra` warnings. Recorded: `make build &&
+  make check` and `make -C games/numblocks-interest build check` fit; `build/desktop` rebuilt.
+
 ## 1.5.38
 **No more holes in a fall the cache moves through: ticks that run while the move is still queued wait too, not only ones past its edge**
 

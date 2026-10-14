@@ -3,7 +3,9 @@
  *   play [--frames N] [--ms-per-frame M] [--keys "10-40:fwd,50:use,..."] [--shots 30,60] [--out DIR]
  *        [--showcase]   (the hotbar of the README's GIF: TNT, flint and steel, water and lava, blocks)
  *        [--animals]    (a sheep, a cow, a pig and a chicken ahead, on the ground where they stand)
- *        [--mobs]       (a row of every mob, four blocks ahead, facing the player, on a cleared field)
+ *        [--mobs]       (a row of every mob, four blocks ahead, facing the player, on a cleared field;
+ *                         in the nether (with --nether) the field is netherrack and only the nether's
+ *                         two are in it, Survival and Normal so the piglin gives chase)
  *        [--skeleton]   (one skeleton ahead but looking the other way, on a cleared field, Survival
  *                         and Normal: it sees the player within a few ticks and shoots - the frames
  *                         show it turn to face - or keep its head on - the player as it fires)
@@ -14,7 +16,7 @@
  *        [--trace]       (a line a frame: the screen, the position, health, whether it is dead)
  *        [--flat]       (a superflat world)
  *        [--spectator]  (spectator mode: flying through the blocks, nothing to touch)
- *        [--spectate N] (with --mobs: the spectator's camera is the N-th mob's, 0..7)
+ *        [--spectate N] (with --mobs: the spectator's camera is the N-th mob's, 0..9)
  *        [--tree]       (an oak in front of the player, with the spectator's head in its canopy)
  *        [--cave]       (a sealed stone room with no light in it, for what the dark is)
  *        [--void]       (a shaft dug through the bedrock under the player, who hangs in the void below it)
@@ -761,15 +763,39 @@ int main(int argc, char **argv) {
             px, fy + 1, pz, px + 1, fy + 1, pz);
   }
   if (mobs) {
-    /* a row of every mob, 4 blocks ahead, facing the player, on a cleared grass field */
-    int fy = (int)pl.y;
-    for (int z = (int)pl.z - 3; z < (int)pl.z + 9; z++)
-      for (int x = (int)pl.x - 9; x < (int)pl.x + 10; x++)
-        for (int y = fy - 1; y < fy + 8; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
-    for (int k = 0; k < 8; k++) {
-      float x = pl.x - 5.6f + k * 1.6f, z = pl.z + 4.5f;
-      Entity *e = ent_new(E_ZOMBIE + k, x, (float)fy, z);
-      if (e) e->health = 20, e->yaw = 180, e->gx = e->x, e->gz = e->z;
+    if (nether) {
+      /* the nether's two, four blocks ahead on the wastes, facing the player, Survival and
+       * Normal so the piglin gives chase and the zombified wanders until hit */
+      int fy = (int)pl.y, px = (int)pl.x, pz = (int)pl.z;
+      for (int z = pz - 3; z < pz + 9; z++)
+        for (int x = px - 9; x < px + 10; x++)
+          for (int y = fy - 1; y < fy + 8; y++) world_set(x, y, z, y == fy - 1 ? B_NETHERRACK : B_AIR);
+      opt.difficulty = 2;
+      pl.mode = 0;
+      pl.yaw = 0, pl.pitch = 6;   /* (facing +z at the pair, the ground about them) */
+      static const int kinds[2] = {E_PIGLIN, E_ZPIGLIN};
+      for (int k = 0; k < 2; k++) {
+        float x = pl.x - 1.6f + k * 3.2f, z = pl.z + 4.5f;
+        Entity *e = ent_new(kinds[k], x, (float)fy, z);
+        if (e) e->health = kinds[k] == E_PIGLIN ? 16 : 20, e->yaw = 180, e->gx = e->x, e->gz = e->z;
+      }
+      camera_reset();
+      fprintf(stderr, "mobs: piglin and zombified piglin at %d %d, Survival Normal (the piglin chases)\n", px, pz + 4);
+    } else {
+      /* a row of every mob, 4 blocks ahead, facing the player, on a cleared grass field.
+       * The eight overworld mobs stand in the row they always did (1.6 apart, so its own
+       * ends are past the frame); the nether's two stand just beyond the row's ends - out
+       * of the frame as well, the nether rig's --mobs pair being their close look - so
+       * that this row holds every mob and the frames it always gave stay the same. */
+      int fy = (int)pl.y;
+      for (int z = (int)pl.z - 3; z < (int)pl.z + 9; z++)
+        for (int x = (int)pl.x - 9; x < (int)pl.x + 10; x++)
+          for (int y = fy - 1; y < fy + 8; y++) world_set(x, y, z, y == fy - 1 ? B_GRASS : B_AIR);
+      for (int k = 0; k < 10; k++) {
+        float x = k == 8 ? pl.x - 7.2f : k == 9 ? pl.x + 7.2f : pl.x - 5.6f + k * 1.6f, z = pl.z + 4.5f;
+        Entity *e = ent_new(E_ZOMBIE + k, x, (float)fy, z);
+        if (e) e->health = E_ZOMBIE + k == E_PIGLIN ? 16 : 20, e->yaw = 180, e->gx = e->x, e->gz = e->z;
+      }
     }
     if (ride >= 0 && ride < N_ENT) spectate = (int8_t)ride;   /* the spectator's camera on the k-th mob */
   }
@@ -861,7 +887,8 @@ int main(int argc, char **argv) {
     world_set(px, fy + 1, pz + 3, B_MOB_SPAWNER);
     spawners_note(px, fy + 1, pz + 3);
     opt.difficulty = 2;   /* (no monsters at all on a peaceful world: the fresh options have 0) */
-    static const int kit[][2] = {{I_ZOMBIE_SPAWN_EGG, 8}, {I_CREEPER_SPAWN_EGG, 8}, {I_PIG_SPAWN_EGG, 8}};
+    static const int kit[][2] = {{I_ZOMBIE_SPAWN_EGG, 8}, {I_CREEPER_SPAWN_EGG, 8}, {I_PIG_SPAWN_EGG, 8},
+                                 {I_PIGLIN_SPAWN_EGG, 8}, {I_ZOMBIFIED_PIGLIN_SPAWN_EGG, 8}};
     for (unsigned i = 0; i < sizeof kit / sizeof kit[0]; i++) inv_add(pl.inv, 36, kit[i][0], kit[i][1], 0);
   }
   double init_ms = (clock() - c0) * 1000.0 / CLOCKS_PER_SEC;

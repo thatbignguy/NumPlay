@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.38"
+#define NB_VERSION "1.5.39"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -82,10 +82,16 @@ static inline bool is_concrete_powder(int b) {
   return b >= B_CONCRETE_POWDER_WHITE && b <= B_CONCRETE_POWDER_BLACK;
 }
 static inline int concrete_of(int b) { return b + (B_CONCRETE_WHITE - B_CONCRETE_POWDER_WHITE); }
-/* a stack id is one of the items' (I_*) rather than a block state's (B_*): the items live
- * at 256..256+N_ITEMS-1, the blocks below 256 and the post-item states past them (the
- * portal and the reserved states in between keep the items' own behaviour) */
-static inline bool is_item_id(int id) { return id >= 256 && id < 256 + N_ITEMS; }
+/* A stack id is one of the items' (I_*) rather than a block state's (B_*): the items'
+ * ids are 256 on, one a slot of the it_* tables (ITEM_SLOTS of them). A holdable
+ * block's stack id is its own state's, and the two number spaces share the middle
+ * (the reserved states alias the items below them, and the states past them - 396's
+ * chiseled quartz and on - are ids of their own, with the items' own tail past them
+ * at 447): an id is an item's where the tables have a row for it, which is the one
+ * place both worlds agree on. */
+static inline bool is_item_id(int id) {
+  return id >= 256 && id < 256 + ITEM_SLOTS && it_label[id - 256] != 0;
+}
 
 /* ---------------------------------------------------------------- the generator (gen.c) */
 void gen_init(int64_t seed);
@@ -241,8 +247,18 @@ void mode_use(void);               /* sin let go (or OK): the mode picked */
 void mode_cancel(void);            /* Back: the way out, nothing changed */
 
 /* ---------------------------------------------------------------- entities (entity.c) */
-enum { E_NONE, E_ITEM, E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN, E_ARROW, E_TNT,
-       E_BOBBER };
+enum { E_NONE, E_ITEM, E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN, E_PIGLIN, E_ZPIGLIN,
+       E_ARROW, E_TNT, E_BOBBER };
+/* The mobs are E_ZOMBIE .. E_ZPIGLIN (2 .. 11), contiguous: appending after E_CHICKEN keeps
+ * old spawner records (2 .. 9) readable. The eggs are not contiguous (QUARTZ sits between
+ * the overworld eggs and the nether's), so mob_of_egg is a lookup, not arithmetic. */
+static inline bool is_mob(int t) { return t >= E_ZOMBIE && t <= E_ZPIGLIN; }
+/* Hostiles are the overworld's four plus the nether's two (the passives sit between them,
+ * so this is not a range). The zombified piglin counts as hostile for the cap, the despawn
+ * and the chase once hit; its neutral wander is the AI's, not this bit's. */
+static inline bool is_hostile_mob(int t) {
+  return (t >= E_ZOMBIE && t <= E_SPIDER) || t == E_PIGLIN || t == E_ZPIGLIN;
+}
 typedef struct {
   uint8_t type, on_ground, hurt, state;   /* hurt: ticks of red; state 255: dying (timer counts) */
   int16_t age, health, timer, delay;   /* delay: an item's pickup delay, a mob's attack wait, a creeper's fuse */
@@ -287,8 +303,9 @@ int fish_reel(Entity *e);   /* how much it wears the rod */
 void mob_tick(Entity *e);
 void mobs_spawn(void);
 int mob_of_egg(int id);                /* the mob a spawn egg makes (0: not one) */
+int egg_of_mob(int mob);               /* the spawn egg that makes a mob (0: none) */
 bool mob_can_stand(int x, int y, int z);   /* room for a mob to stand there */
-extern const char *const mob_name[8];   /* the mobs' names (Zombie .. Chicken) */
+extern const char *const mob_name[10];   /* the mobs' names (Zombie .. ZombifiedPiglin) */
 void spawners_set(int x, int y, int z, int mob);   /* a spawn egg used on a monster spawner */
 void spawners_made(int x, int y, int z, int mob);  /* world generation placed one (a dungeon's) */
 void spawners_note(int x, int y, int z);           /* one fresh from the inventory (unset) */

@@ -657,7 +657,7 @@ static void sleep_in(int x, int y, int z) {
   }
   for (int i = 0; i < N_ENT; i++) {
     const Entity *e = &ents[i];
-    if (e->type >= E_ZOMBIE && e->type <= E_SPIDER && fabsf(e->x - x) < 8 && fabsf(e->y - y) < 5 &&
+    if (is_hostile_mob(e->type) && fabsf(e->x - x) < 8 && fabsf(e->y - y) < 5 &&
         fabsf(e->z - z) < 8) {
       gui_message("You may not rest now, there are monsters nearby");
       return;
@@ -989,7 +989,7 @@ static void spectate_tick(uint32_t keys, uint32_t pressed) {
     pl.sprinting = false;
     /* the eyes where a mob aims from (mob.c: 0.85 of its height); other entities
      * are seen from where they are */
-    spec_eye = e->type >= E_ZOMBIE && e->type <= E_CHICKEN ? mob_height(e->type) * 0.85f : 0.0f;
+    spec_eye = is_mob(e->type) ? mob_height(e->type) * 0.85f : 0.0f;
     return;
   }
   spectate = -1, spec_eye = 0;

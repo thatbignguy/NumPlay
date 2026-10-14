@@ -208,7 +208,6 @@ def main():
         T[name].rows = T[name].rows[:nstates]
     ntex = len(T['tex_px'].rows)
     nsprites0 = len(T['spr_off'].rows)
-    nitems0 = len(T['it_label'].rows)
 
     # ---- the texture names, in pack_textures' order: data.h's TX_ says what is there,
     # and what the new states need comes after it
@@ -283,8 +282,28 @@ def main():
         bs, pal, alpha = pack.pack_sprite(pack.iso_icon(jar, s, None))
         T['blk_icon'].rows[i] = add_sprite(T, bs, pal, alpha)
     T['blk_icon'].changed = True
-    for k in range(nitems0, len(items.I)):
-        it = items.I[k]
+    # ---- the item tables' rows: one an id's slot (256 on). The ids' own places are
+    # the items' (the slots between them are the block states' ids, with no item
+    # there); an item whose slot the table does not hold yet pads it up to there with
+    # pack.py's own fills (a 0 label being what marks a slot without an item).
+    def pad_it():
+        T['it_label'].add('')
+        T['it_icon'].add(0xFFFF)
+        T['it_kind'].add(0)
+        T['it_stack'].add(0)
+        T['it_dur'].add(0)
+        T['it_tier'].add(0)
+        T['it_a'].add(0)
+        T['it_b'].add(0)
+        T['it_place'].add(255)
+        T['it_fuel'].add(0)
+
+    for it in items.I:
+        slot = it['iid'] - 256
+        if slot < len(T['it_label'].rows):
+            continue   # (already packed)
+        while len(T['it_label'].rows) < slot:
+            pad_it()
         bs, pal, alpha = pack.pack_sprite(pack.item_icon(jar, it))
         T['it_label'].add(it['label'])
         T['it_icon'].add(add_sprite(T, bs, pal, alpha))

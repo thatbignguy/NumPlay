@@ -969,17 +969,28 @@ def main():
                ','.join(pad(['"' + items.LABELS[st['name']] + '"' if st['name'] in items.LABELS else '0'
                             for st in blocks.S], '0')) + '};')
     I = items.I
-    out.append('const char *const it_label[N_ITEMS] = {' + ','.join('"' + it['label'] + '"' for it in I) + '};')
-    out.append('const uint16_t it_icon[N_ITEMS] = {' + ','.join(str(first_item + k) for k in range(len(I))) + '};')
-    out.append('const uint8_t it_kind[N_ITEMS] = {' + ','.join(str(items.KINDS.index(it['kind'])) for it in I) + '};')
-    out.append('const uint8_t it_stack[N_ITEMS] = {' + ','.join(str(it['stack']) for it in I) + '};')
-    out.append('const uint16_t it_dur[N_ITEMS] = {' + ','.join(str(it['dur']) for it in I) + '};')
-    out.append('const uint8_t it_tier[N_ITEMS] = {' + ','.join(str(it['tier']) for it in I) + '};')
-    out.append('const uint8_t it_a[N_ITEMS] = {' + ','.join(str(it['a']) for it in I) + '};')
-    out.append('const uint8_t it_b[N_ITEMS] = {' + ','.join(str(it['b']) for it in I) + '};')
-    out.append('const uint8_t it_place[N_ITEMS] = {' +
-               ','.join(str(items.BNAMES.index(it['place']) if it['place'] else 255) for it in I) + '};')
-    out.append('const uint16_t it_fuel[N_ITEMS] = {' + ','.join(str(it['fuel']) for it in I) + '};')
+    # the it_* tables hold a row per id's slot, 256..256+ITEM_SLOTS-1: the slots between
+    # the items' ids (the block states past the reserved range) have no item and stay
+    # empty, and nb.h's is_item_id reads an id as an item's by its label being here
+    def islots(fill, val):
+        a = [fill] * items.ITEM_SLOTS
+        for it in I:
+            a[it['iid'] - 256] = val(it)
+        return a
+    out.append('const char *const it_label[ITEM_SLOTS] = {' +
+               ','.join(islots('0', lambda it: '"' + it['label'] + '"')) + '};')
+    out.append('const uint16_t it_icon[ITEM_SLOTS] = {' +
+               ','.join(str(v) for v in islots('0xFFFF', lambda it: first_item + items.INAMES.index(it['name']))) + '};')
+    out.append('const uint8_t it_kind[ITEM_SLOTS] = {' +
+               ','.join(str(v) for v in islots('0', lambda it: items.KINDS.index(it['kind']))) + '};')
+    out.append('const uint8_t it_stack[ITEM_SLOTS] = {' + ','.join(str(v) for v in islots('0', lambda it: it['stack'])) + '};')
+    out.append('const uint16_t it_dur[ITEM_SLOTS] = {' + ','.join(str(v) for v in islots('0', lambda it: it['dur'])) + '};')
+    out.append('const uint8_t it_tier[ITEM_SLOTS] = {' + ','.join(str(v) for v in islots('0', lambda it: it['tier'])) + '};')
+    out.append('const uint8_t it_a[ITEM_SLOTS] = {' + ','.join(str(v) for v in islots('0', lambda it: it['a'])) + '};')
+    out.append('const uint8_t it_b[ITEM_SLOTS] = {' + ','.join(str(v) for v in islots('0', lambda it: it['b'])) + '};')
+    out.append('const uint8_t it_place[ITEM_SLOTS] = {' +
+               ','.join(str(v) for v in islots('255', lambda it: items.BNAMES.index(it['place']) if it['place'] else 255)) + '};')
+    out.append('const uint16_t it_fuel[ITEM_SLOTS] = {' + ','.join(str(v) for v in islots('0', lambda it: it['fuel'])) + '};')
     # crafting: out, count, width (0: shapeless), height (shapeless: how many), ingredients
     rec = []
     for o, n, rows, keys in items.R:
@@ -1002,7 +1013,7 @@ def main():
                    ','.join(str(items.BNAMES.index(m)) for m in members) + ',0xFFFF};')
     # mob skins: 64 x 32, 4 bits a texel, index 0 see-through
     SKINS = ['zombie/zombie', 'skeleton/skeleton', 'creeper/creeper', 'spider/spider', 'pig/pig', 'cow/cow',
-             'sheep/sheep', 'sheep/sheep_fur', 'chicken']
+             'sheep/sheep', 'sheep/sheep_fur', 'chicken', 'piglin/piglin', 'piglin/zombified_piglin']
     out.append(f'const uint8_t skin_px[{len(SKINS)}][1024] = {{')
     spal = []
     for n in SKINS:
@@ -1026,9 +1037,10 @@ def main():
         cr.append(bits)
     out.append('const uint8_t cracks[10][32] = {' + ','.join('{' + ','.join(str(v) for v in b) + '}' for b in cr) + '};')
     # the creative inventory: each tab's items, in id order (blocks, then items).
-    # Block states and items share the ids from 256 up (block state 256 is item
-    # id 256 too), so the two walks say what each id is: the states as states,
-    # the items as items. Search Items holds everything, once.
+    # Block states and items share the ids from 256 up (the reserved states alias the
+    # items' own ids, and the states past them have ids of their own), so the two walks
+    # say what each id is: the states as states, the items as items. Search Items holds
+    # everything, once.
     tab_lists = [[] for _ in items.TABS]
     for iid in range(len(blocks.S)):
         tabs = items.tab_of(iid, True)
@@ -1036,8 +1048,8 @@ def main():
             for t in tabs:
                 tab_lists[t].append(iid)
             tab_lists[items.T_SEARCH].append(iid)
-    for k in range(len(items.I)):
-        iid = 256 + k
+    for it in items.I:
+        iid = it['iid']
         tabs = items.tab_of(iid, False)
         if tabs:
             for t in tabs:
@@ -1156,12 +1168,12 @@ def main():
     h += ['', '#include "items.h"',
           'extern const uint16_t blk_item[NSTATES];   /* the item a block state counts as (0xFFFF: none) */',
           'extern const uint16_t blk_fuel[NSTATES];   /* ticks it burns in a furnace */',
-          'extern const char *const blk_label[NSTATES], *const it_label[N_ITEMS];',
-          'extern const uint16_t it_icon[N_ITEMS], it_dur[N_ITEMS], it_fuel[N_ITEMS];',
+          'extern const char *const blk_label[NSTATES], *const it_label[ITEM_SLOTS];',
+          'extern const uint16_t it_icon[ITEM_SLOTS], it_dur[ITEM_SLOTS], it_fuel[ITEM_SLOTS];',
           '/* it_tier: the tool or armour material; it_a: attack damage, armour points or food;'
           ' it_b: saturation x 10 */',
-          'extern const uint8_t it_kind[N_ITEMS], it_stack[N_ITEMS], it_tier[N_ITEMS], it_a[N_ITEMS], it_b[N_ITEMS];',
-          'extern const uint8_t it_place[N_ITEMS];   /* the block it places (255: none) */',
+          'extern const uint8_t it_kind[ITEM_SLOTS], it_stack[ITEM_SLOTS], it_tier[ITEM_SLOTS], it_a[ITEM_SLOTS], it_b[ITEM_SLOTS];',
+          'extern const uint8_t it_place[ITEM_SLOTS];   /* the block it places (255: none) */',
           'typedef struct { uint16_t out; uint8_t n, w, h; uint16_t in[9]; } Recipe;   /* w 0: shapeless, h of them */',
           f'#define N_RECIPES {len(items.R)}', 'extern const Recipe recipes[N_RECIPES];',
           f'#define N_SMELTING {len(items.SMELT)}', 'extern const uint16_t smelting[N_SMELTING][2];']
@@ -1169,7 +1181,7 @@ def main():
         h.append(f'extern const uint16_t group_{g[2:].lower()}[];   /* ends with 0xFFFF */')
     h += ['extern const uint8_t skin_px[][1024];   /* mob skins, 64 x 32 */', 'extern const uint16_t skin_pal[][16];',
           'enum { SKIN_ZOMBIE, SKIN_SKELETON, SKIN_CREEPER, SKIN_SPIDER, SKIN_PIG, SKIN_COW, SKIN_SHEEP, SKIN_SHEEP_FUR,'
-          ' SKIN_CHICKEN };',
+          ' SKIN_CHICKEN, SKIN_PIGLIN, SKIN_ZPIGLIN };',
           'extern const uint8_t cracks[10][32];   /* destroy stages, 1 bit a texel */']
     h += [f'extern const uint16_t tab_items[], tab_start[{len(items.TABS) + 1}];   /* the creative tabs\' items */',
           f'extern const char *const tab_name[{len(items.TABS)}];']

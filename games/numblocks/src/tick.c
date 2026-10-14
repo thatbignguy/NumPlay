@@ -566,7 +566,7 @@ static void bolt_strikes(void) {
   }
   for (int i = 0; i < N_ENT; i++) {
     Entity *e = &ents[i];
-    if (e->type >= E_ZOMBIE && e->type <= E_CHICKEN && fabsf(e->x - bolt.x) < 3.3f && fabsf(e->z - bolt.z) < 3.3f &&
+    if (is_mob(e->type) && fabsf(e->x - bolt.x) < 3.3f && fabsf(e->z - bolt.z) < 3.3f &&
         e->y > bolt.y - 4 && e->y < bolt.y + 9)
       mob_struck(e);
   }

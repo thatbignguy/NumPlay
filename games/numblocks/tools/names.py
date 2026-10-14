@@ -164,13 +164,13 @@ def main():
         item_block.add(s['id'])
     have_item = set()
     item_give = []
-    for k, it in enumerate(items.I):
+    for it in items.I:
         name, data = RENAME.get(it['name'], (it['name'].lower(), 0))
         if name not in ITEM and name not in SPLIT:
             continue   # modern-only items (e.g. raw iron/gold): no 1.8 id, not /give-able
         mid = SPLIT[name] if name in SPLIT else 256 + ITEM.index(name)
-        give.append(((mid << 4) | data, 256 + k, name))
-        item_give.append((mid, 256 + k, name))
+        give.append(((mid << 4) | data, it['iid'], name))
+        item_give.append((mid, it['iid'], name))
         have_item.add(mid)
     give.sort()
     keys = [g[0] for g in give]
