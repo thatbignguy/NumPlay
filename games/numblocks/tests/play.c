@@ -21,6 +21,11 @@
  *        [--cave]       (a sealed stone room with no light in it, for what the dark is)
  *        [--void]       (a shaft dug through the bedrock under the player, who hangs in the void below it)
  *        [--nether]     (the world is the nether's: netherrack, lava sea, red sky)
+ *        [--biome NAME] (the nether at the nearest chunk of a biome: one of
+ *                         nether_wastes, crimson_forest, warped_forest,
+ *                         soul_sand_valley - the camera stands on its ground,
+ *                         lit by the rig's glowstone, looking down the growth;
+ *                         the frames show each surface, its fog and its growth)
  *        [--roof]       (above the nether's ceiling: a floor laid over the roof, the player
  *                         standing on it in Creative with netherrack in hand, so keys can
  *                         break and place blocks up there - the nether is 200 tall)
@@ -120,7 +125,7 @@ int main(int argc, char **argv) {
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
   int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, drain = 0, placing = 0, xray = 0, lava = 0, deep = 0, caves = 0;
-  int temple = 0, templetrap = 0;
+  int temple = 0, templetrap = 0, biome_at = -1;
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0, contrast = 0, panorama = -1;
@@ -145,6 +150,11 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--void")) void_world = 1;
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
     else if (!strcmp(argv[i], "--nether")) nether = 1;
+    else if (!strcmp(argv[i], "--biome") && i + 1 < argc) {
+      biome_at = gen_biome_id(argv[++i]);
+      if (biome_at < 0) fprintf(stderr, "biome: no such biome\n"), exit(2);
+      nether = 1;
+    }
     else if (!strcmp(argv[i], "--roof")) roof = 1;
     else if (!strcmp(argv[i], "--concrete")) concrete = 1;
     else if (!strcmp(argv[i], "--settle")) settle = 1;
@@ -362,6 +372,121 @@ int main(int argc, char **argv) {
       fprintf(stderr, "nether: spot %d %d %d glowstone light %d (vl %d)\n", bx, best + 1, bz, vl[i] >> 4, vl[i]);
     }
     camera_reset();
+  }
+  if (biome_at >= 0) {
+    /* The nearest chunk whose biome is the one asked for, then a stand on its ground:
+     * the nether's own column (its top is the ceiling) gives no heightmap, so the
+     * ground is looked for in the cache's rows - 64 first, then 40, 88 and 108, one
+     * of which holds the ground beside a sea or a cavern. Lit by the rig's own
+     * glowstone, Creative and Peaceful: the frames show the surface, the fog and
+     * the growth. */
+    uint8_t bgs[GEN_SCRATCH];
+    memset(bgs, 0, sizeof bgs);
+    gen_scratch(bgs);
+    int scx = (int)floorf(pl.x / 16), scz = (int)floorf(pl.z / 16);
+    int bx = 0, bz = 0, found = 0;
+    for (int r = 0; r <= 12 && !found; r++)
+      for (int dz = -r; dz <= r && !found; dz++)
+        for (int dx = -r; dx <= r && !found; dx++) {
+          if (r && dx > -r && dx < r && dz > -r && dz < r) continue;
+          if (gen_biome((scx + dx) * 16 + 8, (scz + dz) * 16 + 8) == biome_at)
+            bx = (scx + dx) * 16 + 8, bz = (scz + dz) * 16 + 8, found = 1;
+        }
+    gen_scratch(NULL);
+    if (found) {
+      static const int ys[6] = {48, 64, 80, 96, 40, 112};
+      int best = -1, bgx = bx, bgz = bz, best_score = -1;
+      for (unsigned k = 0; k < 6; k++) {
+        pl.x = bx + 0.5f, pl.z = bz + 0.5f, pl.y = (float)ys[k];
+        world_follow(pl.x, pl.y, pl.z);
+        while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+        /* the column of the biome with the most open air above its ground (the most
+         * open cave floor: the view the biome's surface can be seen from), above the
+         * lava sea and under any ceiling; the score is the air count first */
+        for (int lz = 1; lz < VCZ - 1; lz++)
+          for (int lx = 1; lx < VCX - 1; lx++) {
+            if (vbiome[lz * VCX + lx] != biome_at) continue;
+            for (int y = VCY - 2; y >= 3; y--) {
+              int b = world_get(vc_x0 + lx, vc_y0 + y, vc_z0 + lz);
+              if (b == B_AIR || is_lava(b)) continue;
+              int g = vc_y0 + y;
+              if (g < 44) break;   /* (the sea's own shore: not a walkable floor) */
+              int air = 0;
+              for (int q = 1; q <= 8 && q < VCY - y; q++)
+                if (world_get(vc_x0 + lx, vc_y0 + y + q, vc_z0 + lz) == B_AIR) air++;
+              if (air >= 6 && air * 1000 - g > best_score)
+                best_score = air * 1000 - g, best = g, bgx = vc_x0 + lx, bgz = vc_z0 + lz;
+              break;
+            }
+          }
+      }
+      if (best < 0) best = (int)pl.y, bgx = bx, bgz = bz;
+      /* bring the cache down to the room before touching it (the search left it at
+       * some other y: a world_set outside the cache is not kept) */
+      pl.x = bgx + 0.5f, pl.z = bgz + 0.5f, pl.y = (float)(best + 3);
+      world_follow(pl.x, pl.y, pl.z);
+      while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+      /* A cleared room over the biome's own floor, and in it a stand of the biome's
+       * blocks: the rig's own field, as --mobs' and --animals' are (the natural
+       * surface and growth are the unit tests' business). The floor stays the
+       * biome's own; the camera hovers three above it, looking south at the stand. */
+      for (int dz = -5; dz <= 6; dz++)
+        for (int dx = -6; dx <= 6; dx++)
+          for (int dy = 1; dy <= 6; dy++) world_set(bgx + dx, best + dy, bgz + dz, B_AIR);
+      int ny = biome_at == BI_WARPED_FOREST ? B_WARPED_NYLIUM : B_CRIMSON_NYLIUM;
+      int stm = biome_at == BI_WARPED_FOREST ? B_WARPED_STEM : B_CRIMSON_STEM;
+      int wfb = biome_at == BI_WARPED_FOREST ? B_WARPED_FUNGUS : B_CRIMSON_FUNGUS;
+      int rts = biome_at == BI_WARPED_FOREST ? B_WARPED_ROOTS : B_CRIMSON_ROOTS;
+      int wrt = biome_at == BI_WARPED_FOREST ? B_WARPED_WART_BLOCK : B_NETHER_WART_BLOCK;
+      int gz = bgz + 5;
+      if (biome_at == BI_CRIMSON_FOREST || biome_at == BI_WARPED_FOREST) {
+        world_set(bgx - 4, best, gz, ny);
+        for (int k = 1; k <= 4; k++) world_set(bgx - 4, best + k, gz, stm);
+        for (int dx = -1; dx <= 1; dx++)
+          for (int dz = -1; dz <= 1; dz++) world_set(bgx - 4 + dx, best + 4, gz + dz, wrt);
+        world_set(bgx - 4, best + 5, gz, B_SHROOMLIGHT);
+        world_set(bgx - 2, best, gz, ny), world_set(bgx - 2, best + 1, gz, wfb);
+        world_set(bgx, best, gz, ny), world_set(bgx, best + 1, gz, rts);
+        if (biome_at == BI_WARPED_FOREST) {
+          world_set(bgx + 2, best, gz, ny), world_set(bgx + 2, best + 1, gz, B_NETHER_SPROUTS);
+          world_set(bgx - 3, best + 2, gz, B_TWISTING_VINES);
+        } else {
+          world_set(bgx + 2, best + 4, gz, B_NETHERRACK);
+          for (int k = 1; k <= 3; k++) world_set(bgx + 2, best + 4 - k, gz, B_WEEPING_VINES);
+        }
+      } else if (biome_at == BI_SOUL_SAND_VALLEY) {
+        for (int dx = 0; dx <= 1; dx++)
+          for (int dz = 0; dz <= 1; dz++) world_set(bgx - 4 + dx, best, gz + dz, B_SOUL_SAND);
+        for (int dx = 0; dx <= 1; dx++)
+          for (int dz = 0; dz <= 1; dz++) world_set(bgx - 2 + dx, best, gz + dz, B_SOUL_SOIL);
+        world_set(bgx - 2, best + 1, gz, B_SOUL_FIRE);
+        world_set(bgx, best, gz, B_SOUL_SOIL), world_set(bgx, best + 1, gz, B_CRIMSON_ROOTS);
+        world_set(bgx + 2, best, gz, B_BONE_BLOCK), world_set(bgx + 2, best + 1, gz, B_BONE_BLOCK);
+      } else {   /* the wastes */
+        world_set(bgx - 4, best, gz, B_NETHERRACK);
+        world_set(bgx - 2, best, gz, B_SOUL_SAND);
+        world_set(bgx, best, gz, B_GRAVEL);
+        world_set(bgx + 2, best, gz, B_NETHER_QUARTZ_ORE);
+        world_set(bgx - 1, best + 3, gz, B_GLOWSTONE);
+      }
+      pl.x = bgx + 0.5f, pl.z = bgz + 0.5f, pl.y = (float)(best + 3);
+      pl.yaw = 0, pl.pitch = 18;   /* (south, down the floor at the stand five ahead) */
+      /* the rig's own light over the room (the nether has no sky light): two on the
+       * floor at the stand's flanks, and one over the camera */
+      world_set(bgx - 6, best + 1, bgz + 5, B_GLOWSTONE);
+      world_set(bgx + 5, best + 1, bgz + 5, B_GLOWSTONE);
+      world_set(bgx, best + 6, bgz + 1, B_GLOWSTONE);
+      world_set(bgx - 5, best + 5, bgz + 1, B_GLOWSTONE);
+      world_set(bgx + 5, best + 5, bgz + 1, B_GLOWSTONE);
+      pl.mode = 1, pl.flying = true;   /* (Creative, hovering: the frames are of the biome) */
+      opt.difficulty = 0;
+      world_follow(pl.x, pl.y, pl.z);
+      while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+      fprintf(stderr, "biome: %s at %d %d %d (ground %d)\n", gen_biome_name(biome_at), bgx, best + 3, bgz, best);
+      camera_reset();
+    } else {
+      fprintf(stderr, "biome: %s not found near spawn\n", gen_biome_name(biome_at));
+    }
   }
   if (roof) {
     /* Above the nether's ceiling: the open air over the roof is buildable (the

@@ -12,7 +12,7 @@ what "done" means. Order matters only where noted.
       moves to -64, deepslate runs from y=0 down to it, stone and everything
       above stay; the cache, the generator, the edits and every height guard
       move with it.
-- [ ] **[22] Nether biomes** — the nether is one biome: give it the modern
+- [x] **[22] Nether biomes** — the nether is one biome: give it the modern
       three — Crimson Forest, Warped Forest and Soul Sand Valley — and not
       Basalt Deltas; each with its own surface, its own blocks (the crimson
       and warped nyliums, stems, planks, roots and vines, soul soil and soul

@@ -20,6 +20,11 @@ static int craft(const int *ids, int w) {
 }
 
 int main(void) {
+  /* The pressed-plate and nether states are appended; existing saved block ids,
+   * especially the sandstone stairs, must not move. */
+  CHECK(B_SANDSTONE_STAIRS == 443 && B_SANDSTONE_STAIRS_W == 444 && B_SANDSTONE_STAIRS_S == 445 &&
+        B_SANDSTONE_STAIRS_N == 446 && I_PIGLIN_SPAWN_EGG == 447 && I_ZOMBIFIED_PIGLIN_SPAWN_EGG == 448 &&
+        B_STONE_PRESSURE_PLATE_DOWN == 449);
   /* planks from a log, anywhere in the grid */
   int a[4] = {0, B_LOG_BIRCH, 0, 0};
   CHECK(craft(a, 2) == B_PLANKS_BIRCH * 100 + 4);
@@ -1021,6 +1026,30 @@ int main(void) {
       }
       CHECK(in_tab[0] && in_tab[1]);
     }
+    /* The nether biomes' blocks: modern /give names, drops' items, and their
+     * Natural, Building and Decorative creative tabs. */
+    command_run("/give @p crimson_nylium 1");
+    CHECK(pl.inv[23].id == B_CRIMSON_NYLIUM);
+    command_run("/give @p warped_stem 1");
+    CHECK(pl.inv[24].id == B_WARPED_STEM);
+    command_run("/give @p crimson_planks 1");
+    CHECK(pl.inv[25].id == B_CRIMSON_PLANKS);
+    command_run("/give @p soul_soil 1");
+    CHECK(pl.inv[26].id == B_SOUL_SOIL);
+    command_run("/give @p bone_block 1");
+    CHECK(pl.inv[27].id == B_BONE_BLOCK);
+    command_run("/give @p weeping_vines 1");
+    CHECK(pl.inv[28].id == B_WEEPING_VINES);
+    {
+      int nat = 0, build = 0, deco = 0;
+      for (int i = tab_start[0]; i < tab_start[1]; i++)
+        nat |= tab_items[i] == B_CRIMSON_NYLIUM;
+      for (int i = tab_start[1]; i < tab_start[2]; i++)
+        build |= tab_items[i] == B_CRIMSON_PLANKS || tab_items[i] == B_BONE_BLOCK;
+      for (int i = tab_start[2]; i < tab_start[3]; i++)
+        deco |= tab_items[i] == B_WEEPING_VINES;
+      CHECK(nat && build && deco);
+    }
     memset(pl.inv, 0, sizeof pl.inv);
     /* the 1.8 spellings are gone */
     command_run("/give @p wool 5 14");
@@ -1032,6 +1061,15 @@ int main(void) {
     /* /setblock: the modern name places exactly that state, its handling beside the name */
     command_run("/setblock ~ ~3 ~ orange_terracotta");
     CHECK(world_get(sx, sy + 3, sz) == B_STAINED_CLAY_ORANGE);
+    command_run("/setblock ~ ~2 ~ soul_soil");
+    command_run("/setblock ~ ~3 ~ soul_fire");
+    CHECK(world_get(sx, sy + 3, sz) == B_SOUL_FIRE);   /* a fire state, not a /give item */
+    {
+      char co[40];
+      int ca;
+      CHECK(command_complete("/setblock ~ ~ ~ soul_fi", 0, &ca, co, sizeof co) &&
+            !strcmp(co, "minecraft:soul_fire"));
+    }
     command_run("/setblock ~ ~3 ~ infested_stone");
     CHECK(world_get(sx, sy + 3, sz) == B_MONSTER_EGG_STONE);
     command_run("/setblock ~ ~3 ~ oak_stairs destroy");
@@ -1078,7 +1116,8 @@ int main(void) {
     CHECK(command_complete("/give @p oak_pl", 0, &at, o, sizeof o) && at == 9 && !strcmp(o, "minecraft:oak_planks"));
     CHECK(command_complete("/give @p red_w", 0, &at, o, sizeof o) && at == 9 && !strcmp(o, "minecraft:red_wool"));
     CHECK(command_complete("/setblock ~ ~ ~ ", 0, &at, o, sizeof o) && at == 16 && !strcmp(o, "minecraft:stone"));
-    CHECK(command_complete("/setblock ~ ~ ~ wa", 0, &at, o, sizeof o) && at == 16 && !strcmp(o, "minecraft:water"));
+    CHECK(command_complete("/setblock ~ ~ ~ wat", 0, &at, o, sizeof o) && at == 16 && !strcmp(o, "minecraft:water"));
+    CHECK(command_complete("/setblock ~ ~ ~ warp", 0, &at, o, sizeof o) && at == 16 && !strcmp(o, "minecraft:warped_fungus"));
     CHECK(command_complete("/setblock ~ ~3 ~ oak_stairs des", 0, &at, o, sizeof o) && !strcmp(o, "destroy"));
     CHECK(command_complete("/gamemode cr", 0, &at, o, sizeof o) && !strcmp(o, "creative"));
     CHECK(command_complete("/time set ", 1, &at, o, sizeof o) && !strcmp(o, "night"));
@@ -1650,9 +1689,13 @@ int main(void) {
     world_follow(8, 40, 8);   /* (the window covers the lava sea and its shore) */
     while (world_pending()) world_follow(8, 40, 8);
     CHECK(world_dim == DIM_NETHER);
-    CHECK(gen_biome(8, 8) == 8 && gen_biome(-500, 900) == 8);
+    int nb0 = gen_biome(8, 8), nb1 = gen_biome(-500, 900);
+    CHECK(nb0 == BI_NETHER_WASTES || nb0 == BI_CRIMSON_FOREST || nb0 == BI_WARPED_FOREST ||
+          nb0 == BI_SOUL_SAND_VALLEY);
+    CHECK(nb1 == BI_NETHER_WASTES || nb1 == BI_CRIMSON_FOREST || nb1 == BI_WARPED_FOREST ||
+          nb1 == BI_SOUL_SAND_VALLEY);
     int nrack = 0, nlava = 0, nair = 0, nbed = 0, nsoul = 0, ngrav = 0, nother = 0;
-    int nquartz = 0, nglow = 0;
+    int nquartz = 0, nglow = 0, nnew = 0;
     int ylo = vc_y0 > 0 ? vc_y0 : 0, yhi = vc_y0 + VCY < 32 ? vc_y0 + VCY : 32;   /* the rows it holds */
     CHECK(yhi > ylo);
     for (int z = 0; z < VCZ; z++)
@@ -1667,6 +1710,7 @@ int main(void) {
           else if (b == B_GRAVEL) ngrav++;
           else if (b == B_NETHER_QUARTZ_ORE) nquartz++;
           else if (b == B_GLOWSTONE) nglow++;
+          else if (b >= B_CRIMSON_NYLIUM && b <= B_SOUL_FIRE) nnew++;   /* the biomes' (1.16) */
           else nother++;
         }
     CHECK(nother == 0 && nrack > 1000);   /* netherrack, and the patches and lava near the sea */
@@ -1723,6 +1767,144 @@ int main(void) {
     plat_remove_prefix("utn");
   }
   {
+    /* ---- the nether's biomes (todo [22]): the crimson and warped forests and the
+     * soul sand valley beside the wastes --------------------------------------------- */
+    world_new(22, "utnb");
+    world_switch_dim(DIM_NETHER);
+    uint8_t bs[GEN_SCRATCH];
+    memset(bs, 0, sizeof bs);
+    gen_scratch(bs);
+    /* the four of them in a 25 x 25 chunk window, and the split is a pure function
+     * of the column (the same answer for the same place every time) */
+    int saw = 0;
+    for (int cz = -12; cz <= 12; cz++)
+      for (int cx = -12; cx <= 12; cx++) {
+        int b = gen_biome(cx * 16 + 8, cz * 16 + 8);
+      CHECK(b == BI_NETHER_WASTES || b == BI_CRIMSON_FOREST || b == BI_WARPED_FOREST ||
+            b == BI_SOUL_SAND_VALLEY);
+      saw |= 1 << (b == BI_NETHER_WASTES ? 0 : b == BI_CRIMSON_FOREST ? 1 : b == BI_WARPED_FOREST ? 2 : 3);
+    }
+    CHECK(saw == 15);
+    int stable_biome = gen_biome(1234, -5678);
+    {
+      static uint8_t other_window[24 * 288];
+      gen_slab(3, -7, 72, 24, other_window);
+    }
+    CHECK(gen_biome(1234, -5678) == stable_biome);
+    CHECK(gen_biome_known(BI_CRIMSON_FOREST) && gen_biome_known(BI_WARPED_FOREST) &&
+          gen_biome_known(BI_SOUL_SAND_VALLEY));
+    CHECK(!strcmp(gen_biome_name(BI_CRIMSON_FOREST), "Crimson Forest") &&
+          !strcmp(gen_biome_name(BI_WARPED_FOREST), "Warped Forest") &&
+          !strcmp(gen_biome_name(BI_SOUL_SAND_VALLEY), "Soul Sand Valley"));
+    CHECK(gen_biome_id("crimson_forest") == BI_CRIMSON_FOREST &&
+          gen_biome_id("warped_forest") == BI_WARPED_FOREST &&
+          gen_biome_id("soul_sand_valley") == BI_SOUL_SAND_VALLEY);
+    CHECK(gen_biome_id("nether_wastes") == BI_NETHER_WASTES && gen_biome_id("hell") == BI_NETHER_WASTES &&
+          !strcmp(gen_biome_name(BI_NETHER_WASTES), "Nether Wastes"));
+    /* the same chunk out of two sliding windows (40..63 and 52..75): the twelve
+     * rows they share are the same, block for block (9 bits a cell: 288 bytes a row) */
+    {
+      static uint8_t wa[24 * 288], wb[24 * 288];
+      gen_slab(0, 0, 40, 24, wa);
+      gen_slab(0, 0, 52, 24, wb);
+      CHECK(!memcmp(wa + 12 * 288, wb, 12 * 288));
+    }
+    /* each biome's surface and growth, out of its own chunk's window: a forest has
+     * nylium and something growing on it, the valley soul ground (and its bone
+     * blocks where the ground has them). Three cache windows cover the ground. */
+    {
+      int f_found = 0, v_found = 0, f_ok = 0, v_ok = 0;
+      for (int cx = -6; cx <= 6 && !(f_found && v_found); cx++)
+        for (int cz = -6; cz <= 6 && !(f_found && v_found); cz++) {
+          int bio = gen_biome(cx * 16 + 8, cz * 16 + 8);
+          if (bio != BI_CRIMSON_FOREST && bio != BI_WARPED_FOREST && bio != BI_SOUL_SAND_VALLEY) continue;
+          int nyl = 0, growth = 0, soul = 0;
+          for (int wy = 32; wy <= 120; wy += 24) {
+            world_follow((float)(cx * 16 + 8), (float)wy, (float)(cz * 16 + 8));
+            while (world_pending()) world_follow((float)(cx * 16 + 8), (float)wy, (float)(cz * 16 + 8));
+            for (int z = 0; z < VCZ; z++)
+              for (int x = 0; x < VCX; x++)
+                for (int y = 0; y < VCY; y++) {
+                  int b = world_get(vc_x0 + x, vc_y0 + y, vc_z0 + z);
+                  if (b == B_CRIMSON_NYLIUM || b == B_WARPED_NYLIUM) nyl++;
+                  if (b == B_CRIMSON_FUNGUS || b == B_WARPED_FUNGUS || b == B_CRIMSON_ROOTS ||
+                      b == B_WARPED_ROOTS || b == B_NETHER_SPROUTS || b == B_WEEPING_VINES ||
+                      b == B_TWISTING_VINES || b == B_NETHER_WART_BLOCK || b == B_WARPED_WART_BLOCK ||
+                      b == B_SHROOMLIGHT || b == B_SOUL_FIRE)
+                    growth++;
+                  if (b == B_SOUL_SAND || b == B_SOUL_SOIL) soul++;
+                }
+          }
+          if ((bio == BI_CRIMSON_FOREST || bio == BI_WARPED_FOREST) && !f_found) {
+            f_found = 1;
+            CHECK(nyl > 0 && growth > 0);
+            f_ok = 1;
+          } else if (bio == BI_SOUL_SAND_VALLEY && !v_found) {
+            v_found = 1;
+            CHECK(soul > 0);
+            v_ok = 1;
+          }
+        }
+      CHECK(f_found && v_found && f_ok && v_ok);
+    }
+    /* the same growth whichever window asked: the chunk's whole column against a
+     * higher window, the rows they share identical (the glowstone lesson of 1.5.4) */
+    {
+      int ox = -1000, oz = -1000;
+      for (int cx = -6; cx <= 6 && ox < -500; cx++)
+        for (int cz = -6; cz <= 6 && ox < -500; cz++)
+          if (gen_biome(cx * 16 + 8, cz * 16 + 8) == BI_WARPED_FOREST) ox = cx, oz = cz;
+      CHECK(ox >= -6 && ox <= 6);   /* (the window above found one) */
+      static uint8_t wa[128 * 288], wb[64 * 288];
+      gen_scratch(bs);   /* (world_follow released the scratch it borrowed) */
+      gen_slab(ox, oz, 0, 128, wa);
+      gen_slab(ox, oz, 64, 64, wb);
+      CHECK(!memcmp(wa + 64 * 288, wb, 64 * 288));
+    }
+    gen_scratch(NULL);
+    plat_remove_prefix("utnb");
+  }
+  {
+    /* soul fire (1.16): fire on soul sand or soul soil is the blue kind, nowhere
+     * else, and it goes out when its soul ground is gone; the new blocks place,
+     * break and drop as their own */
+    world_new(24, "utsoul");
+    world_switch_dim(DIM_NETHER);
+    world_follow(8, 60, 8);
+    while (world_pending()) world_follow(8, 60, 8);
+    memset(&weather, 0, sizeof weather);
+    rain_str = 0;
+    game_rules = GR_DEFAULT;
+    memset(&pl, 0, sizeof pl);
+    for (int z = 0; z < 16; z++)
+      for (int x = 0; x < 16; x++)
+        for (int y = 60; y < 70; y++) world_set(x, y, z, y == 60 ? B_NETHERRACK : B_AIR);
+    world_set(4, 61, 4, B_SOUL_SAND);
+    world_set(6, 61, 4, B_SOUL_SOIL);
+    fire_set(4, 62, 4, 0);
+    CHECK(world_get(4, 62, 4) == B_SOUL_FIRE);
+    fire_set(6, 62, 4, 0);
+    CHECK(world_get(6, 62, 4) == B_SOUL_FIRE);
+    fire_set(8, 61, 4, 0);
+    CHECK(world_get(8, 61, 4) == B_FIRE);
+    for (int t = 0; t < 120; t++) ticks_run++, world_tick();
+    CHECK(world_get(4, 62, 4) == B_SOUL_FIRE && world_get(6, 62, 4) == B_SOUL_FIRE);
+    /* the soul ground removed, the soul fire goes out (the next update) */
+    world_set(4, 61, 4, B_AIR);
+    world_set(6, 61, 4, B_AIR);
+    for (int t = 0; t < 120 && (world_get(4, 62, 4) != B_AIR || world_get(6, 62, 4) != B_AIR); t++)
+      ticks_run++, world_tick();
+    CHECK(world_get(4, 62, 4) == B_AIR && world_get(6, 62, 4) == B_AIR);
+    /* place, break, drop: the states are their own items and the vines need shears */
+    memset(pl.inv, 0, sizeof pl.inv);
+    CHECK(blk_item[B_CRIMSON_PLANKS] == B_CRIMSON_PLANKS && blk_item[B_SOUL_SOIL] == B_SOUL_SOIL);
+    CHECK(blk_item[B_CRIMSON_STEM_X] == B_CRIMSON_STEM && blk_item[B_STRIPPED_WARPED_STEM_Z] == B_STRIPPED_WARPED_STEM);
+    CHECK(blk_model[B_SOUL_FIRE] == M_CROSS && blk_light[B_SHROOMLIGHT] == 15 && blk_light[B_SOUL_FIRE] == 10);
+    CHECK(blk_hard[B_SOUL_SOIL] > 0 && blk_hard[B_WEEPING_VINES] > 0);
+    CHECK(blk_fuel[B_CRIMSON_PLANKS] == 0 && blk_fuel[B_WARPED_STEM] == 0 && smelt_of(B_CRIMSON_STEM) == 0);
+    plat_remove_prefix("utsoul");
+  }
+  {
     /* ---- the nether's mobs (todo [15]): piglins and zombified piglins ----------------
      * Spawning, models, skins, drops, spawn eggs, /summon; the enderman is the stretch
      * past them and is not in (no ender pearl item, no teleport). Bartering, the
@@ -1766,6 +1948,9 @@ int main(void) {
           world_set(x, y - 1, z, B_NETHERRACK);
           for (int k = 0; k < 4; k++) world_set(x, y + k, z, B_AIR);
         }
+      /* The synthetic floor is a controlled biome patch too: this checks the
+       * biome-specific list rather than whichever noise patch seed 99 made here. */
+      memset(vbiome, BI_NETHER_WASTES, sizeof vbiome);
       memset(ents, 0, sizeof ents);
       opt.difficulty = 2, pl.mode = 0, pl.dead = false, pl.health = 20;
       pl.x = px + 0.5f, pl.y = (float)y, pl.z = pz + 0.5f;
@@ -1785,6 +1970,24 @@ int main(void) {
           int bx = (int)floorf(ents[i].x), by = (int)floorf(ents[i].y), bz = (int)floorf(ents[i].z);
           CHECK(mob_can_stand(bx, by, bz) && world_get(bx, by - 1, bz) != B_LAVA);
         }
+      /* the soul sand valley uses the existing skeleton; the warped forest has
+       * no naturally spawning mob the game models (enderman/strider are absent). */
+      memset(ents, 0, sizeof ents);
+      memset(vbiome, BI_SOUL_SAND_VALLEY, sizeof vbiome);
+      rnd_seed(123);
+      for (int t = 0; t < 200; t++) mobs_spawn();
+      int skel = 0;
+      for (int i = 0; i < N_ENT; i++) {
+        if (ents[i].type == E_SKELETON) skel++;
+        else if (is_mob(ents[i].type)) other++;
+      }
+      CHECK(skel > 0 && other == 0);
+      memset(ents, 0, sizeof ents);
+      memset(vbiome, BI_WARPED_FOREST, sizeof vbiome);
+      for (int t = 0; t < 200; t++) mobs_spawn();
+      int warped_mobs = 0;
+      for (int i = 0; i < N_ENT; i++) warped_mobs += is_mob(ents[i].type);
+      CHECK(warped_mobs == 0);
       /* peaceful: nothing (as overworld hostiles make nothing) */
       memset(ents, 0, sizeof ents);
       opt.difficulty = 0;
@@ -2825,20 +3028,27 @@ int main(void) {
     int wx = ox * 16 + 10, wz = oz * 16 + 10;
     world_follow((float)wx + 0.5f, (float)pr, (float)wz + 0.5f);
     while (world_pending()) world_follow((float)wx + 0.5f, (float)pr, (float)wz + 0.5f);
-    CHECK(world_get(wx, pr, wz) == B_STONE_PRESSURE_PLATE);
+     CHECK(world_get(wx, pr, wz) == B_STONE_PRESSURE_PLATE);
     /* (the chests sit at the plate's own row: one and two out of the chamber's centre) */
-    CHECK(world_get(wx, pr, wz - 2) == B_CHEST && world_get(wx + 2, pr, wz) == B_CHEST &&
-          world_get(wx, pr, wz + 2) == B_CHEST && world_get(wx - 2, pr, wz) == B_CHEST);
-    memset(ents, 0, sizeof ents);
-    temple_trap((float)wx + 0.5f, (float)pr, (float)wz + 0.5f);
-    int moved = 0, lit = 0, stays = 0;
+     CHECK(world_get(wx, pr, wz - 2) == B_CHEST && world_get(wx + 2, pr, wz) == B_CHEST &&
+           world_get(wx, pr, wz + 2) == B_CHEST && world_get(wx - 2, pr, wz) == B_CHEST);
+     memset(ents, 0, sizeof ents);
+     pl.x = (float)wx + 0.5f, pl.y = (float)pr + 1.0625f, pl.z = (float)wz + 0.5f;
+     pressure_plate_tick(pl.x, pl.y, pl.z);   /* actual feet position atop the plate */
+     CHECK(world_get(wx, pr, wz) == B_STONE_PRESSURE_PLATE_DOWN);
+     pressure_plates_update();   /* occupied: stay pressed */
+     CHECK(world_get(wx, pr, wz) == B_STONE_PRESSURE_PLATE_DOWN);
+     int moved = 0, lit = 0, stays = 0;
     for (int dx = -1; dx <= 1; dx++)
       for (int dz = -1; dz <= 1; dz++)
         if (world_get(wx + dx, pr - 2, wz + dz) != B_TNT) moved++;
-    for (int i = 0; i < N_ENT; i++) lit += ents[i].type == E_TNT;
-    CHECK(moved == 9 && lit == 9);
-    /* and only the plate: five west there is no plate at that row */
-    temple_trap((float)wx - 4.5f, (float)pr, (float)wz + 0.5f);
+     for (int i = 0; i < N_ENT; i++) lit += ents[i].type == E_TNT;
+     CHECK(moved == 9 && lit == 9);
+     pl.x = (float)wx - 4.5f;
+     pressure_plates_update();   /* unoccupied: release */
+     CHECK(world_get(wx, pr, wz) == B_STONE_PRESSURE_PLATE);
+     /* and only the plate: five west there is no plate at that row */
+    pressure_plate_tick((float)wx - 4.5f, (float)pr, (float)wz + 0.5f);
     for (int i = 0; i < N_ENT; i++) stays += ents[i].type == E_TNT;
     CHECK(stays == 9);
     /* the loot: the main pool's 2-4 rolls and the bone pool's four, each item in the
@@ -2943,6 +3153,41 @@ int main(void) {
       CHECK(command_complete("/locate biome dese", 0, &at, o, sizeof o) && !strcmp(o, "minecraft:desert"));
       world_cheats = was_cheats;
     }
+  }
+  {
+    /* A stone plate powers an adjacent oak door while occupied and closes it
+     * again on release. */
+    world_new(25, "utplate");
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    for (int z = 6; z <= 10; z++)
+      for (int x = 6; x <= 10; x++) world_set(x, 69, z, B_STONE);
+    world_set(8, 70, 8, B_STONE_PRESSURE_PLATE);
+    world_set(9, 70, 8, B_DOOR_OAK_LOWER);
+    world_set(9, 71, 8, B_DOOR_OAK_UPPER);
+    memset(ents, 0, sizeof ents);
+    pl.x = 16.5f, pl.y = 70, pl.z = 16.5f;
+    pressure_plate_tick(8.5f, 70, 8.5f);
+    CHECK(world_get(8, 70, 8) == B_STONE_PRESSURE_PLATE_DOWN);
+    CHECK(world_get(9, 70, 8) == B_DOOR_OAK_LOWER_E_OPEN);
+    pressure_plates_update();
+    CHECK(world_get(8, 70, 8) == B_STONE_PRESSURE_PLATE);
+    CHECK(world_get(9, 70, 8) == B_DOOR_OAK_LOWER);
+    plat_remove_prefix("utplate");
+  }
+  {
+    /* An axe strips a Nether stem without changing its axis. */
+    world_new(26, "utstrip");
+    world_follow(8, 70, 8);
+    while (world_pending()) world_follow(8, 70, 8);
+    world_set(8, 70, 9, B_CRIMSON_STEM_X);
+    memset(pl.inv, 0, sizeof pl.inv);
+    pl.mode = 0, pl.dead = false, pl.x = 8.5f, pl.y = 70, pl.z = 8.5f, pl.health = 20;
+    pl.inv[0] = (Stack){I_IRON_AXE, 0}, pl.slot = 0;
+    player_look(pl.x, pl.y + 1.62f, pl.z, 0, 45);
+    player_tick(K_USE, K_USE);
+    CHECK(world_get(8, 70, 9) == B_STRIPPED_CRIMSON_STEM_X);
+    plat_remove_prefix("utstrip");
   }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);
   return fails != 0;

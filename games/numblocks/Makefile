@@ -78,10 +78,11 @@ data:
 # block/item/entity/font/environment pictures from an extracted modern client
 # (minecraft-textures/), falling back to 1.8.8's client.jar for the GUI/HUD
 MODERN_TEX ?= ../../minecraft-textures
+SPAWN_EGG_TEX ?= ../../minecraft-spawneggs/item
 data-modern:
 	python3 tools/blocks.py --header > src/blocks.h
 	python3 tools/items.py --header > src/items.h
-	python3 tools/pack.py --modern $(MODERN_TEX) $(CLIENT_JAR)
+	python3 tools/pack.py --modern $(MODERN_TEX) $(CLIENT_JAR) --eggs $(SPAWN_EGG_TEX)
 
 # the four moving-fluid pictures packed again in place (no full pack without the
 # 1.8.8 jar: the bed and the GUI have no modern file to come from)

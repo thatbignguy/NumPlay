@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.39"
+#define NB_VERSION "1.5.40"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -73,6 +73,8 @@ static inline bool is_door_lower(int b) {
   return b == B_DOOR_OAK_LOWER || (b >= B_DOOR_OAK_LOWER_S && b <= B_DOOR_OAK_LOWER_N_OPEN);
 }
 static inline bool is_lava(int b) { return b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA); }
+/* fire's two states: ordinary and the blue soul fire (on soul sand or soul soil) */
+static inline bool is_fire(int b) { return b == B_FIRE || b == B_SOUL_FIRE; }
 /* the nether portal's two states: NS faces north/south (thin in Z), EW faces east/west (thin in X) */
 static inline bool is_portal(int b) { return b == B_PORTAL_NS || b == B_PORTAL_EW; }
 /* the concrete pair (blocks.py): the powder falls like sand and gravel, and water - a source
@@ -319,7 +321,8 @@ void spawners_load(const uint8_t *b, int len); /* (len 0: none saved) */
 #define SPAWNERS_MAX 24                       /* the monster spawners the world remembers */
 void explode(float x, float y, float z, float power, bool blocks);
 void tnt_light(int x, int y, int z, int fuse);
-void temple_trap(float x, float y, float z);   /* the pyramid's plate: stood on, it lights its nine TNT (player.c) */
+void pressure_plate_tick(float x, float y, float z);   /* a pressure plate where (x,y,z) stands: powers (lights TNT, opens doors) the blocks that need it and turns the plate pressed */
+void pressure_plates_update(void);   /* release any pressed plate no entity is on any more */
 void throw_item(int id, float speed, bool from_player);   /* arrows, snowballs, eggs */
 bool mob_attack(const Entity *e);   /* the player hits this mob (with the held item) */
 bool mob_use(Entity *e);            /* the player uses the held item on it (shears, bucket) */

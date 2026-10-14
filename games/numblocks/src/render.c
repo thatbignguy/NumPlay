@@ -230,9 +230,12 @@ static bool dim_nether(void) { return world_dim == DIM_NETHER; }
 
 static __attribute__((noinline)) uint16_t sky(float dx, float dy, float dz, float len) {
   if (dim_nether()) {
-    if (under_liq) return under_liq == 2 ? lava_tint(NETHER_R, NETHER_G, NETHER_B)
-                                         : pack(NETHER_R / 4, NETHER_G / 3, NETHER_B / 2 + 40);
-    return pack(NETHER_R, NETHER_G, NETHER_B);
+    /* the nether's sky is the fog's colour, which is the biome's under the camera
+     * (render_frame set it): wastes #330808, crimson #330303, warped #1a051a,
+     * soul sand valley #1b4745 (the client's own) */
+    if (under_liq) return under_liq == 2 ? lava_tint(fog_r, fog_g, fog_b)
+                                         : pack(fog_r / 4, fog_g / 3, fog_b / 2 + 40);
+    return pack(fog_r, fog_g, fog_b);
   }
   float e = dy / len;   /* elevation, -1..1 */
   /* horizon (fog colour) to the sky's colour above; below the horizon, fog */
@@ -652,8 +655,11 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
     Hit h = {0}, hk;
     h.t = 1e9f;
     float dd[3] = {R->dx, R->dy, R->dz}, iv[3] = {R->ivx, R->ivy, R->ivz}, tl0 = tl;
+    /* the pressed plate sits half a texel lower (its box is whole sixteenths,
+     * so its shape is drawn against a ray raised by that much instead) */
+    float py = m == M_PLATE_DOWN ? ly + 1 / 32.0f : ly;
     for (int k = 0; k < nbx; k++)
-      if (hit_box(bxs[k], lx, ly, lz, dd, iv, tl0 + 1e-4f, &hk) && hk.t < h.t) h = hk;
+      if (hit_box(bxs[k], lx, py, lz, dd, iv, tl0 + 1e-4f, &hk) && hk.t < h.t) h = hk;
     if (h.t < 1e9f) {
       int tex = face_tex(b, h.face, x, y, z);
       if (m == M_BED && h.face == 1) {
@@ -2446,13 +2452,22 @@ void render_frame(const Camera *c, uint32_t tod) {
      * fog are the same red, and the fog closes from 10 blocks out (modern Nether
      * wastes), full by the render distance: shorter than the overworld's, which is
      * also a speed win. With no sky light there is no sun to dim it either, so the
-     * light tables are set once and for all (the block-light table is the sun's) */
+     * light tables are set once and for all (the block-light table is the sun's).
+     * The colour is the biome's under the camera (1.16's own): the wastes' #330808,
+     * the crimson forest's #330303, the warped forest's #1a051a, the soul sand
+     * valley's #1b4745, as modern's fog follows the camera. */
+    int bx = (int)floorf(ox), bz = (int)floorf(oz), nr = NETHER_R, ng = NETHER_G, nb = NETHER_B;
+    int bio = BI_NETHER_WASTES;
+    if ((unsigned)bx < VCX && (unsigned)bz < VCZ) bio = vbiome[bz * VCX + bx];
+    if (bio == BI_CRIMSON_FOREST) nr = 51, ng = 3, nb = 3;
+    else if (bio == BI_WARPED_FOREST) nr = 26, ng = 5, nb = 26;
+    else if (bio == BI_SOUL_SAND_VALLEY) nr = 27, ng = 71, nb = 69;
     setup_light(1.0f);
-    sky_r = fog_r = NETHER_R, sky_g = fog_g = NETHER_G, sky_b = fog_b = NETHER_B;
+    sky_r = fog_r = nr, sky_g = fog_g = ng, sky_b = fog_b = nb;
     ss_a = 0;
     star_k = 0;
     sun_a = 0;
-    cloud_r = NETHER_R, cloud_g = NETHER_G, cloud_b = NETHER_B;
+    cloud_r = nr, cloud_g = ng, cloud_b = nb;
     cur_max_t = view_dist();
     fog1 = fminf(cur_max_t, view_reach());
     cur_max_t = fog1;

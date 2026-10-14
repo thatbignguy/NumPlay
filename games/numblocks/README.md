@@ -7,14 +7,13 @@ Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it fo
 - **The same worlds as Minecraft 1.8.8:** type a seed and you get the world Minecraft 1.8.8 makes, block for block: the same terrain, biomes, hills, caves, lakes and trees. Or a superflat world to build on.
 - **Survival:** health, hunger, day and night, zombies, skeletons, creepers and spiders, and pigs, cows, sheep and chickens.
 - **Weather:** rain, snow and thunderstorms with lightning, as often as in 1.8.
-- **The Nether:** netherrack, caverns, a lava sea and a red sky, with piglins and zombified
-  piglins in it - the piglin hunts you down, the zombified piglin keeps to itself until you hit
-  it (and then its neighbours come too). Build an obsidian frame, light it with flint and steel,
-  stand in it, and you are in the Nether Wastes: nether quartz to find, soul sand and glowstone,
-  and the portal to come back by.
-- **Crafting:** 129 items and all their 1.8 recipes, a furnace, chests, tools that wear out, armor.
+- **The Nether:** the Nether Wastes, Crimson Forest, Warped Forest and Soul Sand Valley, each
+  with its own ground, growth and fog. Crimson and warped fungi, stems, wart blocks, roots and
+  vines grow above the lava sea; soul sand, soul soil and soul fire make the valley. Piglins
+  hunt you in the wastes and crimson forest; zombified piglins stay neutral until attacked.
+- **Crafting:** 142 items and 214 recipes, a furnace, chests, tools that wear out, armor.
 - **Fishing:** cast, wait for the bite, reel in fish, junk or treasure.
-- **Building:** 250 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
+- **Building:** over 230 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
 - **Fire:** light it with flint and steel. It spreads and burns wood, leaves and wool, like in 1.8.
 - **Creative mode:** fly, every block and item, break things at once, and search for any block.
 - **Spectator mode:** fly through the blocks and see through them, nothing to touch, and OK on a mob sees the world through its eyes.

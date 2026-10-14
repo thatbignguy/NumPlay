@@ -451,7 +451,45 @@ enum {
   B_SANDSTONE_STAIRS_W = 444,   /* 128:1 */
   B_SANDSTONE_STAIRS_S = 445,   /* 128:2 */
   B_SANDSTONE_STAIRS_N = 446,   /* 128:3 */
-  B_COUNT = 447
+  B_UNUSED_447 = 447,   /* 0:0 */
+  B_UNUSED_448 = 448,   /* 0:0 */
+  B_STONE_PRESSURE_PLATE_DOWN = 449,   /* 70:1 */
+  B_CRIMSON_NYLIUM = 450,   /* 250:0 */
+  B_WARPED_NYLIUM = 451,   /* 250:1 */
+  B_CRIMSON_STEM = 452,   /* 249:0 */
+  B_CRIMSON_STEM_X = 453,   /* 249:1 */
+  B_CRIMSON_STEM_Z = 454,   /* 249:2 */
+  B_CRIMSON_STEM_BARK = 455,   /* 249:3 */
+  B_STRIPPED_CRIMSON_STEM = 456,   /* 249:4 */
+  B_STRIPPED_CRIMSON_STEM_X = 457,   /* 249:5 */
+  B_STRIPPED_CRIMSON_STEM_Z = 458,   /* 249:6 */
+  B_STRIPPED_CRIMSON_STEM_BARK = 459,   /* 249:7 */
+  B_WARPED_STEM = 460,   /* 249:8 */
+  B_WARPED_STEM_X = 461,   /* 249:9 */
+  B_WARPED_STEM_Z = 462,   /* 249:10 */
+  B_WARPED_STEM_BARK = 463,   /* 249:11 */
+  B_STRIPPED_WARPED_STEM = 464,   /* 249:12 */
+  B_STRIPPED_WARPED_STEM_X = 465,   /* 249:13 */
+  B_STRIPPED_WARPED_STEM_Z = 466,   /* 249:14 */
+  B_STRIPPED_WARPED_STEM_BARK = 467,   /* 249:15 */
+  B_CRIMSON_PLANKS = 468,   /* 248:0 */
+  B_WARPED_PLANKS = 469,   /* 248:1 */
+  B_NETHER_WART_BLOCK = 470,   /* 248:2 */
+  B_WARPED_WART_BLOCK = 471,   /* 248:3 */
+  B_SHROOMLIGHT = 472,   /* 248:4 */
+  B_BONE_BLOCK = 473,   /* 250:5 */
+  B_BONE_BLOCK_X = 474,   /* 250:6 */
+  B_BONE_BLOCK_Z = 475,   /* 250:7 */
+  B_CRIMSON_FUNGUS = 476,   /* 247:0 */
+  B_WARPED_FUNGUS = 477,   /* 247:1 */
+  B_CRIMSON_ROOTS = 478,   /* 247:2 */
+  B_WARPED_ROOTS = 479,   /* 247:3 */
+  B_NETHER_SPROUTS = 480,   /* 247:4 */
+  B_WEEPING_VINES = 481,   /* 247:5 */
+  B_TWISTING_VINES = 482,   /* 247:6 */
+  B_SOUL_SOIL = 483,   /* 247:7 */
+  B_SOUL_FIRE = 484,   /* 247:8 */
+  B_COUNT = 485
 };
 
 /* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the
@@ -459,7 +497,7 @@ enum {
  * what the per-state tables are sized for */
 #define NSTATES 512
 
-enum { M_NONE, M_CUBE, M_CROSS, M_LIQUID, M_TORCH, M_SLAB, M_LAYER, M_CACTUS, M_LEAVES, M_GLASS, M_FLAT, M_VINE, M_PANE, M_FENCE, M_DOOR, M_LADDER, M_STAIRS, M_CHEST, M_BED, M_PORTAL };
+enum { M_NONE, M_CUBE, M_CROSS, M_LIQUID, M_TORCH, M_SLAB, M_LAYER, M_CACTUS, M_LEAVES, M_GLASS, M_FLAT, M_VINE, M_PANE, M_FENCE, M_DOOR, M_LADDER, M_STAIRS, M_CHEST, M_BED, M_PORTAL, M_PLATE, M_PLATE_DOWN };
 enum { T_NONE, T_PICKAXE, T_AXE, T_SHOVEL, T_SHEARS, T_SWORD };
 
 #endif

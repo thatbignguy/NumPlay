@@ -4,7 +4,7 @@
 
 <h1 align="center">NumPlay / Custom Numblocks</h1>
 
-<p align="center">NumPlay 1.10.0 · NumBlocks 1.5.22</p>
+<p align="center">NumPlay 1.10.0 · NumBlocks 1.5.40</p>
 
 <h3 align="center">Numplay, but with a more advanced and disguised version of numblocks.</h3>
 

@@ -1,3 +1,50 @@
+## 1.5.40
+**The Nether gains its Crimson, Warped and Soul Sand biomes, with their own ground, growth and fog**
+
+- **The biomes.** The Nether Wastes remains id 8 (also named `nether_wastes`; the old `hell`
+  name still resolves). The Crimson Forest, Warped Forest and Soul Sand Valley use 1.16's ids
+  49, 50 and 51. Two seed-derived, smoothly interpolated value-noise fields split the nether
+  into chunk-scale regions; one function supplies both the biome line (`gen_biome`, F3 and
+  `/locate`) and the terrain, so a column's answer is stable whichever slab is made. This is a
+  small deterministic split, not modern's multi-noise climate sampler. Temperature and rainfall
+  for all three are nominal 2.0 / 0 (warm and dry); nether weather stays disabled.
+- **Ground and growth.** Crimson and warped nylium surface exposed netherrack in their forests;
+  crimson fungi/roots, warped fungi/roots and nether sprouts decorate them. Chunk-seeded huge
+  fungi have stems, wart-block caps and shroomlight; crimson weeping vines hang from cave
+  ceilings, and twisting vines grow on warped fungi. Soul Sand Valley patches soul sand and
+  soul soil across its surface, adds buried bone blocks, crimson roots and soul fire. The
+  generator's separate chunk stream and whole-column floor/ceiling maps keep every feature
+  identical across slab windows. Basalt Deltas, basalt pillars, hoglins and striders are not
+  added; the simplified huge-fungus shapes are small box-model clusters, not modern's full
+  structure placement.
+- **Blocks and fire.** Added the two nyliums, crimson/warped stems and stripped stems (axis
+  states included), planks, wart blocks, shroomlight, bone block (axis states), fungi, roots,
+  sprouts, both vines, soul soil and soul fire. Item blocks have modern textures, labels,
+  creative entries, `/give` names and stem-to-plank recipes; soul fire remains block-only like
+  fire in Minecraft. Axes strip either stem while preserving its axis. Nether wood is not
+  flammable, furnace fuel or charcoal material. Soul fire lights at level 10, becomes the fire
+  kind when lit on soul sand or soul soil, and stays there without spreading or aging out.
+  `/setblock soul_fire` places the non-item state. Existing block ids are unchanged: the
+  pressed plate and Nether states append after the old states, and unused state slots 447/448
+  remain reserved for the piglin egg item ids.
+- **Spawning.** Piglins and zombified piglins spawn on wastes and crimson-forest ground; the
+  existing skeleton spawns in Soul Sand Valleys. As in the earlier mob pass, nether spawns
+  ignore light, keep the hostile cap, and avoid the lava sea. The game has no enderman or ghast,
+  so the warped forest has no natural mob yet, and valley ghasts are omitted.
+- **Pressure plates.** The already-present temple plate work is included with this release:
+  plates show their pressed state, release when entities leave, light the pyramid's nine TNT,
+  and open/close adjacent oak doors. The plate record waits while its cell is outside the cache;
+  only living mobs and the player hold it down.
+- **Tests and build.** `make test` passes (214 recipes), including all four nether biomes,
+  surface/growth and repeated-window determinism, soul-fire persistence/release, biome-specific
+  spawns, temple TNT, plate release/door power and saved-state id assertions. Scripted
+  `./build/play --biome nether_wastes|crimson_forest|warped_forest|soul_sand_valley --frames 40
+  --shots 39` captures each environment; `build/desktop` was built, not run as a test.
+- **Cost.** `NumBlocks.nwa` 635,108 -> 650,676 B; `numblocks.bin` 566,508 -> 582,152 B.
+  `.data` 5,079 B and `.bss` 122,136 B (127,215 B combined, below `CUSTOM_RAM` 133,652 B;
+  no generator static field or BSS growth). `make build && make check`, `make desktop`, and
+  `make -C ../numblocks-interest build check` pass.
+
 ## 1.5.39
 **The nether has life: piglins and zombified piglins spawn on the wastes - the piglin hostile, the zombified neutral until hit and then its neighbours with it - with the modern skins and models, drops, spawn eggs, `/summon` and spawners**
 

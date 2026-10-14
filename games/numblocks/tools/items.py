@@ -231,6 +231,16 @@ LABELS = {
     'DEEPSLATE_REDSTONE_ORE': 'Deepslate Redstone Ore', 'DEEPSLATE_DIAMOND_ORE': 'Deepslate Diamond Ore',
     'DEEPSLATE_LAPIS_ORE': 'Deepslate Lapis Lazuli Ore', 'DEEPSLATE_EMERALD_ORE': 'Deepslate Emerald Ore',
     'STONE_PRESSURE_PLATE': 'Stone Pressure Plate', 'SANDSTONE_STAIRS': 'Sandstone Stairs',
+    'CRIMSON_NYLIUM': 'Crimson Nylium', 'WARPED_NYLIUM': 'Warped Nylium',
+    'CRIMSON_STEM': 'Crimson Stem', 'WARPED_STEM': 'Warped Stem',
+    'STRIPPED_CRIMSON_STEM': 'Stripped Crimson Stem', 'STRIPPED_WARPED_STEM': 'Stripped Warped Stem',
+    'CRIMSON_PLANKS': 'Crimson Planks', 'WARPED_PLANKS': 'Warped Planks',
+    'NETHER_WART_BLOCK': 'Nether Wart Block', 'WARPED_WART_BLOCK': 'Warped Wart Block',
+    'SHROOMLIGHT': 'Shroomlight', 'BONE_BLOCK': 'Bone Block',
+    'CRIMSON_FUNGUS': 'Crimson Fungus', 'WARPED_FUNGUS': 'Warped Fungus',
+    'CRIMSON_ROOTS': 'Crimson Roots', 'WARPED_ROOTS': 'Warped Roots', 'NETHER_SPROUTS': 'Nether Sprouts',
+    'WEEPING_VINES': 'Weeping Vines', 'TWISTING_VINES': 'Twisting Vines', 'SOUL_SOIL': 'Soul Soil',
+    'SOUL_FIRE': 'Soul Fire',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
@@ -251,6 +261,7 @@ for c, l in zip(COLORS, CLAB):
 
 # block states that stand for another one in the inventory
 ITEM_OF = {'PORTAL_NS': None, 'PORTAL_EW': None,   # the nether portal: the game's own, never an item
+           'STONE_PRESSURE_PLATE_DOWN': 'STONE_PRESSURE_PLATE',
            'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
            'COBBLESTONE_STAIRS_W': 'COBBLESTONE_STAIRS', 'COBBLESTONE_STAIRS_S': 'COBBLESTONE_STAIRS',
            'COBBLESTONE_STAIRS_N': 'COBBLESTONE_STAIRS',
@@ -261,11 +272,18 @@ ITEM_OF = {'PORTAL_NS': None, 'PORTAL_EW': None,   # the nether portal: the game
            'BROWN_MUSHROOM_INSIDE': 'BROWN_MUSHROOM_CAP', 'BROWN_MUSHROOM_STEM': 'BROWN_MUSHROOM_CAP',
            'RED_MUSHROOM_INSIDE': 'RED_MUSHROOM_CAP', 'RED_MUSHROOM_STEM': 'RED_MUSHROOM_CAP',
            'MONSTER_EGG_STONE': 'STONE'}
+ITEM_OF['UNUSED_447'] = ITEM_OF['UNUSED_448'] = None   # the piglin eggs own these item ids
 for v in ['OAK', 'SPRUCE', 'BIRCH', 'JUNGLE', 'ACACIA', 'DARK_OAK']:
     for s in ['_X', '_Z', '_BARK']:
         ITEM_OF[f'LOG_{v}{s}'] = f'LOG_{v}'
 ITEM_OF['QUARTZ_PILLAR_X'] = 'QUARTZ_PILLAR'
 ITEM_OF['QUARTZ_PILLAR_Z'] = 'QUARTZ_PILLAR'
+for _w in ['CRIMSON', 'WARPED', 'STRIPPED_CRIMSON', 'STRIPPED_WARPED']:
+    for _s in ['_X', '_Z', '_BARK']:
+        ITEM_OF[f'{_w}_STEM{_s}'] = f'{_w}_STEM'
+ITEM_OF['BONE_BLOCK_X'] = 'BONE_BLOCK'
+ITEM_OF['BONE_BLOCK_Z'] = 'BONE_BLOCK'
+ITEM_OF['SOUL_FIRE'] = None   # soul fire is a state, not an item (as fire is)
 for n in ['SUNFLOWER', 'LILAC', 'DOUBLE_GRASS', 'LARGE_FERN', 'ROSE_BUSH', 'PEONY']:
     ITEM_OF[f'{n}_UPPER'] = f'{n}_LOWER'
 for d in ['S', 'W', 'N', 'E_OPEN', 'S_OPEN', 'W_OPEN', 'N_OPEN']:
@@ -433,6 +451,10 @@ for n in ['OAK', 'SPRUCE', 'BIRCH', 'JUNGLE', 'ACACIA', 'DARK_OAK']:
     if f'WOOD_SLAB_{n}' in BNAMES:
         shaped(f'WOOD_SLAB_{n}', 6, ['###'], {'#': f'PLANKS_{n}'})
     shaped(f'PLANKS_{n}', 4, ['#'], {'#': f'LOG_{n}'})
+# the nether's planks, from a stem or a stripped stem (modern's tag recipe)
+for w in ['CRIMSON', 'WARPED']:
+    shaped(f'{w}_PLANKS', 4, ['#'], {'#': f'{w}_STEM'})
+    shaped(f'{w}_PLANKS', 4, ['#'], {'#': f'STRIPPED_{w}_STEM'})
 shaped('LADDER', 3, ['# #', '###', '# #'], {'#': 'STICK'})
 shaped('WOODEN_DOOR', 3, ['##', '##', '##'], {'#': 'PLANKS_OAK'})
 shaped('SUGAR', 1, ['#'], {'#': 'REEDS'})
@@ -496,7 +518,8 @@ NATURAL = ('GRASS', 'DIRT', 'COARSE_DIRT', 'PODZOL', 'MYCELIUM', 'STONE', 'GRANI
            'SAND', 'RED_SAND', 'GRAVEL', 'CLAY', 'SNOW', 'ICE', 'PACKED_ICE', 'BEDROCK', 'OBSIDIAN', 'NETHERRACK',
            'COAL_ORE', 'IRON_ORE', 'GOLD_ORE', 'DIAMOND_ORE', 'REDSTONE_ORE', 'LAPIS_ORE', 'EMERALD_ORE', 'DEEPSLATE',
            'DEEPSLATE_COAL_ORE', 'DEEPSLATE_IRON_ORE', 'DEEPSLATE_GOLD_ORE', 'DEEPSLATE_REDSTONE_ORE',
-           'DEEPSLATE_DIAMOND_ORE', 'DEEPSLATE_LAPIS_ORE', 'DEEPSLATE_EMERALD_ORE')
+           'DEEPSLATE_DIAMOND_ORE', 'DEEPSLATE_LAPIS_ORE', 'DEEPSLATE_EMERALD_ORE', 'CRIMSON_NYLIUM',
+           'WARPED_NYLIUM', 'SOUL_SOIL')
 NATURAL_ONLY = ('SNOW_LAYER', 'SOUL_SAND', 'NETHER_QUARTZ_ORE')   # natural, but only in Natural Blocks:
 # Snow Block is already in Building Blocks, and soul sand and quartz ore are the nether's
 # ground and veins (quartz ore groups with the other ores through tab_group's _ORE rule)
@@ -509,7 +532,8 @@ FUNC_FULL = ('TNT', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE')
 DECO = ('SAPLING_', 'LEAVES_', 'DEAD_SHRUB', 'TALL_GRASS', 'FERN', 'DEAD_BUSH', 'DANDELION', 'POPPY',
         'BLUE_ORCHID', 'ALLIUM', 'AZURE_BLUET', '_TULIP', 'OXEYE_DAISY', 'BROWN_MUSHROOM', 'RED_MUSHROOM',
         'CACTUS', 'VINE', 'LILY_PAD', 'SUNFLOWER_LOWER', 'LILAC_LOWER', 'DOUBLE_GRASS_LOWER', 'LARGE_FERN_LOWER',
-        'ROSE_BUSH_LOWER', 'PEONY_LOWER')
+        'ROSE_BUSH_LOWER', 'PEONY_LOWER', 'CRIMSON_FUNGUS', 'WARPED_FUNGUS', 'CRIMSON_ROOTS', 'WARPED_ROOTS',
+        'NETHER_SPROUTS', 'WEEPING_VINES', 'TWISTING_VINES', 'SHROOMLIGHT')
 
 
 def tab_of(iid, block=False):

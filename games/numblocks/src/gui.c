@@ -558,7 +558,7 @@ static void mode_screen(void) {
   for (int i = 0; i < N_MODES; i++) {
     int x = sx + i * SLOT_DX;
     sprite(i == mode_sel ? SP_GM_SEL : SP_GM_SLOT, x, sy);
-    int ic = mode_of[i] == 1 ? blk_icon[B_GRASS] : mode_of[i] == 2 ? SP_EYE : item_icon(I_IRON_SWORD);
+    int ic = mode_of[i] == 1 ? blk_icon[B_GRASS] : mode_of[i] == 2 ? SP_EYE_ENDER : item_icon(I_IRON_SWORD);
     if (ic >= 0) sprite(ic, x + 5, sy + 5);
   }
   /* under them: the key that goes to the next one, as Minecraft's "[F4] Next" */

@@ -249,7 +249,11 @@ def faces(s, names):
 # shapes in sixteenths (x0 y0 z0 x1 y1 z1), up to two boxes; models not listed are whole cubes or
 # drawn their own way (cross, liquid); ladders, vines, fences and panes are shaped by their neighbours
 BOX = {'slab': [(0, 0, 0, 16, 8, 16)], 'layer': [(0, 0, 0, 16, 2, 16)], 'torch': [(7, 0, 7, 9, 10, 9)],
-       'cactus': [(1, 0, 1, 15, 16, 15)], 'flat': [(0, 0, 0, 16, 1, 16)], 'fence': [(6, 0, 6, 10, 16, 10)],
+       'cactus': [(1, 0, 1, 15, 16, 15)], 'flat': [(0, 0, 0, 16, 1, 16)],
+       # BlockPressurePlate: the up plate 14 x 14, one texel high; the down one
+       # is half a texel (the renderer lowers it, blk_box cannot hold halves)
+       'plate': [(1, 0, 1, 15, 1, 15)], 'plate_down': [(1, 0, 1, 15, 1, 15)],
+       'fence': [(6, 0, 6, 10, 16, 10)],
        'pane': [(7, 0, 7, 9, 16, 9)], 'ladder': [(0, 0, 14, 16, 16, 16)], 'vine': [(0, 0, 15, 16, 16, 16)],
        'bed': [(0, 0, 0, 16, 9, 16)], 'chest': [(1, 0, 1, 15, 14, 15)], 'liquid': [(0, 0, 0, 16, 14, 16)]}
 STAIR_TOP = [(8, 8, 0, 16, 16, 16), (0, 8, 0, 8, 16, 16), (0, 8, 8, 16, 16, 16), (0, 8, 0, 16, 16, 8)]
@@ -288,8 +292,10 @@ BIOMES = {0: (0.5, 0.5), 1: (0.8, 0.4), 2: (2.0, 0.0), 3: (0.2, 0.3), 4: (0.7, 0
           20: (0.2, 0.3), 21: (0.95, 0.9), 22: (0.95, 0.9), 23: (0.95, 0.8), 24: (0.5, 0.5), 25: (0.2, 0.3),
           26: (0.05, 0.3), 27: (0.6, 0.6), 28: (0.6, 0.6), 29: (0.7, 0.8), 30: (-0.5, 0.4), 31: (-0.5, 0.4),
           32: (0.3, 0.8), 33: (0.3, 0.8), 34: (0.2, 0.3), 35: (1.2, 0.0), 36: (1.0, 0.0), 37: (2.0, 0.0), 38: (2.0, 0.0),
-          39: (2.0, 0.0)}
+          39: (2.0, 0.0), 49: (2.0, 0.0), 50: (2.0, 0.0), 51: (2.0, 0.0)}
 # (forest 4 is 0.7/0.8; birch forests 0.6/0.6; plains 0.8/0.4; mega spruce taiga mutated 160: 0.25/0.8)
+# (the nether's 49-51, 1.16's crimson forest, warped forest and soul sand valley: the
+# nether has no weather, so their temperature and rainfall are nominal - 2.0 warm, dry)
 
 
 def biome_colors(jar):
@@ -427,7 +433,9 @@ def iso_icon(jar, s, names_px):
     # Their outer columns are dark edge trim: sample asymmetrically so the
     # trim stays on the icon's outer silhouette and plain wood meets at the
     # middle seam (trim-against-trim there reads as a black split/hole).
-    h = 0.5 if s['model'] == 'slab' else 0.5625 if s['model'] == 'bed' else (14 / 16) if s['model'] == 'chest' else 1.0
+    h = (0.5 if s['model'] == 'slab' else 0.5625 if s['model'] == 'bed' else
+         (14 / 16) if s['model'] == 'chest' else 1 / 16 if s['model'] == 'plate' else
+         0.5 / 16 if s['model'] == 'plate_down' else 1.0)
     inset_tex = s['model'] in ('chest', 'cactus')
     is_chest = s['model'] == 'chest'
     for y in range(16):
@@ -1095,7 +1103,7 @@ def main():
     out.append('};')
     gui_names = [n for n, im in gi]
     extra = [n for n, *_ in GUI_SPRITES] + ['slot_helmet', 'slot_chestplate', 'slot_leggings', 'slot_boots', 'steve',
-                                            'arm', 'dirt_bg']
+                                            'arm', 'dirt_bg', 'eye_ender']
     # Minecraft's clouds: 256 x 256, 1 bit a cell
     cl = jar.image('environment/clouds')
     bits = bytearray(256 * 256 // 8)
@@ -1132,7 +1140,7 @@ def main():
     temps = [BIOMES.get(i & 127 if i >= 128 else i, (0.5, 0.5))[0] for i in range(256)]
     out.append('const int8_t biome_temp[256] = {' + ','.join(str(int(round(t * 50))) for t in temps) + '};   /* x 50 */')
     # BiomeGenBase.enableRain (off in deserts, savannas, mesas) and enableSnow; mutated biomes copy them
-    no_rain, snowy = {2, 8, 9, 17, 35, 36, 37, 38, 39}, {10, 11, 12, 13, 26, 30, 31}
+    no_rain, snowy = {2, 8, 9, 17, 35, 36, 37, 38, 39, 49, 50, 51}, {10, 11, 12, 13, 26, 30, 31}
     rain = [(0 if (i & 127) in no_rain else 1) | (2 if (i & 127) in snowy else 0) for i in range(256)]
     out.append('const uint8_t biome_rain[256] = {' + ','.join(str(v) for v in rain) + '};')
     open(os.path.join(ROOT, 'src', 'data.c'), 'w').write('\n'.join(out) + '\n')

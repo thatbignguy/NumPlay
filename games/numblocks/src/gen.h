@@ -45,6 +45,13 @@ void gen_set_flat_preset(const char *preset);
 /* The deepest row bedrock reaches (1.18: bedrock about -64..-60). */
 #define BEDROCK_TOP (-60)
 
+/* The nether's other biomes (1.16's own ids; the wastes are 1.8's Hell, 8):
+ * their temperature and rainfall are nominal (the dimension has no weather). */
+#define BI_CRIMSON_FOREST 49
+#define BI_WARPED_FOREST 50
+#define BI_SOUL_SAND_VALLEY 51
+#define BI_NETHER_WASTES 8   /* 1.8's Hell (gen.c's BI_HELL): the ground the others sit in */
+
 /* Blocks of chunk (cx, cz) for y in [y0, y0 + h), after terrain, caves, ravines
  * and the decoration (population) that Minecraft would put in this chunk:
  * out[(y - y0) * 256 + z * 16 + x], x and z in 0..15, values from blocks.h (B_*).
@@ -58,7 +65,8 @@ void gen_set_flat_preset(const char *preset);
 void gen_slab(int cx, int cz, int y0, int h, uint8_t *out);
 
 /* Minecraft biome id at block (x, z) (0 ocean, 1 plains, ... 129+ mutated).
- * Cheap for the chunk of the last gen_slab call, a few ms elsewhere. */
+ * Cheap for the chunk of the last gen_slab call, a few ms elsewhere.
+ * In the nether the answer is one of 1.16's 49-51 or BI_HELL (8, the wastes). */
 int gen_biome(int x, int z);
 
 /* y (0..127) of the highest non-air block of column (x, z) after generation

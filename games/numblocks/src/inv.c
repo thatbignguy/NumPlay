@@ -250,7 +250,8 @@ int block_drops(int b, int held, Stack *out) {
       else DROP(I_STICK, rnd(3));
       return n;
     case B_VINE:
-      if (shears) DROP(B_VINE, 1);
+    case B_WEEPING_VINES: case B_TWISTING_VINES:
+      if (shears) DROP(b, 1);
       return n;
     case B_BROWN_MUSHROOM_CAP: case B_BROWN_MUSHROOM_INSIDE: case B_BROWN_MUSHROOM_STEM:
       DROP(B_BROWN_MUSHROOM, rnd(10) - 7);

@@ -305,17 +305,74 @@ b('DEEPSLATE_EMERALD_ORE', 253, 7, tex='deepslate_emerald_ore', hard=3.0, tool='
 # sandstone is the existing SANDSTONE_SMOOTH state; the orange and blue
 # terracotta are the existing STAINED_CLAY_ORANGE/BLUE, the slab, TNT and the
 # chest are in already.
-b('STONE_PRESSURE_PLATE', 70, 0, model='flat', tex='stone', hard=0.5, tool='pickaxe')
+b('STONE_PRESSURE_PLATE', 70, 0, model='plate', tex='stone', hard=0.5, tool='pickaxe')
 _SANDSTAIRS_TEX = tsb('sandstone_top', 'sandstone_normal', 'sandstone_bottom')
 b('SANDSTONE_STAIRS', 128, 0, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
 b('SANDSTONE_STAIRS_W', 128, 1, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
 b('SANDSTONE_STAIRS_S', 128, 2, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
 b('SANDSTONE_STAIRS_N', 128, 3, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
+# 447 and 448 are the piglin spawn-egg item ids. Keep them reserved in the block
+# table too: state ids and item ids share a number space, so new states must not
+# alias those eggs. (No existing saved block-state id moves.)
+for _u in range(447, 449):
+    b('UNUSED_%03d' % _u, 0, model='none')
+# The pressed-plate state and the Nether additions follow all existing states and
+# the egg ids; saved blocks, the egg stacks and the recipes keep their old ids.
+b('STONE_PRESSURE_PLATE_DOWN', 70, 1, model='plate_down', tex='stone', hard=0.5, tool='pickaxe')
+# --- the nether's biomes (1.16): the crimson and warped forests and the soul
+# sand valley. Modern only - 1.8 has no id for any of them - so four free
+# numeric ids stand in for the families, told apart by the data value (the
+# states sit past the items' ids, as the concrete's and deepslate's do):
+#   250 nylium (0 crimson, 1 warped) and the bone block (5-7, the axes; the cut
+#              family's own numbers 2-4 are left unused so the bone does not burn)
+#   249 stems (0-3 crimson stem/x/z/bark, 4-7 the stripped ones,
+#              8-11 warped, 12-15 stripped warped)
+#   248 the cut family (0-1 planks, 2-3 wart blocks, 4 shroomlight)
+#   247 the growth and the soul blocks (0-1 fungi, 2-3 roots, 4 sprouts,
+#              5-6 vines, 7 soul soil, 8 soul fire)
+b('CRIMSON_NYLIUM', 250, 0, tex=tsb('crimson_nylium', 'crimson_nylium_side'), hard=0.4, tool='pickaxe')
+b('WARPED_NYLIUM', 250, 1, tex=tsb('warped_nylium', 'warped_nylium_side'), hard=0.4, tool='pickaxe')
+for _m, (_n, _t) in enumerate([('CRIMSON', 'crimson'), ('WARPED', 'warped')]):
+    _base = _m * 8
+    b(f'{_n}_STEM', 249, _base + 0, tex=tsb(f'{_t}_stem_top', f'{_t}_stem'), hard=2.0, tool='axe')
+    b(f'{_n}_STEM_X', 249, _base + 1, tex={'top': f'{_t}_stem', 'side': f'{_t}_stem', 'bottom': f'{_t}_stem',
+                                           'x': f'{_t}_stem_top'}, hard=2.0, tool='axe')
+    b(f'{_n}_STEM_Z', 249, _base + 2, tex={'top': f'{_t}_stem', 'side': f'{_t}_stem', 'bottom': f'{_t}_stem',
+                                           'z': f'{_t}_stem_top'}, hard=2.0, tool='axe')
+    b(f'{_n}_STEM_BARK', 249, _base + 3, tex=f'{_t}_stem', hard=2.0, tool='axe')
+    b(f'STRIPPED_{_n}_STEM', 249, _base + 4, tex=tsb(f'stripped_{_t}_stem_top', f'stripped_{_t}_stem'),
+      hard=2.0, tool='axe')
+    b(f'STRIPPED_{_n}_STEM_X', 249, _base + 5, tex={'top': f'stripped_{_t}_stem', 'side': f'stripped_{_t}_stem',
+                                                    'bottom': f'stripped_{_t}_stem', 'x': f'stripped_{_t}_stem_top'},
+      hard=2.0, tool='axe')
+    b(f'STRIPPED_{_n}_STEM_Z', 249, _base + 6, tex={'top': f'stripped_{_t}_stem', 'side': f'stripped_{_t}_stem',
+                                                    'bottom': f'stripped_{_t}_stem', 'z': f'stripped_{_t}_stem_top'},
+      hard=2.0, tool='axe')
+    b(f'STRIPPED_{_n}_STEM_BARK', 249, _base + 7, tex=f'stripped_{_t}_stem', hard=2.0, tool='axe')
+b('CRIMSON_PLANKS', 248, 0, tex='crimson_planks', hard=2.0, tool='axe')
+b('WARPED_PLANKS', 248, 1, tex='warped_planks', hard=2.0, tool='axe')
+b('NETHER_WART_BLOCK', 248, 2, tex='nether_wart_block', hard=1.0, tool='axe')
+b('WARPED_WART_BLOCK', 248, 3, tex='warped_wart_block', hard=1.0, tool='axe')
+b('SHROOMLIGHT', 248, 4, tex='shroomlight', light=15, hard=1.0, tool='axe')
+b('BONE_BLOCK', 250, 5, tex=tsb('bone_block_top', 'bone_block_side'), hard=2.0, tool='pickaxe')
+b('BONE_BLOCK_X', 250, 6, tex={'top': 'bone_block_side', 'side': 'bone_block_side', 'bottom': 'bone_block_side',
+                               'x': 'bone_block_top'}, hard=2.0, tool='pickaxe')
+b('BONE_BLOCK_Z', 250, 7, tex={'top': 'bone_block_side', 'side': 'bone_block_side', 'bottom': 'bone_block_side',
+                               'z': 'bone_block_top'}, hard=2.0, tool='pickaxe')
+b('CRIMSON_FUNGUS', 247, 0, model='cross', tex='crimson_fungus', hard=0)
+b('WARPED_FUNGUS', 247, 1, model='cross', tex='warped_fungus', hard=0)
+b('CRIMSON_ROOTS', 247, 2, model='cross', tex='crimson_roots', hard=0)
+b('WARPED_ROOTS', 247, 3, model='cross', tex='warped_roots', hard=0)
+b('NETHER_SPROUTS', 247, 4, model='cross', tex='nether_sprouts', hard=0)
+b('WEEPING_VINES', 247, 5, model='cross', tex='weeping_vines_plant', hard=0.2, tool='shears')
+b('TWISTING_VINES', 247, 6, model='cross', tex='twisting_vines_plant', hard=0.2, tool='shears')
+b('SOUL_SOIL', 247, 7, tex='soul_soil', hard=0.5, tool='shovel')
+b('SOUL_FIRE', 247, 8, model='cross', tex='soul_fire_0', light=10, hard=0)
 
 assert len(S) <= NSTATES, len(S)
 
 MODELS = ['none', 'cube', 'cross', 'liquid', 'torch', 'slab', 'layer', 'cactus', 'leaves', 'glass', 'flat', 'vine',
-          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed', 'portal']
+          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed', 'portal', 'plate', 'plate_down']
 TOOLS = [None, 'pickaxe', 'axe', 'shovel', 'shears', 'sword']
 
 

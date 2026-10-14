@@ -4,13 +4,13 @@
 #include <stdint.h>
 #include "blocks.h"
 
-#define NTEX 270
+#define NTEX 298
 /* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */
 extern const uint8_t tex_px[NTEX][128];
 extern const uint16_t tex_pal[NTEX][16];
 extern const uint8_t tex_flags[NTEX];
 
-/* faces: -Y +Y -Z +Z -X +X */
+/* faces: -Y +Y -Z +Z -X +X; 16 bits: the texture list passed 256 with the concrete */
 extern const uint16_t blk_tex[NSTATES][6];
 extern const uint8_t blk_model[NSTATES], blk_light[NSTATES], blk_flags[NSTATES], blk_tool[NSTATES];
 extern const uint8_t blk_nbox[NSTATES];   /* how many boxes it is made of (0: a whole cube) */
@@ -297,6 +297,34 @@ extern const uint8_t rain_run[][4], snow_run[][4], rain_idx[257], snow_idx[257];
 #define TX_DEEPSLATE_DIAMOND_ORE 267
 #define TX_DEEPSLATE_LAPIS_ORE 268
 #define TX_DEEPSLATE_EMERALD_ORE 269
+#define TX_CRIMSON_NYLIUM 270
+#define TX_CRIMSON_NYLIUM_SIDE 271
+#define TX_WARPED_NYLIUM 272
+#define TX_WARPED_NYLIUM_SIDE 273
+#define TX_CRIMSON_STEM_TOP 274
+#define TX_CRIMSON_STEM 275
+#define TX_STRIPPED_CRIMSON_STEM_TOP 276
+#define TX_STRIPPED_CRIMSON_STEM 277
+#define TX_WARPED_STEM_TOP 278
+#define TX_WARPED_STEM 279
+#define TX_STRIPPED_WARPED_STEM_TOP 280
+#define TX_STRIPPED_WARPED_STEM 281
+#define TX_CRIMSON_PLANKS 282
+#define TX_WARPED_PLANKS 283
+#define TX_NETHER_WART_BLOCK 284
+#define TX_WARPED_WART_BLOCK 285
+#define TX_SHROOMLIGHT 286
+#define TX_BONE_BLOCK_TOP 287
+#define TX_BONE_BLOCK_SIDE 288
+#define TX_CRIMSON_FUNGUS 289
+#define TX_WARPED_FUNGUS 290
+#define TX_CRIMSON_ROOTS 291
+#define TX_WARPED_ROOTS 292
+#define TX_NETHER_SPROUTS 293
+#define TX_WEEPING_VINES_PLANT 294
+#define TX_TWISTING_VINES_PLANT 295
+#define TX_SOUL_SOIL 296
+#define TX_SOUL_FIRE_0 297
 
 extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];
 extern const uint32_t spr_off[];
@@ -331,31 +359,31 @@ extern const uint16_t blk_icon[NSTATES];   /* sprite of its icon */
 #define SP_MOON_5 26
 #define SP_MOON_6 27
 #define SP_MOON_7 28
-#define SP_FLAME 419
-#define SP_ARROW 420
-#define SP_ARMOR_FULL 421
-#define SP_ARMOR_HALF 422
-#define SP_BUBBLE_POP 423
-#define SP_HEART_HIT 424
-#define SP_TAB_TOP 425
-#define SP_TAB_TOP_SEL 426
-#define SP_TAB_BOTTOM 427
-#define SP_TAB_BOTTOM_SEL 428
-#define SP_SCROLLER 429
-#define SP_BUTTON 430
-#define SP_BUTTON_HOVER 431
-#define SP_BUTTON_OFF 432
-#define SP_GM_BG 433
-#define SP_GM_SLOT 434
-#define SP_GM_SEL 435
-#define SP_SLOT_HELMET 436
-#define SP_SLOT_CHESTPLATE 437
-#define SP_SLOT_LEGGINGS 438
-#define SP_SLOT_BOOTS 439
-#define SP_STEVE 440
-#define SP_ARM 441
-#define SP_DIRT_BG 442
-#define SP_EYE 443   /* the ender eye: the spectator slot's icon (the item is not in the game) */
+#define SP_FLAME 515
+#define SP_ARROW 516
+#define SP_ARMOR_FULL 517
+#define SP_ARMOR_HALF 518
+#define SP_BUBBLE_POP 519
+#define SP_HEART_HIT 520
+#define SP_TAB_TOP 521
+#define SP_TAB_TOP_SEL 522
+#define SP_TAB_BOTTOM 523
+#define SP_TAB_BOTTOM_SEL 524
+#define SP_SCROLLER 525
+#define SP_BUTTON 526
+#define SP_BUTTON_HOVER 527
+#define SP_BUTTON_OFF 528
+#define SP_GM_BG 529
+#define SP_GM_SLOT 530
+#define SP_GM_SEL 531
+#define SP_SLOT_HELMET 532
+#define SP_SLOT_CHESTPLATE 533
+#define SP_SLOT_LEGGINGS 534
+#define SP_SLOT_BOOTS 535
+#define SP_STEVE 536
+#define SP_ARM 537
+#define SP_DIRT_BG 538
+#define SP_EYE_ENDER 539
 
 #include "items.h"
 extern const uint16_t blk_item[NSTATES];   /* the item a block state counts as (0xFFFF: none) */
@@ -366,7 +394,7 @@ extern const uint16_t it_icon[ITEM_SLOTS], it_dur[ITEM_SLOTS], it_fuel[ITEM_SLOT
 extern const uint8_t it_kind[ITEM_SLOTS], it_stack[ITEM_SLOTS], it_tier[ITEM_SLOTS], it_a[ITEM_SLOTS], it_b[ITEM_SLOTS];
 extern const uint8_t it_place[ITEM_SLOTS];   /* the block it places (255: none) */
 typedef struct { uint16_t out; uint8_t n, w, h; uint16_t in[9]; } Recipe;   /* w 0: shapeless, h of them */
-#define N_RECIPES 210
+#define N_RECIPES 214
 extern const Recipe recipes[N_RECIPES];
 #define N_SMELTING 28
 extern const uint16_t smelting[N_SMELTING][2];

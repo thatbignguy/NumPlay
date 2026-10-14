@@ -552,6 +552,9 @@ static void cmd_setblock(char **a, int n) {
    * number and the names of blocks no item has keep the 1.8 <dataValue> between the id and
    * the handling, a state's handling comes straight after the name */
   int b = state_named(a[3]);
+  /* Soul fire is a block state, not an item in Minecraft: /setblock can place
+   * it, while /give and the creative inventory cannot. */
+  if (b < 0 && !strcmp(strip_ns(a[3]), "soul_fire")) b = B_SOUL_FIRE;
   const char *hand = NULL;
   if (b < 0) {
     int id = block_named(a[3]);
@@ -803,6 +806,7 @@ bool command_complete(const char *line, int k, int *at, char *o, int max) {
         for (int i = 0; i < 198; i++)
           if (mc_block_name[i][0] && !(mc_block_item[i >> 3] >> (i & 7) & 1) &&
               offer(word, mc_block_name[i], "minecraft:", k, o, max)) return true;
+        if (offer(word, "soul_fire", "minecraft:", k, o, max)) return true;
         return false;
       }
       /* the handling: straight after a state's name (no data value), or after the data

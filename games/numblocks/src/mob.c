@@ -454,11 +454,13 @@ void spawners_load(const uint8_t *b, int len) {
 void mobs_spawn(void) {
   if (pl.dead) return;
   if (world_dim == DIM_NETHER) {
-    /* the nether's own rule (vanilla nether mobs ignore light level: no sky light exists
-     * there, so the overworld's light <= rnd(8) gate means nothing): on solid ground of
-     * the wastes, around the player, in small groups of 2-3, with the hostile cap in
-     * charge. mob_can_stand's opaque-below already refuses the lava sea (lava is not
-     * opaque), so a spawn never drops them in lava to swim. */
+    /* The nether's own rule (vanilla nether mobs ignore light level: no sky light exists
+     * there, so the overworld's light <= rnd(8) gate means nothing), on solid ground
+     * around the player and with the hostile cap in charge. The 1.16 biome lists we
+     * can represent: piglins and zombified piglins in the wastes and crimson forest;
+     * skeletons in the soul sand valley. The warped forest has endermen and striders,
+     * and the valley has ghasts: those mobs are not implemented, so neither is spawned.
+     * mob_can_stand's opaque-below refuses the lava sea. */
     if (opt.difficulty == 0 || !rule(GR_MOB_SPAWNING)) return;
     for (int k = 0; k < 4; k++) {
       int x = ifl(pl.x) + rnd(41) - 20, z = ifl(pl.z) + rnd(41) - 20;
@@ -469,9 +471,20 @@ void mobs_spawn(void) {
         if (!world_loaded(x, y + 1, z) || !world_loaded(x, y - 1, z)) continue;
         if (!mob_can_stand(x, y, z)) continue;
         if (count(true) >= 8) return;
-        /* seven in ten a zombified piglin, the rest a piglin */
-        int t = rnd(10) < 7 ? E_ZPIGLIN : E_PIGLIN;
-        int n = 2 + rnd(2);
+        int lx = x - vc_x0, lz = z - vc_z0;
+        if ((unsigned)lx >= VCX || (unsigned)lz >= VCZ) continue;
+        int bio = vbiome[lz * VCX + lx];
+        int t, n;
+        if (bio == BI_SOUL_SAND_VALLEY) {
+          t = E_SKELETON;
+          n = 1 + rnd(2);
+        } else if (bio == BI_NETHER_WASTES || bio == BI_CRIMSON_FOREST) {
+          /* seven in ten a zombified piglin, the rest a piglin */
+          t = rnd(10) < 7 ? E_ZPIGLIN : E_PIGLIN;
+          n = 2 + rnd(2);
+        } else {
+          continue;   /* the warped forest has no implemented natural mob yet */
+        }
         for (int i = 0; i < n; i++) {
           int sx = x + (i ? rnd(5) - 2 : 0), sz = z + (i ? rnd(5) - 2 : 0);
           if (!mob_can_stand(sx, y, sz)) continue;
@@ -891,7 +904,7 @@ static bool sees(const Entity *e) {
 }
 /* where a mob as tall as h can stand, going from height y onto the column (x, z): up a step, level,
  * or down up to three (PathFinder.getSafePoint); -1: nowhere */
-static bool clear(int b) { return !(blk_flags[b] & BF_SOLID) && !is_lava(b) && b != B_FIRE && b != B_CACTUS; }
+static bool clear(int b) { return !(blk_flags[b] & BF_SOLID) && !is_lava(b) && !is_fire(b) && b != B_CACTUS; }
 static int stand_at(int x, int y, int z, int tall) {
   for (int k = 0; k < 5; k++) {
     int ny = k == 0 ? y + 1 : y - k + 1;
@@ -1027,7 +1040,7 @@ void mob_tick(Entity *e) {
     if (e->fire < 160) e->fire = 160;
   }
   if (in_lava) e->fire = 300, hurt(e, 4, 0, 0);
-  if (world_get(bx, by, bz) == B_FIRE || world_get(bx, ifl(e->y + 1), bz) == B_FIRE) {
+  if (is_fire(world_get(bx, by, bz)) || is_fire(world_get(bx, ifl(e->y + 1), bz))) {
     hurt(e, 1, 0, 0);
     if (e->fire < 160) e->fire = 160;
   }
@@ -1143,7 +1156,7 @@ void mob_tick(Entity *e) {
       bool ground = false;
       for (int k = 1; k <= 4 && !ground; k++) ground = (blk_flags[world_get(ax, by - k + 1, az)] & BF_SOLID) != 0;
       int ahead = world_get(ax, by, az);
-      if ((!ground && !in_water) || is_lava(ahead) || ahead == B_FIRE) go = false, e->gx = e->x, e->gz = e->z;
+      if ((!ground && !in_water) || is_lava(ahead) || is_fire(ahead)) go = false, e->gx = e->x, e->gz = e->z;
     }
   }
   if (chase) {
@@ -1248,5 +1261,5 @@ void mob_tick(Entity *e) {
     }
   }
   if (e->y < (float)VOID_Y) e->type = E_NONE;   /* fell into the void */
-  else temple_trap(e->x, e->y, e->z);   /* the pyramid's plate (stone plates take mobs too) */
+  else pressure_plate_tick(e->x, e->y, e->z);   /* pressure plates take mobs too (temple TNT, doors) */
 }

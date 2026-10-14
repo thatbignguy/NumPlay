@@ -247,7 +247,7 @@ static void fluids_tick(void) {
     Pending p = pend[i];
     pend[i] = pend[--npend];
     if (!world_loaded(p.x, p.y, p.z)) continue;
-    if (world_get(p.x, p.y, p.z) == B_FIRE) fire_update(p.x, p.y, p.z, p.age);
+    if (is_fire(world_get(p.x, p.y, p.z))) fire_update(p.x, p.y, p.z, p.age);
     else fluid_update(p.x, p.y, p.z);
     done++;
   }
@@ -256,6 +256,7 @@ static void fluids_tick(void) {
 /* ---------------------------------------------------------------- fire */
 /* Blocks.fire.setFireInfo: how readily a block sets fire to the air by it, and burns away (0: never) */
 static int fire_enc(int b) {
+  if (b == B_SOUL_FIRE) return 0;
   switch (blk_id[b]) {
     case 5: case 125: case 126: case 85: case 107: case 53: case 134: case 135: case 136: case 163: case 164:
     case 17: case 162: case 173: return 5;
@@ -266,6 +267,7 @@ static int fire_enc(int b) {
   return 0;
 }
 static int fire_flam(int b) {
+  if (b == B_SOUL_FIRE) return 0;
   switch (blk_id[b]) {
     case 5: case 125: case 126: case 85: case 107: case 53: case 134: case 135: case 136: case 163: case 164:
     case 47: case 170: case 171: return 20;
@@ -299,7 +301,10 @@ static void fire_schedule(int x, int y, int z, int age) {
   pend[npend++] = (Pending){(int16_t)x, (int16_t)z, (uint8_t)y, (uint8_t)age, (uint16_t)(ticks_run + 30 + rnd(10))};
 }
 void fire_set(int x, int y, int z, int age) {
-  world_set(x, y, z, B_FIRE);
+  /* BlockFire.getStateForPlacement: on soul sand or soul soil, fire is soul fire
+   * (1.16); everywhere else it is the ordinary kind */
+  int below = world_get(x, y - 1, z);
+  world_set(x, y, z, below == B_SOUL_SAND || below == B_SOUL_SOIL ? B_SOUL_FIRE : B_FIRE);
   fire_schedule(x, y, z, age);
 }
 /* BlockFire.catchOnFire: what burns may burn away (or catch, the fire young enough); TNT is lit */
@@ -317,13 +322,25 @@ static void catch_fire(int x, int y, int z, int chance, int age) {
 /* BlockFire.updateTick */
 static void fire_update(int x, int y, int z, int age) {
   if (!rule(GR_FIRE_TICK)) return;
-  bool raining = rain_str > 0.2f;
+  /* soul fire stays only on soul sand or soul soil, and fire on either becomes
+   * soul fire; a soul fire whose ground is gone goes out (1.16, BlockFire) */
+  int here = world_get(x, y, z), below = world_get(x, y - 1, z);
+  bool soul_base = below == B_SOUL_SAND || below == B_SOUL_SOIL;
+  if (here == B_FIRE && soul_base) world_set(x, y, z, here = B_SOUL_FIRE);
+  if (here == B_SOUL_FIRE && !soul_base) {
+    world_set(x, y, z, B_AIR);
+    return;
+  }
+  bool raining = here == B_FIRE && rain_str > 0.2f;
   if (!fire_can_stay(x, y, z) || (raining && rained_on(x, y, z) && rndf() < 0.2f + age * 0.03f)) {
     world_set(x, y, z, B_AIR);
     return;
   }
   if (age < 15) age += rnd(3) / 2;
   fire_schedule(x, y, z, age);
+  /* Soul fire is a permanent, blue light: unlike ordinary fire it does not spread,
+   * burn neighbours away, or age out on a bare soul block. */
+  if (here == B_SOUL_FIRE) return;
   if (!fire_near(x, y, z)) {
     /* nothing to burn: out, soon (at once off a solid top) */
     if (!(blk_flags[world_get(x, y - 1, z)] & BF_OPAQUE) || age > 3) world_set(x, y, z, B_AIR);
@@ -424,7 +441,7 @@ static void grow_tree(int x, int y, int z, int sapling) {
 
 static void random_tick(int x, int y, int z) {
   int b = world_get(x, y, z);
-  if (b == B_FIRE) {
+  if (is_fire(b)) {
     fire_schedule(x, y, z, 8);
     return;
   }
