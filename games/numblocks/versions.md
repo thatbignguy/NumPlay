@@ -1,3 +1,6 @@
+## 1.5.41
+Nether biomes split into larger regions (crimson/warped forests and soul sand valleys now span several chunks); fixed ground-block glitch in generated nether terrain.
+
 ## 1.5.40
 **The Nether gains its Crimson, Warped and Soul Sand biomes, with their own ground, growth and fog**
 

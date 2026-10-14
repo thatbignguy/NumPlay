@@ -6066,10 +6066,10 @@ static float neth_vnoise(int x, int z, int scale, uint32_t salt) {
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 static int nether_biome_at(int x, int z) {
-    float f = neth_vnoise(x, z, 80, 0x4E42u);   /* 80 blocks a cell: forests of a few chunks */
-    if (f > 0.38f) return BI_CRIMSON_FOREST;
-    if (f < -0.38f) return BI_WARPED_FOREST;
-    if (neth_vnoise(x, z, 48, 0xB00Bu) > 0.42f) return BI_SOUL_SAND_VALLEY;
+    float f = neth_vnoise(x, z, 240, 0x4E42u);   /* ~3x coarser: forests and valleys span several chunks */
+    if (f > 0.35f) return BI_CRIMSON_FOREST;
+    if (f < -0.35f) return BI_WARPED_FOREST;
+    if (neth_vnoise(x, z, 144, 0xB00Bu) > 0.38f) return BI_SOUL_SAND_VALLEY;
     return BI_HELL;
 }
 
