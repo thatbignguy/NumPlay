@@ -450,9 +450,26 @@ void spawners_load(const uint8_t *b, int len) {
   n_spawners = n;
 }
 
+/* The test world's cages: one for each of the game's ten mobs, put back the moment
+ * one of them is gone (a monster despawns 32 blocks out, a caged one the player kills
+ * too), so the showcase always holds all of them. Nothing else spawns there. */
+static void cages(void) {
+  for (int k = 0; k < 10; k++) {
+    bool there = false;
+    for (int i = 0; i < N_ENT && !there; i++)
+      if (ents[i].type == E_ZOMBIE + k && ents[i].state != 255) there = true;
+    if (there) continue;
+    int x, y, z;
+    test_cage(k, &x, &y, &z);
+    Entity *e = mob_summon(E_ZOMBIE + k, x + 0.5f, (float)y, z + 0.5f);
+    if (e) e->yaw = 90, e->gx = e->x, e->gz = e->z;   /* facing the spawn platform, west */
+  }
+}
+
 /* SpawnerAnimals, made small: a try every second */
 void mobs_spawn(void) {
   if (pl.dead) return;
+  if (world_type == WT_TEST) { cages(); return; }   /* the showcase's own ten, and nothing else */
   if (world_dim == DIM_NETHER) {
     /* The nether's own rule (vanilla nether mobs ignore light level: no sky light exists
      * there, so the overworld's light <= rnd(8) gate means nothing), on solid ground

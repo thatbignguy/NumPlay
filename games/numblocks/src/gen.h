@@ -19,6 +19,75 @@ void gen_set_cache(void *mem);
  * "2;7,2x3,2;1": bedrock, two dirt, grass, all plains, nothing else). Kept across gen_init. */
 void gen_set_flat(int flat);
 
+/* The test world (nb.h's WT_TEST): the same empty world whatever the seed, holding
+ * everything the game has once - every block state in a grid, every mob in a cage of
+ * its own and the structures the world makes, each on its own platform. Off is the
+ * two above. Kept across gen_init, as the flat mode is. */
+void gen_set_test(int test);
+
+/* The test world's layout (nb.h's WT_TEST): where the showcase puts its sections, so
+ * the tests can read the world through them. Everything stands on one row,
+ * TEST_SECTION_Y, three blocks above the spawn platform's top, and the sections run in
+ * one row along +z, in the order of the game's own: the grid of every block state first
+ * (starting a bit before the spawn platform and running past it, so the platform is in
+ * the middle of the blocks, which are three blocks over its top), then the chests of
+ * every item that has no block of its own, then the mobs in their cages, then the
+ * structures the world makes. A player on the platform faces the whole row. */
+#define TEST_PLATFORM_Y 40           /* the spawn platform: the row its blocks sit on (the player on 41) */
+#define TEST_SECTION_Y 43            /* the row the showcase's platforms and the grid's barriers sit on */
+#define TEST_BLOCK_Y 44              /* the row the grid's blocks and the item chests float at (their barriers at TEST_SECTION_Y) */
+/* the spawn platform: 16 x 16, in the middle of the grid of blocks */
+#define TEST_SPAWN_X0 0
+#define TEST_SPAWN_Z0 (-31)
+#define TEST_SPAWN_X1 (TEST_SPAWN_X0 + 15)
+#define TEST_SPAWN_Z1 (TEST_SPAWN_Z0 + 15)
+/* the grid of every block state: 15 columns along x, 23 rows along z (the row the
+ * showcase runs in) - the 345 block states there are (the ids the block and the item
+ * number spaces share - 258 to 395, and the two reserved slots - hold no block of their
+ * own), one air gap between each */
+#define TEST_GRID_X0 (-7)
+#define TEST_GRID_Z0 (-46)
+#define TEST_GRID_COLS 15
+#define TEST_GRID_ROWS 23
+#define TEST_GRID_X1 (TEST_GRID_X0 + (TEST_GRID_COLS - 1) * 2)
+#define TEST_GRID_Z1 (TEST_GRID_Z0 + (TEST_GRID_ROWS - 1) * 2)
+/* the chests of every item that has no block of its own (the ones that place one are
+ * shown in the grid of blocks): TEST_ITEM_CHESTS of them in a row, floating like the
+ * blocks, one stack of each of the 136 of them (27 a chest) */
+#define TEST_ITEM_X0 5
+#define TEST_ITEM_Z 8
+#define TEST_ITEM_CHESTS 6
+/* the cages: five along x, two along z, 5 x 5 of grass each with one block between
+ * them. Each mob stands on the middle block of its own, with a barrier on each of its
+ * four sides and one over it */
+#define TEST_CAGE_X0 (-7)
+#define TEST_CAGE_Z0 18
+#define TEST_CAGE_COLS 5
+#define TEST_CAGE_ROWS 2
+#define TEST_CAGE_STEP 6
+#define TEST_CAGE_X1 (TEST_CAGE_X0 + (TEST_CAGE_COLS - 1) * TEST_CAGE_STEP + 4)
+#define TEST_CAGE_Z1 (TEST_CAGE_Z0 + (TEST_CAGE_ROWS - 1) * TEST_CAGE_STEP + 4)
+#define TEST_CAGE_Y 44      /* the row the mobs' feet stand on (the grass is at TEST_SECTION_Y) */
+/* the desert pyramid: its origin chunk (its 21 x 21 starts there, on a chunk boundary
+ * as the world's own placement puts it) and the row its base is on */
+#define TEST_TEMPLE_OX 0
+#define TEST_TEMPLE_OZ 2
+#define TEST_TEMPLE_BASE 60
+/* the dungeon: the middle of its box, and the row its floor is on */
+#define TEST_DUNG_X 3
+#define TEST_DUNG_Z 63
+#define TEST_DUNG_Y 45
+#define TEST_DUNG_SEED 20250614   /* its own stream: the same dungeon every time */
+
+/* The test world's dungeon box: its half sizes, the two draws WorldGenDungeons makes of
+ * its own stream first (2..3 each way, so its room is 9 x 9 to 11 x 11). */
+void test_dung_box(int *i, int *l);
+
+/* The test world's mob cages (gen.c's test world section): where the k-th of the
+ * game's ten mobs (E_ZOMBIE .. E_ZPIGLIN) stands, as the block its feet are on, in
+ * the middle of its own 2 x 2 room. k outside 0..9 gives (0, 0, 0). */
+void test_cage(int k, int *x, int *y, int *z);
+
 /* Superflat with a preset: either a simple "block,block,..." list (one layer per
  * block, bottom to top, e.g. "bedrock,dirt,dirt,grass") or a 1.8 FlatGeneratorInfo
  * "version;layers;biome;structures" (e.g. "2;7,2x3,2;1", kept for older saves):
@@ -27,6 +96,12 @@ void gen_set_flat(int flat);
  * simple name like bedrock/dirt/grass/stone/sand/glass. Invalid/NULL falls back
  * to the default preset. Max 16 layer entries, max height 128. */
 void gen_set_flat_preset(const char *preset);
+
+/* The world's sea level: the row the water of the default worlds sits at, and the row the rock
+ * under the generator's own world ends (below it, a column of the test world's vget is stone).
+ * And the desert pyramid's footprint: TEMPLE_SIZE x TEMPLE_SIZE (gen.c's temple_build). */
+#define SEA 63
+#define TEMPLE_SIZE 21
 
 /* The nether's build height: the top of gen_slab's windows there (one past the highest
  * block the player can put, y 199). Its terrain is the same 128-block column, ceiling

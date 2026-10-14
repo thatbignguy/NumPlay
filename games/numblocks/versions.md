@@ -1,3 +1,53 @@
+## 1.5.43
+**A third world type - Test: an empty world that is always the same, whatever the seed, with everything the game has in it once**
+
+- **The world.** `WT_TEST` (after `WT_DEFAULT`, `WT_FLAT`) makes the generator build one
+  fixed world out of nothing: no seed, no noise, no terrain. `gen_set_test` puts the
+  generator into it (kept across `gen_init`, as the flat mode is) and `gen_slab`'s new
+  branch writes it; `gen_biome` answers plains, `gen_top` answers the row each column
+  stands on, `gen_spawn` answers the middle of the spawn platform. A chunk comes out the
+  same whatever the seed and whatever slab window asks for it, so the world is the same
+  every time and does not depend on what has been visited. The create screen's World Type
+  row steps Default, Superflat, Test (Customize stays Superflat's), and a test world saves
+  and loads like any other.
+- **The sections.** The player spawns in the middle of a 16 x 16 platform of bedrock. Every
+  block state there is - one of each, in the order of the ids, air and the two reserved
+  slots aside - floats in a grid of 21 columns x 23 rows with one air gap between each; the
+  platform under it is a barrier (invisible until you hold one, 1.5.42), which is what keeps
+  the sand and the gravel from falling and the sources from spreading, and the liquids have
+  barriers on their four sides as well. Every mob stands in a cage of its own on a floating
+  bedrock platform - glass walls and a floor, a roof with a glowstone over the room - so the
+  daylight does not set the monsters alight; `mob.c` puts the ten of them there and puts one
+  back the moment it is gone. The structures the world generates - a desert pyramid and a
+  dungeon - are built by the generator's own structure code, block for block as the real
+  ones, each on its own platform of bedrock two blocks wider than the structure on every
+  side; the dungeon keeps its spawner and chest (unset, as one from the inventory is) and a
+  doorway in its north wall so the room can be walked into, and the pyramid keeps its plate
+  and its nine TNT: stepping on it is the trap, as in Minecraft. The pyramid's platform sits
+  on SEA's row because its foundation fills down to the first block that is not air or
+  liquid, and a dungeon's box has to be below SEA because WorldGenDungeons asks for rock of
+  its own to carve.
+- **It never changes.** Nothing in it moves on its own: `tick.c` keeps the weather and the
+  random block ticks off it (no rain, no fire spreading or burning out, no grass spreading,
+  no saplings growing, no leaves decaying, no snow or ice melting, no crops or canes
+  growing) and `mob.c` keeps the natural spawning off it, so what is put there stays as it
+  is put. `new_world` turns the daylight cycle off for it, as `/gamerule` would, so the sun
+  stands at noon: a showcase is looked at in the light.
+- **Tests and build.** `make test` passes (214 recipes), with a test-world section: the
+  same slab whatever the seed or window, every block state once on its barrier with the
+  liquids held in and the gaps air, the ten cages with their mobs in them (put back when
+  one is taken away), the pyramid's sandstone and its nine TNT, plate and four chests on
+  its platform, the dungeon's walls, spawner, chest and doorway, the spawn point, the
+  weather never starting, the fire and the sapling staying put and the world coming back
+  the same out of a save. `./build/play --test --frames 60 --shots 59` flies the showcase
+  (`--fly "x,y,z,yaw,pitch"` puts the camera somewhere else) and logs what it holds;
+  `build/desktop` was built, not run as a test.
+- **Cost.** `NumBlocks.nwa` 656,880 B (1.5.42: 654,248 B), `numblocks.bin` 583,908 B.
+  `.data` 5,079 B and `.bss` 122,152 B (127,231 B combined, below `CUSTOM_RAM` 133,652 B;
+  the test world adds no static of its own beyond one flag). `make -C games/numblocks build
+  check host desktop`, `make -C games/numblocks-interest build check`, `apps`,
+  `test_numblocks_progress`, `test_games --game numblocks` and `test_small_ram` pass.
+
 ## 1.5.42
 **Minecraft's barrier block: invisible until you hold one, and an Operator Utilities tab (cheats on) for it**
 

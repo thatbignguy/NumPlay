@@ -399,6 +399,7 @@ void world_new(int64_t seed, const char *name) {
   world_dim = DIM_OVER;   /* a world made now starts in the overworld */
   if (world_type == WT_FLAT) gen_set_flat_preset(world_preset);
   else gen_set_flat(0);
+  gen_set_test(world_type == WT_TEST);   /* the showcase: always the same, whatever the seed */
   gen_init(seed);
   gen_set_dim(world_dim);   /* the dimension's generator (one, shared with the overworld) */
   edits_set_dim(world_dim);   /* and its records */

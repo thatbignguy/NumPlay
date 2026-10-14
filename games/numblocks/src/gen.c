@@ -105,6 +105,10 @@
 
 #include "blocks.h"
 #include "states.h"   /* the 9-bit block states: the slab's and the columns' accessors */
+/* nb.h's E_ZOMBIE: the first of the game's ten mobs (E_ZOMBIE .. E_ZPIGLIN), which the
+ * cages are filled in the order of. Declared here instead of including mob.h, which
+ * brings nb.h, whose BF_OPAQUE is this file's own flag under another name. */
+#define MOB_FIRST 2
 #ifndef FLAT_DEFAULT
 #define FLAT_DEFAULT "2;7,2x3,2;1"
 #endif
@@ -150,7 +154,6 @@ typedef uint64_t u64;
 typedef int32_t i32;
 typedef uint32_t u32;
 
-#define SEA 63
 
 /* left shifts of possibly negative values, without undefined behaviour */
 #define SHL(v, k) ((i64)((u64)(i64)(v) << (k)))
@@ -5478,7 +5481,6 @@ static void decorate(const Biome *b) {
 #define TEMPLE_SPACING 32
 #define TEMPLE_SEPARATION 8
 #define TEMPLE_SALT 14357617
-#define TEMPLE_SIZE 21
 #define TEMPLE_LIMIT (TEMPLE_SPACING - TEMPLE_SEPARATION)   /* 24 */
 
 
@@ -6951,8 +6953,220 @@ static int flat_block(int y) {
   return flat_layers[y];
 }
 
+/* ---------------------------------------------------------------- the test world
+ * The Test world type (nb.h's WT_TEST): an empty world that is always the same,
+ * whatever the seed, holding everything the game has once. Nothing here reads the
+ * seed or any noise, so a chunk comes out the same every time it is asked for, and
+ * nothing in it moves on its own: tick.c keeps the weather and the random block
+ * ticks off it and mob.c keeps the natural spawning off it, so what is put here
+ * stays as it is put. The sections stand in one row along +z, in the order of the
+ * game's own:
+ *   - the spawn platform, a square of bedrock with the player in its middle, under the
+ *     middle of the grid of blocks;
+ *   - every block state floating in a grid, one air gap between each. Each block stands
+ *     on a barrier of its own (a barrier is drawn as air, so the gaps read as gaps) and
+ *     the liquids have barriers on their four sides too: that is what keeps the sand and
+ *     the gravel from falling and a source from spreading. The grid starts a bit before
+ *     the spawn platform and runs past it, so the platform is in the middle of it;
+ *   - the chests of every item that has no block of its own (the ones that place one are
+ *     in the grid of blocks), in a row, floating on their barriers as the blocks do;
+ *   - every mob in a cage of its own on a floating platform of grass, a ring of barriers
+ *     on its four sides and one over its head (mob.c puts the mobs in them, gen.h's
+ *     test_cage says where);
+ *   - the structures the world generates - a desert pyramid and a dungeon - each on its
+ *     own platform of grass, two blocks wider than the structure on every side, built by
+ *     the generator's own structure code below, so they are the real ones block for
+ *     block (their chests' contents are put in when the world is made).
+ * Two of the structures' own needs set the rest of the layout: a dungeon's box has to be
+ * below SEA, since WorldGenDungeons asks for rock of its own to carve (vget's answer
+ * under the world, with no summaries here, is stone below SEA and air above it), and the
+ * pyramid's foundation, which fills down from its base to the first block that is not
+ * air or liquid, is put here because this world has no rock of its own to stop at. Where
+ * each section is: gen.h, next to test_cage. */
+
+static int g_test;
+void gen_set_test(int test) { g_test = test ? 1 : 0; }
+
+/* a platform over [x0,x1] x [z0,z1], its blocks (blk) on the row y: grass under the
+ * mobs and the structures, bedrock for the spawn platform */
+static void t_platform(int x0, int z0, int x1, int z1, int y, int blk) {
+  for (int z = z0; z <= z1; z++)
+    for (int x = x0; x <= x1; x++) put(x, y, z, blk, R_ALWAYS);
+}
+/* whether the state id is a block of its own: the ids the block and the item number
+ * spaces share (258 to 395, the items themselves, and the two reserved slots 447 and
+ * 448) hold no block - a block laid down with one of them shows as an empty cube, and
+ * picking it would give the item */
+static bool t_block(int s) { return blk_id[s] != 0; }
+/* the state the grid's (i, j) shows: one of each block state, in the order of the ids,
+ * the ones that hold no block of their own left out (345 of them) */
+static int grid_state(int i, int j) {
+  int want = j * TEST_GRID_COLS + i, s = 0;
+  for (int k = 0; k <= want; k++) {
+    do s++;
+    while (s < NSTATES && !t_block(s));
+  }
+  return s;
+}
+/* the fourteen liquid states, as nb.h's is_water and is_lava take them: the sources,
+ * the flows and the falls of both. They are not one run of ids - the wood slabs and
+ * the crops sit between the flows of water and the flows of lava - so each run is
+ * named. What the barriers around them are for. */
+static inline bool t_liquid(int b) {
+  return b == B_WATER || b == B_FLOWING_WATER || (b >= B_FLOWING_WATER_2 && b <= B_FALLING_WATER) ||
+         b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA);
+}
+/* the view and the bookkeeping the structure builders read and write. There are no
+ * column summaries of this world, so vget answers rock from the world's floor up to
+ * SEA and air above it: the ground both structures ask for (the pyramid's foundation
+ * fills down to the first block that is not air or liquid - SEA's row, where its
+ * platform is - and WorldGenDungeons wants rock to carve its room out of). A top is
+ * never lowered while they build (c_top is 255: no write of theirs is at row 255),
+ * which keeps c_lower_top out of a summary this world has none of. */
+static void t_view(int cx, int cz) {
+  memset(&PV, 0, sizeof PV);
+  for (int i = 0; i < 32 * 32; i++) PV.top[i] = 255;
+  PV.ox = cx * 16, PV.oz = cz * 16;
+  nb_cx = nb_cz = 1 << 20;
+  memset(c_top, 255, sizeof c_top), memset(c_sl, 0, sizeof c_sl);
+  pm = &pmemo[0], pm_known = 0, dung_idx = 0;
+}
+/* the dungeon's own box: its half sizes, the two draws WorldGenDungeons makes of
+ * its stream first (2..3 each way, so its room is 9 x 9 to 11 x 11) */
+void test_dung_box(int *i, int *l) {
+  JRand r;
+  jr_seed(&r, TEST_DUNG_SEED);
+  *i = jr_int(&r, 2) + 2;
+  *l = jr_int(&r, 2) + 2;
+}
+/* the showcase, for the chunk (cx, cz) over the rows [y0, y0 + h). Everything is
+ * written through put(), the generator's own path, so the structures below build on
+ * what the platforms and the grid have already put down. */
+static void test_slab(int cx, int cz, int y0, int h, uint8_t *out) {
+  int x0 = cx * 16, z0 = cz * 16;
+  /* the showcase is all there is in this world: everything else of the window is air,
+   * written out so a chunk asked for again comes out the same (the slab is not cleared
+   * by fill_chunk when it asks the generator for a whole one) */
+  memset(out, 0, (size_t)h * 256 / 8 * 9);
+  c_out = out, c_y0 = y0, c_h = h, c_cx = cx, c_cz = cz;
+#define T_TOUCH(a, b, c, d) (x0 <= (c) && x0 + 15 >= (a) && z0 <= (d) && z0 + 15 >= (b))
+  if (T_TOUCH(TEST_SPAWN_X0, TEST_SPAWN_Z0, TEST_SPAWN_X1, TEST_SPAWN_Z1))
+    t_platform(TEST_SPAWN_X0, TEST_SPAWN_Z0, TEST_SPAWN_X1, TEST_SPAWN_Z1, TEST_PLATFORM_Y, B_BEDROCK);
+  if (T_TOUCH(TEST_GRID_X0, TEST_GRID_Z0, TEST_GRID_X1, TEST_GRID_Z1)) {
+    static const int8_t d[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    for (int j = 0; j < TEST_GRID_ROWS; j++)
+      for (int i = 0; i < TEST_GRID_COLS; i++) {
+        int X = TEST_GRID_X0 + i * 2, Z = TEST_GRID_Z0 + j * 2, b = grid_state(i, j);
+        put(X, TEST_SECTION_Y, Z, B_BARRIER, R_ALWAYS);   /* what it floats on */
+        put(X, TEST_BLOCK_Y, Z, b, R_ALWAYS);
+        if (t_liquid(b))   /* held in by barriers on its four sides, so it goes nowhere */
+          for (int k = 0; k < 4; k++) put(X + d[k][0], TEST_BLOCK_Y, Z + d[k][1], B_BARRIER, R_ALWAYS);
+      }
+  }
+  if (T_TOUCH(TEST_ITEM_X0, TEST_ITEM_Z, TEST_ITEM_X0 + TEST_ITEM_CHESTS - 1, TEST_ITEM_Z)) {
+    /* the chests of every item that has no block of its own, in a row, floating on their
+     * barriers as the grid's blocks do (their contents are put in when the world is
+     * made: the chests' items are the game's own, saved with it) */
+    for (int k = 0; k < TEST_ITEM_CHESTS; k++) {
+      put(TEST_ITEM_X0 + k, TEST_SECTION_Y, TEST_ITEM_Z, B_BARRIER, R_ALWAYS);
+      put(TEST_ITEM_X0 + k, TEST_SECTION_Y + 1, TEST_ITEM_Z, B_CHEST, R_ALWAYS);
+    }
+  }
+  if (T_TOUCH(TEST_CAGE_X0, TEST_CAGE_Z0, TEST_CAGE_X1, TEST_CAGE_Z1)) {
+    static const int8_t d[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    for (int j = 0; j < TEST_CAGE_ROWS; j++)
+      for (int i = 0; i < TEST_CAGE_COLS; i++) {
+        int X = TEST_CAGE_X0 + i * TEST_CAGE_STEP, Z = TEST_CAGE_Z0 + j * TEST_CAGE_STEP;
+        /* 5 x 5 of grass, each on its own, floating */
+        for (int z = 0; z < 5; z++)
+          for (int x = 0; x < 5; x++) put(X + x, TEST_SECTION_Y, Z + z, B_GRASS, R_ALWAYS);
+        /* the mob on its middle block, a ring of barriers on its four sides and one
+         * over its head. The ring is two rows of it - a mob jumps a block and a
+         * quarter, so a one-row ring would be climbed - and the barrier over the mob's
+         * own column is what keeps it in: its box never clears the ring's sides while
+         * it is up, and nothing burns in a cell that is not air. How tall the cage
+         * reads is the mob's own height: two blocks for the tall ones, one for the
+         * small. A barrier is drawn as air until one is held, so each mob stands in
+         * plain sight - and holding one shows the cage it is in, as Minecraft's */
+        for (int y = TEST_CAGE_Y; y <= TEST_CAGE_Y + 1; y++)
+          for (int q = 0; q < 4; q++)
+            put(X + 2 + d[q][0], y, Z + 2 + d[q][1], B_BARRIER, R_ALWAYS);
+        put(X + 2, TEST_CAGE_Y + 1, Z + 2, B_BARRIER, R_ALWAYS);
+      }
+  }
+  int tx0 = TEST_TEMPLE_OX * 16, tz0 = TEST_TEMPLE_OZ * 16;
+  if (T_TOUCH(tx0, tz0, tx0 + TEMPLE_SIZE - 1, tz0 + TEMPLE_SIZE - 1)) {
+    t_view(cx, cz);
+    /* the platform, two blocks wider than the pyramid on every side */
+    t_platform(tx0 - 2, tz0 - 2, tx0 + TEMPLE_SIZE + 1, tz0 + TEMPLE_SIZE + 1, TEST_SECTION_Y, B_GRASS);
+    /* its foundation, up from the platform to the row the pyramid's own base starts
+     * at: the builder fills down from there to the first block that is not air or
+     * liquid, which under the world's own generator is its rock. This world has none of
+     * its own, so the fill is put here - and the burial chamber is carved out of it,
+     * as it is out of the ground a real one stands in */
+    for (int lz = 0; lz < TEMPLE_SIZE; lz++)
+      for (int lx = 0; lx < TEMPLE_SIZE; lx++)
+        for (int y = TEST_SECTION_Y + 1; y < TEST_TEMPLE_BASE - 4; y++)
+          put(tx0 + lx, y, tz0 + lz, B_SANDSTONE, R_ALWAYS);
+    temple_build(TEST_TEMPLE_OX, TEST_TEMPLE_OZ, TEST_TEMPLE_BASE);
+  }
+  int di, dl;
+  test_dung_box(&di, &dl);
+  if (T_TOUCH(TEST_DUNG_X - di, TEST_DUNG_Z - dl, TEST_DUNG_X + di, TEST_DUNG_Z + dl)) {
+    t_view(cx, cz);
+    /* the platform, two blocks wider than the box on every side, under its floor */
+    t_platform(TEST_DUNG_X - di - 2, TEST_DUNG_Z - dl - 2, TEST_DUNG_X + di + 2, TEST_DUNG_Z + dl + 2, TEST_SECTION_Y, B_GRASS);
+    /* the rock it carves its room out of, its own footprint and no more */
+    for (int z = TEST_DUNG_Z - dl; z <= TEST_DUNG_Z + dl; z++)
+      for (int x = TEST_DUNG_X - di; x <= TEST_DUNG_X + di; x++)
+        for (int y = TEST_DUNG_Y - 1; y <= TEST_DUNG_Y + 4; y++) put(x, y, z, B_STONE, R_ALWAYS);
+    /* its spawner stays as one from the inventory is: nobody sets it, so nothing comes
+     * out of it (the showcase holds its own mobs already) */
+    void (*hook)(int, int, int, int) = gen_spawner_hook;
+    gen_spawner_hook = 0;
+    /* its own stream, seeded the same for every chunk that touches its box (the box
+     * spans a few of them): the same room whichever of them asks */
+    jr_seed(&PR, TEST_DUNG_SEED);
+    dungeon(TEST_DUNG_X, TEST_DUNG_Y, TEST_DUNG_Z);
+    gen_spawner_hook = hook;
+    /* a doorway in its north wall, where the player comes from, so the room inside
+     * can be walked into and looked at */
+    for (int y = TEST_DUNG_Y; y <= TEST_DUNG_Y + 1; y++) put(TEST_DUNG_X, y, TEST_DUNG_Z - dl, B_AIR, R_ALWAYS);
+  }
+#undef T_TOUCH
+}
+
+/* where the k-th of the game's ten mobs (E_ZOMBIE .. E_ZPIGLIN) stands in its cage:
+ * the block its feet are on, in the middle of the cage's 2 x 2 room */
+void test_cage(int k, int *x, int *y, int *z) {
+  *x = TEST_CAGE_X0 + (k % TEST_CAGE_COLS) * TEST_CAGE_STEP + 2;
+  *z = TEST_CAGE_Z0 + (k / TEST_CAGE_COLS) * TEST_CAGE_STEP + 2;
+  *y = TEST_CAGE_Y;
+}
+
+/* the row the showcase's blocks in the column (x, z) start at (0: the column is all
+ * air) - the sky light's top. It is the lowest row anything stands on, never the
+ * highest: world.c's light is worked out by walking the column down from the sky and
+ * taking one level off each block, so a top below the real one lights a structure
+ * exactly as the open sky does (its walls from the air beside them, its hollows from
+ * the dark under them), while a top above it would darken what stands under it. */
+static int test_top(int X, int Z) {
+  if (X >= TEST_SPAWN_X0 && X <= TEST_SPAWN_X1 && Z >= TEST_SPAWN_Z0 && Z <= TEST_SPAWN_Z1) return TEST_PLATFORM_Y;
+  if (X >= TEST_GRID_X0 && X <= TEST_GRID_X1 && Z >= TEST_GRID_Z0 && Z <= TEST_GRID_Z1) return TEST_SECTION_Y;
+  if (X >= TEST_CAGE_X0 - 1 && X <= TEST_CAGE_X1 + 1 && Z >= TEST_CAGE_Z0 - 1 && Z <= TEST_CAGE_Z1 + 1) return TEST_SECTION_Y;
+  if (X >= TEST_ITEM_X0 - 2 && X <= TEST_ITEM_X0 + TEST_ITEM_CHESTS + 1 && Z >= TEST_ITEM_Z - 2 && Z <= TEST_ITEM_Z + 2)
+    return TEST_SECTION_Y;
+  int tx0 = TEST_TEMPLE_OX * 16, tz0 = TEST_TEMPLE_OZ * 16;
+  if (X >= tx0 - 2 && X <= tx0 + TEMPLE_SIZE + 1 && Z >= tz0 - 2 && Z <= tz0 + TEMPLE_SIZE + 1) return TEST_SECTION_Y;
+  int di, dl;
+  test_dung_box(&di, &dl);
+  if (X >= TEST_DUNG_X - di - 2 && X <= TEST_DUNG_X + di + 2 && Z >= TEST_DUNG_Z - dl - 2 && Z <= TEST_DUNG_Z + dl + 2)
+    return TEST_SECTION_Y;
+  return 0;
+}
+
 int gen_prepare(int cx, int cz) {
-    if (g_dim || g_flat) return 0;
+    if (g_dim || g_flat || g_test) return 0;
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++)
             if ((dx || dz) && !sum_find(cx + dx, cz + dz)) {
@@ -7197,8 +7411,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     int Htop = g_dim ? NETHER_H : WORLD_TOP;
     if (y0 + h > Htop) h = Htop - y0;
     if (h <= 0) return;
-    if (g_dim) {
-        if (y0 < 0) {   /* the nether has no deep layer: below 0 is air */
+    if (g_dim) {        if (y0 < 0) {   /* the nether has no deep layer: below 0 is air */
             h += y0;
             y0 = 0;
             if (h <= 0) return;
@@ -7217,6 +7430,11 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
         c_cx = cx;
         c_cz = cz;
         nether_slab(cx, cz, y0, h, out);
+        return;
+    }
+    if (g_test) {
+        test_slab(cx, cz, y0, h, out);
+        last_cx = cx, last_cz = cz;   /* (gen_top's "the chunk just made" is this one) */
         return;
     }
     if (g_flat) {
@@ -7324,6 +7542,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
 int gen_biome(int x, int z) {
     if (g_dim) return nether_biome_at(x, z);   /* the nether's four (1.16): the split of [22] */
     if (g_flat) return flat_biome;
+    if (g_test) return BI_PLAINS;   /* the showcase's one biome: warm, so the weather is rain */
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx == last_cx && cz == last_cz) return c_b16[i];
     if (cx != bc_cx || cz != bc_cz) chunk_biomes(cx, cz);
@@ -7332,6 +7551,7 @@ int gen_biome(int x, int z) {
 
 int gen_top(int x, int z) {
     if (g_flat) return flat_top;
+    if (g_test) return test_top(x, z);
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx != last_cx || cz != last_cz) gen_slab(cx, cz, 127, 1, col_tmp);
     int t = c_top[i];
@@ -7364,6 +7584,13 @@ void gen_spawn(int *px, int *py, int *pz) {
         *px = -256 + jr_int(&r, 513);
         *pz = -256 + jr_int(&r, 513);
         *py = flat_top + 1;
+        return;
+    }
+    if (g_test) {
+        /* the middle of the spawn platform, standing on it */
+        *px = (TEST_SPAWN_X0 + TEST_SPAWN_X1) / 2;
+        *pz = (TEST_SPAWN_Z0 + TEST_SPAWN_Z1) / 2;
+        *py = TEST_PLATFORM_Y + 1;
         return;
     }
     /* WorldChunkManager.a(0, 0, 256, spawn biomes, random): 129 x 129 cells of rivermix */

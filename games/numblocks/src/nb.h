@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.42"
+#define NB_VERSION "1.5.43"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -384,6 +384,7 @@ void gui_input(uint32_t keys, uint32_t pressed);
 void gui_tick(void);       /* 20 a second: furnaces */
 void tiles_removed(int x, int y, int z);   /* a chest or furnace broken: its items fall out */
 void tiles_forget(int x, int y, int z);    /* (or replaced by a command: they are gone) */
+void tiles_chest(int x, int y, int z, const Stack *items, int n);   /* a chest the world was made with */
 void gui_menu(int screen);  /* opens a menu screen */
 enum { ACT_NONE, ACT_PLAY, ACT_NEW, ACT_QUIT_APP, ACT_SAVE_QUIT, ACT_RESPAWN, ACT_TITLE };
 extern int menu_choice;    /* what a menu asks main.c to do (ACT_*), 0 if nothing */
@@ -426,8 +427,11 @@ void keys_update(int seen);       /* keys saved by an older version (seen: its k
 #define KEY_SHEET 8       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places; 5: debug overlay; 6: sprint on i; 7: sin + cos, the game mode switcher; 8: forward twice no longer sprints, no EXE line) */
 extern Options opt;
 extern int64_t world_seed;
-enum { WT_DEFAULT, WT_FLAT };
-extern uint8_t world_type;   /* the world type (WT_*): Default, or Superflat */
+/* The world types (save.c): Default (Minecraft's own terrain), Superflat (a preset's
+ * layers) and Test (an empty world that is always the same, showing everything the
+ * game has once: every block, every mob, the structures). */
+enum { WT_DEFAULT, WT_FLAT, WT_TEST };
+extern uint8_t world_type;   /* the world type (WT_*): Default, Superflat, or Test */
 /* the dimension the world is in (save.c): the overworld, or the nether */
 enum { DIM_OVER, DIM_NETHER };
 extern uint8_t world_dim;

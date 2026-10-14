@@ -315,6 +315,26 @@ void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char 
   world_seed = seed;
   game_time = 0;
   world_cheats = cheats, lan_open = lan_cheats = false, game_rules = GR_DEFAULT, world_type = (uint8_t)type;
+  if (type == WT_TEST) {
+    /* the showcase is looked at, not played through: the sun stands still, as /gamerule
+     * does it. It is the only rule this turns off - what keeps the blocks as they are and
+     * the natural spawning away lives in tick.c and mob.c; main.c starts the clock at noon */
+    game_rules = (uint8_t)(GR_DEFAULT & ~GR_DAYLIGHT_CYCLE);
+    /* its chests: one stack of each of the game's items that has no block of its own -
+     * the ones that place a block are shown in the grid of blocks - 27 a chest (gen.c
+     * puts the row of chests down, floating on barriers like the grid's blocks) */
+    Stack s[27];
+    int k = 0, n = 0;
+    for (int id = 256; id < 256 + ITEM_SLOTS; id++) {
+      if (!is_item_id(id) || it_place[id - 256] != 255) continue;
+      s[n].id = (uint16_t)id, s[n].aux = 1, n++;
+      if (n == 27) {
+        tiles_chest(TEST_ITEM_X0 + k, TEST_SECTION_Y + 1, TEST_ITEM_Z, s, n);
+        k++, n = 0;
+      }
+    }
+    if (n) tiles_chest(TEST_ITEM_X0 + k, TEST_SECTION_Y + 1, TEST_ITEM_Z, s, n);
+  }
   copy_preset(world_preset, type == WT_FLAT ? preset : FLAT_DEFAULT);
   memset(&weather, 0, sizeof weather);
   rain_str = thunder_str = 0;

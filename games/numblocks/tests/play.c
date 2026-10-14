@@ -83,6 +83,11 @@
  *        [--contrast]   (Personalisation: High Contrast Block Outlines on)
  *        [--panorama N] (Personalisation: the title's backdrop; 0 Random, 1 World,
  *                         2 Overworld, 3 Nether)
+ *        [--test]       (the test world: an empty world that is always the same, with the
+ *                         grid of every block state, the ten mobs in their cages and the
+ *                         structures, each on its own platform; Creative and flying, the
+ *                         camera over the spawn platform looking at the grid)
+ *        [--fly "x,y,z,yaw,pitch"] (with --test: where the camera stands, and where it looks)
  *
  * Keys: left right up down fwd back sleft sright jump use attack inv sneak sprint pause 1..9.
  * Raws: --raws "10-14:24,20:25" holds the calculator's own key numbers (24 sin, 25 cos...). */
@@ -131,6 +136,8 @@ int main(int argc, char **argv) {
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
   int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, drain = 0, placing = 0, xray = 0, lava = 0, deep = 0, caves = 0;
   int temple = 0, templetrap = 0, biome_at = -1;
+  int world_test = 0;
+  float fly[5] = {0, 0, 0, 0, 0};
   float hurt = 0;
   int frames = 60, mspf = 50;
   int cheats = 0, contrast = 0, panorama = -1;
@@ -150,6 +157,11 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--lava")) lava = 1;
     else if (!strcmp(argv[i], "--creative")) creative = 1;
     else if (!strcmp(argv[i], "--flat")) flat = 1;
+    else if (!strcmp(argv[i], "--test")) world_test = 1;
+    else if (!strcmp(argv[i], "--fly") && i + 1 < argc) {
+      float v[5] = {0, 0, 0, 0, 0};
+      if (sscanf(argv[++i], "%f,%f,%f,%f,%f", v, v + 1, v + 2, v + 3, v + 4) >= 3) memcpy(fly, v, sizeof fly);
+    }
     else if (!strcmp(argv[i], "--tree")) tree = 1;
     else if (!strcmp(argv[i], "--cave")) cave = 1;
     else if (!strcmp(argv[i], "--void")) void_world = 1;
@@ -217,8 +229,86 @@ int main(int argc, char **argv) {
   extern bool start_in_world;
   extern int start_type;
   start_in_world = !title_screen;
-  start_type = flat ? WT_FLAT : WT_DEFAULT;
+  start_type = world_test ? WT_TEST : flat ? WT_FLAT : WT_DEFAULT;
   game_init();
+  if (world_test) {
+    /* the test world: empty, always the same, with everything in it once. The camera
+     * stands five above the grid's last row, looking north down along it (Creative and
+     * flying: the showcase is flown through); --fly puts it somewhere else. The log
+     * says what the world holds and where, out of the cache the camera has made. */
+    if (fly[0] || fly[1] || fly[2]) {
+      pl.x = fly[0], pl.y = fly[1], pl.z = fly[2];
+      pl.yaw = fly[3], pl.pitch = fly[4];
+    } else {
+      pl.x = 8.0f, pl.y = 47.0f, pl.z = -23.5f;   /* above the spawn platform, in the middle of the blocks */
+      pl.yaw = 0, pl.pitch = 40;                  /* south, down the row of sections */
+    }
+    pl.mode = 1, pl.flying = true;
+    opt.difficulty = 2;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    camera_reset();
+    int gx = -1, gz = -1, n = 0, barriers = 0, liquids = 0;
+    for (int z = TEST_GRID_Z0; z <= TEST_GRID_Z1; z++)
+      for (int x = TEST_GRID_X0; x <= TEST_GRID_X1; x++) {
+        if (!((x - TEST_GRID_X0) & 1) && !((z - TEST_GRID_Z0) & 1)) {
+          int b = world_get(x, TEST_BLOCK_Y, z);
+          if (b != B_AIR) n++, gx = x, gz = z;
+        }
+        for (int y = TEST_BLOCK_Y - 1; y <= TEST_BLOCK_Y; y++) {
+          int b = world_get(x, y, z);
+          if (b == B_BARRIER) barriers++;
+          if (y == TEST_BLOCK_Y && (b == B_WATER || b == B_LAVA || (b >= B_FLOWING_WATER && b <= B_FALLING_LAVA)))
+            liquids++;
+        }
+      }
+    int cages = 0;
+    for (int k = 0; k < 10; k++) {
+      int cx, cy, cz;
+      test_cage(k, &cx, &cy, &cz);
+      bool ok = world_get(cx, cy - 1, cz) == B_GRASS && world_get(cx, cy, cz) == B_AIR &&
+                world_get(cx, cy + 1, cz) == B_BARRIER;
+      static const int d[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+      for (int q = 0; q < 4 && ok; q++)
+        ok = world_get(cx + d[q][0], cy, cz + d[q][1]) == B_BARRIER &&
+             world_get(cx + d[q][0], cy + 1, cz + d[q][1]) == B_BARRIER;
+      cages += ok;
+    }
+    int chests = 0;
+    for (int k = 0; k < TEST_ITEM_CHESTS; k++)
+      if (world_get(TEST_ITEM_X0 + k, TEST_SECTION_Y + 1, TEST_ITEM_Z) == B_CHEST &&
+          world_get(TEST_ITEM_X0 + k, TEST_SECTION_Y, TEST_ITEM_Z) == B_BARRIER)
+        chests++;
+    fprintf(stderr, "test: the camera at %d %d %d, the world is %s\n", (int)pl.x, (int)pl.y, (int)pl.z,
+            world_type == WT_TEST ? "WT_TEST" : "NOT THE TEST WORLD");
+    fprintf(stderr, "test: %d blocks in the grid (last %d %d), %d barriers (%d liquids)\n", n, gx, gz, barriers,
+            liquids);
+    fprintf(stderr, "test: %d of 10 cages standing (grass under, barriers round), %d of %d item chests floating\n",
+            cages, chests, TEST_ITEM_CHESTS);
+    /* the structures: the pyramid's sandstone and the dungeon's walls, out of the cache */
+    int sand = 0, tnt = 0, plate = 0, cobble = 0, spawner = 0;
+    int tx0 = TEST_TEMPLE_OX * 16, tz0 = TEST_TEMPLE_OZ * 16;
+    for (int z = tz0 - 2; z <= tz0 + TEMPLE_SIZE + 1; z++)
+      for (int x = tx0 - 2; x <= tx0 + TEMPLE_SIZE + 1; x++)
+        for (int y = SEA; y <= TEST_TEMPLE_BASE + 10; y++) {
+          int b = world_get(x, y, z);
+          if (b == B_SANDSTONE || b == B_SANDSTONE_SMOOTH || b == B_SANDSTONE_CHISELED || b == B_SANDSTONE_SLAB ||
+              b == B_SANDSTONE_STAIRS || b == B_SANDSTONE_STAIRS_W || b == B_SANDSTONE_STAIRS_S ||
+              b == B_SANDSTONE_STAIRS_N)
+            sand++;
+          if (b == B_TNT) tnt++;
+          if (b == B_STONE_PRESSURE_PLATE) plate++;
+        }
+    for (int z = TEST_DUNG_Z - 8; z <= TEST_DUNG_Z + 8; z++)
+      for (int x = TEST_DUNG_X - 8; x <= TEST_DUNG_X + 8; x++)
+        for (int y = TEST_DUNG_Y - 1; y <= TEST_DUNG_Y + 4; y++) {
+          int b = world_get(x, y, z);
+          if (b == B_COBBLESTONE || b == B_MOSSY_COBBLESTONE) cobble++;
+          if (b == B_MOB_SPAWNER) spawner++;
+        }
+    fprintf(stderr, "test: the pyramid holds %d sandstone blocks, %d TNT, plate %d; the dungeon %d walls, spawner %d\n",
+            sand, tnt, plate, cobble, spawner);
+  }
   if (temple) {
     /* The desert pyramid: the nearest one by the modern grid (spacing 32,
      * separation 8, salt 14357617, deserts only). The placement is modern's
@@ -1083,6 +1173,25 @@ int main(int argc, char **argv) {
     for (int k = 0; k < 9; k++)
       if (world_get(temple_tnt[k][0], temple_tnt[k][1], temple_tnt[k][2]) != B_TNT) gone++;
     fprintf(stderr, "templetrap: after %d frames, %d of the 9 TNT blocks are gone from the chamber\n", frames, gone);
+  }
+  if (world_test) {
+    /* the ten cages: each mob still where its cage says, and nothing on fire */
+    int home = 0;
+    for (int k = 0; k < 10; k++) {
+      int cx, cy, cz;
+      test_cage(k, &cx, &cy, &cz);
+      for (int i = 0; i < N_ENT; i++)
+        if (ents[i].type == E_ZOMBIE + k)
+          home += (int)ents[i].x == cx && (int)ents[i].y == cy && (int)ents[i].z == cz && !ents[i].fire;
+    }
+    int kinds[10] = {0};
+    for (int i = 0; i < N_ENT; i++) {
+      int t = ents[i].type;
+      if (is_mob(t)) kinds[t - E_ZOMBIE]++;
+    }
+    fprintf(stderr, "test: after %d frames, %d of 10 mobs still in their cages and alight-free:", frames, home);
+    for (int k = 0; k < 10; k++) fprintf(stderr, " %s%d", mob_name[k], kinds[k]);
+    fprintf(stderr, "\n");
   }
   printf("init %.1f ms, %.2f ms a frame (host), the slowest %.1f ms (frame %d)\n", init_ms,
          (clock() - c0) * 1000.0 / CLOCKS_PER_SEC / frames, slowest, slowest_at);

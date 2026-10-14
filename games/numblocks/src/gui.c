@@ -721,6 +721,15 @@ void tiles_forget(int x, int y, int z) {
   if (f) f->used = 0;
 }
 
+/* a chest the world was made with - the test world's showcase puts a row of them down,
+ * one stack of each of the game's items - so that it opens on them. A tile is made if
+ * there is one free (N_CHESTS); the block itself is the generator's to place. */
+void tiles_chest(int x, int y, int z, const Stack *items, int n) {
+  Chest *c = chest_at(x, y, z, true);
+  if (!c) return;
+  for (int i = 0; i < n && i < 27; i++) c->s[i] = items[i];
+}
+
 /* The desert pyramid's chests: is (x, y, z) one of the four the piece holds? The
  * placement grid (gen.c) says which chunks are a temple's; the chamber's own blocks
  * about the chest say the chest is the piece's and not one put there later. The loot
@@ -1676,7 +1685,7 @@ static void menu(Button *buf, int screen) {
       add_button(w / 2 + 5, 100, 150, 1, B_CHEATS, t);
       cat(t, "Seed: ", seed_text[0] ? seed_text : (field == F_SEED ? "" : "(random)"));
       add_button(w / 2 - 100, 146, 200, 1, B_SEED, t);
-      cat(t, "World Type: ", create_type == WT_FLAT ? "Superflat" : "Default");
+      cat(t, "World Type: ", create_type == WT_FLAT ? "Superflat" : create_type == WT_TEST ? "Test" : "Default");
       add_button(w / 2 - 155, 182, 150, 1, B_TYPE, t);
       add_button(w / 2 + 5, 182, 150, create_type == WT_FLAT, B_CUSTOMIZE, "Customize...");
       add_button(w / 2 - 155, h - 28, 150, 1, B_DOCREATE, "Create New World");
@@ -1922,7 +1931,7 @@ static void press(Button *buttons, int id) {
       if (!cheats_set) create_cheats = create_mode;
       break;
     case B_CHEATS: create_cheats = !create_cheats, cheats_set = true; break;
-    case B_TYPE: create_type = create_type == WT_FLAT ? WT_DEFAULT : WT_FLAT; break;
+    case B_TYPE: create_type = (create_type + 1) % 3; break;   /* Default, Superflat, Test */
     case B_CUSTOMIZE:
       if (create_type != WT_FLAT) break;
       /* the preset as plain blocks (older version;layers;biome strings convert) */

@@ -155,7 +155,7 @@ void game_init(void) {
   last = plat_millis();
   if (start_in_world) {
     new_world(1, start_seed, 0, false, start_type, "New World", start_type == WT_FLAT ? FLAT_DEFAULT : FLAT_DEFAULT);
-    game_time = 1000;
+    game_time = start_type == WT_TEST ? 6000 : 1000;
 #ifdef BENCH_FALL
     pl.mode = 1, pl.y += BENCH_FALL;   /* (timing a fall from that high, in Creative: no harm) */
 #endif
@@ -237,7 +237,7 @@ bool game_frame(void) {
         name_text[b] = 0;
         world_unique_name(name_text + a, name);
         new_world(slot, parse_seed(), create_mode, create_cheats, create_type, name, create_preset);
-        game_time = 0;
+        game_time = create_type == WT_TEST ? 6000 : 0;   /* the showcase stands in the noon sun */
         loading();
         save_world();
         break;

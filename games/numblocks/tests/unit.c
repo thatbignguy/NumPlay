@@ -1352,6 +1352,267 @@ int main(void) {
     world_type = WT_DEFAULT;
   }
   {
+    /* the test world: an empty world that is always the same, whatever the seed, holding
+     * everything the game has once - every block state in a grid, every mob in a cage of
+     * its own, the structures on their own platforms - and nothing in it moves on its own */
+    static uint8_t gs[GEN_SCRATCH];
+    static uint8_t sa[64 * 256 / 8 * 9 + 4], sb[64 * 256 / 8 * 9 + 4];
+    int t0 = 40, th = 36;   /* the rows the whole showcase stands in: 40..76 */
+    memset(ents, 0, sizeof ents);   /* (the cages put back only what is gone) */
+    /* the showcase's slab, through the generator's own write path */
+#define TEST_SLAB(cx, cz, buf) (gen_scratch(gs), gen_slab(cx, cz, t0, th, buf), gen_scratch(NULL))
+#define TEST_CELL(buf, y, lx, lz) b9_get(buf, ((y - t0) * 16 + (lz)) * 16 + (lx))
+    new_world(6, 31337, 1, true, WT_TEST, "Test", NULL);
+    save_world();
+    WorldInfo twi;
+    CHECK(world_type == WT_TEST && world_info(6, &twi) && twi.type == WT_TEST && twi.mode == 1);
+    /* the sun stands still: it is a showcase, not a world to be played through */
+    CHECK(game_rules == (GR_DEFAULT & ~GR_DAYLIGHT_CYCLE));
+    /* the spawn: the middle of the spawn platform, standing on it */
+    int sx, sy, sz;
+    gen_spawn(&sx, &sy, &sz);
+    CHECK(sx == (TEST_SPAWN_X0 + TEST_SPAWN_X1) / 2 && sz == (TEST_SPAWN_Z0 + TEST_SPAWN_Z1) / 2 &&
+          sy == TEST_PLATFORM_Y + 1);
+    /* the same chunk whatever the seed (a second world of another seed gives the same slab) */
+    TEST_SLAB(2, 6, sa);
+    gen_init(-4242);
+    TEST_SLAB(2, 6, sb);
+    CHECK(!memcmp(sa, sb, (size_t)th * 256 / 8 * 9));
+    /* and the same whatever window is asked for it (its rows overlap exactly) */
+    gen_init(31337);
+    TEST_SLAB(2, 6, sa);
+    gen_scratch(gs);
+    gen_slab(2, 6, 70, 12, sb);
+    gen_scratch(NULL);
+    for (int y = 70; y < 82; y++)
+      for (int lz = 0; lz < 16; lz++)
+        for (int lx = 0; lx < 16; lx++) CHECK(TEST_CELL(sa, y, lx, lz) == TEST_CELL(sb, y, lx, lz));
+    /* every block state in the grid: one air gap between each, each on its own barrier,
+     * and the liquids held in by barriers on their four sides */
+    static uint8_t seen[NSTATES];
+    static int liq[16][2];
+    int n = 0, liquids = 0;
+    for (int cz = (TEST_GRID_Z0 >> 4); cz <= (TEST_GRID_Z1 >> 4); cz++)
+      for (int cx = (TEST_GRID_X0 >> 4); cx <= (TEST_GRID_X1 >> 4); cx++) {
+        TEST_SLAB(cx, cz, sb);
+        for (int j = 0; j < TEST_GRID_ROWS; j++)
+          for (int i = 0; i < TEST_GRID_COLS; i++) {
+            int x = TEST_GRID_X0 + i * 2, z = TEST_GRID_Z0 + j * 2;
+            if (x >> 4 != cx || z >> 4 != cz) continue;
+            int lx = x & 15, lz = z & 15, b = TEST_CELL(sb, TEST_BLOCK_Y, lx, lz);
+            seen[b]++, n++;
+            CHECK(TEST_CELL(sb, TEST_BLOCK_Y - 1, lx, lz) == B_BARRIER);   /* what it floats on */
+            CHECK(TEST_CELL(sb, TEST_BLOCK_Y + 1, lx, lz) == B_AIR);       /* air above it */
+            int side = b == B_WATER || b == B_FLOWING_WATER || (b >= B_FLOWING_WATER_2 && b <= B_FALLING_WATER) ||
+                      b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA);
+            if (side) {
+              liquids++;
+              if (liquids <= 16) liq[liquids - 1][0] = x, liq[liquids - 1][1] = z;
+            }
+            if (side)   /* held in: a barrier on each of its four sides */
+              for (int dx = -1; dx <= 1; dx += 2) {
+                if ((x + dx) >> 4 == cx && TEST_CELL(sb, TEST_BLOCK_Y, lx + dx, lz) != B_BARRIER) CHECK(false);
+                if ((z + dx) >> 4 == cz && TEST_CELL(sb, TEST_BLOCK_Y, lx, lz + dx) != B_BARRIER) CHECK(false);
+              }
+          }
+      }
+    /* the gaps between the blocks: air, and a barrier only where a liquid beside it is
+     * held in by it (a second pass: every liquid of the grid is known by now) */
+    for (int cz = (TEST_GRID_Z0 >> 4); cz <= (TEST_GRID_Z1 >> 4); cz++)
+      for (int cx = (TEST_GRID_X0 >> 4); cx <= (TEST_GRID_X1 >> 4); cx++) {
+        TEST_SLAB(cx, cz, sb);
+        for (int lz = 0; lz < 16; lz++)
+          for (int lx = 0; lx < 16; lx++) {
+            int x = cx * 16 + lx, z = cz * 16 + lz;
+            if (x < TEST_GRID_X0 || x > TEST_GRID_X1 || z < TEST_GRID_Z0 || z > TEST_GRID_Z1) continue;
+            if (!((x - TEST_GRID_X0) & 1) && !((z - TEST_GRID_Z0) & 1)) continue;   /* a block's cell */
+            bool need = false;
+            for (int k = 0; k < liquids && k < 16; k++)
+              need |= abs(liq[k][0] - x) + abs(liq[k][1] - z) == 1;
+            CHECK(TEST_CELL(sb, TEST_BLOCK_Y, lx, lz) == (need ? B_BARRIER : B_AIR));
+          }
+      }
+    int blocks = 0;
+    for (int ssi = 1; ssi < B_COUNT; ssi++)
+      if (blk_id[ssi]) blocks++;
+    CHECK(n == blocks && liquids == 14);   /* one of each block state; air and the item ids are not */
+    for (int ssi = 1; ssi < B_COUNT; ssi++)
+      if (blk_id[ssi]) CHECK(seen[ssi] == 1);
+    /* the chests of every item that has no block of its own: floating on their barriers,
+     * in a row after the grid, their contents one stack of each of those items */
+    int itemz = 0;
+    for (int id = 256; id < 256 + ITEM_SLOTS; id++)
+      if (is_item_id(id) && it_place[id - 256] == 255) itemz++;
+    int nchests = (itemz + 26) / 27;
+    CHECK(nchests == TEST_ITEM_CHESTS);
+    {
+      TEST_SLAB(TEST_ITEM_X0 >> 4, TEST_ITEM_Z >> 4, sb);
+      for (int k = 0; k < TEST_ITEM_CHESTS; k++) {
+        int lx = (TEST_ITEM_X0 + k) & 15, lz = TEST_ITEM_Z & 15;
+        CHECK(TEST_CELL(sb, TEST_SECTION_Y, lx, lz) == B_BARRIER);   /* what it floats on */
+        CHECK(TEST_CELL(sb, TEST_BLOCK_Y, lx, lz) == B_CHEST);
+      }
+    }
+    /* the chests' contents: one stack of each item that has no block, 27 a chest. A chest
+     * is 6 bytes (x, z, y, used) then its 27 stacks of four, and the world's tiles are
+     * eight chests of them */
+    {
+      extern void *tiles_data(uint32_t *len);
+      uint32_t tl;
+      const uint8_t *t = tiles_data(&tl);
+      int used = 0, items = 0;
+      for (int i = 0; i < 8; i++) {
+        const uint8_t *c = t + i * (6 + 27 * 4);
+        if (!c[5]) continue;   /* used */
+        used++;
+        for (int q = 0; q < 27; q++) {
+          uint16_t id, aux;
+          memcpy(&id, c + 6 + q * 4, 2), memcpy(&aux, c + 6 + q * 4 + 2, 2);
+          if (!id) continue;
+          items++;
+          CHECK(is_item_id(id) && it_place[id - 256] == 255 && aux == 1);
+        }
+      }
+      CHECK(used == TEST_ITEM_CHESTS && items == itemz);
+    }
+    /* the cages: one for each mob, 5 x 5 of grass of its own floating, the mob on the
+     * middle block, a ring of barriers on its four sides and one over its head */
+    for (int k = 0; k < 10; k++) {
+      int cx, cy, cz;
+      test_cage(k, &cx, &cy, &cz);
+      TEST_SLAB(cx >> 4, cz >> 4, sb);
+      int lx = cx & 15, lz = cz & 15;
+      for (int dz = -2; dz <= 2; dz++)
+        for (int dx = -2; dx <= 2; dx++)
+          if ((cx + dx) >> 4 == cx >> 4 && (cz + dz) >> 4 == cz >> 4)
+            CHECK(TEST_CELL(sb, TEST_SECTION_Y, lx + dx, lz + dz) == B_GRASS);
+      CHECK(TEST_CELL(sb, cy, lx, lz) == B_AIR);              /* where the mob stands */
+      CHECK(TEST_CELL(sb, cy + 1, lx, lz) == B_BARRIER);      /* and over its head */
+      static const int d[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+      for (int q = 0; q < 4; q++)
+        for (int y = TEST_CAGE_Y; y <= TEST_CAGE_Y + 1; y++)
+          if ((cx + d[q][0]) >> 4 == cx >> 4 && (cz + d[q][1]) >> 4 == cz >> 4)
+            CHECK(TEST_CELL(sb, y, lx + d[q][0], lz + d[q][1]) == B_BARRIER);
+      /* nothing of the showcase stands on the spawn platform's row here */
+      CHECK(TEST_CELL(sb, TEST_PLATFORM_Y, lx, lz) == B_AIR);
+    }
+    /* the mobs: one of each in its own cage, standing where the cage says, and nothing else */
+    mobs_spawn();
+    int mobs = 0;
+    for (int i = 0; i < N_ENT; i++) {
+      int t = ents[i].type;
+      if (!is_mob(t)) continue;
+      mobs++;
+      int cx, cy, cz;
+      test_cage(t - E_ZOMBIE, &cx, &cy, &cz);
+      CHECK(floorf(ents[i].x) == cx && floorf(ents[i].y) == cy && floorf(ents[i].z) == cz);
+      CHECK(ents[i].state != 255);
+    }
+    CHECK(mobs == 10);
+    /* one taken away comes back, and a second pass adds nothing */
+    for (int i = 0; i < N_ENT; i++)
+      if (is_mob(ents[i].type)) {
+        ents[i].type = E_NONE;
+        break;
+      }
+    mobs_spawn();
+    mobs = 0;
+    for (int i = 0; i < N_ENT; i++)
+      if (is_mob(ents[i].type)) mobs++;
+    CHECK(mobs == 10);
+    /* the structures: the desert pyramid on its platform, block for block as the world
+     * makes it, and a dungeon of cobblestone with a spawner and a chest in it */
+    int sand = 0, tnt = 0, plate = 0, chest = 0, terra = 0;
+    for (int cz = TEST_TEMPLE_OZ; cz <= TEST_TEMPLE_OZ + 1; cz++)
+      for (int cx = TEST_TEMPLE_OX; cx <= TEST_TEMPLE_OX + 1; cx++) {
+        TEST_SLAB(cx, cz, sb);
+        for (int lz = 0; lz < 16; lz++)
+          for (int lx = 0; lx < 16; lx++)
+            for (int y = t0; y < t0 + th; y++) {
+              int b = TEST_CELL(sb, y, lx, lz);
+              int wx = cx * 16 + lx, wz = cz * 16 + lz;
+              if (b == B_SANDSTONE || b == B_SANDSTONE_SMOOTH || b == B_SANDSTONE_CHISELED ||
+                  b == B_SANDSTONE_SLAB || b == B_SANDSTONE_STAIRS || b == B_SANDSTONE_STAIRS_W ||
+                  b == B_SANDSTONE_STAIRS_S || b == B_SANDSTONE_STAIRS_N)
+                sand++;
+              if (b == B_TNT) tnt++;
+              if (b == B_STONE_PRESSURE_PLATE) plate++;
+              if (b == B_CHEST && wx >= TEST_TEMPLE_OX * 16 && wx <= TEST_TEMPLE_OX * 16 + TEMPLE_SIZE - 1 &&
+                  wz >= TEST_TEMPLE_OZ * 16 && wz <= TEST_TEMPLE_OZ * 16 + TEMPLE_SIZE - 1)
+                chest++;
+              if (b == B_STAINED_CLAY_ORANGE || b == B_STAINED_CLAY_BLUE) terra++;
+              /* its platform: two blocks wider than the pyramid on every side */
+              bool out = wx < TEST_TEMPLE_OX * 16 - 2 || wx > TEST_TEMPLE_OX * 16 + TEMPLE_SIZE + 1 ||
+                         wz < TEST_TEMPLE_OZ * 16 - 2 || wz > TEST_TEMPLE_OZ * 16 + TEMPLE_SIZE + 1;
+              if (y == TEST_SECTION_Y && !out) CHECK(b == B_GRASS || b == B_SANDSTONE);
+              if (y == TEST_SECTION_Y - 1 && !out) CHECK(b == B_AIR);
+            }
+      }
+    CHECK(sand > 1000 && tnt == 9 && plate == 1 && chest == 4 && terra > 20);
+    /* a dungeon: cobblestone walls, a spawner, a chest or two (WorldGenDungeons's own
+     * draw), and a doorway, on its own platform */
+    int cobble = 0, spawner = 0, dchest = 0, door = 0, door_z = -1;
+    int di, dl;
+    test_dung_box(&di, &dl);   /* its half sizes: 2..3 each way */
+    for (int cz = (TEST_DUNG_Z - 8) >> 4; cz <= (TEST_DUNG_Z + 8) >> 4; cz++)
+      for (int cx = (TEST_DUNG_X - 8) >> 4; cx <= (TEST_DUNG_X + 8) >> 4; cx++) {
+        TEST_SLAB(cx, cz, sb);
+        for (int lz = 0; lz < 16; lz++)
+          for (int lx = 0; lx < 16; lx++)
+            for (int y = TEST_DUNG_Y - 1; y <= TEST_DUNG_Y + 4; y++) {
+              int b = TEST_CELL(sb, y, lx, lz);
+              if (b == B_COBBLESTONE || b == B_MOSSY_COBBLESTONE) cobble++;
+              if (b == B_MOB_SPAWNER) spawner++;
+              int wx = cx * 16 + lx, wz = cz * 16 + lz;
+              if (b == B_CHEST && wx >= TEST_DUNG_X - di && wx <= TEST_DUNG_X + di && wz >= TEST_DUNG_Z - dl &&
+                  wz <= TEST_DUNG_Z + dl)
+                dchest++;
+            }
+        /* the doorway in its north wall: the first air block of the wall's row */
+        for (int lz = 0; lz < 16 && door_z < 0; lz++)
+          if (TEST_CELL(sb, TEST_DUNG_Y, TEST_DUNG_X & 15, lz) == B_AIR) door_z = cz * 16 + lz;
+      }
+    for (int y = TEST_DUNG_Y; y <= TEST_DUNG_Y + 1; y++)
+      if (TEST_CELL(sb, y, TEST_DUNG_X & 15, door_z & 15) == B_AIR) door++;
+    CHECK(cobble > 40 && spawner == 1 && dchest >= 1 && door == 2);
+    /* nothing in it moves on its own: the same blocks after a while of ticks */
+    TEST_SLAB(2, 6, sa);
+    for (int t = 0; t < 400; t++) ticks_run++, world_tick();
+    TEST_SLAB(2, 6, sb);
+    CHECK(!memcmp(sa, sb, (size_t)th * 256 / 8 * 9));
+    /* the weather never starts, and the fire does not spread or burn out */
+    CHECK(!weather.raining && !weather.thundering);
+    extern uint32_t game_time;
+    game_time = 6000;   /* the showcase's sun: noon, and standing still */
+    world_follow(sx + 0.5f, (float)sy, sz + 0.5f);
+    while (world_pending()) world_follow(sx + 0.5f, (float)sy, sz + 0.5f);
+    CHECK(light_at(VC_I(sx - vc_x0, sy + 1 - vc_y0, sz - vc_z0)) == 15);   /* the platform, in the open sky */
+    world_set(sx + 1, sy + 1, sz, B_FIRE);
+    world_set(sx + 1, sy, sz, B_PLANKS_OAK);
+    world_set(sx + 1, sy, sz + 1, B_SAPLING_OAK);
+    for (int t = 0; t < 200; t++) ticks_run++, world_tick();
+    CHECK(world_get(sx + 1, sy + 1, sz) == B_FIRE);
+    CHECK(world_get(sx + 1, sy, sz) == B_PLANKS_OAK);
+    CHECK(world_get(sx + 1, sy, sz + 1) == B_SAPLING_OAK);
+    /* and the world comes back the same out of a save, with its cages filled again */
+    save_world();
+    CHECK(load_world(6) && world_type == WT_TEST && world_info(6, &twi) && twi.type == WT_TEST);
+    gen_spawn(&sx, &sy, &sz);
+    CHECK(sx == (TEST_SPAWN_X0 + TEST_SPAWN_X1) / 2 && sy == TEST_PLATFORM_Y + 1);
+    world_follow(sx + 0.5f, (float)sy, sz + 0.5f);
+    while (world_pending()) world_follow(sx + 0.5f, (float)sy, sz + 0.5f);
+    CHECK(world_get(sx, sy - 1, sz) == B_BEDROCK && world_get(sx, sy, sz) == B_AIR);
+    mobs_spawn();
+    mobs = 0;
+    for (int i = 0; i < N_ENT; i++)
+      if (is_mob(ents[i].type)) mobs++;
+    CHECK(mobs == 10);
+    delete_world(6);
+    world_type = WT_DEFAULT;
+#undef TEST_SLAB
+#undef TEST_CELL
+  }
+  {
     /* the copy in numblocks_saves.py: every save, and after an install (only scripts left) they come back */
     for (int s = 1; s <= MAX_WORLDS; s++) delete_world(s);
     new_world(3, 42, 0, false, WT_DEFAULT, "Kept", NULL);

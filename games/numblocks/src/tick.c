@@ -666,16 +666,23 @@ static void freeze_tick(void) {
 }
 
 void world_tick(void) {
-  if (world_dim != DIM_NETHER) {   /* the nether has no weather at all */
-    weather_tick();
-    bolt_tick();
-    freeze_tick();
+  /* the test world's showcase never changes on its own: no weather (nothing rains on
+   * it, and the snow and the ice the cold would bring stay as they are put) and no
+   * random block ticks (the fire does not spread or burn out, the grass does not
+   * spread, the saplings do not grow, the leaves do not decay, the snow and the ice
+   * do not melt, the canes and the cacti do not grow) */
+  if (world_type != WT_TEST) {
+    if (world_dim != DIM_NETHER) {   /* the nether has no weather at all */
+      weather_tick();
+      bolt_tick();
+      freeze_tick();
+    }
+    /* about 3 a section: the cache is VCX x VCY x VCZ blocks */
+    int n = VCX * VCY * VCZ * 3 / 4096;
+    for (int k = 0; k < n; k++) {
+      int x = vc_x0 + rnd(VCX), y = vc_y0 + rnd(VCY), z = vc_z0 + rnd(VCZ);
+      random_tick(x, y, z);
+    }
   }
   fluids_tick();
-  /* about 3 a section: the cache is VCX x VCY x VCZ blocks */
-  int n = VCX * VCY * VCZ * 3 / 4096;
-  for (int k = 0; k < n; k++) {
-    int x = vc_x0 + rnd(VCX), y = vc_y0 + rnd(VCY), z = vc_z0 + rnd(VCZ);
-    random_tick(x, y, z);
-  }
 }
