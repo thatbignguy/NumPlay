@@ -1,3 +1,23 @@
+## 1.5.48
+**A nether biome is that biome all through: its whole surface is its own block**
+
+- **The surface.** A biome's ground is now every netherrack the terrain left open,
+  not only the single highest one: in a warped forest every open face - the floor the
+  player walks on, and any ledge of it - is warped nylium, in a crimson forest crimson
+  nylium, in a soul sand valley soul sand (with its fossils), instead of small pockets
+  of it in netherrack where the highest open face happened to sit. The cave walls and
+  the ceiling stay netherrack, and the wastes keep theirs.
+- **Fixed.** A block id past 255 written through a `uint8_t` was cut to another
+  block's id: the nylium ids are 450 and 451, so a byte-wide surface block placed
+  block 194/195 instead. The surface is a 16-bit block now.
+- **Biomes.** The nether's cells are 128 blocks instead of 192: the four biomes are
+  then about 200 to 500 blocks across, closer to the real nether's forests and valleys.
+- **The test.** `tests/test_numblocks_progress.py` mines its block once the new world
+  it creates has come up (the app's frame counter moves again) instead of at fixed
+  times: a world's load takes a few seconds and ends with the player facing whichever
+  way the random seed says, so fixed keys landed inside the load or on open sky. The
+  check itself is unchanged.
+
 ## 1.5.47
 **Equal quarter nether biomes; much rarer soul fire and fossils**
 

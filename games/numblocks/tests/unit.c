@@ -2127,6 +2127,46 @@ int main(void) {
         }
       CHECK(f_found && v_found && f_ok && v_ok);
     }
+    /* a biome is that biome all the way through: every netherrack the terrain left
+     * open above the lava sea is the biome's own block - nylium in the two forests,
+     * soul sand in the valley - instead of pockets of it in netherrack (the ledge
+     * the highest open face happened to sit on was the trap: the floor the player
+     * walks on stayed netherrack) */
+    {
+      static uint8_t slab[128 * 288];
+      int chunks = 0, rack = 0, waste_chunks = 0, waste_rack = 0;
+      for (int cz = -24; cz <= 24; cz++)
+        for (int cx = -24; cx <= 24; cx++) {
+          int bio = gen_biome(cx * 16 + 8, cz * 16 + 8);
+          if (bio != BI_CRIMSON_FOREST && bio != BI_WARPED_FOREST && bio != BI_SOUL_SAND_VALLEY) continue;
+          chunks++;
+          gen_scratch(bs);   /* (the world's follow released the scratch it borrowed) */
+          gen_slab(cx, cz, 0, 128, slab);
+          for (int z = 0; z < 16; z++)
+            for (int x = 0; x < 16; x++)
+              for (int y = 121; y >= 32; y--)
+                if (b9_get(slab, y * 256 + z * 16 + x) == B_NETHERRACK &&
+                    b9_get(slab, (y + 1) * 256 + z * 16 + x) == B_AIR)
+                  rack++;
+        }
+      CHECK(chunks > 0);
+      CHECK(rack == 0);
+      /* the wastes keep theirs: no biome, no conversion */
+      for (int cz = -24; cz <= 24 && !waste_chunks; cz++)
+        for (int cx = -24; cx <= 24 && !waste_chunks; cx++) {
+          if (gen_biome(cx * 16 + 8, cz * 16 + 8) != BI_NETHER_WASTES) continue;
+          waste_chunks = 1;
+          gen_scratch(bs);
+          gen_slab(cx, cz, 0, 128, slab);
+          for (int z = 0; z < 16; z++)
+            for (int x = 0; x < 16; x++)
+              for (int y = 121; y >= 32; y--)
+                if (b9_get(slab, y * 256 + z * 16 + x) == B_NETHERRACK &&
+                    b9_get(slab, (y + 1) * 256 + z * 16 + x) == B_AIR)
+                  waste_rack++;
+        }
+      CHECK(waste_chunks == 1 && waste_rack > 0);
+    }
     /* the same growth whichever window asked: the chunk's whole column against a
      * higher window, the rows they share identical (the glowstone lesson of 1.5.4) */
     {

@@ -16,17 +16,62 @@ Usage: test_numblocks_progress.py build/apps/NumBlocks.nwa [--out DIR]
 import argparse
 import base64
 import os
+import struct
 import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
 from test_progress import presses, records, run, write_storage  # noqa: E402
+import emu  # noqa: E402
 
 COPY = "numblocks_saves.py"
 
 
 def ours(name):
     return name == "numblocks.cfg" or (name.startswith("nb") and name[2:3].isdigit() and name[2] != "0")
+
+
+def frames(c):
+    """The app's own frame counter (main.c's perf_frames, read by tools/emu.py)."""
+    if "perf_frames" not in c.symbols:
+        raise SystemExit("the app carries no perf_frames: it cannot be waited on")
+    return struct.unpack("<I", bytes(c.uc.mem_read(c.symbols["perf_frames"], 4)))[0]
+
+
+def play(nwa, storage, keys, out, tag):
+    """The first phase of this test: a new world, a block mined in it, then Home.
+
+    A new world's terrain is built in one blocking pass - no frame is drawn while
+    it happens (the app's frame counter stops) - and the player then stands wherever
+    the seed's spawn search landed, facing whichever way it says. So the looking
+    down and the mining are played once the counter moves again instead of at fixed
+    times: a fixed time either lands inside the load (the key is never seen, nothing
+    is mined) or on a player facing the sky (nothing to mine). The seed is random -
+    it is the clock at the moment Create is pressed - so the load takes a few
+    seconds and the player's facing changes from run to run."""
+    c = emu.Calculator(nwa, storage_file=storage)
+    c.enable_checks(reads=True)
+    c.keys = keys
+    c.run(keys[-1][1] + 200)   # the create press is done
+    base = frames(c)
+    until = c.now_ms + 120000   # the load is a few seconds; a world that never comes up is a failure
+    while frames(c) - base < 5:   # the load's one frame, then the world's own
+        if c.exited or c.now_ms > until:
+            return None, [f"{tag}: the world never came up"]
+        c.run(c.now_ms + 500)
+    now = int(c.now_ms)
+    c.keys += presses((now + 200, "down", 1200), (now + 1500, "ok", 3500))   # look down, mine
+    home = now + 7000
+    c.keys += [(home, home + 400, emu.KEYS["home"])]
+    c.pending_shots = [(home - 150, os.path.join(out, f"{tag}_{home - 150}.png"))]
+    c.run(home + 3000)
+    problems = []
+    if not c.exited:
+        problems.append(f"{tag}: did not quit on Home")
+    if c.violations:
+        problems += [f"{tag}: {v}" for v in sorted(set(c.violations))[:5]]
+    return dict(records(open(storage, "rb").read())), problems
 
 
 def main():
@@ -42,9 +87,10 @@ def main():
         write_storage(st, [script])
         # the key sheet, Singleplayer, Create New World, down to its button; then look down and mine (OK)
         keys = presses((3000, "ok"), (3600, "ok"), (4200, "ok"), (4800, "down"), (5100, "down"), (5400, "down"),
-                       (5700, "down"), (6000, "down"), (6300, "ok"), (9000, "down", 1200), (10400, "ok", 3500))
-        recs, p = run(a.nwa, st, keys, 14500, a.out, "1_play")
+                       (5700, "down"), (6000, "down"), (6300, "ok"))
+        recs, p = play(a.nwa, st, keys, a.out, "1_play")
         problems += p
+        recs = recs or {}   # (a world that never came up: the problems above say so)
         saves = {n: v for n, v in recs.items() if ours(n)}
         for want in ("numblocks.cfg", "nb1.nbw"):
             if want not in saves:

@@ -6059,7 +6059,7 @@ static uint32_t neth_mix(int x, int z, uint32_t salt) {
     h ^= h >> 16;
     return h;
 }
-/* The biome split (1.16's three, beside the wastes): every 192-block cell takes one
+/* The biome split (1.16's three, beside the wastes): every 128-block cell takes one
  * biome, and every 4 x 4 cells hold four of each, so the four biomes cover equal
  * areas with no small pockets of one biome inside another. The order inside each
  * 4 x 4 macro is hashed, so the map is not a regular checkerboard, but a macro
@@ -6089,7 +6089,7 @@ static int neth_cell_biome(int cx, int cz) {
     return p[quad];
 }
 static int nether_biome_at(int x, int z) {
-    enum { CELL = 192 };
+    enum { CELL = 128 };
     return neth_cell_biome(neth_idiv(x, CELL), neth_idiv(z, CELL));
 }
 
@@ -6279,9 +6279,9 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                         if (col[y] == B_NETHERRACK && col[y + 1] != B_NETHERRACK) col[y] = patch;
                 }
             }
-            /* the column's own biome (1.16): the top of the cave floor it gives its
-             * surface to - crimson or warped nylium for the forests, soul sand and
-             * soul soil, with bone blocks in the ground, for the valley */
+            /* the column's own biome (1.16): it gives its surface to the netherrack
+             * the generation left open - crimson or warped nylium for the forests,
+             * soul sand, with bone blocks in the ground, for the valley */
             int ground = 0;
             for (int yy = 121; yy >= 8; yy--)
                 if (col[yy] != B_AIR && col[yy + 1] == B_AIR) {
@@ -6289,21 +6289,31 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                     break;
                 }
             int bio = nether_biome_at(X, Z);
-            if (ground > 31) {
-                if (bio == BI_CRIMSON_FOREST || bio == BI_WARPED_FOREST) {
-                    if (col[ground] == B_NETHERRACK)
-                        col[ground] = bio == BI_CRIMSON_FOREST ? B_CRIMSON_NYLIUM : B_WARPED_NYLIUM;
-                } else if (bio == BI_SOUL_SAND_VALLEY) {
-                    /* the whole valley's exposed floor is soul ground: no small
-                     * soil/sand noise pockets cutting it up (a desert is not
-                     * sand with grass patches in it either) */
+            /* The biome's surface is every netherrack the generation left touching
+             * air, not only the highest one: a warped forest is nylium wherever its
+             * floor - or a ledge of it - is open, instead of pockets of nylium in
+             * netherrack, and a valley is soul ground all over. The conversion
+             * reads the whole column, never the slab window, so it is the same
+             * whichever window asks for the chunk. (surf is a 16-bit block: the
+             * nylium ids are past 255, and a byte would cut them to some other
+             * block's id.) */
+            uint16_t surf = bio == BI_CRIMSON_FOREST ? B_CRIMSON_NYLIUM
+                             : bio == BI_WARPED_FOREST ? B_WARPED_NYLIUM
+                             : bio == BI_SOUL_SAND_VALLEY ? B_SOUL_SAND : 0;
+            if (surf)
+                for (int yy = 121; yy >= 8; yy--)
+                    if (col[yy] == B_NETHERRACK && col[yy + 1] == B_AIR) col[yy] = surf;
+            if (ground > 31 && bio == BI_SOUL_SAND_VALLEY) {
+                    /* the valley's ground is soul ground a few blocks down too -
+                     * no netherrack left showing through the surface (a desert is
+                     * not sand with grass patches in it either) - with its fossils
+                     * breaking the surface where the mix says so */
                     for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
                         if (col[yy] == B_NETHERRACK) col[yy] = B_SOUL_SAND;
                     if (neth_mix(X, Z, 0xB05Eu) % 211 == 0 && ground > 33) {
                         col[ground] = B_BONE_BLOCK;
                         if (col[ground - 1] == B_NETHERRACK) col[ground - 1] = B_BONE_BLOCK_X;
                     }
-                }
             }
             gmap[z * 16 + x] = (uint8_t)ground;
             /* what the ground is, as a code the growth pass can read without the
