@@ -1,3 +1,14 @@
+## 1.5.45
+**Big contiguous nether biomes; soul sand valleys are soul ground throughout**
+
+- **Biomes.** The nether biome lattice is coarser: 192-block cells, 112-block seed
+  radius, about three quarters of cells seeded. Each biome is one large connected
+  area with no foreign pockets inside it, instead of many small noise-defined
+  pockets. The wastes remain unseeded areas, and forests no longer run forever.
+- **Soul Sand Valley.** The whole exposed floor is soul sand now (with fossils),
+  not soil/sand noise patches cut out of netherrack. Valleys also grow nether
+  sprouts rather than crimson roots.
+
 ## 1.5.44
 **Nether biomes are contiguous lattice patches, not noise pockets; soul sand valleys get nether sprouts**
 

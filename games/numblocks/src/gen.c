@@ -6044,7 +6044,7 @@ static void glow_blob(JRand *r, int cx, int cz);
 /* ---- the nether's biomes (1.16, todo [22]) ----
  * Modern picks its nether biomes with its multi-noise climate source; here a
  * coarse lattice of biome seeds (neth_seed_biome) splits the wastes: each
- * 64-block cell at its centre holds a seed about two times in three, or
+ * 192-block cell at its centre holds a seed about three times in four, or
  * nothing (the wastes). A column takes the seed it lies in, so every place has
  * one biome with no foreign pockets inside it, while the lattice keeps forests
  * and valleys from running on forever. It is a pure function of (x, z), so the
@@ -6059,26 +6059,15 @@ static uint32_t neth_mix(int x, int z, uint32_t salt) {
     h ^= h >> 16;
     return h;
 }
-static float neth_vnoise(int x, int z, int scale, uint32_t salt) {
-    int xi = x >= 0 ? x / scale : -((-x + scale - 1) / scale);
-    int zi = z >= 0 ? z / scale : -((-z + scale - 1) / scale);
-    float fx = (float)(x - xi * scale) / (float)scale, fz = (float)(z - zi * scale) / (float)scale;
-    float u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
-    float a = (float)(neth_mix(xi, zi, salt) & 0xFFFF) / 32768.0f - 1.0f;
-    float b = (float)(neth_mix(xi + 1, zi, salt) & 0xFFFF) / 32768.0f - 1.0f;
-    float c = (float)(neth_mix(xi, zi + 1, salt) & 0xFFFF) / 32768.0f - 1.0f;
-    float d = (float)(neth_mix(xi + 1, zi + 1, salt) & 0xFFFF) / 32768.0f - 1.0f;
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
 /* The biome split (1.16's three, beside the wastes): a coarse lattice of biome
- * seeds (one every 64-block cell at its centre, about two thirds of them
+ * seeds (one every 192-block cell at its centre, about three quarters of them
  * seeded). A column takes the seed it lies in, so a biome is one contiguous
  * area with no wastes holes inside it, instead of a thresholded smooth field
  * that cuts tiny pockets of forest out of the wastes. Fatigue: the seeds are
  * few enough that no forest runs forever, and the wastes stay the default. */
 static int neth_seed_biome(int cx, int cz) {
     uint32_t h = neth_mix(cx, cz, 0x51A1u);
-    if ((uint16_t)(h >> 16) >= 0xA800u) return BI_HELL;   /* ~35%: unseeded, the wastes */
+    if ((uint16_t)(h >> 16) >= 0xC000u) return BI_HELL;   /* ~25%: unseeded, the wastes */
     switch ((h >> 8) % 3u) {
       case 0: return BI_CRIMSON_FOREST;
       case 1: return BI_WARPED_FOREST;
@@ -6086,7 +6075,7 @@ static int neth_seed_biome(int cx, int cz) {
     }
 }
 static int nether_biome_at(int x, int z) {
-    enum { CELL = 64, RADIUS = 28 };
+    enum { CELL = 192, RADIUS = 112 };
     int r2 = RADIUS * RADIUS + 1;
     int cx = x >= 0 ? x / CELL : -((-x + CELL - 1) / CELL);
     int cz = z >= 0 ? z / CELL : -((-z + CELL - 1) / CELL);
@@ -6303,12 +6292,11 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                     if (col[ground] == B_NETHERRACK)
                         col[ground] = bio == BI_CRIMSON_FOREST ? B_CRIMSON_NYLIUM : B_WARPED_NYLIUM;
                 } else if (bio == BI_SOUL_SAND_VALLEY) {
-                    float s = neth_vnoise(X, Z, 12, 0x50ULL);
-                    if (s > 0.05f || s < -0.05f) {
-                        uint8_t sb = s > 0 ? B_SOUL_SOIL : B_SOUL_SAND;
-                        for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
-                            if (col[yy] == B_NETHERRACK) col[yy] = sb;
-                    }
+                    /* the whole valley's exposed floor is soul ground: no small
+                     * soil/sand noise pockets cutting it up (a desert is not
+                     * sand with grass patches in it either) */
+                    for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
+                        if (col[yy] == B_NETHERRACK) col[yy] = B_SOUL_SAND;
                     if (neth_mix(X, Z, 0xB05Eu) % 37 == 0 && ground > 33) {
                         col[ground] = B_BONE_BLOCK;
                         if (col[ground - 1] == B_NETHERRACK) col[ground - 1] = B_BONE_BLOCK_X;

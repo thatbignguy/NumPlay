@@ -2054,11 +2054,11 @@ int main(void) {
     uint8_t bs[GEN_SCRATCH];
     memset(bs, 0, sizeof bs);
     gen_scratch(bs);
-    /* the four of them in a 25 x 25 chunk window, and the split is a pure function
+    /* the four of them in a 49 x 49 chunk window, and the split is a pure function
      * of the column (the same answer for the same place every time) */
     int saw = 0;
-    for (int cz = -12; cz <= 12; cz++)
-      for (int cx = -12; cx <= 12; cx++) {
+    for (int cz = -24; cz <= 24; cz++)
+      for (int cx = -24; cx <= 24; cx++) {
         int b = gen_biome(cx * 16 + 8, cz * 16 + 8);
       CHECK(b == BI_NETHER_WASTES || b == BI_CRIMSON_FOREST || b == BI_WARPED_FOREST ||
             b == BI_SOUL_SAND_VALLEY);
@@ -2094,8 +2094,8 @@ int main(void) {
      * blocks where the ground has them). Three cache windows cover the ground. */
     {
       int f_found = 0, v_found = 0, f_ok = 0, v_ok = 0;
-      for (int cx = -6; cx <= 6 && !(f_found && v_found); cx++)
-        for (int cz = -6; cz <= 6 && !(f_found && v_found); cz++) {
+      for (int cx = -24; cx <= 24 && !(f_found && v_found); cx++)
+        for (int cz = -24; cz <= 24 && !(f_found && v_found); cz++) {
           int bio = gen_biome(cx * 16 + 8, cz * 16 + 8);
           if (bio != BI_CRIMSON_FOREST && bio != BI_WARPED_FOREST && bio != BI_SOUL_SAND_VALLEY) continue;
           int nyl = 0, growth = 0, soul = 0;
@@ -2131,10 +2131,10 @@ int main(void) {
      * higher window, the rows they share identical (the glowstone lesson of 1.5.4) */
     {
       int ox = -1000, oz = -1000;
-      for (int cx = -6; cx <= 6 && ox < -500; cx++)
-        for (int cz = -6; cz <= 6 && ox < -500; cz++)
+      for (int cx = -24; cx <= 24 && ox < -500; cx++)
+        for (int cz = -24; cz <= 24 && ox < -500; cz++)
           if (gen_biome(cx * 16 + 8, cz * 16 + 8) == BI_WARPED_FOREST) ox = cx, oz = cz;
-      CHECK(ox >= -6 && ox <= 6);   /* (the window above found one) */
+      CHECK(ox >= -24 && ox <= 24);   /* (the window above found one) */
       static uint8_t wa[128 * 288], wb[64 * 288];
       gen_scratch(bs);   /* (world_follow released the scratch it borrowed) */
       gen_slab(ox, oz, 0, 128, wa);
