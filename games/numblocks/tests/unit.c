@@ -1742,6 +1742,178 @@ int main(void) {
 #undef TEST_CELL
   }
   {
+    /* above the sky top is generated too: moving the cache straight up across the
+     * grid's barrier row and back must not unmake the blocks over it (the air fast
+     * path once aired whatever a too-low top did not know) */
+    new_world(7, 99, 0, false, WT_TEST, "Air", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    /* the grid's cell at (-7, -40): a block on its barrier, in the spawn view */
+    int gx = TEST_GRID_X0, gz = TEST_GRID_Z0 + 6;
+    int gb = world_get(gx, TEST_BLOCK_Y, gz);
+    CHECK(gb != B_AIR);
+    CHECK(world_get(gx, TEST_SECTION_Y, gz) == B_BARRIER);
+    /* down below the grid (its rows leave the cache), then back up across them (the
+     * cache only moves near an edge: y=36 puts it 16 into the old window) */
+    pl.x = gx + 0.5f, pl.z = gz + 0.5f;
+    world_follow(pl.x, 31.0f, pl.z);
+    while (world_pending()) world_follow(pl.x, 31.0f, pl.z);
+    world_follow(pl.x, 36.0f, pl.z);
+    while (world_pending()) world_follow(pl.x, 36.0f, pl.z);
+    CHECK(world_get(gx, TEST_BLOCK_Y, gz) == gb);
+    CHECK(world_get(gx, TEST_SECTION_Y, gz) == B_BARRIER);
+    delete_world(7);
+    world_type = WT_DEFAULT;
+  }
+  {
+    /* a change outside the loaded cache is kept anyway (an explosion past the edge) */
+    new_world(7, 100, 0, false, WT_TEST, "Edge", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int ex = (int)pl.x + 100, ez = (int)pl.z;
+    CHECK(!world_loaded(ex, 60, ez));
+    world_set(ex, 60, ez, B_GOLD_BLOCK);
+    world_follow((float)ex + 0.5f, 60.0f, (float)ez + 0.5f);
+    while (world_pending()) world_follow((float)ex + 0.5f, 60.0f, (float)ez + 0.5f);
+    CHECK(world_get(ex, 60, ez) == B_GOLD_BLOCK);
+    /* save before deleting (as gameplay does): the edit flushes under this world's own
+     * prefix, and deleting removes it - no journal dirt reaches the next world, where
+     * a leftover record would read as saves still being here */
+    save_world();
+    delete_world(7);
+    world_type = WT_DEFAULT;
+  }
+  {
+    /* the showcase's liquids stand where they are put: the pyramid's baked box holds
+     * the desert rock it was cut out of, lava at its bottom row over the void included.
+     * Woken, it falls into the void for ever - a change each - and every one of them
+     * goes into the journal that keeps the player's own changes, and into the record
+     * they are flushed into. The player's changes are then the ones that get dropped,
+     * and the structures come back whole. */
+    new_world(7, 424242, 0, false, WT_TEST, "Still", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    int tx0 = TEST_TEMPLE_OX * 16 - 2, ty0 = TEST_TEMPLE_Y0 + TEST_TEMPLE_DY, tz0 = TEST_TEMPLE_OZ * 16 - 2;
+    /* the bottom of the pyramid, where the lava row is: cache it, tick it, leave it,
+     * come back - the journal holds nothing at all, and the box reads back as stamped */
+    world_follow((float)(tx0 + 12) + 0.5f, (float)(ty0 + 6), (float)(tz0 + 12) + 0.5f);
+    while (world_pending()) world_follow((float)(tx0 + 12) + 0.5f, (float)(ty0 + 6), (float)(tz0 + 12) + 0.5f);
+    for (int t = 0; t < 60; t++) ticks_run++, world_tick();
+    CHECK(edits_count() == 0);
+    world_follow((float)(tx0 + 12) + 0.5f, 80.0f, (float)(tz0 + 12) + 0.5f);   /* up: the bottom unrenders */
+    while (world_pending()) world_follow((float)(tx0 + 12) + 0.5f, 80.0f, (float)(tz0 + 12) + 0.5f);
+    world_follow((float)(tx0 + 12) + 0.5f, (float)(ty0 + 6), (float)(tz0 + 12) + 0.5f);   /* and back */
+    while (world_pending()) world_follow((float)(tx0 + 12) + 0.5f, (float)(ty0 + 6), (float)(tz0 + 12) + 0.5f);
+    for (int t = 0; t < 60; t++) ticks_run++, world_tick();
+    CHECK(edits_count() == 0);
+    /* the lava itself: where the box put it, still there and not spilled below it */
+    int lava = 0;
+    for (int z = tz0; z < tz0 + TEST_TEMPLE_SZ; z++)
+      for (int x = tx0; x < tx0 + TEST_TEMPLE_SX; x++)
+        for (int y = ty0; y < ty0 + TEST_TEMPLE_SY; y++) {
+          if (!world_loaded(x, y, z) || world_pending_at(x, y, z)) continue;
+          int g = (int)test_temple[((y - ty0) * TEST_TEMPLE_SZ + (z - tz0)) * TEST_TEMPLE_SX + (x - tx0)];
+          CHECK(world_get(x, y, z) == g);
+          if (g == B_LAVA) lava++;
+        }
+    CHECK(lava > 0);
+    /* the water of the desert well stands too */
+    world_follow((float)TEST_WELL_X + 0.5f, (float)(TEST_WELL_Y0 + TEST_WELL_DY + 6), (float)TEST_WELL_Z + 0.5f);
+    while (world_pending())
+      world_follow((float)TEST_WELL_X + 0.5f, (float)(TEST_WELL_Y0 + TEST_WELL_DY + 6), (float)TEST_WELL_Z + 0.5f);
+    for (int t = 0; t < 60; t++) ticks_run++, world_tick();
+    int water = 0;
+    for (int z = TEST_WELL_Z - TEST_WELL_MID_Z; z <= TEST_WELL_Z + TEST_WELL_MID_Z; z++)
+      for (int x = TEST_WELL_X - TEST_WELL_MID_X; x <= TEST_WELL_X + TEST_WELL_MID_X; x++)
+        for (int y = TEST_WELL_Y0 + TEST_WELL_DY; y < TEST_WELL_Y0 + TEST_WELL_DY + TEST_WELL_SY; y++) {
+          if (!world_loaded(x, y, z) || world_pending_at(x, y, z)) continue;
+          if (world_get(x, y, z) == B_WATER) water++;
+        }
+    CHECK(water > 0);
+    delete_world(7);
+    world_type = WT_DEFAULT;
+  }
+  {
+    /* a record is handed out as it lies in the storage, and any write moves it: the cache
+     * that keeps it is dropped at the end of each chunk, so a file read between two
+     * chunk fills cannot leave it pointing at some other record's bytes */
+    new_world(7, 999, 0, false, WT_TEST, "Fresh", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    world_set(6, TEST_PLATFORM_Y + 2, 6, B_GOLD_BLOCK);
+    save_world();   /* the record is written, and the options read covers the load buffer */
+    save_options();
+    uint32_t ol;
+    plat_load("numblocks.cfg", &ol);
+    /* a move that makes its chunks one a frame: a read between them all the same */
+    int mx = (int)pl.x + 20, mz = (int)pl.z + 20;
+    for (int k = 0; k < 6; k++) {
+      world_follow((float)mx + 0.5f, pl.y, (float)mz + 0.5f);
+      if (!world_pending()) break;
+      uint32_t l2;
+      plat_load("numblocks.cfg", &l2);
+    }
+    while (world_pending()) world_follow((float)mx + 0.5f, pl.y, (float)mz + 0.5f);
+    world_follow(6.5f, (float)(TEST_PLATFORM_Y + 2), 6.5f);
+    while (world_pending()) world_follow(6.5f, (float)(TEST_PLATFORM_Y + 2), 6.5f);
+    CHECK(world_get(6, TEST_PLATFORM_Y + 2, 6) == B_GOLD_BLOCK);
+    delete_world(7);
+    world_type = WT_DEFAULT;
+  }
+  {
+    /* the baked value of a temple cell (test_data.h: the pyramid as generated) */
+    int ttx = TEST_TEMPLE_OX * 16 - 2, tty = TEST_TEMPLE_Y0 + TEST_TEMPLE_DY, ttz = TEST_TEMPLE_OZ * 16 - 2;
+#define baked_of(x, y, z) \
+  ((x) >= ttx && (x) < ttx + TEST_TEMPLE_SX && (y) >= tty && (y) < tty + TEST_TEMPLE_SY && \
+       (z) >= ttz && (z) < ttz + TEST_TEMPLE_SZ \
+     ? (int)test_temple[(((y) - tty) * TEST_TEMPLE_SZ + ((z) - ttz)) * TEST_TEMPLE_SX + ((x) - ttx)] \
+     : 0)
+    /* a record that has outgrown the merge: the journal's entries still go in, and
+     * the record's tail makes way. A merge that does not happen is the thing that
+     * loses the player's work - the journal is then the only place their changes
+     * live, and it holds 128 of them, so the rest are gone and the structures come
+     * back whole. (This is the old damage healing itself: the showcase's liquids
+     * stand where they are put now, so nothing makes a record this big any more.) */
+    new_world(7, 2025, 0, false, WT_TEST, "Big", NULL);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    /* a record well past the merge: the desert rock the pyramid was carved out of,
+     * one change a cell - what the showcase's falling lava left behind */
+    for (int i = 0; i < 2300; i++) {
+      int x = i % 64, y = 33 - i / 4096, z = (i / 64) % 64;
+      if (y >= 0) world_set(x, y, z, B_LAVA);
+    }
+    save_world();
+    CHECK(edits_count() == 0);
+    /* the player's own changes on top of it: the floor they mine, and the blast */
+    int tx0 = TEST_TEMPLE_OX * 16 - 2, ty0 = TEST_TEMPLE_Y0 + TEST_TEMPLE_DY, tz0 = TEST_TEMPLE_OZ * 16 - 2;
+    world_follow(10.5f, (float)(ty0 + 14), 42.5f);
+    while (world_pending()) world_follow(10.5f, (float)(ty0 + 14), 42.5f);
+    static int mine[600][3];
+    int nmine = 0;
+    for (int y = ty0; y < ty0 + TEST_TEMPLE_SY && nmine < 600; y++)
+      for (int x = tx0; x < tx0 + TEST_TEMPLE_SX && nmine < 600; x++)
+        for (int z = tz0; z < tz0 + TEST_TEMPLE_SZ && nmine < 600; z++)
+          if (baked_of(x, y, z) && world_loaded(x, y, z) && !world_pending_at(x, y, z))
+            mine[nmine][0] = x, mine[nmine][1] = y, mine[nmine][2] = z, nmine++;
+    for (int i = 0; i < nmine; i++) break_block_at(mine[i][0], mine[i][1], mine[i][2], false);
+    CHECK(!edits_full());   /* the merge took them: the record made way */
+    save_world();
+    CHECK(edits_count() == 0 && !edits_full());
+    /* and every one of them reads back broken once the cache leaves and returns */
+    int back = 0;
+    for (int i = 0; i < nmine; i++) {
+      world_follow(10.5f, (float)(mine[i][1] + 12), 42.5f);
+      while (world_pending()) world_follow(10.5f, (float)(mine[i][1] + 12), 42.5f);
+      back += world_get(mine[i][0], mine[i][1], mine[i][2]) == B_AIR;
+    }
+    CHECK(back == nmine);
+    edits_clear();
+    delete_world(7);
+    world_type = WT_DEFAULT;
+  }
+#undef baked_of
+  {
     /* the copy in numblocks_saves.py: every save, and after an install (only scripts left) they come back */
     for (int s = 1; s <= MAX_WORLDS; s++) delete_world(s);
     new_world(3, 42, 0, false, WT_DEFAULT, "Kept", NULL);
@@ -1771,6 +1943,9 @@ int main(void) {
     for (int i = 0; i < n; i++) {
       uint32_t len;
       const uint8_t *d = plat_load(names[i], &len);
+      if (!(d && len == lens[i] && !memcmp(d, before[i], len)))
+        printf("  copy mismatch %s: got %s len %u, want len %u\n", names[i], d ? "data" : "NULL",
+               d ? len : 0, lens[i]);
       CHECK(d && len == lens[i] && !memcmp(d, before[i], len));
     }
     /* inside NumPlay, NumPlay keeps the copy */

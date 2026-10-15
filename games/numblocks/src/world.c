@@ -216,6 +216,12 @@ static void fill_chunk(int cx, int cz, const uint8_t *keep, int oy, int ylo, int
       }
     }
   }
+  /* a record is handed out as it lies in the storage - a pointer into it, which any
+   * write moves (a world saved, an option set, the copies remade). The cache that
+   * keeps it is dropped here, at the end of each chunk, so it can never outlive the
+   * fill it was loaded for: the next chunk asks again, and asks of a storage that
+   * stands as it was left. */
+  edits_forget();
 }
 
 static uint8_t kept[VCZ * VCX / 8];   /* columns the old cache covered (moved, not generated): a bit each */
@@ -230,15 +236,22 @@ static uint8_t kept[VCZ * VCX / 8];   /* columns the old cache covered (moved, n
  *   - a hanging sand or gravel block drops (settle_fall, player.c);
  *   - a liquid that can move at all is woken (fluid_wake, tick.c) and flows from there.
  * The move's chunks are made one a frame, so the pass runs when the last of them is made:
- * the cost lands once every few frames and never inside a chunk's own making. */
+ * the cost lands once every few frames and never inside a chunk's own making.
+ * (The showcase's liquids are the one exception: they are put where they stand. Its
+ * baked boxes hold the desert rock the structures were cut out of - the pyramid's
+ * bottom row has lava in it, over the void - and a liquid woken there falls into
+ * the void for ever, one change each: hundreds of them, filling the journal that
+ * keeps the player's own changes and the records they are flushed into, until it
+ * is full and the changes are dropped. Nothing in the showcase is placed to run.) */
 static void settle_cache(void) {
+  bool wet = world_type != WT_TEST;   /* the showcase's liquids are put where they stand */
   for (int lz = 0; lz < VCZ; lz++)
     for (int lx = 0; lx < VCX; lx++) {
       int wx = vc_x0 + lx, wz = vc_z0 + lz;
       for (int ly = 0; ly < VCY; ly++) {
         int b = vc_get(VC_I(lx, ly, lz));
         if (b == B_SAND || b == B_RED_SAND || b == B_GRAVEL) settle_fall(wx, vc_y0 + ly, wz);
-        else if (blk_model[b] == M_LIQUID) fluid_wake(wx, vc_y0 + ly, wz);
+        else if (wet && blk_model[b] == M_LIQUID) fluid_wake(wx, vc_y0 + ly, wz);
       }
     }
 }
@@ -543,8 +556,14 @@ int world_get(int x, int y, int z) {
 }
 
 void world_set(int x, int y, int z, int b) {
-  if (!world_loaded(x, y, z) || y < dim_min_y() || y >= dim_height()) return;
-  if (vpend_get((z - vc_z0) * VCX + x - vc_x0)) return;
+  if (y < dim_min_y() || y >= dim_height()) return;
+  if (!world_loaded(x, y, z) || vpend_get((z - vc_z0) * VCX + x - vc_x0)) {
+    /* outside the cache, or in a column still to be made: nothing here to touch, but the
+     * change is kept anyway - the chunk writes it when it is made (an explosion past the
+     * edge, or mining it the moment it unloads, is still the player's change) */
+    edits_put(x, y, z, b);
+    return;
+  }
   int lx = x - vc_x0, ly = y - vc_y0, lz = z - vc_z0;
   vc_set(VC_I(lx, ly, lz), b);
   edits_put(x, y, z, b);

@@ -895,6 +895,12 @@ static void arrow_tick(Entity *e) {
 
 /* lit TNT: falls, flashes, and blows with power 4 after 80 ticks (EntityTNTPrimed) */
 static void tnt_tick(Entity *e) {
+  /* the fuse waits for the world that feeds it, as a liquid does (tick.c's below) and a
+   * falling block does (player.c's settle_fall): a cell the cache does not hold reads as
+   * air, so a blast whose centre has left the cache finds nothing to break and goes off
+   * into empty space - and what it was meant to open comes back whole when the player
+   * returns. It stands where it is until the cache holds it again, then the fuse runs on. */
+  if (!world_loaded(ifl(e->x), ifl(e->y), ifl(e->z))) return;
   float p[3] = {e->x, e->y, e->z}, v[3] = {e->vx, e->vy - 0.04f, e->vz};
   bool ground = phys_move(p, v, 0.98f, 0.98f);
   e->x = p[0], e->y = p[1], e->z = p[2];
@@ -1126,7 +1132,11 @@ void mob_tick(Entity *e) {
       }
     }
   } else if (e->state != 255) {
-    if (e->type == E_CREEPER && e->delay > 0) e->delay--;
+    /* the creeper's fuse waits for the cache to hold it, as the TNT's does (tnt_tick):
+     * a blast whose centre is out of the cache finds nothing to break */
+    if (e->type == E_CREEPER && e->delay > 0 &&
+        world_loaded(ifl(e->x), ifl(e->y), ifl(e->z)))
+      e->delay--;
     int food = food_of(e->type);
     if (e->panic > 0 && !hostile(e->type)) {
       /* EntityAIPanic: somewhere within 5 blocks, fast, again and again */

@@ -1,3 +1,92 @@
+## 1.5.54
+**Broken blocks stay broken - and a save the old bug bloated heals itself**
+
+The player breaks something in the test world, leaves, comes back, and it is whole
+again: the floor they mined to get into the pyramid, the bottom of the pyramid the
+TNT blew out, the plate and the TNT with them. Four things took the change away,
+all in the world around the player rather than the showcase.
+
+- **The showcase's liquids ran.** The pyramid's baked box holds the desert rock the
+  structure was carved out of, lava at its bottom row over the void included. Woken,
+  that lava fell into the void for ever - one change a tick, every one going into the
+  journal that keeps the player's own changes and into the record they are flushed
+  into. A round trip of the pyramid left 46 of them and a record of a thousand
+  entries. The showcase's liquids stand where they are put now, like the blocks they
+  were placed beside: the settle pass does not wake them and they are not ticked.
+  The journal is free for the player's changes, and the pyramid's region record went
+  from 1014 entries to 11.
+- **A record too big to be merged dropped everything after it.** The merge is one
+  buffer, and a record that had outgrown it could not be merged at all - so the
+  journal stayed full with nowhere to put its entries, and every change made after
+  that was thrown away with no word said. The merge now holds a whole region's
+  record, and a record that has outgrown even that makes way for the journal's
+  entries (losing its own tail) rather than refusing the merge. This is what bit a
+  save the lava had already bloated: on one, all 600 of the player's changes were
+  lost before, and all 600 survive now.
+- **The test world's sky top answered the lowest row anything stands on** instead of
+  the highest row there is, and rows above the top are taken as air without
+  generating them - so moving the cache up across the grid aired its blocks away,
+  barriers only left standing. It answers the highest row now, as everywhere else.
+- **A change outside the loaded cache was dropped silently**, so an explosion past
+  the edge never happened once its chunks came back: it is kept anyway now, and the
+  chunk writes it when it is made.
+
+Two smaller ones beside them. A record is handed out as a pointer into the storage,
+which any write moves, so the cache that kept it could come back pointing at some
+other record's bytes: it is dropped at the end of every chunk, where no write can
+reach it. And a change is no longer thrown away silently when the journal is full
+and the storage cannot take it - it is the storage's trouble then, not the
+player's, and what they already broke stays broken.
+
+- **Tests and build.** `make test` passes (214 recipes): four new recipes, each
+  failing without its fix - the showcase's liquids standing still through a round
+  trip of the pyramid (and the well's five water), an edit surviving a chunk refill
+  with a record read in between, the newest change surviving a journal that is full,
+  and every one of 600 changes surviving on top of a record the old bug had bloated
+  past the merge. `./build/play --test` was flown through the showcase again and
+  every section was looked at (the grid, the pyramid's face, the dungeon's room,
+  the cages): all as before, the well's water standing. The real game loop was
+  flown through the pyramid: a roof block mined, the player up out of the structure
+  (its rows leaving the cache whole) and back down, and the hole still there - and
+  the same forward and back. `make -C games/numblocks build check host desktop`,
+  `make -C games/numblocks-interest build check`, `test_numblocks_progress`,
+  `test_games --game numblocks` and `test_small_ram` pass; the app still starts in
+  CUSTOM_RAM = 133652 B, which is what set the merge's size.
+
+**The temple, in a normal world.** The above is the showcase, which is what was
+reported. The same sequence in a generated world - mine in through the pyramid's
+coloured floor, stand on the plate, let the nine TNT go off, fly straight up until
+the pyramid is out of the cache altogether, come back down - was reproduced with
+`--temple --templetrap` and fixed the same way: the chamber reads back as the
+blast left it (8 non-air cells, no sandstone, all nine TNT gone) where before it
+came back whole (179 non-air, 89 sandstone, the TNT standing). Both halves were
+checked on the save that was reported: every block broken stays broken and every
+block placed stays placed through the round trip. The census is in tests/play.c's
+own report, so the harness shows it.
+
+**A blast that goes off out of sight.** Primed TNT (and a creeper's fuse) used to
+run its fuse down wherever it was, so a blast whose centre had left the cache found
+nothing to break - a cell the cache does not hold reads as air - and what it was
+meant to open came back whole. The fuse now waits for the cache to hold it again,
+the same rule a liquid's flow already follows (tick.c's below) and a falling block
+follows (player.c's settle_fall): out of sight is unknown, never empty. It goes off
+when the player comes back, and the damage is there when they look.
+
+- **Tests and build.** `make test` passes (214 recipes): four new recipes, each
+  failing without its fix - the showcase's liquids standing still through a round
+  trip of the pyramid (and the well's five water), an edit surviving a chunk refill
+  with a record read in between, the newest change surviving a journal that is full,
+  and every one of 600 changes surviving on top of a record the old bug had bloated
+  past the merge. `./build/play --test` was flown through the showcase again and
+  every section was looked at (the grid, the pyramid's face, the dungeon's room,
+  the cages): all as before, the well's water standing. The real game loop was
+  flown through the pyramid: a roof block mined, the player up out of the structure
+  (its rows leaving the cache whole) and back down, and the hole still there - and
+  the same forward and back. `make -C games/numblocks build check host desktop`,
+  `make -C games/numblocks-interest build check`, `test_numblocks_progress`,
+  `test_games --game numblocks` and `test_small_ram` pass; the app still starts in
+  CUSTOM_RAM = 133652 B, which is what set the merge's size.
+
 ## 1.5.53
 **The showcase pyramid stands free: re-baked on flat desert, with an entrance passage to the dungeon**
 

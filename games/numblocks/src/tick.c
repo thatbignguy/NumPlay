@@ -667,10 +667,12 @@ static void freeze_tick(void) {
 
 void world_tick(void) {
   /* the test world's showcase never changes on its own: no weather (nothing rains on
-   * it, and the snow and the ice the cold would bring stay as they are put) and no
+   * it, and the snow and the ice the cold would bring stay as they are put), no
    * random block ticks (the fire does not spread or burn out, the grass does not
    * spread, the saplings do not grow, the leaves do not decay, the snow and the ice
-   * do not melt, the canes and the cacti do not grow) */
+   * do not melt, the canes and the cacti do not grow) and no liquid moves: the
+   * showcase's water and lava stand where they are put (the settle pass does not
+   * wake them either, world.c), like the blocks they were placed beside */
   if (world_type != WT_TEST) {
     if (world_dim != DIM_NETHER) {   /* the nether has no weather at all */
       weather_tick();
@@ -683,6 +685,6 @@ void world_tick(void) {
       int x = vc_x0 + rnd(VCX), y = vc_y0 + rnd(VCY), z = vc_z0 + rnd(VCZ);
       random_tick(x, y, z);
     }
+    fluids_tick();
   }
-  fluids_tick();
 }

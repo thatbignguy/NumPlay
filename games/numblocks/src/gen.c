@@ -7279,24 +7279,26 @@ void test_cage(int k, int *x, int *y, int *z) {
   *y = TEST_CAGE_Y;
 }
 
-/* the row the showcase's blocks in the column (x, z) start at (0: the column is all
- * air) - the sky light's top. It is the lowest row anything stands on, never the
- * highest: world.c's light is worked out by walking the column down from the sky and
- * taking one level off each block, so a top below the real one lights a structure
- * exactly as the open sky does (its walls from the air beside them, its hollows from
- * the dark under them), while a top above it would darken what stands under it. */
+/* the highest non-air row of the showcase in the column (x, z), or 0 where the column
+ * is all air - what vgtop and the sky light's top are made from, as gen_top is everywhere
+ * else. It has to be the highest row, never the lowest anything stands on: world.c takes
+ * rows above the top as air without generating them, so a top below the real one unmakes
+ * whatever stands over it the moment the cache moves up through it. (A constant per box,
+ * over the columns that hold less: overestimating only generates more often, never less.
+ * The light's own top still walks each column down past what lets light through.) */
 static int test_top(int X, int Z) {
   if (X >= TEST_SPAWN_X0 && X <= TEST_SPAWN_X1 && Z >= TEST_SPAWN_Z0 && Z <= TEST_SPAWN_Z1) return TEST_PLATFORM_Y;
-  if (X >= TEST_GRID_X0 && X <= TEST_GRID_X1 && Z >= TEST_GRID_Z0 && Z <= TEST_GRID_Z1) return TEST_SECTION_Y;
-  if (X >= TEST_CAGE_X0 - 1 && X <= TEST_CAGE_X1 + 1 && Z >= TEST_CAGE_Z0 - 1 && Z <= TEST_CAGE_Z1 + 1) return TEST_SECTION_Y;
+  if (X >= TEST_GRID_X0 && X <= TEST_GRID_X1 && Z >= TEST_GRID_Z0 && Z <= TEST_GRID_Z1) return TEST_BLOCK_Y;
+  if (X >= TEST_CAGE_X0 - 1 && X <= TEST_CAGE_X1 + 1 && Z >= TEST_CAGE_Z0 - 1 && Z <= TEST_CAGE_Z1 + 1)
+    return TEST_CAGE_Y + 1;
   if (X >= TEST_ITEM_X0 - 2 && X <= TEST_ITEM_X0 + TEST_ITEM_CHESTS + 1 && Z >= TEST_ITEM_Z - 2 && Z <= TEST_ITEM_Z + 2)
-    return TEST_SECTION_Y;
+    return TEST_BLOCK_Y;
   int tx0 = TEST_TEMPLE_OX * 16 - 2, tz0 = TEST_TEMPLE_OZ * 16 - 2;
-  if (X >= tx0 && X < tx0 + TEST_TEMPLE_SX && Z >= tz0 && Z < tz0 + TEST_TEMPLE_SZ) return TEST_TEMPLE_TOP;
+  if (X >= tx0 && X < tx0 + TEST_TEMPLE_SX && Z >= tz0 && Z < tz0 + TEST_TEMPLE_SZ) return TEST_TEMPLE_TOP - 1;
   int dx0 = TEST_DUNG_X - TEST_DUNG_SPAWN_X, dz0 = TEST_DUNG_Z - TEST_DUNG_SPAWN_Z;
-  if (X >= dx0 && X < dx0 + TEST_DUNG_SX && Z >= dz0 && Z < dz0 + TEST_DUNG_SZ) return TEST_DUNG_TOP;
+  if (X >= dx0 && X < dx0 + TEST_DUNG_SX && Z >= dz0 && Z < dz0 + TEST_DUNG_SZ) return TEST_DUNG_TOP - 1;
   int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
-  if (X >= ex0 && X < ex0 + TEST_WELL_SX && Z >= ez0 && Z < ez0 + TEST_WELL_SZ) return TEST_WELL_TOP;
+  if (X >= ex0 && X < ex0 + TEST_WELL_SX && Z >= ez0 && Z < ez0 + TEST_WELL_SZ) return TEST_WELL_TOP - 1;
   return 0;
 }
 
