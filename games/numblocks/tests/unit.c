@@ -1357,7 +1357,7 @@ int main(void) {
      * its own, the structures on their own platforms - and nothing in it moves on its own */
     static uint8_t gs[GEN_SCRATCH];
     static uint8_t sa[64 * 256 / 8 * 9 + 4], sb[64 * 256 / 8 * 9 + 4];
-    int t0 = 36, th = 40;   /* the rows the whole showcase stands in: 36..76 */
+    int t0 = 32, th = 44;   /* the rows the whole showcase stands in: 32..76 */
     memset(ents, 0, sizeof ents);   /* (the cages put back only what is gone) */
     /* the showcase's slab, through the generator's own write path */
 #define TEST_SLAB(cx, cz, buf) (gen_scratch(gs), gen_slab(cx, cz, t0, th, buf), gen_scratch(NULL))
@@ -1656,11 +1656,59 @@ int main(void) {
           }
       }
     CHECK(water == 5 && slabs == 12);
+    /* barriers under the whole well (its sand stands over the void) */
+    for (int z = ez0; z < ez0 + TEST_WELL_SZ; z++)
+      for (int x = ex0; x < ex0 + TEST_WELL_SX; x++) {
+        TEST_SLAB(x >> 4, z >> 4, sb);
+        CHECK(TEST_CELL(sb, ey0 - 1, x & 15, z & 15) == B_BARRIER);
+      }
     /* nothing in it moves on its own: the same blocks after a while of ticks */
     TEST_SLAB(2, 6, sa);
     for (int t = 0; t < 400; t++) ticks_run++, world_tick();
     TEST_SLAB(2, 6, sb);
     CHECK(!memcmp(sa, sb, (size_t)th * 256 / 8 * 9));
+    /* and nothing moves in the live world either: cache each structure (the settle
+     * pass runs as the cache moves), tick a while (fluids!), and every cell reads
+     * back what the generator stamped - no sand falls, no water runs */
+    {
+      /* the structures and the grid (its liquids sit on barriers too) */
+      int bx[4][6] = {{tx0, ty0, tz0, TEST_TEMPLE_SX, TEST_TEMPLE_SY, TEST_TEMPLE_SZ},
+                      {dx0, dy0, dz0, TEST_DUNG_SX, TEST_DUNG_SY, TEST_DUNG_SZ},
+                      {ex0, ey0, ez0, TEST_WELL_SX, TEST_WELL_SY, TEST_WELL_SZ},
+                      {TEST_GRID_X0, TEST_SECTION_Y, TEST_GRID_Z0, TEST_GRID_X1 - TEST_GRID_X0 + 1, 2,
+                       TEST_GRID_Z1 - TEST_GRID_Z0 + 1}};
+      /* bottom and top each (the cache is 24 rows and the temple's box is 28): cache
+       * it, tick it (fluids!), and every cached cell reads back what was stamped */
+      /* bottom and top each: the cache's windows must cover the box between them */
+      int wy0[4][2];
+      for (int q = 0; q < 4; q++)
+        for (int e = 0; e < 2; e++) {
+          int cx = bx[q][0] + bx[q][3] / 2, cz = bx[q][2] + bx[q][5] / 2;
+          int cy = e ? bx[q][1] + bx[q][4] - 6 : bx[q][1] + 6;
+          world_follow((float)cx + 0.5f, (float)cy, (float)cz + 0.5f);
+          while (world_pending()) world_follow((float)cx + 0.5f, (float)cy, (float)cz + 0.5f);
+          wy0[q][e] = vc_y0;
+          for (int t = 0; t < 100; t++) ticks_run++, world_tick();
+          for (int dz = (bx[q][2] >> 4); dz <= ((bx[q][2] + bx[q][5] - 1) >> 4); dz++)
+            for (int dx = (bx[q][0] >> 4); dx <= ((bx[q][0] + bx[q][3] - 1) >> 4); dx++) {
+              TEST_SLAB(dx, dz, sb);
+              for (int lz = 0; lz < 16; lz++)
+                for (int lx = 0; lx < 16; lx++) {
+                  int x = dx * 16 + lx, z = dz * 16 + lz;
+                  if (x < bx[q][0] || x >= bx[q][0] + bx[q][3] || z < bx[q][2] || z >= bx[q][2] + bx[q][5]) continue;
+                  for (int y = bx[q][1]; y < bx[q][1] + bx[q][4]; y++) {
+                    if (!world_loaded(x, y, z) || world_pending_at(x, y, z)) continue;
+                    int w = world_get(x, y, z), g = TEST_CELL(sb, y, lx, lz);
+                    if (w != g) printf("  drift box %d at %d %d %d: world %d, stamped %d\n", q, x, y, z, w, g);
+                    CHECK(w == g);
+                  }
+                }
+            }
+        }
+      for (int q = 0; q < 4; q++)
+        CHECK(wy0[q][0] <= bx[q][1] && wy0[q][1] + VCY >= bx[q][1] + bx[q][4] &&
+              wy0[q][1] <= wy0[q][0] + VCY);
+    }
     /* the weather never starts, and the fire does not spread or burn out */
     CHECK(!weather.raining && !weather.thundering);
     extern uint32_t game_time;

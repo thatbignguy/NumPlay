@@ -1,3 +1,30 @@
+## 1.5.53
+**The showcase pyramid stands free: re-baked on flat desert, with an entrance passage to the dungeon**
+
+- **Why.** The baked pyramid stood in a dune field: dunes bury its east steps almost to
+  the towers, and a dungeon is fused to the north foot of other seeds' - seed 777's box
+  even baked a slice of its neighbor's room. Above the temple should be nothing, so the
+  bake hunts thirty seeds for a temple that stands alone on flat desert: no neighbor's
+  blocks in its box, no sand over its shaped top, the desert around it varying no more
+  than four rows. Seed 616's is the first clean one. (The dunes elsewhere are the dunes
+  doing what dunes do: the terrain generates first and the pyramid builds through it, at
+  the lowest ground minus a couple of rows, with no slope guard - in this game and in
+  Minecraft itself. General generation is unchanged.)
+- **Also in.** The dungeon gains an entrance passage from its box's north face to its
+  doorway (the doorway sat five rows deep in the rock, invisible and unreachable), the
+  bake leaves out loose sand with nothing under it (the settle pass would drop it into
+  the well's pool on the first update, as the real one does), and barriers stand under
+  the whole well (its sand stands over the void). The pool keeps its five water blocks
+  in the live world, verified frame by frame. The grass platforms under the structures
+  are gone, as asked; the pyramid brings its desert, the dungeon its rock, the well
+  its sand.
+- **Tests and build.** `make test` passes (214 recipes) with the same checks over the
+  new bytes; `./build/play --test` re-flies every section (the pyramid's entrance face
+  with its towers against clear sky, the dungeon's room with its spawner, the well's
+  five water). `make -C games/numblocks build check host desktop`,
+  `make -C games/numblocks-interest build check`, `test_numblocks_progress`, `test_games
+  --game numblocks` and `test_small_ram` pass.
+
 ## 1.5.52
 **The test world's structures are baked, not generated: the whole pyramid, a closed dungeon and a desert well**
 

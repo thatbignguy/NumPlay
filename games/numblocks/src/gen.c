@@ -7255,8 +7255,19 @@ static void test_slab(int cx, int cz, int y0, int h, uint8_t *out) {
   }
   /* the desert well, stamped with its roof's middle at (TEST_WELL_X, TEST_WELL_Z) */
   int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ey0 = TEST_WELL_Y0 + TEST_WELL_DY, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
-  if (T_TOUCH(ex0, ez0, ex0 + TEST_WELL_SX - 1, ez0 + TEST_WELL_SZ - 1))
+  if (T_TOUCH(ex0, ez0, ex0 + TEST_WELL_SX - 1, ez0 + TEST_WELL_SZ - 1)) {
     t_stamp(test_well, TEST_WELL_SX, TEST_WELL_SY, TEST_WELL_SZ, ex0, ey0, ez0, out, cx, cz, y0, h);
+    /* barriers under the whole of it: its sand stands over the void, and whatever
+     * came loose lands on them instead of falling out of the world (a barrier is
+     * drawn as air, so the island floats as before) */
+    for (int lz = 0; lz < TEST_WELL_SZ; lz++)
+      for (int lx = 0; lx < TEST_WELL_SX; lx++) {
+        int X = ex0 + lx, Z = ez0 + lz, Y = ey0 - 1;
+        int clx = X - cx * 16, clz = Z - cz * 16;
+        if (clx < 0 || clx >= 16 || clz < 0 || clz >= 16 || Y < y0 || Y >= y0 + h) continue;
+        b9_set(out, (Y - y0) * 256 + clz * 16 + clx, B_BARRIER);
+      }
+  }
 #undef T_TOUCH
 }
 

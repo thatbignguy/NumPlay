@@ -145,6 +145,49 @@ static int bake_temple(FILE *fh, FILE *fc, int fx, int fz) {
   Box b = take_box(fx - 2, llo - 3, fz - 2, 25, hhi - (llo - 3) + 1, 25);
   if (fails) return 0;
   stabilize(&b);
+  /* above the temple: nothing. Any sand over the pyramid's own shaped top - stairs,
+   * chiseled and smooth blocks, slabs, the terracotta pattern, its TNT, its plate, its
+   * chests - is another seed's. (Plain sandstone is the desert's own rock too, so the
+   * top is read off the shaped blocks alone; sand beside the pyramid or under its base
+   * is the desert it stands in.) Flat desert around it, or the dunes bury its flanks:
+   * the margin ring outside the footprint may not vary by more than four rows. */
+  {
+    int top = -1;
+    for (int i = 0; i < b.sx * b.sy * b.sz; i++) {
+      int bb = b.cells[i];
+      if (bb == B_SANDSTONE_CHISELED || bb == B_SANDSTONE_SMOOTH || bb == B_SANDSTONE_SLAB ||
+          bb == B_SANDSTONE_STAIRS || bb == B_SANDSTONE_STAIRS_W || bb == B_SANDSTONE_STAIRS_S ||
+          bb == B_SANDSTONE_STAIRS_N || bb == B_STAINED_CLAY_ORANGE || bb == B_STAINED_CLAY_BLUE ||
+          bb == B_TNT || bb == B_STONE_PRESSURE_PLATE || bb == B_CHEST) {
+        int y = i / (b.sx * b.sz);
+        if (y > top) top = y;
+      }
+    }
+    int dust = 0;
+    for (int i = 0; i < b.sx * b.sy * b.sz && !dust; i++) {
+      int y = i / (b.sx * b.sz);
+      if (y > top && b.cells[i] == B_SAND) dust = 1;
+    }
+    if (top < 0 || dust) {
+      printf("temple at %d %d: sand over its top - another seed's\n", fx, fz);
+      return 0;
+    }
+    int gmin = 1 << 30, gmax = -(1 << 30);
+    for (int lz = 0; lz < b.sz; lz++)
+      for (int lx = 0; lx < b.sx; lx++) {
+        if (lx >= 2 && lx <= 22 && lz >= 2 && lz <= 22) continue;   /* the footprint */
+        for (int y = b.sy - 1; y >= 0; y--)
+          if (b.cells[(y * b.sz + lz) * b.sx + lx]) {
+            if (y < gmin) gmin = y;
+            if (y > gmax) gmax = y;
+            break;
+          }
+      }
+    if (gmax - gmin > 4) {
+      printf("temple at %d %d: dunes %d..%d around it - another seed's\n", fx, fz, gmin, gmax);
+      return 0;
+    }
+  }
   int gt = b.y0;
   for (int z = 0; z < b.sz; z++)
     for (int x = 0; x < b.sx; x++)
@@ -345,48 +388,48 @@ static int well_roof(int cx, int wx, int y, int wz) {
 static int desert_id;
 
 static const int64_t temple_seeds[] = {20260614, 11, 777, 31337, 123, 100, 2024, 999, 616, 1337, 424242,
-                                       8675309, 2000, 7007, 31415, 555, 271828, 314159};
+                                       8675309, 2000, 7007, 31415, 555, 271828, 314159, 42, 1961, 8000, 98765,
+                                       112233, 445566, 778899, 13579, 24680, 11111, 22222, 33333};
 
 int main(void) {
   desert_id = gen_biome_id("desert");
   printf("bake: desert id %d\n", desert_id);
   CHECK(desert_id == 2);
-  /* the pyramid: the first seed whose temple stands alone (no neighbor's blocks in
-   * its box - a dungeon fused to seed 123's is why it is not simply seed 123) */
+  /* the pyramid: the first seed whose temple stands alone and clear - no neighbor's
+   * blocks in its box (a dungeon is fused to seed 123's) and no sand over its steps
+   * (a dune buries seed 777's). bake_temple checks both. */
   int64_t temple_seed = 0;
   int fx = 0, fz = 0;
-  for (unsigned s = 0; s < sizeof temple_seeds / sizeof temple_seeds[0] && !temple_seed; s++) {
-    gen_init(temple_seeds[s]);
+  FILE *th_temple = NULL, *tc_temple = NULL;
+  for (unsigned t = 0; t < sizeof temple_seeds / sizeof temple_seeds[0] && !temple_seed; t++) {
+    gen_init(temple_seeds[t]);
     gen_set_dim(0);
     gen_set_flat(0);
     gen_set_test(0);
+    int tfx = 0, tfz = 0;
     gen_scratch(gs);
-    int has_temple = gen_find_temple(0, 0, &fx, &fz);
+    int has = gen_find_temple(0, 0, &tfx, &tfz);
     gen_scratch(NULL);
-    if (!has_temple) {
-      printf("bake: seed %lld has no temple near the origin\n", (long long)temple_seeds[s]);
+    if (!has) {
+      printf("bake: seed %lld has no temple near the origin\n", (long long)temple_seeds[t]);
       continue;
     }
-    printf("bake: seed %lld temple corner %d %d\n", (long long)temple_seeds[s], fx, fz);
-    int foreign = 0;
-    for (int cz = (fz - 2) >> 4; cz <= (fz + 22) >> 4 && !foreign; cz++)
-      for (int cx = (fx - 2) >> 4; cx <= (fx + 22) >> 4 && !foreign; cx++) {
-        gen_full(cx, cz);
-        for (int lz = 0; lz < 16 && !foreign; lz++)
-          for (int lx = 0; lx < 16 && !foreign; lx++) {
-            int x = cx * 16 + lx, z = cz * 16 + lz;
-            if (x < fx - 2 || x > fx + 22 || z < fz - 2 || z > fz + 22) continue;
-            for (int y = 30; y < 110; y++) {
-              int b = at(lx, y, lz);
-              if (b == B_COBBLESTONE || b == B_MOSSY_COBBLESTONE || b == B_MOB_SPAWNER) foreign = 1;
-            }
-          }
-      }
-    if (foreign) {
-      printf("bake: seed %lld temple has a neighbor in its box\n", (long long)temple_seeds[s]);
-      continue;
+    printf("bake: seed %lld temple corner %d %d\n", (long long)temple_seeds[t], tfx, tfz);
+    FILE *th = tmpfile(), *tc = tmpfile();
+    if (!th || !tc) {
+      printf("BAKE FAIL: no temporary files\n");
+      return 1;
     }
-    temple_seed = temple_seeds[s];
+    fails = 0;
+    if (bake_temple(th, tc, tfx, tfz)) {
+      printf("bake: temple seed %lld taken\n", (long long)temple_seeds[t]);
+      temple_seed = temple_seeds[t];
+      fx = tfx, fz = tfz;
+      th_temple = th, tc_temple = tc;
+    } else {
+      fclose(th);
+      fclose(tc);
+    }
   }
   if (!temple_seed) {
     printf("bake: no seed has a clean temple - giving up\n");
@@ -450,11 +493,17 @@ int main(void) {
   fprintf(fh, "#include <stdint.h>\n");
   fprintf(fc, "/* See test_data.h. */\n#include \"test_data.h\"\n");
   fails = 0;
-  gen_init(temple_seed);
-  gen_set_dim(0);
-  gen_set_flat(0);
-  gen_set_test(0);
-  int ok = bake_temple(fh, fc, fx, fz);
+  int ok = 1;
+  {
+    FILE *from[2] = {th_temple, tc_temple}, *to[2] = {fh, fc};
+    for (int k = 0; k < 2; k++) {
+      int c;
+      rewind(from[k]);
+      while ((c = fgetc(from[k])) != EOF) fputc(c, to[k]);
+    }
+    fclose(th_temple);
+    fclose(tc_temple);
+  }
   gen_init(123);
   gen_set_dim(0);
   gen_set_flat(0);
