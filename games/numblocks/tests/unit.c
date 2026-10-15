@@ -2071,7 +2071,7 @@ int main(void) {
       int n[4] = {0, 0, 0, 0};
       for (int cz = -200; cz <= 200; cz++)
         for (int cx = -200; cx <= 200; cx++) {
-          int b = gen_biome(cx * 128 + 64, cz * 128 + 64);
+          int b = gen_biome(cx * 64 + 32, cz * 64 + 32);
           n[b == BI_NETHER_WASTES ? 0 : b == BI_CRIMSON_FOREST ? 1 : b == BI_WARPED_FOREST ? 2 : 3]++;
         }
       int tot = n[0] + n[1] + n[2] + n[3];
@@ -2084,16 +2084,16 @@ int main(void) {
      * cells' other neighbours the same biome, so no second edge leans in). */
     {
       int ex = 0, ez = 0, found = 0;
-      for (int cz = -40; cz <= 40 && !found; cz++)
-        for (int cx = -40; cx <= 40 && !found; cx++) {
-          int w0 = gen_biome(cx * 128 + 64, cz * 128 + 64);
-          if (w0 == gen_biome((cx + 1) * 128 + 64, cz * 128 + 64)) continue;
-          if (gen_biome(cx * 128 + 64, (cz - 1) * 128 + 64) != w0) continue;
-          if (gen_biome(cx * 128 + 64, (cz + 1) * 128 + 64) != w0) continue;
-          int w1 = gen_biome((cx + 1) * 128 + 64, cz * 128 + 64);
-          if (gen_biome((cx + 1) * 128 + 64, (cz - 1) * 128 + 64) != w1) continue;
-          if (gen_biome((cx + 1) * 128 + 64, (cz + 1) * 128 + 64) != w1) continue;
-          ex = (cx + 1) * 128, ez = cz * 128 + 64, found = 1;
+      for (int cz = -80; cz <= 80 && !found; cz++)
+        for (int cx = -80; cx <= 80 && !found; cx++) {
+          int w0 = gen_biome(cx * 64 + 32, cz * 64 + 32);
+          if (w0 == gen_biome((cx + 1) * 64 + 32, cz * 64 + 32)) continue;
+          if (gen_biome(cx * 64 + 32, (cz - 1) * 64 + 32) != w0) continue;
+          if (gen_biome(cx * 64 + 32, (cz + 1) * 64 + 32) != w0) continue;
+          int w1 = gen_biome((cx + 1) * 64 + 32, cz * 64 + 32);
+          if (gen_biome((cx + 1) * 64 + 32, (cz - 1) * 64 + 32) != w1) continue;
+          if (gen_biome((cx + 1) * 64 + 32, (cz + 1) * 64 + 32) != w1) continue;
+          ex = (cx + 1) * 64, ez = cz * 64 + 32, found = 1;
         }
       CHECK(found);
       int r0, g0, b0, r1, g1, b1, re, ge, be;
@@ -2139,14 +2139,17 @@ int main(void) {
     }
     /* each biome's surface and growth, out of its own chunk's window: a forest has
      * nylium and something growing on it, the valley soul ground (and its bone
-     * blocks where the ground has them). Three cache windows cover the ground. */
+     * blocks where the ground has them), the wastes their red and brown mushrooms.
+     * Three cache windows cover the ground. */
     {
-      int f_found = 0, v_found = 0, f_ok = 0, v_ok = 0;
-      for (int cx = -24; cx <= 24 && !(f_found && v_found); cx++)
-        for (int cz = -24; cz <= 24 && !(f_found && v_found); cz++) {
+      int f_found = 0, v_found = 0, m_found = 0, f_ok = 0, v_ok = 0, m_ok = 0;
+      for (int cx = -24; cx <= 24 && !(f_found && v_found && m_found); cx++)
+        for (int cz = -24; cz <= 24 && !(f_found && v_found && m_found); cz++) {
           int bio = gen_biome(cx * 16 + 8, cz * 16 + 8);
-          if (bio != BI_CRIMSON_FOREST && bio != BI_WARPED_FOREST && bio != BI_SOUL_SAND_VALLEY) continue;
-          int nyl = 0, growth = 0, soul = 0;
+          if (bio != BI_NETHER_WASTES && bio != BI_CRIMSON_FOREST && bio != BI_WARPED_FOREST &&
+              bio != BI_SOUL_SAND_VALLEY)
+            continue;
+          int nyl = 0, growth = 0, soul = 0, shroom = 0;
           for (int wy = 32; wy <= 120; wy += 24) {
             world_follow((float)(cx * 16 + 8), (float)wy, (float)(cz * 16 + 8));
             while (world_pending()) world_follow((float)(cx * 16 + 8), (float)wy, (float)(cz * 16 + 8));
@@ -2161,6 +2164,7 @@ int main(void) {
                       b == B_SHROOMLIGHT || b == B_SOUL_FIRE)
                     growth++;
                   if (b == B_SOUL_SAND || b == B_SOUL_SOIL) soul++;
+                  if (b == B_RED_MUSHROOM || b == B_BROWN_MUSHROOM) shroom++;
                 }
           }
           if ((bio == BI_CRIMSON_FOREST || bio == BI_WARPED_FOREST) && !f_found) {
@@ -2171,9 +2175,13 @@ int main(void) {
             v_found = 1;
             CHECK(soul > 0);
             v_ok = 1;
+          } else if (bio == BI_NETHER_WASTES && !m_found) {
+            m_found = 1;
+            CHECK(shroom > 0);
+            m_ok = 1;
           }
         }
-      CHECK(f_found && v_found && f_ok && v_ok);
+      CHECK(f_found && v_found && m_found && f_ok && v_ok && m_ok);
     }
     /* a biome is that biome all the way through: every netherrack the terrain left
      * open above the lava sea is the biome's own block - nylium in the two forests,
@@ -2182,7 +2190,7 @@ int main(void) {
      * walks on stayed netherrack) */
     {
       static uint8_t slab[128 * 288];
-      int chunks = 0, rack = 0, waste_chunks = 0, waste_rack = 0;
+      int chunks = 0, rack = 0, waste_chunks = 0, waste_rack = 0, soulshroom = 0;
       for (int cz = -24; cz <= 24; cz++)
         for (int cx = -24; cx <= 24; cx++) {
           int bio = gen_biome(cx * 16 + 8, cz * 16 + 8);
@@ -2192,13 +2200,20 @@ int main(void) {
           gen_slab(cx, cz, 0, 128, slab);
           for (int z = 0; z < 16; z++)
             for (int x = 0; x < 16; x++)
-              for (int y = 121; y >= 32; y--)
-                if (b9_get(slab, y * 256 + z * 16 + x) == B_NETHERRACK &&
-                    b9_get(slab, (y + 1) * 256 + z * 16 + x) == B_AIR)
-                  rack++;
+              for (int y = 121; y >= 32; y--) {
+                int b = b9_get(slab, y * 256 + z * 16 + x);
+                if (b == B_NETHERRACK && b9_get(slab, (y + 1) * 256 + z * 16 + x) == B_AIR) rack++;
+                /* mushrooms never stand on the valley's ground: they grow in
+                 * the forests and the wastes, on nylium and netherrack */
+                if (b == B_RED_MUSHROOM || b == B_BROWN_MUSHROOM) {
+                  int below = b9_get(slab, (y - 1) * 256 + z * 16 + x);
+                  if (below == B_SOUL_SAND || below == B_SOUL_SOIL || below == B_BONE_BLOCK) soulshroom++;
+                }
+              }
         }
       CHECK(chunks > 0);
       CHECK(rack == 0);
+      CHECK(soulshroom == 0);
       /* the wastes keep theirs: no biome, no conversion */
       for (int cz = -24; cz <= 24 && !waste_chunks; cz++)
         for (int cx = -24; cx <= 24 && !waste_chunks; cx++) {
@@ -2208,12 +2223,17 @@ int main(void) {
           gen_slab(cx, cz, 0, 128, slab);
           for (int z = 0; z < 16; z++)
             for (int x = 0; x < 16; x++)
-              for (int y = 121; y >= 32; y--)
-                if (b9_get(slab, y * 256 + z * 16 + x) == B_NETHERRACK &&
-                    b9_get(slab, (y + 1) * 256 + z * 16 + x) == B_AIR)
-                  waste_rack++;
+              for (int y = 121; y >= 32; y--) {
+                int b = b9_get(slab, y * 256 + z * 16 + x);
+                if (b == B_NETHERRACK && b9_get(slab, (y + 1) * 256 + z * 16 + x) == B_AIR) waste_rack++;
+                if (b == B_RED_MUSHROOM || b == B_BROWN_MUSHROOM) {
+                  int below = b9_get(slab, (y - 1) * 256 + z * 16 + x);
+                  if (below == B_SOUL_SAND || below == B_SOUL_SOIL || below == B_BONE_BLOCK) soulshroom++;
+                }
+              }
         }
       CHECK(waste_chunks == 1 && waste_rack > 0);
+      CHECK(soulshroom == 0);
     }
     /* the same growth whichever window asked: the chunk's whole column against a
      * higher window, the rows they share identical (the glowstone lesson of 1.5.4) */

@@ -1,3 +1,22 @@
+## 1.5.51
+**Smaller nether regions, dense forests, mushrooms in the wastes**
+
+- **The split.** Cells are 64 blocks instead of 128, so the forests and valleys are
+  small regions - a few hundred blocks at most - instead of sprawls, and the wastes
+  read as the ground between them. The shares are unchanged (about 55/15/15/15); the
+  sky's fade narrows with the cells, 16 blocks either side of an edge.
+- **The forests.** Growth stands on the lowest open face as well as the highest, so
+  the floor walked on is planted, not only the ledges: small fungi, roots and sprouts
+  on one column in five, huge fungi on the floor about three a chunk, twice the
+  hanging weeping vines in crimson, and twisting vines climbing from the warped floor
+  (bounded by the ceiling map, so the whole stack is open air).
+- **Mushrooms.** Brown and red mushrooms grow in one-kind patches, as in 1.16 -
+  most in the wastes, which grew nothing before, a few in the forests, never in
+  the valley. A patch never spills into another biome: its members stand only on
+  the centre's kind of ground.
+- **Soul soil.** The valley's floor lay soul sand throughout; soul soil lies in
+  patches over it now, as in 1.16 - and soul fire lights on it, as on soul sand.
+
 ## 1.5.50
 **The nether biome code is cleaned up: one description, no dead code, no behaviour change**
 

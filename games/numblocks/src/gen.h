@@ -146,7 +146,7 @@ int gen_biome(int x, int z);
 
 /* The nether's sky and fog colour at (x, z): 1.16's own colour for the biome the
  * camera is in, faded toward the biome across the edge you are walking to (the fade
- * runs 24 blocks either side of it). Pure function of (x, z). The wastes' red, the
+ * runs 16 blocks either side of it). Pure function of (x, z). The wastes' red, the
  * forests' and the valley's own; give (r, g, b) it fills. */
 void gen_nether_sky_colour(float x, float z, int *r, int *g, int *b);
 

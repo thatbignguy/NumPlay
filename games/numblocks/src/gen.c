@@ -6042,7 +6042,7 @@ static void quartz_vein(JRand *r, int cx, int cz, int n);
 static void glow_blob(JRand *r, int cx, int cz);
 
 /* ---- the nether's biomes (1.16, todo [22]) ----
- * Modern picks its nether biomes with its multi-noise climate source; here 128-block
+ * Modern picks its nether biomes with its multi-noise climate source; here 64-block
  * cells take one biome each, and every 5 x 4 cells is one macro holding the same mix:
  * eleven cells of wastes and three of each of the two forests and the valley, so the
  * wastes are a little over half the nether and the other three a sixth each. A macro
@@ -6096,17 +6096,18 @@ static int neth_cell_biome(int cx, int cz) {
     }
     return p[slot - 1];
 }
-#define NETHER_CELL 128
+#define NETHER_CELL 64
 static int nether_biome_at(int x, int z) {
     return neth_cell_biome(neth_idiv(x, NETHER_CELL), neth_idiv(z, NETHER_CELL));
 }
 
 /* the block a biome gives the netherrack its columns leave open: the forests'
- * nylium, the valley's soul sand, none for the wastes (0) */
-static uint16_t nether_surface(int bio) {
+ * nylium, soul sand or - in its patches - soul soil for the valley, none for
+ * the wastes (0) */
+static uint16_t nether_surface(int bio, int soil) {
     if (bio == BI_CRIMSON_FOREST) return B_CRIMSON_NYLIUM;
     if (bio == BI_WARPED_FOREST) return B_WARPED_NYLIUM;
-    if (bio == BI_SOUL_SAND_VALLEY) return B_SOUL_SAND;
+    if (bio == BI_SOUL_SAND_VALLEY) return soil ? B_SOUL_SOIL : B_SOUL_SAND;
     return 0;
 }
 
@@ -6124,7 +6125,7 @@ static void neth_bio_colour(int bio, int *r, int *g, int *b) {
  * to, because a step at the border would cut the screen in two flat colours. The fade
  * runs NETHER_BLEND blocks either side of the edge: the biome's own colour a blend
  * away from it, half of each on the line. A pure function of (x, z), like the split. */
-#define NETHER_BLEND 24.0f
+#define NETHER_BLEND 16.0f
 void gen_nether_sky_colour(float x, float z, int *r, int *g, int *b) {
     int ix = neth_idiv((int)floorf(x), NETHER_CELL), iz = neth_idiv((int)floorf(z), NETHER_CELL);
     int here = neth_cell_biome(ix, iz);
@@ -6198,12 +6199,36 @@ static void neth_huge_fungus(int y0, int h, uint8_t *out, JRand *r, int lx, int 
             }
 }
 
+/* a patch of red or brown mushrooms, one kind per patch as in 1.16: the centre on
+ * this column's face, the rest on neighbouring columns' own grounds (read off
+ * their map entries, so the patch is the same whichever slab window is asked).
+ * Members must stand on the centre's kind of ground (nylium for the forests,
+ * netherrack for the wastes), so a patch never spills into another biome - and
+ * never into the valley, which grows none. Offsets that leave the chunk are
+ * skipped, as a huge fungus's cap is. */
+static void neth_shroom_patch(int y0, int h, uint8_t *out, JRand *r, const uint8_t *gmap,
+                              const uint8_t *smap, int x, int y, int z) {
+    uint16_t b = jr_int_i(r, 2) ? B_RED_MUSHROOM : B_BROWN_MUSHROOM;
+    neth_set(y0, h, out, x, y + 1, z, b);
+    int want = smap[z * 16 + x];
+    if (want != 0 && want != 3 && want != 4) return;   /* exotic ground: the centre is enough */
+    for (int q = 0; q < 3; q++) {
+        int nx = x + jr_int_i(r, 3) - 1, nz = z + jr_int_i(r, 3) - 1, ni, ng;
+        if (nx < 0 || nx > 15 || nz < 0 || nz > 15 || (nx == x && nz == z)) continue;
+        ni = nz * 16 + nx;
+        if (smap[ni] != want) continue;
+        ng = gmap[ni];
+        if (ng <= 31) continue;
+        neth_set(y0, h, out, nx, ng + 1, nz, b);
+    }
+}
+
 /* the growth of the chunk's biomes, from the chunk's own stream (the quartz veins
- * and the bedrock draw elsewhere, so this never moves their draws). The ground and
- * the ceiling of each column were read off the whole 128-block column
+ * and the bedrock draw elsewhere, so this never moves their draws). The open faces
+ * and the ceiling of each column were read off the whole 128-block column
  * (nether_slab's maps), so the growth is the same whatever slab window is asked. */
 static void nether_growth(int cx, int cz, int y0, int h, uint8_t *out, const uint8_t *gmap, const uint8_t *cmap,
-                          const uint8_t *smap) {
+                          const uint8_t *smap, const uint8_t *fmap) {
     JRand r;
     jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x6E47726F77ULL);
     for (int z = 0; z < 16; z++)
@@ -6211,18 +6236,38 @@ static void nether_growth(int cx, int cz, int y0, int h, uint8_t *out, const uin
             int X = cx * 16 + x, Z = cz * 16 + z, g = gmap[z * 16 + x];
             if (g <= 31) continue;
             int bio = nether_biome_at(X, Z);
+            /* the open faces to plant on: the highest and, where there is one,
+             * the lowest (the floor walked on) - the ledges were bare before */
+            int gy[2] = {g, fmap[z * 16 + x]};
             if (bio == BI_CRIMSON_FOREST || bio == BI_WARPED_FOREST) {
-                if (x >= 3 && x <= 12 && z >= 3 && z <= 12 && jr_int_i(&r, 48) == 0) {
-                    neth_huge_fungus(y0, h, out, &r, x, g, z, bio == BI_WARPED_FOREST);
+                int warped = bio == BI_WARPED_FOREST;
+                int fg = gy[1] > 31 ? gy[1] : g;   /* trees stand on the floor */
+                if (x >= 3 && x <= 12 && z >= 3 && z <= 12 && jr_int_i(&r, 32) == 0) {
+                    neth_huge_fungus(y0, h, out, &r, x, fg, z, warped);
                     continue;
                 }
-                int k = jr_int_i(&r, 100);
-                if (k < 10)
-                    neth_set(y0, h, out, x, g + 1,
-                             z, bio == BI_CRIMSON_FOREST ? (k < 3 ? B_CRIMSON_FUNGUS : B_CRIMSON_ROOTS)
-                                                         : (k < 3 ? B_WARPED_FUNGUS
-                                                                  : (k < 7 ? B_WARPED_ROOTS : B_NETHER_SPROUTS)));
-                if (bio == BI_CRIMSON_FOREST && jr_int_i(&r, 24) == 0) {
+                for (int f = 0; f < 2; f++) {
+                    int y = gy[f];
+                    if (y <= 31) continue;
+                    int k = jr_int_i(&r, 100);
+                    if (k < 20)
+                        neth_set(y0, h, out, x, y + 1,
+                                 z, !warped ? (k < 3 ? B_CRIMSON_FUNGUS : B_CRIMSON_ROOTS)
+                                            : (k < 3 ? B_WARPED_FUNGUS
+                                                     : (k < 7 ? B_WARPED_ROOTS : B_NETHER_SPROUTS)));
+                    int m = jr_int_i(&r, 200);
+                    if (m < 3) neth_shroom_patch(y0, h, out, &r, gmap, smap, x, y, z);
+                    if (warped && !f && jr_int_i(&r, 100) < 5) {
+                        /* twisting vines climb from the highest face: the ceiling
+                         * map bounds them, so the whole stack is open air - any
+                         * rock above the face would be a higher face still. Capped
+                         * at one where the ceiling sits on the face. */
+                        int top = cmap[z * 16 + x], len = 2 + jr_int_i(&r, 3);
+                        if (len > top - y) len = top - y;
+                        for (int q = 1; q <= len; q++) neth_set(y0, h, out, x, y + q, z, B_TWISTING_VINES);
+                    }
+                }
+                if (!warped && jr_int_i(&r, 12) == 0) {
                     int len = 1 + jr_int_i(&r, 3), y = cmap[z * 16 + x];
                     for (int q = 0; q < len; q++) neth_set(y0, h, out, x, y - q, z, B_WEEPING_VINES);
                 }
@@ -6232,6 +6277,17 @@ static void nether_growth(int cx, int cz, int y0, int h, uint8_t *out, const uin
                 int sb = smap[z * 16 + x], k = jr_int_i(&r, 80);
                 if ((sb == 1 || sb == 2) && k == 0) neth_set(y0, h, out, x, g + 1, z, B_SOUL_FIRE);
                 else if (jr_int_i(&r, 64) == 0 && (sb == 1 || sb == 2)) neth_set(y0, h, out, x, g + 1, z, B_NETHER_SPROUTS);
+                /* no mushrooms here: in 1.16 they grow in the forests and the
+                 * wastes, never in the valley */
+            } else {
+                /* the wastes grow only mushrooms, brown and red - nowhere else in
+                 * the nether is as bare, and nothing else grows here to hide them */
+                for (int f = 0; f < 2; f++) {
+                    int y = gy[f];
+                    if (y <= 31) continue;
+                    int m = jr_int_i(&r, 100);
+                    if (m < 3) neth_shroom_patch(y0, h, out, &r, gmap, smap, x, y, z);
+                }
             }
         }
 }
@@ -6277,13 +6333,13 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     JRand r;
     jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x4E42ULL);
     uint16_t *col = T->col;
-    /* The biome pass leaves three maps for the growth pass: the cave floor the
-     * column's own features stand on (the highest solid with open air above it),
-     * the ceiling's underside and the surface type, all read off the whole
-     * 128-block column so growth is independent of the slab window. The maps use
-     * the surface pass's own scratch (T->surf), which the nether never touches
-     * otherwise. */
-    uint8_t *gmap = (uint8_t *)T->surf, *cmap = gmap + 256, *smap = cmap + 256;
+    /* The biome pass leaves four maps for the growth pass: the highest and the
+     * lowest open face of the cave floor the column's own features stand on, the
+     * ceiling's underside and the surface type, all read off the whole 128-block
+     * column so growth is independent of the slab window. The maps use the surface
+     * pass's own scratch (T->surf), which the nether never touches otherwise. */
+    _Static_assert(sizeof(T->surf) == 4 * 256, "gmap, cmap, smap and fmap share T->surf");
+    uint8_t *gmap = (uint8_t *)T->surf, *cmap = gmap + 256, *smap = cmap + 256, *fmap = smap + 256;
     for (int z = 0; z < 16; z++)
         for (int x = 0; x < 16; x++) {
             int X = cx * 16 + x, Z = cz * 16 + z;
@@ -6340,18 +6396,23 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
             }
             /* the column's own biome (1.16): its surface is every netherrack the
              * generation left touching air - crimson or warped nylium for the
-             * forests, soul sand for the valley - not only the highest one, so a
-             * forest is nylium wherever its floor is open instead of pockets of it
-             * in netherrack. The conversion reads the whole column, never the slab
-             * window, so it is the same whichever window asks for the chunk. */
-            int ground = 0;   /* the highest solid with open air above it */
+             * forests, soul sand and soil patches for the valley - not only the
+             * highest one, so a forest is nylium wherever its floor is open
+             * instead of pockets of it in netherrack. The conversion reads the
+             * whole column, never the slab window, so it is the same whichever
+             * window asks for the chunk. */
+            int ground = 0, floor = 0;   /* the highest and lowest open faces */
             for (int yy = 121; yy >= 8; yy--)
                 if (col[yy] != B_AIR && col[yy + 1] == B_AIR) {
-                    ground = yy;
-                    break;
+                    if (!ground) ground = yy;
+                    floor = yy;
                 }
+            if (floor == ground) floor = 0;   /* one face only: no second to grow on */
             int bio = nether_biome_at(X, Z);
-            uint16_t surf = nether_surface(bio);   /* 16-bit: the nylium ids are past 255 */
+            /* soul soil lies in patches over the valley's floor, as in 1.16 -
+             * the same low noise the shores are patched with, so it blobs */
+            int soil = bio == BI_SOUL_SAND_VALLEY && grass_noise_div(X, Z, 16) > 0.3f;
+            uint16_t surf = nether_surface(bio, soil);   /* 16-bit: the nylium ids are past 255 */
             if (surf)
                 for (int yy = 121; yy >= 8; yy--)
                     if (col[yy] == B_NETHERRACK && col[yy + 1] == B_AIR) col[yy] = surf;
@@ -6360,13 +6421,14 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                  * netherrack left showing through the surface - with its fossils
                  * breaking the surface where the mix says so */
                 for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
-                    if (col[yy] == B_NETHERRACK) col[yy] = B_SOUL_SAND;
+                    if (col[yy] == B_NETHERRACK) col[yy] = soil ? B_SOUL_SOIL : B_SOUL_SAND;
                 if (neth_mix(X, Z, 0xB05Eu) % 211 == 0 && ground > 33) {
                     col[ground] = B_BONE_BLOCK;
                     if (col[ground - 1] == B_NETHERRACK) col[ground - 1] = B_BONE_BLOCK_X;
                 }
             }
             gmap[z * 16 + x] = (uint8_t)ground;
+            fmap[z * 16 + x] = (uint8_t)floor;
             /* what the ground is, as a code the growth pass can read without the
              * window (a cell above a block outside the window was the trap: its
              * feature must not depend on whether its ground is in the window) */
@@ -6404,7 +6466,7 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
      * ceiling, twisting vines up the warped stems, soul fire on the valley's soul
      * ground. It is drawn from a stream of the chunk's own (never the quartz's
      * or the bedrock's), so a chunk's growth is the same however it is asked. */
-    nether_growth(cx, cz, y0, h, out, gmap, cmap, smap);
+    nether_growth(cx, cz, y0, h, out, gmap, cmap, smap, fmap);
     /* the quartz veins: ninety of ten to twenty-four blocks, y 10..117 (1.8 had
      * about twenty of four to eleven) */
     for (int i = 0; i < 90; i++)
