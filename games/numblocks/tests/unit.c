@@ -1357,7 +1357,7 @@ int main(void) {
      * its own, the structures on their own platforms - and nothing in it moves on its own */
     static uint8_t gs[GEN_SCRATCH];
     static uint8_t sa[64 * 256 / 8 * 9 + 4], sb[64 * 256 / 8 * 9 + 4];
-    int t0 = 40, th = 36;   /* the rows the whole showcase stands in: 40..76 */
+    int t0 = 36, th = 40;   /* the rows the whole showcase stands in: 36..76 */
     memset(ents, 0, sizeof ents);   /* (the cages put back only what is gone) */
     /* the showcase's slab, through the generator's own write path */
 #define TEST_SLAB(cx, cz, buf) (gen_scratch(gs), gen_slab(cx, cz, t0, th, buf), gen_scratch(NULL))
@@ -1374,17 +1374,17 @@ int main(void) {
     CHECK(sx == (TEST_SPAWN_X0 + TEST_SPAWN_X1) / 2 && sz == (TEST_SPAWN_Z0 + TEST_SPAWN_Z1) / 2 &&
           sy == TEST_PLATFORM_Y + 1);
     /* the same chunk whatever the seed (a second world of another seed gives the same slab) */
-    TEST_SLAB(2, 6, sa);
+    TEST_SLAB(1, 2, sa);
     gen_init(-4242);
-    TEST_SLAB(2, 6, sb);
+    TEST_SLAB(1, 2, sb);
     CHECK(!memcmp(sa, sb, (size_t)th * 256 / 8 * 9));
     /* and the same whatever window is asked for it (its rows overlap exactly) */
     gen_init(31337);
-    TEST_SLAB(2, 6, sa);
+    TEST_SLAB(1, 2, sa);
     gen_scratch(gs);
-    gen_slab(2, 6, 70, 12, sb);
+    gen_slab(1, 2, 60, 12, sb);
     gen_scratch(NULL);
-    for (int y = 70; y < 82; y++)
+    for (int y = 60; y < 72; y++)
       for (int lz = 0; lz < 16; lz++)
         for (int lx = 0; lx < 16; lx++) CHECK(TEST_CELL(sa, y, lx, lz) == TEST_CELL(sb, y, lx, lz));
     /* every block state in the grid: one air gap between each, each on its own barrier,
@@ -1520,61 +1520,142 @@ int main(void) {
     for (int i = 0; i < N_ENT; i++)
       if (is_mob(ents[i].type)) mobs++;
     CHECK(mobs == 10);
-    /* the structures: the desert pyramid on its platform, block for block as the world
-     * makes it, and a dungeon of cobblestone with a spawner and a chest in it */
+    /* the structures, stamped from the baked bytes (test_data.h): the pyramid's sandstone
+     * and its nine TNT, plate and four chests, the dungeon's walls, spawner, ceiling
+     * light and doorway, the well's water */
     int sand = 0, tnt = 0, plate = 0, chest = 0, terra = 0;
-    for (int cz = TEST_TEMPLE_OZ; cz <= TEST_TEMPLE_OZ + 1; cz++)
-      for (int cx = TEST_TEMPLE_OX; cx <= TEST_TEMPLE_OX + 1; cx++) {
+    int tx0 = TEST_TEMPLE_OX * 16 - 2, ty0 = TEST_TEMPLE_Y0 + TEST_TEMPLE_DY, tz0 = TEST_TEMPLE_OZ * 16 - 2;
+    for (int cz = tz0 >> 4; cz <= (tz0 + TEST_TEMPLE_SZ - 1) >> 4; cz++)
+      for (int cx = tx0 >> 4; cx <= (tx0 + TEST_TEMPLE_SX - 1) >> 4; cx++) {
         TEST_SLAB(cx, cz, sb);
         for (int lz = 0; lz < 16; lz++)
-          for (int lx = 0; lx < 16; lx++)
-            for (int y = t0; y < t0 + th; y++) {
+          for (int lx = 0; lx < 16; lx++) {
+            int x = cx * 16 + lx, z = cz * 16 + lz;
+            if (x < tx0 || x >= tx0 + TEST_TEMPLE_SX || z < tz0 || z >= tz0 + TEST_TEMPLE_SZ) continue;
+            for (int y = ty0; y < ty0 + TEST_TEMPLE_SY; y++) {
               int b = TEST_CELL(sb, y, lx, lz);
-              int wx = cx * 16 + lx, wz = cz * 16 + lz;
               if (b == B_SANDSTONE || b == B_SANDSTONE_SMOOTH || b == B_SANDSTONE_CHISELED ||
                   b == B_SANDSTONE_SLAB || b == B_SANDSTONE_STAIRS || b == B_SANDSTONE_STAIRS_W ||
                   b == B_SANDSTONE_STAIRS_S || b == B_SANDSTONE_STAIRS_N)
                 sand++;
               if (b == B_TNT) tnt++;
               if (b == B_STONE_PRESSURE_PLATE) plate++;
-              if (b == B_CHEST && wx >= TEST_TEMPLE_OX * 16 && wx <= TEST_TEMPLE_OX * 16 + TEMPLE_SIZE - 1 &&
-                  wz >= TEST_TEMPLE_OZ * 16 && wz <= TEST_TEMPLE_OZ * 16 + TEMPLE_SIZE - 1)
-                chest++;
+              if (b == B_CHEST) chest++;
               if (b == B_STAINED_CLAY_ORANGE || b == B_STAINED_CLAY_BLUE) terra++;
-              /* its platform: two blocks wider than the pyramid on every side */
-              bool out = wx < TEST_TEMPLE_OX * 16 - 2 || wx > TEST_TEMPLE_OX * 16 + TEMPLE_SIZE + 1 ||
-                         wz < TEST_TEMPLE_OZ * 16 - 2 || wz > TEST_TEMPLE_OZ * 16 + TEMPLE_SIZE + 1;
-              if (y == TEST_SECTION_Y && !out) CHECK(b == B_GRASS || b == B_SANDSTONE);
-              if (y == TEST_SECTION_Y - 1 && !out) CHECK(b == B_AIR);
             }
+          }
       }
     CHECK(sand > 1000 && tnt == 9 && plate == 1 && chest == 4 && terra > 20);
-    /* a dungeon: cobblestone walls, a spawner, a chest or two (WorldGenDungeons's own
-     * draw), and a doorway, on its own platform */
-    int cobble = 0, spawner = 0, dchest = 0, door = 0, door_z = -1;
-    int di, dl;
-    test_dung_box(&di, &dl);   /* its half sizes: 2..3 each way */
-    for (int cz = (TEST_DUNG_Z - 8) >> 4; cz <= (TEST_DUNG_Z + 8) >> 4; cz++)
-      for (int cx = (TEST_DUNG_X - 8) >> 4; cx <= (TEST_DUNG_X + 8) >> 4; cx++) {
+    /* the dungeon: its spawner where the room's middle is, its doorway open, its
+     * ceiling light over it, its floor and ceiling cobble under and over the room,
+     * and the room closed on every side (flood-filled from the spawner through air:
+     * the fill must stay in the box) */
+    int dx0 = TEST_DUNG_X - TEST_DUNG_SPAWN_X, dy0 = TEST_DUNG_Y0 + TEST_DUNG_DY,
+        dz0 = TEST_DUNG_Z - TEST_DUNG_SPAWN_Z;
+    int spawner = 0, dchest = 0, cobble = 0;
+    for (int cz = dz0 >> 4; cz <= (dz0 + TEST_DUNG_SZ - 1) >> 4; cz++)
+      for (int cx = dx0 >> 4; cx <= (dx0 + TEST_DUNG_SX - 1) >> 4; cx++) {
         TEST_SLAB(cx, cz, sb);
         for (int lz = 0; lz < 16; lz++)
-          for (int lx = 0; lx < 16; lx++)
-            for (int y = TEST_DUNG_Y - 1; y <= TEST_DUNG_Y + 4; y++) {
+          for (int lx = 0; lx < 16; lx++) {
+            int x = cx * 16 + lx, z = cz * 16 + lz;
+            if (x < dx0 || x >= dx0 + TEST_DUNG_SX || z < dz0 || z >= dz0 + TEST_DUNG_SZ) continue;
+            for (int y = dy0; y < dy0 + TEST_DUNG_SY; y++) {
               int b = TEST_CELL(sb, y, lx, lz);
               if (b == B_COBBLESTONE || b == B_MOSSY_COBBLESTONE) cobble++;
               if (b == B_MOB_SPAWNER) spawner++;
-              int wx = cx * 16 + lx, wz = cz * 16 + lz;
-              if (b == B_CHEST && wx >= TEST_DUNG_X - di && wx <= TEST_DUNG_X + di && wz >= TEST_DUNG_Z - dl &&
-                  wz <= TEST_DUNG_Z + dl)
-                dchest++;
+              if (b == B_CHEST) dchest++;
             }
-        /* the doorway in its north wall: the first air block of the wall's row */
-        for (int lz = 0; lz < 16 && door_z < 0; lz++)
-          if (TEST_CELL(sb, TEST_DUNG_Y, TEST_DUNG_X & 15, lz) == B_AIR) door_z = cz * 16 + lz;
+          }
       }
-    for (int y = TEST_DUNG_Y; y <= TEST_DUNG_Y + 1; y++)
-      if (TEST_CELL(sb, y, TEST_DUNG_X & 15, door_z & 15) == B_AIR) door++;
-    CHECK(cobble > 40 && spawner == 1 && dchest >= 1 && door == 2);
+    CHECK(spawner == 1 && dchest >= 1 && cobble > 40);
+    {
+      int spx = dx0 + TEST_DUNG_SPAWN_X, spy = dy0 + TEST_DUNG_SPAWN_Y, spz = dz0 + TEST_DUNG_SPAWN_Z;
+      TEST_SLAB(spx >> 4, spz >> 4, sb);
+      CHECK(TEST_CELL(sb, spy, spx & 15, spz & 15) == B_MOB_SPAWNER);
+      int dox = dx0 + TEST_DUNG_DOOR_X, doy = dy0 + TEST_DUNG_DOOR_Y, doz = dz0 + TEST_DUNG_DOOR_Z;
+      TEST_SLAB(dox >> 4, doz >> 4, sb);
+      CHECK(TEST_CELL(sb, doy, dox & 15, doz & 15) == B_AIR);
+      CHECK(TEST_CELL(sb, doy + 1, dox & 15, doz & 15) == B_AIR);
+      /* the entrance passage to it, a block wide and two high from the box's face */
+      int pdx0 = dx0, pdz0 = dz0;
+      for (int ly = 0; ly < 2; ly++)
+        for (int lz = 0; lz < TEST_DUNG_DOOR_Z; lz++) {
+          int px = pdx0 + TEST_DUNG_DOOR_X, py = doy + ly, pz = pdz0 + lz;
+          TEST_SLAB(px >> 4, pz >> 4, sb);
+          CHECK(TEST_CELL(sb, py, px & 15, pz & 15) == B_AIR);
+        }
+      int glx = dx0 + TEST_DUNG_GLOW_X, gly = dy0 + TEST_DUNG_GLOW_Y, glz = dz0 + TEST_DUNG_GLOW_Z;
+      TEST_SLAB(glx >> 4, glz >> 4, sb);
+      CHECK(TEST_CELL(sb, gly, glx & 15, glz & 15) == B_GLOWSTONE);
+      /* closed but for the entrance passage: the room's air, flood-filled from beside
+       * the spawner without stepping into the passage, stays in the box */
+      CHECK(TEST_DUNG_SX == 17 && TEST_DUNG_SY == 13 && TEST_DUNG_SZ == 17);   /* the baker's box */
+      static uint8_t seen[17 * 13 * 17];
+      memset(seen, 0, sizeof seen);
+      int stack[17 * 13 * 17], n = 0, escaped = 0, vol = 0;
+      static const int8_t d[6][3] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+      for (int k = 0; k < 6; k++) {
+        int nx = spx + d[k][0], ny = spy + d[k][1], nz = spz + d[k][2];
+        if (nx < dx0 || nx >= dx0 + TEST_DUNG_SX || ny < dy0 || ny >= dy0 + TEST_DUNG_SY || nz < dz0 ||
+            nz >= dz0 + TEST_DUNG_SZ)
+          continue;
+        stack[n++] = ((ny - dy0) * TEST_DUNG_SZ + (nz - dz0)) * TEST_DUNG_SX + (nx - dx0);
+      }
+      while (n && !escaped) {
+        int ii = stack[--n], lx = ii % TEST_DUNG_SX, t = ii / TEST_DUNG_SX, lz = t % TEST_DUNG_SZ,
+            ly = t / TEST_DUNG_SZ;
+        int x = dx0 + lx, y = dy0 + ly, z = dz0 + lz;
+        if (seen[ii]) continue;
+        seen[ii] = 1;
+        TEST_SLAB(x >> 4, z >> 4, sb);
+        if (TEST_CELL(sb, y, x & 15, z & 15) != B_AIR) continue;
+        vol++;
+        if (lx == 0 || ly == 0 || lz == 0 || lx == TEST_DUNG_SX - 1 || ly == TEST_DUNG_SY - 1 ||
+            lz == TEST_DUNG_SZ - 1)
+          escaped = 1;
+        for (int k = 0; k < 6; k++) {
+          int nx = lx + d[k][0], ny = ly + d[k][1], nz = lz + d[k][2];
+          if (nx < 0 || nx >= TEST_DUNG_SX || ny < 0 || ny >= TEST_DUNG_SY || nz < 0 || nz >= TEST_DUNG_SZ)
+            continue;
+          /* not into the entrance passage (its own air is checked above) */
+          if (dx0 + nx == dox && dz0 + nz < doz && (dy0 + ny == doy || dy0 + ny == doy + 1)) continue;
+          stack[n++] = (ny * TEST_DUNG_SZ + nz) * TEST_DUNG_SX + nx;
+        }
+      }
+      CHECK(!escaped && vol > 50 && vol < 400);
+      /* its floor and its ceiling, cobble all across the room */
+      int fry = spy - 1, cry = spy + 4;
+      for (int dz = -4; dz <= 4; dz++)
+        for (int dx = -4; dx <= 4; dx++) {
+          TEST_SLAB((spx + dx) >> 4, (spz + dz) >> 4, sb);
+          int fb = TEST_CELL(sb, fry, (spx + dx) & 15, (spz + dz) & 15);
+          int cb = TEST_CELL(sb, cry, (spx + dx) & 15, (spz + dz) & 15);
+          if (abs(dx) <= 3 && abs(dz) <= 3) {
+            CHECK(fb == B_COBBLESTONE || fb == B_MOSSY_COBBLESTONE);
+            CHECK(cb == B_COBBLESTONE || cb == B_MOSSY_COBBLESTONE || cb == B_GLOWSTONE);
+          }
+        }
+    }
+    /* the well: its five water blocks and its twelve slabs, floating nowhere (its sand
+     * comes with it) */
+    int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ey0 = TEST_WELL_Y0 + TEST_WELL_DY, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
+    int water = 0, slabs = 0;
+    for (int cz = ez0 >> 4; cz <= (ez0 + TEST_WELL_SX - 1) >> 4; cz++)
+      for (int cx = ex0 >> 4; cx <= (ex0 + TEST_WELL_SX - 1) >> 4; cx++) {
+        TEST_SLAB(cx, cz, sb);
+        for (int lz = 0; lz < 16; lz++)
+          for (int lx = 0; lx < 16; lx++) {
+            int x = cx * 16 + lx, z = cz * 16 + lz;
+            if (x < ex0 || x >= ex0 + TEST_WELL_SX || z < ez0 || z >= ez0 + TEST_WELL_SZ) continue;
+            for (int y = ey0; y < ey0 + TEST_WELL_SY; y++) {
+              int b = TEST_CELL(sb, y, lx, lz);
+              if (b == B_WATER) water++;
+              if (b == B_SANDSTONE_SLAB) slabs++;
+            }
+          }
+      }
+    CHECK(water == 5 && slabs == 12);
     /* nothing in it moves on its own: the same blocks after a while of ticks */
     TEST_SLAB(2, 6, sa);
     for (int t = 0; t < 400; t++) ticks_run++, world_tick();

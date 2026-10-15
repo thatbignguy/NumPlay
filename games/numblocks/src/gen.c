@@ -7113,22 +7113,21 @@ static int flat_block(int y) {
  *   - every mob in a cage of its own on a floating platform of grass, a ring of barriers
  *     on its four sides and one over its head (mob.c puts the mobs in them, gen.h's
  *     test_cage says where);
- *   - the structures the world generates - a desert pyramid and a dungeon - each on its
- *     own platform of grass, two blocks wider than the structure on every side, built by
- *     the generator's own structure code below, so they are the real ones block for
- *     block (their chests' contents are put in when the world is made).
- * Two of the structures' own needs set the rest of the layout: a dungeon's box has to be
- * below SEA, since WorldGenDungeons asks for rock of its own to carve (vget's answer
- * under the world, with no summaries here, is stone below SEA and air above it), and the
- * pyramid's foundation, which fills down from its base to the first block that is not
- * air or liquid, is put here because this world has no rock of its own to stop at. Where
- * each section is: gen.h, next to test_cage. */
+ *   - the structures the world makes - a desert pyramid, a dungeon and a desert well -
+ *     baked as the generator makes them (`make bake-test` writes src/test_data.c) and
+ *     stamped instead of generated, so the showcase is exactly the same every time: no
+ *     seed, no random stream, no view and no write rules at runtime, just fixed blocks
+ *     at fixed places. The pyramid brings the desert ground it stands on, the dungeon
+ *     its room in the rock (closed on every side: its floor, its walls and a cobbled
+ *     ceiling, with a doorway in its north wall and one ceiling block a glowstone so
+ *     the room can be seen), the well its sand. Where each section is: gen.h, next to
+ *     test_cage. */
 
 static int g_test;
 void gen_set_test(int test) { g_test = test ? 1 : 0; }
 
-/* a platform over [x0,x1] x [z0,z1], its blocks (blk) on the row y: grass under the
- * mobs and the structures, bedrock for the spawn platform */
+/* a platform over [x0,x1] x [z0,z1], its blocks (blk) on the row y (the spawn
+ * platform's bedrock; the mobs' grass) */
 static void t_platform(int x0, int z0, int x1, int z1, int y, int blk) {
   for (int z = z0; z <= z1; z++)
     for (int x = x0; x <= x1; x++) put(x, y, z, blk, R_ALWAYS);
@@ -7156,28 +7155,25 @@ static inline bool t_liquid(int b) {
   return b == B_WATER || b == B_FLOWING_WATER || (b >= B_FLOWING_WATER_2 && b <= B_FALLING_WATER) ||
          b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA);
 }
-/* the view and the bookkeeping the structure builders read and write. There are no
- * column summaries of this world, so vget answers rock from the world's floor up to
- * SEA and air above it: the ground both structures ask for (the pyramid's foundation
- * fills down to the first block that is not air or liquid - SEA's row, where its
- * platform is - and WorldGenDungeons wants rock to carve its room out of). A top is
- * never lowered while they build (c_top is 255: no write of theirs is at row 255),
- * which keeps c_lower_top out of a summary this world has none of. */
-static void t_view(int cx, int cz) {
-  memset(&PV, 0, sizeof PV);
-  for (int i = 0; i < 32 * 32; i++) PV.top[i] = 255;
-  PV.ox = cx * 16, PV.oz = cz * 16;
-  nb_cx = nb_cz = 1 << 20;
-  memset(c_top, 255, sizeof c_top), memset(c_sl, 0, sizeof c_sl);
-  pm = &pmemo[0], pm_known = 0, dung_idx = 0;
-}
-/* the dungeon's own box: its half sizes, the two draws WorldGenDungeons makes of
- * its stream first (2..3 each way, so its room is 9 x 9 to 11 x 11) */
-void test_dung_box(int *i, int *l) {
-  JRand r;
-  jr_seed(&r, TEST_DUNG_SEED);
-  *i = jr_int(&r, 2) + 2;
-  *l = jr_int(&r, 2) + 2;
+/* a baked box into the slab being made, at (px, py, pz): air (0) is not stamped (the
+ * slab is cleared to air first). Cells outside the chunk or the rows are left: a box
+ * comes out the same whichever chunk and whichever window asks. */
+static void t_stamp(const uint16_t *cells, int sx, int sy, int sz, int px, int py, int pz, uint8_t *out, int cx,
+                    int cz, int y0, int h) {
+  for (int ly = 0; ly < sy; ly++) {
+    int Y = py + ly;
+    if (Y < y0 || Y >= y0 + h) continue;
+    for (int lz = 0; lz < sz; lz++) {
+      int clz = pz + lz - cz * 16;
+      if (clz < 0 || clz >= 16) continue;
+      for (int lx = 0; lx < sx; lx++) {
+        int clx = px + lx - cx * 16;
+        if (clx < 0 || clx >= 16) continue;
+        int b = cells[(ly * sz + lz) * sx + lx];
+        if (b) b9_set(out, (Y - y0) * 256 + clz * 16 + clx, b);
+      }
+    }
+  }
 }
 /* the showcase, for the chunk (cx, cz) over the rows [y0, y0 + h). Everything is
  * written through put(), the generator's own path, so the structures below build on
@@ -7234,45 +7230,33 @@ static void test_slab(int cx, int cz, int y0, int h, uint8_t *out) {
         put(X + 2, TEST_CAGE_Y + 1, Z + 2, B_BARRIER, R_ALWAYS);
       }
   }
-  int tx0 = TEST_TEMPLE_OX * 16, tz0 = TEST_TEMPLE_OZ * 16;
-  if (T_TOUCH(tx0, tz0, tx0 + TEMPLE_SIZE - 1, tz0 + TEMPLE_SIZE - 1)) {
-    t_view(cx, cz);
-    /* the platform, two blocks wider than the pyramid on every side */
-    t_platform(tx0 - 2, tz0 - 2, tx0 + TEMPLE_SIZE + 1, tz0 + TEMPLE_SIZE + 1, TEST_SECTION_Y, B_GRASS);
-    /* its foundation, up from the platform to the row the pyramid's own base starts
-     * at: the builder fills down from there to the first block that is not air or
-     * liquid, which under the world's own generator is its rock. This world has none of
-     * its own, so the fill is put here - and the burial chamber is carved out of it,
-     * as it is out of the ground a real one stands in */
-    for (int lz = 0; lz < TEMPLE_SIZE; lz++)
-      for (int lx = 0; lx < TEMPLE_SIZE; lx++)
-        for (int y = TEST_SECTION_Y + 1; y < TEST_TEMPLE_BASE - 4; y++)
-          put(tx0 + lx, y, tz0 + lz, B_SANDSTONE, R_ALWAYS);
-    temple_build(TEST_TEMPLE_OX, TEST_TEMPLE_OZ, TEST_TEMPLE_BASE);
+  /* the desert pyramid: the baked box holds two blocks of the desert around its 21 x 21
+   * footprint (tests/bake.c's margin), so it is stamped two blocks before the footprint */
+  int tx0 = TEST_TEMPLE_OX * 16 - 2, ty0 = TEST_TEMPLE_Y0 + TEST_TEMPLE_DY, tz0 = TEST_TEMPLE_OZ * 16 - 2;
+  if (T_TOUCH(tx0, tz0, tx0 + TEST_TEMPLE_SX - 1, tz0 + TEST_TEMPLE_SZ - 1))
+    t_stamp(test_temple, TEST_TEMPLE_SX, TEST_TEMPLE_SY, TEST_TEMPLE_SZ, tx0, ty0, tz0, out, cx, cz, y0, h);
+  /* the dungeon: the baked box holds the room in its rock, stamped with the room's
+   * middle (its spawner) at (TEST_DUNG_X, TEST_DUNG_Z). Its spawner stays as one from
+   * the inventory is: nothing is ever set, so nothing comes out of it (the showcase
+   * holds its own mobs already). */
+  int dx0 = TEST_DUNG_X - TEST_DUNG_SPAWN_X, dy0 = TEST_DUNG_Y0 + TEST_DUNG_DY, dz0 = TEST_DUNG_Z - TEST_DUNG_SPAWN_Z;
+  if (T_TOUCH(dx0, dz0, dx0 + TEST_DUNG_SX - 1, dz0 + TEST_DUNG_SZ - 1)) {
+    t_stamp(test_dungeon, TEST_DUNG_SX, TEST_DUNG_SY, TEST_DUNG_SZ, dx0, dy0, dz0, out, cx, cz, y0, h);
+    /* the entrance passage: the doorway sits five rows deep in the rock, so a passage
+     * a block wide and two high is cut from the box's north face to it (air is written
+     * out, as the stamp does: cells outside the chunk or the rows are left) */
+    for (int ly = 0; ly < 2; ly++)
+      for (int lz = 0; lz < TEST_DUNG_DOOR_Z; lz++) {
+        int X = dx0 + TEST_DUNG_DOOR_X, Y = dy0 + TEST_DUNG_DOOR_Y + ly, Z = dz0 + lz;
+        int clx = X - cx * 16, clz = Z - cz * 16;
+        if (clx < 0 || clx >= 16 || clz < 0 || clz >= 16 || Y < y0 || Y >= y0 + h) continue;
+        b9_set(out, (Y - y0) * 256 + clz * 16 + clx, B_AIR);
+      }
   }
-  int di, dl;
-  test_dung_box(&di, &dl);
-  if (T_TOUCH(TEST_DUNG_X - di, TEST_DUNG_Z - dl, TEST_DUNG_X + di, TEST_DUNG_Z + dl)) {
-    t_view(cx, cz);
-    /* the platform, two blocks wider than the box on every side, under its floor */
-    t_platform(TEST_DUNG_X - di - 2, TEST_DUNG_Z - dl - 2, TEST_DUNG_X + di + 2, TEST_DUNG_Z + dl + 2, TEST_SECTION_Y, B_GRASS);
-    /* the rock it carves its room out of, its own footprint and no more */
-    for (int z = TEST_DUNG_Z - dl; z <= TEST_DUNG_Z + dl; z++)
-      for (int x = TEST_DUNG_X - di; x <= TEST_DUNG_X + di; x++)
-        for (int y = TEST_DUNG_Y - 1; y <= TEST_DUNG_Y + 4; y++) put(x, y, z, B_STONE, R_ALWAYS);
-    /* its spawner stays as one from the inventory is: nobody sets it, so nothing comes
-     * out of it (the showcase holds its own mobs already) */
-    void (*hook)(int, int, int, int) = gen_spawner_hook;
-    gen_spawner_hook = 0;
-    /* its own stream, seeded the same for every chunk that touches its box (the box
-     * spans a few of them): the same room whichever of them asks */
-    jr_seed(&PR, TEST_DUNG_SEED);
-    dungeon(TEST_DUNG_X, TEST_DUNG_Y, TEST_DUNG_Z);
-    gen_spawner_hook = hook;
-    /* a doorway in its north wall, where the player comes from, so the room inside
-     * can be walked into and looked at */
-    for (int y = TEST_DUNG_Y; y <= TEST_DUNG_Y + 1; y++) put(TEST_DUNG_X, y, TEST_DUNG_Z - dl, B_AIR, R_ALWAYS);
-  }
+  /* the desert well, stamped with its roof's middle at (TEST_WELL_X, TEST_WELL_Z) */
+  int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ey0 = TEST_WELL_Y0 + TEST_WELL_DY, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
+  if (T_TOUCH(ex0, ez0, ex0 + TEST_WELL_SX - 1, ez0 + TEST_WELL_SZ - 1))
+    t_stamp(test_well, TEST_WELL_SX, TEST_WELL_SY, TEST_WELL_SZ, ex0, ey0, ez0, out, cx, cz, y0, h);
 #undef T_TOUCH
 }
 
@@ -7296,12 +7280,12 @@ static int test_top(int X, int Z) {
   if (X >= TEST_CAGE_X0 - 1 && X <= TEST_CAGE_X1 + 1 && Z >= TEST_CAGE_Z0 - 1 && Z <= TEST_CAGE_Z1 + 1) return TEST_SECTION_Y;
   if (X >= TEST_ITEM_X0 - 2 && X <= TEST_ITEM_X0 + TEST_ITEM_CHESTS + 1 && Z >= TEST_ITEM_Z - 2 && Z <= TEST_ITEM_Z + 2)
     return TEST_SECTION_Y;
-  int tx0 = TEST_TEMPLE_OX * 16, tz0 = TEST_TEMPLE_OZ * 16;
-  if (X >= tx0 - 2 && X <= tx0 + TEMPLE_SIZE + 1 && Z >= tz0 - 2 && Z <= tz0 + TEMPLE_SIZE + 1) return TEST_SECTION_Y;
-  int di, dl;
-  test_dung_box(&di, &dl);
-  if (X >= TEST_DUNG_X - di - 2 && X <= TEST_DUNG_X + di + 2 && Z >= TEST_DUNG_Z - dl - 2 && Z <= TEST_DUNG_Z + dl + 2)
-    return TEST_SECTION_Y;
+  int tx0 = TEST_TEMPLE_OX * 16 - 2, tz0 = TEST_TEMPLE_OZ * 16 - 2;
+  if (X >= tx0 && X < tx0 + TEST_TEMPLE_SX && Z >= tz0 && Z < tz0 + TEST_TEMPLE_SZ) return TEST_TEMPLE_TOP;
+  int dx0 = TEST_DUNG_X - TEST_DUNG_SPAWN_X, dz0 = TEST_DUNG_Z - TEST_DUNG_SPAWN_Z;
+  if (X >= dx0 && X < dx0 + TEST_DUNG_SX && Z >= dz0 && Z < dz0 + TEST_DUNG_SZ) return TEST_DUNG_TOP;
+  int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
+  if (X >= ex0 && X < ex0 + TEST_WELL_SX && Z >= ez0 && Z < ez0 + TEST_WELL_SZ) return TEST_WELL_TOP;
   return 0;
 }
 

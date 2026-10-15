@@ -32,7 +32,10 @@ void gen_set_test(int test);
  * (starting a bit before the spawn platform and running past it, so the platform is in
  * the middle of the blocks, which are three blocks over its top), then the chests of
  * every item that has no block of its own, then the mobs in their cages, then the
- * structures the world makes. A player on the platform faces the whole row. */
+ * structures the world makes - a desert pyramid, a dungeon and a desert well, baked as
+ * the generator makes them (test_data.h) and stamped instead of generated. A player on
+ * the platform faces the whole row. */
+#include "test_data.h"   /* the structures' baked bytes (their boxes and light tops) */
 #define TEST_PLATFORM_Y 40           /* the spawn platform: the row its blocks sit on (the player on 41) */
 #define TEST_SECTION_Y 43            /* the row the showcase's platforms and the grid's barriers sit on */
 #define TEST_BLOCK_Y 44              /* the row the grid's blocks and the item chests float at (their barriers at TEST_SECTION_Y) */
@@ -68,20 +71,19 @@ void gen_set_test(int test);
 #define TEST_CAGE_X1 (TEST_CAGE_X0 + (TEST_CAGE_COLS - 1) * TEST_CAGE_STEP + 4)
 #define TEST_CAGE_Z1 (TEST_CAGE_Z0 + (TEST_CAGE_ROWS - 1) * TEST_CAGE_STEP + 4)
 #define TEST_CAGE_Y 44      /* the row the mobs' feet stand on (the grass is at TEST_SECTION_Y) */
-/* the desert pyramid: its origin chunk (its 21 x 21 starts there, on a chunk boundary
- * as the world's own placement puts it) and the row its base is on */
+/* the desert pyramid: its 21 x 21 footprint starts at this origin chunk's corner (on a
+ * chunk boundary, as the world's own placement puts it). The baked box holds two blocks
+ * of the desert around the footprint (tests/bake.c's margin), so it is stamped two
+ * blocks before the footprint. */
 #define TEST_TEMPLE_OX 0
 #define TEST_TEMPLE_OZ 2
-#define TEST_TEMPLE_BASE 60
-/* the dungeon: the middle of its box, and the row its floor is on */
+/* the dungeon: its room's middle (its spawner). Six blocks of the void lie between
+ * the pyramid's box and its own, so the doorway in its north wall faces open air. */
 #define TEST_DUNG_X 3
-#define TEST_DUNG_Z 63
-#define TEST_DUNG_Y 45
-#define TEST_DUNG_SEED 20250614   /* its own stream: the same dungeon every time */
-
-/* The test world's dungeon box: its half sizes, the two draws WorldGenDungeons makes of
- * its own stream first (2..3 each way, so its room is 9 x 9 to 11 x 11). */
-void test_dung_box(int *i, int *l);
+#define TEST_DUNG_Z 69
+/* the desert well: its roof's middle (two blocks past the dungeon's box) */
+#define TEST_WELL_X 3
+#define TEST_WELL_Z 84
 
 /* The test world's mob cages (gen.c's test world section): where the k-th of the
  * game's ten mobs (E_ZOMBIE .. E_ZPIGLIN) stands, as the block its feet are on, in

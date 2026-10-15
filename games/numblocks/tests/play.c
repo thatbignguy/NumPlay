@@ -285,12 +285,13 @@ int main(int argc, char **argv) {
             liquids);
     fprintf(stderr, "test: %d of 10 cages standing (grass under, barriers round), %d of %d item chests floating\n",
             cages, chests, TEST_ITEM_CHESTS);
-    /* the structures: the pyramid's sandstone and the dungeon's walls, out of the cache */
-    int sand = 0, tnt = 0, plate = 0, cobble = 0, spawner = 0;
-    int tx0 = TEST_TEMPLE_OX * 16, tz0 = TEST_TEMPLE_OZ * 16;
-    for (int z = tz0 - 2; z <= tz0 + TEMPLE_SIZE + 1; z++)
-      for (int x = tx0 - 2; x <= tx0 + TEMPLE_SIZE + 1; x++)
-        for (int y = SEA; y <= TEST_TEMPLE_BASE + 10; y++) {
+    /* the structures, out of the cache: the pyramid's sandstone, TNT and plate, the
+     * dungeon's walls, spawner and ceiling light, the well's water */
+    int sand = 0, tnt = 0, plate = 0, cobble = 0, spawner = 0, glow = 0, water = 0;
+    int tx0 = TEST_TEMPLE_OX * 16 - 2, ty0 = TEST_TEMPLE_Y0 + TEST_TEMPLE_DY, tz0 = TEST_TEMPLE_OZ * 16 - 2;
+    for (int z = tz0; z < tz0 + TEST_TEMPLE_SZ; z++)
+      for (int x = tx0; x < tx0 + TEST_TEMPLE_SX; x++)
+        for (int y = ty0; y < ty0 + TEST_TEMPLE_SY; y++) {
           int b = world_get(x, y, z);
           if (b == B_SANDSTONE || b == B_SANDSTONE_SMOOTH || b == B_SANDSTONE_CHISELED || b == B_SANDSTONE_SLAB ||
               b == B_SANDSTONE_STAIRS || b == B_SANDSTONE_STAIRS_W || b == B_SANDSTONE_STAIRS_S ||
@@ -299,15 +300,22 @@ int main(int argc, char **argv) {
           if (b == B_TNT) tnt++;
           if (b == B_STONE_PRESSURE_PLATE) plate++;
         }
-    for (int z = TEST_DUNG_Z - 8; z <= TEST_DUNG_Z + 8; z++)
-      for (int x = TEST_DUNG_X - 8; x <= TEST_DUNG_X + 8; x++)
-        for (int y = TEST_DUNG_Y - 1; y <= TEST_DUNG_Y + 4; y++) {
+    int dx0 = TEST_DUNG_X - TEST_DUNG_SPAWN_X, dy0 = TEST_DUNG_Y0 + TEST_DUNG_DY, dz0 = TEST_DUNG_Z - TEST_DUNG_SPAWN_Z;
+    for (int z = dz0; z < dz0 + TEST_DUNG_SZ; z++)
+      for (int x = dx0; x < dx0 + TEST_DUNG_SX; x++)
+        for (int y = dy0; y < dy0 + TEST_DUNG_SY; y++) {
           int b = world_get(x, y, z);
           if (b == B_COBBLESTONE || b == B_MOSSY_COBBLESTONE) cobble++;
           if (b == B_MOB_SPAWNER) spawner++;
+          if (b == B_GLOWSTONE) glow++;
         }
-    fprintf(stderr, "test: the pyramid holds %d sandstone blocks, %d TNT, plate %d; the dungeon %d walls, spawner %d\n",
-            sand, tnt, plate, cobble, spawner);
+    int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ey0 = TEST_WELL_Y0 + TEST_WELL_DY, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
+    for (int z = ez0; z < ez0 + TEST_WELL_SZ; z++)
+      for (int x = ex0; x < ex0 + TEST_WELL_SX; x++)
+        for (int y = ey0; y < ey0 + TEST_WELL_SY; y++)
+          if (world_get(x, y, z) == B_WATER) water++;
+    fprintf(stderr, "test: the pyramid holds %d sandstone blocks, %d TNT, plate %d; the dungeon %d walls, spawner %d, light %d; the well %d water\n",
+            sand, tnt, plate, cobble, spawner, glow, water);
   }
   if (temple) {
     /* The desert pyramid: the nearest one by the modern grid (spacing 32,
@@ -1186,7 +1194,8 @@ int main(int argc, char **argv) {
       test_cage(k, &cx, &cy, &cz);
       for (int i = 0; i < N_ENT; i++)
         if (ents[i].type == E_ZOMBIE + k)
-          home += (int)ents[i].x == cx && (int)ents[i].y == cy && (int)ents[i].z == cz && !ents[i].fire;
+          /* floorf: the mob's block (a C cast rounds toward zero, wrong below zero) */
+          home += floorf(ents[i].x) == cx && floorf(ents[i].y) == cy && floorf(ents[i].z) == cz && !ents[i].fire;
     }
     int kinds[10] = {0};
     for (int i = 0; i < N_ENT; i++) {

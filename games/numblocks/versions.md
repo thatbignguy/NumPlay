@@ -1,3 +1,55 @@
+## 1.5.52
+**The test world's structures are baked, not generated: the whole pyramid, a closed dungeon and a desert well**
+
+- **Why.** The showcase built its structures at runtime, through the generator's own
+  write path with a faked view of the world - and what came out depended on the cache
+  window asking: the pyramid stands 28 rows tall in a 24-row window, so from the ground
+  only its foundation ever showed, and the dungeon's room stayed dark rock from outside.
+  Nothing is generated at runtime any more: `make bake-test` (tests/bake.c) captures the
+  structures as the world generator makes them into src/test_data.c/.h, and the test
+  world stamps those bytes - no seed, no random stream, no view and no write rules,
+  just fixed blocks at fixed places. A chunk comes out the same whatever asks for it,
+  because there is nothing left to go wrong.
+- **What is baked.** A desert pyramid (seed 777: the first seed whose temple stands
+  alone - seeds 20260614, 11 and 123 all have a dungeon fused to theirs), a dungeon
+  (seed 123) and a desert well (seed 123: yes, the well is real - BiomeDesert's
+  decoration, one in a thousand desert chunks). The pyramid brings the desert ground it
+  stands on, the dungeon its room in the rock, the well its sand. The bake asserts on
+  the way out (the pyramid's nine TNT, its plate and its four chests; the dungeon's
+  spawner, its chest and a room closed on every side; the well's five water blocks), so
+  a bad bake fails instead of shipping - and the file stays as it was baked until the
+  structures' own code changes and the showcase should follow, on purpose.
+- **The showcase's own touches.** Three, all in the open: the dungeon's ceiling is
+  cobbled (a real room's top is the rock above it) with one ceiling block a glowstone so
+  the room can be seen, a doorway is cut in its north wall with a passage to the box's
+  face so it can be walked into, and loose sand with nothing under it comes out (the
+  settle pass would drop it into the well's pool on the first update, as the real one
+  does - the pool keeps its five water blocks). The room itself - its floor, its walls,
+  its spawner, its chest - is exactly as generated, and its spawner stays unset, as one
+  from the inventory is. The grass platforms under the structures are gone.
+- **The row.** Everything still stands in one row along +z: the grid of blocks (with the
+  spawn platform in its middle), the chests of the items, the mobs in their cages, then
+  the pyramid, the dungeon (six blocks of the void before it, so its doorway faces open
+  air) and the well. The pyramid is stamped with its top at row 60, so the platform's
+  window keeps its entrance and its base; fly up a little and the whole of it is in
+  view, as in the real game. The grid, the cages and the chests are untouched (their
+  blocks were always at hardcoded places already).
+- **Tests and build.** `make test` passes (214 recipes): the same slab whatever the seed
+  or window, one of each block state, the six chests holding exactly the 136 items
+  without blocks, the ten cages with their mobs in them, the pyramid's sandstone and
+  its nine TNT, plate and four chests, the dungeon's walls, spawner, ceiling light,
+  doorway, passage and flood-filled-closed room with its cobbled floor and ceiling, the
+  well's five water and twelve slabs, the spawn in the middle of the grid, the weather
+  never starting and the world coming back the same out of a save. `./build/play
+  --test` flies it (`--fly "x,y,z,yaw,pitch"` puts the camera); every section was
+  looked at in screenshots - the pyramid's entrance face with its towers, the dungeon's
+  room with its spawner, the well, the cages. `build/desktop` was built, not run.
+- **Cost.** `NumBlocks.nwa` 702,532 B, `numblocks.bin` 629,468 B (the baked bytes live in
+  flash: `.data` 5,079 B and `.bss` 122,160 B, 127,239 B combined, below `CUSTOM_RAM`
+  133,652 B). `make -C games/numblocks build check host desktop`,
+  `make -C games/numblocks-interest build check`, `test_numblocks_progress`, `test_games
+  --game numblocks` and `test_small_ram` pass.
+
 ## 1.5.51
 **Smaller nether regions, dense forests, mushrooms in the wastes**
 

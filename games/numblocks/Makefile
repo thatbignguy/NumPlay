@@ -10,7 +10,7 @@ BUILD_DIR = output
 STRIP ?= arm-none-eabi-strip --strip-unneeded
 CLIENT_JAR ?= client.jar
 GEN ?= src/gen.c
-GAME = src/main.c src/world.c src/edits.c src/portal.c src/render.c src/player.c src/phys.c src/inv.c src/entity.c src/mob.c src/tick.c src/gui.c src/hand.c src/save.c src/data.c src/names.c src/command.c $(GEN)
+GAME = src/main.c src/world.c src/edits.c src/portal.c src/render.c src/player.c src/phys.c src/inv.c src/entity.c src/mob.c src/tick.c src/gui.c src/hand.c src/save.c src/data.c src/names.c src/command.c src/test_data.c $(GEN)
 HEADERS = $(wildcard src/*.h) ../common/epsilon_app.h ../common/epsilon_files.h Makefile
 
 CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device)
@@ -25,7 +25,7 @@ LDFLAGS = -Wl,--relocatable -nostartfiles --specs=nano.specs
 LDFLAGS += -Wl,-e,main -Wl,-u,eadk_app_name -Wl,-u,eadk_app_icon -Wl,-u,eadk_api_level
 LDFLAGS += -Wl,--gc-sections -flinker-output=nolto-rel
 
-.PHONY: build check clean host data
+.PHONY: build check clean host data bake-test
 build: $(BUILD_DIR)/numblocks.nwa
 
 check: $(BUILD_DIR)/numblocks.nwa
@@ -58,6 +58,14 @@ test: build/unit
 	@# read as the current one (the world's head is what converts a real world)
 	@rm -rf build/unit-saves && mkdir -p build/unit-saves
 	./build/unit
+# the test world's structures, baked as the generator makes them (tests/bake.c writes
+# src/test_data.c, which the game stamps instead of generating: see its header)
+.PHONY: bake-test
+bake-test: build/bake
+build/bake: $(filter-out src/main.c,$(GAME)) src/plat_host.c tests/bake.c tests/stubs.c $(HEADERS)
+	$(Q) mkdir -p build
+	$(Q) cc $(HOST_FLAGS) $(filter-out src/main.c,$(GAME)) src/plat_host.c tests/bake.c tests/stubs.c -lm -o $@
+	@echo "HOST    $@"
 # every pixel traced: the reference the adaptive picture is checked against
 build/play_ref: $(GAME) src/plat_host.c tests/play.c $(HEADERS)
 	$(Q) mkdir -p build
