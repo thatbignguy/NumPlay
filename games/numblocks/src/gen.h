@@ -144,6 +144,12 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out);
  * In the nether the answer is one of 1.16's 49-51 or BI_HELL (8, the wastes). */
 int gen_biome(int x, int z);
 
+/* The nether's sky and fog colour at (x, z): 1.16's own colour for the biome the
+ * camera is in, faded toward the biome across the edge you are walking to (the fade
+ * runs 24 blocks either side of it). Pure function of (x, z). The wastes' red, the
+ * forests' and the valley's own; give (r, g, b) it fills. */
+void gen_nether_sky_colour(float x, float z, int *r, int *g, int *b);
+
 /* y (0..127) of the highest non-air block of column (x, z) after generation
  * (including trees and other decoration, whatever the y range of the slab asked).
  * Cheap for the chunk of the last gen_slab call; elsewhere it costs a gen_slab. */

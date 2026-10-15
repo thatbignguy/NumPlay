@@ -481,7 +481,11 @@ int main(int argc, char **argv) {
     gen_scratch(bgs);
     int scx = (int)floorf(pl.x / 16), scz = (int)floorf(pl.z / 16);
     int bx = 0, bz = 0, found = 0;
-    for (int r = 0; r <= 12 && !found; r++)
+    /* the biomes beside the wastes are a sixth of the nether each, in blobs a few
+     * cells wide: the nearest one can be a few hundred blocks out, so the search
+     * runs forty chunks - a whole 5 x 4 macro of cells, which always holds three
+     * cells of each - rather than twelve */
+    for (int r = 0; r <= 40 && !found; r++)
       for (int dz = -r; dz <= r && !found; dz++)
         for (int dx = -r; dx <= r && !found; dx++) {
           if (r && dx > -r && dx < r && dz > -r && dz < r) continue;

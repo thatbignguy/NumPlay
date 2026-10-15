@@ -2463,13 +2463,11 @@ void render_frame(const Camera *c, uint32_t tod) {
      * light tables are set once and for all (the block-light table is the sun's).
      * The colour is the biome's under the camera (1.16's own): the wastes' #330808,
      * the crimson forest's #330303, the warped forest's #1a051a, the soul sand
-     * valley's #1b4745, as modern's fog follows the camera. */
-    int bx = (int)floorf(ox), bz = (int)floorf(oz), nr = NETHER_R, ng = NETHER_G, nb = NETHER_B;
-    int bio = BI_NETHER_WASTES;
-    if ((unsigned)bx < VCX && (unsigned)bz < VCZ) bio = vbiome[bz * VCX + bx];
-    if (bio == BI_CRIMSON_FOREST) nr = 51, ng = 3, nb = 3;
-    else if (bio == BI_WARPED_FOREST) nr = 26, ng = 5, nb = 26;
-    else if (bio == BI_SOUL_SAND_VALLEY) nr = 27, ng = 71, nb = 69;
+     * valley's #1b4745, faded toward the next biome's as you come to its edge, so a
+     * border moves the sky's colour instead of cutting it in two. It is a pure
+     * function of the place, so it is the same whatever the view cache holds. */
+    int nr, ng, nb;
+    gen_nether_sky_colour(c->x, c->z, &nr, &ng, &nb);
     setup_light(1.0f);
     sky_r = fog_r = nr, sky_g = fog_g = ng, sky_b = fog_b = nb;
     ss_a = 0;

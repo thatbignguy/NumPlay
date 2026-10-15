@@ -2065,6 +2065,54 @@ int main(void) {
       saw |= 1 << (b == BI_NETHER_WASTES ? 0 : b == BI_CRIMSON_FOREST ? 1 : b == BI_WARPED_FOREST ? 2 : 3);
     }
     CHECK(saw == 15);
+    /* the mix over a wide area: the wastes a little over half, the other three a
+     * sixth each (three cells of each in every twenty of the split's macros) */
+    {
+      int n[4] = {0, 0, 0, 0};
+      for (int cz = -200; cz <= 200; cz++)
+        for (int cx = -200; cx <= 200; cx++) {
+          int b = gen_biome(cx * 128 + 64, cz * 128 + 64);
+          n[b == BI_NETHER_WASTES ? 0 : b == BI_CRIMSON_FOREST ? 1 : b == BI_WARPED_FOREST ? 2 : 3]++;
+        }
+      int tot = n[0] + n[1] + n[2] + n[3];
+      CHECK(n[0] * 100 > tot * 50 && n[0] * 100 < tot * 60);
+      for (int k = 1; k < 4; k++) CHECK(n[k] * 100 > tot * 12 && n[k] * 100 < tot * 18);
+    }
+    /* the sky and the fog fade across a biome's edge instead of stepping: the
+     * colour thirty blocks out is the biome's own, on the edge half of each, and
+     * it moves monotonically between them. The walk crosses one clean edge (both
+     * cells' other neighbours the same biome, so no second edge leans in). */
+    {
+      int ex = 0, ez = 0, found = 0;
+      for (int cz = -40; cz <= 40 && !found; cz++)
+        for (int cx = -40; cx <= 40 && !found; cx++) {
+          int w0 = gen_biome(cx * 128 + 64, cz * 128 + 64);
+          if (w0 == gen_biome((cx + 1) * 128 + 64, cz * 128 + 64)) continue;
+          if (gen_biome(cx * 128 + 64, (cz - 1) * 128 + 64) != w0) continue;
+          if (gen_biome(cx * 128 + 64, (cz + 1) * 128 + 64) != w0) continue;
+          int w1 = gen_biome((cx + 1) * 128 + 64, cz * 128 + 64);
+          if (gen_biome((cx + 1) * 128 + 64, (cz - 1) * 128 + 64) != w1) continue;
+          if (gen_biome((cx + 1) * 128 + 64, (cz + 1) * 128 + 64) != w1) continue;
+          ex = (cx + 1) * 128, ez = cz * 128 + 64, found = 1;
+        }
+      CHECK(found);
+      int r0, g0, b0, r1, g1, b1, re, ge, be;
+      gen_nether_sky_colour((float)(ex - 30), (float)ez, &r0, &g0, &b0);
+      gen_nether_sky_colour((float)(ex + 30), (float)ez, &r1, &g1, &b1);
+      gen_nether_sky_colour((float)ex, (float)ez, &re, &ge, &be);
+      CHECK(re == (r0 + r1 + 1) / 2 && ge == (g0 + g1 + 1) / 2 && be == (b0 + b1 + 1) / 2);
+      int pr = r0, pg = g0, pb = b0, seen = 0;
+      for (int x = ex - 30; x <= ex + 30; x++) {
+        int r, g, b;
+        gen_nether_sky_colour((float)x, (float)ez, &r, &g, &b);
+        if (r != pr || g != pg || b != pb) seen = 1;   /* (it moves at all) */
+        /* no step back away from this side's colour (a snap would jump) */
+        CHECK(abs(r - r1) + abs(g - g1) + abs(b - b1) <= abs(pr - r1) + abs(pg - g1) + abs(pb - b1) + 3);
+        pr = r, pg = g, pb = b;
+      }
+      CHECK(seen);
+      CHECK(pr == r1 && pg == g1 && pb == b1);
+    }
     int stable_biome = gen_biome(1234, -5678);
     {
       static uint8_t other_window[24 * 288];

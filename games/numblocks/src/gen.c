@@ -6060,37 +6060,100 @@ static uint32_t neth_mix(int x, int z, uint32_t salt) {
     return h;
 }
 /* The biome split (1.16's three, beside the wastes): every 128-block cell takes one
- * biome, and every 4 x 4 cells hold four of each, so the four biomes cover equal
- * areas with no small pockets of one biome inside another. The order inside each
- * 4 x 4 macro is hashed, so the map is not a regular checkerboard, but a macro
- * always has one quarter of each biome. The cells are large enough that a biome
- * reads as one region, and it is a pure function of (x, z), so the terrain, the
- * growth, the fog and the F3 line all agree whichever slab window is asked. */
+ * biome, and every 5 x 4 cells is one macro holding the same mix - eleven cells of
+ * wastes and three of each of the two forests and the valley, so the wastes are a
+ * little over half the nether and the other three a sixth each, as the wastes are the
+ * wider part of the real one. A macro's mix is laid out as three blobs of three cells
+ * in a sea of wastes, then turned over and hashed into one of six orders of the three,
+ * so no macro is a copy of its neighbour's, and cells of the same biome meet across a
+ * macro's border now and then, growing a region. It is a pure function of (x, z), so
+ * the terrain, the growth, the fog and the F3 line all agree whichever slab window is
+ * asked. */
 static inline int neth_idiv(int v, int d) {
     int q = v / d;
     if (v < 0 && v % d) q--;
     return q;
 }
 static int neth_cell_biome(int cx, int cz) {
-    enum { MACRO = 4 };
-    int mx = neth_idiv(cx, MACRO), mz = neth_idiv(cz, MACRO);
-    int lx = cx - mx * MACRO, lz = cz - mz * MACRO;
-    int quad = (lx >> 1) + ((lz >> 1) << 1);
-    /* one permutation per macro: four slots, each biome exactly once */
+    enum { MX = 5, MZ = 4 };
+    int mx = neth_idiv(cx, MX), mz = neth_idiv(cz, MZ);
+    int lx = cx - mx * MX, lz = cz - mz * MZ;
+    /* the three blobs, in a field of wastes: 1 2 2 / 3 . . 2 / 3 . . . / 3 . . . */
+    static const uint8_t blob[MX * MZ] = {
+        1, 1, 1, 2, 2,
+        3, 0, 0, 0, 2,
+        3, 0, 0, 0, 0,
+        3, 0, 0, 0, 0,
+    };
     uint32_t h = neth_mix(mx, mz, 0xB105Eu);
-    uint8_t p[4] = {BI_HELL, BI_CRIMSON_FOREST, BI_WARPED_FOREST, BI_SOUL_SAND_VALLEY};
-    for (int i = 3; i > 0; i--) {
+    if (h & 1) lx = MX - 1 - lx;   /* the macro turned over, one way or both */
+    h >>= 1;
+    if (h & 1) lz = MZ - 1 - lz;
+    h >>= 1;
+    int slot = blob[lz * MX + lx];
+    if (!slot) return BI_HELL;
+    /* one order per macro of the three, the slot's own */
+    uint8_t p[3] = {BI_CRIMSON_FOREST, BI_WARPED_FOREST, BI_SOUL_SAND_VALLEY};
+    for (int i = 2; i > 0; i--) {
         int j = (int)(h % (uint32_t)(i + 1));
         h /= (uint32_t)(i + 1);
         uint8_t t = p[i];
         p[i] = p[j];
         p[j] = t;
     }
-    return p[quad];
+    return p[slot - 1];
 }
+#define NETHER_CELL 128
 static int nether_biome_at(int x, int z) {
-    enum { CELL = 128 };
-    return neth_cell_biome(neth_idiv(x, CELL), neth_idiv(z, CELL));
+    return neth_cell_biome(neth_idiv(x, NETHER_CELL), neth_idiv(z, NETHER_CELL));
+}
+
+/* ---- the nether's sky and fog colour (1.16's own four) ----
+ * The wastes' #330808, the crimson forest's #330303, the warped forest's #1a051a and
+ * the soul sand valley's #1b4745: what modern's fog and sky are under the camera. */
+static void neth_bio_colour(int bio, int *r, int *g, int *b) {
+    if (bio == BI_CRIMSON_FOREST) *r = 51, *g = 3, *b = 3;
+    else if (bio == BI_WARPED_FOREST) *r = 26, *g = 5, *b = 26;
+    else if (bio == BI_SOUL_SAND_VALLEY) *r = 27, *g = 71, *b = 69;
+    else *r = 51, *g = 8, *b = 8;   /* the wastes' #330808 (render.c's NETHER_R/G/B) */
+}
+/* The colour the sky and the fog take at (x, z): the biome's own, the way 1.16's fog
+ * follows the camera - but faded toward the biome across the edge you are walking to,
+ * because modern's colour is a step at the border and a border you come to in a second
+ * then cuts the screen in two flat colours. The fade runs NETHER_BLEND blocks each side
+ * of the edge: the colour is the biome's a blend away from it and half of each on the
+ * line, and it keeps moving while you walk across - it runs on the signed distance to
+ * the edge, so crossing it does not jump the colour, only carries it on. The edge is
+ * one the column's own cell (NETHER_CELL, the split above) shares with a cell of
+ * another biome; the split is a pure function of (x, z), so the colour is too. */
+#define NETHER_BLEND 24.0f
+void gen_nether_sky_colour(float x, float z, int *r, int *g, int *b) {
+    int ix = neth_idiv((int)floorf(x), NETHER_CELL), iz = neth_idiv((int)floorf(z), NETHER_CELL);
+    int here = neth_cell_biome(ix, iz);
+    int r0, g0, b0, r1 = 0, g1 = 0, b1 = 0;
+    neth_bio_colour(here, &r0, &g0, &b0);
+    r1 = r0, g1 = g0, b1 = b0;
+    /* the four edges the cell shares with a cell of another biome: the nearest one
+     * (the signed distance, negative once you are past it) is the one faded toward */
+    static const int ex[4] = {1, -1, 0, 0}, ez[4] = {0, 0, 1, -1};
+    float best = 1e9f;
+    for (int k = 0; k < 4; k++) {
+        int bio = neth_cell_biome(ix + ex[k], iz + ez[k]);
+        if (bio == here) continue;
+        float d = ex[k] ? (ex[k] > 0 ? (float)((ix + 1) * NETHER_CELL) - x : x - (float)(ix * NETHER_CELL))
+                        : (ez[k] > 0 ? (float)((iz + 1) * NETHER_CELL) - z : z - (float)(iz * NETHER_CELL));
+        if (d < best) {
+            best = d;
+            neth_bio_colour(bio, &r1, &g1, &b1);
+        }
+    }
+    /* 0 at a blend away from the edge and beyond, half of each on it, 1 a blend past */
+    float w = 0.5f - 0.5f * best / NETHER_BLEND;
+    if (w < 0.0f) w = 0.0f;
+    if (w > 1.0f) w = 1.0f;
+    *r = (int)(r0 + (r1 - r0) * w + 0.5f);
+    *g = (int)(g0 + (g1 - g0) * w + 0.5f);
+    *b = (int)(b0 + (b1 - b0) * w + 0.5f);
 }
 
 /* one cell of the nether's growth, into the slab window (out of it: left for the

@@ -1,3 +1,19 @@
+## 1.5.49
+**The nether's sky fades across biome edges, and the wastes are most of it**
+
+- **The blend.** The sky and the fog took the biome under the camera, so walking
+  over a biome's edge cut the background from one flat colour to another. They now
+  fade toward the next biome's colour over the 24 blocks either side of the edge -
+  the biome's own further out, half of each on the line - so a border moves the
+  colour instead of snapping it. The colours are 1.16's own: wastes `#330808`,
+  crimson `#330303`, warped `#1a051a`, valley `#1b4745`.
+- **The split.** The wastes are eleven of every twenty cells now and each of the two
+  forests and the valley three - about 55/15/15/15, the wastes the wider part of the
+  nether as in the real one - laid out as three blobs of three cells in a sea of
+  wastes per macro, turned over and reordered per macro so regions still grow across
+  a macro's border. The `--biome` rig looks forty chunks out for its biome, since the
+  nearest forest or valley can be a few hundred blocks away now.
+
 ## 1.5.48
 **A nether biome is that biome all through: its whole surface is its own block**
 
