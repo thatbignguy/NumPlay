@@ -6042,14 +6042,14 @@ static void quartz_vein(JRand *r, int cx, int cz, int n);
 static void glow_blob(JRand *r, int cx, int cz);
 
 /* ---- the nether's biomes (1.16, todo [22]) ----
- * Modern picks its nether biomes with its multi-noise climate source; here a
- * coarse lattice of biome seeds (neth_seed_biome) splits the wastes: each
- * 192-block cell at its centre holds a seed about three times in four, or
- * nothing (the wastes). A column takes the seed it lies in, so every place has
- * one biome with no foreign pockets inside it, while the lattice keeps forests
- * and valleys from running on forever. It is a pure function of (x, z), so the
- * terrain, the growth, the fog and the F3 line all agree whichever slab window
- * is asked. */
+ * Modern picks its nether biomes with its multi-noise climate source; here 128-block
+ * cells take one biome each, and every 5 x 4 cells is one macro holding the same mix:
+ * eleven cells of wastes and three of each of the two forests and the valley, so the
+ * wastes are a little over half the nether and the other three a sixth each. A macro
+ * lays its three non-wastes out as blobs of three cells in a sea of wastes, then turns
+ * over and reorders them by hash, so no macro copies its neighbour's and regions grow
+ * across a macro's border. It is a pure function of (x, z), so the terrain, the growth,
+ * the fog and the F3 line all agree whichever slab window is asked. */
 static uint32_t neth_mix(int x, int z, uint32_t salt) {
     uint32_t h = (uint32_t)x * 0x9E3779B1u ^ (uint32_t)z * 0x85EBCA77u ^ (uint32_t)(uint64_t)g_seed ^ salt;
     h ^= h >> 16;
@@ -6059,16 +6059,9 @@ static uint32_t neth_mix(int x, int z, uint32_t salt) {
     h ^= h >> 16;
     return h;
 }
-/* The biome split (1.16's three, beside the wastes): every 128-block cell takes one
- * biome, and every 5 x 4 cells is one macro holding the same mix - eleven cells of
- * wastes and three of each of the two forests and the valley, so the wastes are a
- * little over half the nether and the other three a sixth each, as the wastes are the
- * wider part of the real one. A macro's mix is laid out as three blobs of three cells
- * in a sea of wastes, then turned over and hashed into one of six orders of the three,
- * so no macro is a copy of its neighbour's, and cells of the same biome meet across a
- * macro's border now and then, growing a region. It is a pure function of (x, z), so
- * the terrain, the growth, the fog and the F3 line all agree whichever slab window is
- * asked. */
+/* The biome split: every cell takes one biome (nether_biome_at); every 5 x 4 macro
+ * holds the same mix, so the four cover the same shares everywhere with no small
+ * pockets of one biome inside another. */
 static inline int neth_idiv(int v, int d) {
     int q = v / d;
     if (v < 0 && v % d) q--;
@@ -6078,21 +6071,21 @@ static int neth_cell_biome(int cx, int cz) {
     enum { MX = 5, MZ = 4 };
     int mx = neth_idiv(cx, MX), mz = neth_idiv(cz, MZ);
     int lx = cx - mx * MX, lz = cz - mz * MZ;
-    /* the three blobs, in a field of wastes: 1 2 2 / 3 . . 2 / 3 . . . / 3 . . . */
+    /* the three blobs in a field of wastes: 1 2 2 / 3 . . 2 / 3 . . . / 3 . . . */
     static const uint8_t blob[MX * MZ] = {
         1, 1, 1, 2, 2,
         3, 0, 0, 0, 2,
         3, 0, 0, 0, 0,
         3, 0, 0, 0, 0,
     };
+    /* the macro turned over one way, both or neither, then one of the six orders of
+     * the three: the hash is spent low bits first, so the order never sees the flips */
     uint32_t h = neth_mix(mx, mz, 0xB105Eu);
-    if (h & 1) lx = MX - 1 - lx;   /* the macro turned over, one way or both */
-    h >>= 1;
-    if (h & 1) lz = MZ - 1 - lz;
-    h >>= 1;
+    if (h & 1) lx = MX - 1 - lx;
+    if (h & 2) lz = MZ - 1 - lz;
+    h >>= 2;
     int slot = blob[lz * MX + lx];
     if (!slot) return BI_HELL;
-    /* one order per macro of the three, the slot's own */
     uint8_t p[3] = {BI_CRIMSON_FOREST, BI_WARPED_FOREST, BI_SOUL_SAND_VALLEY};
     for (int i = 2; i > 0; i--) {
         int j = (int)(h % (uint32_t)(i + 1));
@@ -6108,6 +6101,15 @@ static int nether_biome_at(int x, int z) {
     return neth_cell_biome(neth_idiv(x, NETHER_CELL), neth_idiv(z, NETHER_CELL));
 }
 
+/* the block a biome gives the netherrack its columns leave open: the forests'
+ * nylium, the valley's soul sand, none for the wastes (0) */
+static uint16_t nether_surface(int bio) {
+    if (bio == BI_CRIMSON_FOREST) return B_CRIMSON_NYLIUM;
+    if (bio == BI_WARPED_FOREST) return B_WARPED_NYLIUM;
+    if (bio == BI_SOUL_SAND_VALLEY) return B_SOUL_SAND;
+    return 0;
+}
+
 /* ---- the nether's sky and fog colour (1.16's own four) ----
  * The wastes' #330808, the crimson forest's #330303, the warped forest's #1a051a and
  * the soul sand valley's #1b4745: what modern's fog and sky are under the camera. */
@@ -6115,42 +6117,36 @@ static void neth_bio_colour(int bio, int *r, int *g, int *b) {
     if (bio == BI_CRIMSON_FOREST) *r = 51, *g = 3, *b = 3;
     else if (bio == BI_WARPED_FOREST) *r = 26, *g = 5, *b = 26;
     else if (bio == BI_SOUL_SAND_VALLEY) *r = 27, *g = 71, *b = 69;
-    else *r = 51, *g = 8, *b = 8;   /* the wastes' #330808 (render.c's NETHER_R/G/B) */
+    else *r = 51, *g = 8, *b = 8;   /* the wastes' #330808 */
 }
-/* The colour the sky and the fog take at (x, z): the biome's own, the way 1.16's fog
- * follows the camera - but faded toward the biome across the edge you are walking to,
- * because modern's colour is a step at the border and a border you come to in a second
- * then cuts the screen in two flat colours. The fade runs NETHER_BLEND blocks each side
- * of the edge: the colour is the biome's a blend away from it and half of each on the
- * line, and it keeps moving while you walk across - it runs on the signed distance to
- * the edge, so crossing it does not jump the colour, only carries it on. The edge is
- * one the column's own cell (NETHER_CELL, the split above) shares with a cell of
- * another biome; the split is a pure function of (x, z), so the colour is too. */
+/* The colour the sky and the fog take at (x, z): the biome's own colour - the way
+ * 1.16's fog follows the camera - faded toward the biome across the edge being walked
+ * to, because a step at the border would cut the screen in two flat colours. The fade
+ * runs NETHER_BLEND blocks either side of the edge: the biome's own colour a blend
+ * away from it, half of each on the line. A pure function of (x, z), like the split. */
 #define NETHER_BLEND 24.0f
 void gen_nether_sky_colour(float x, float z, int *r, int *g, int *b) {
     int ix = neth_idiv((int)floorf(x), NETHER_CELL), iz = neth_idiv((int)floorf(z), NETHER_CELL);
     int here = neth_cell_biome(ix, iz);
-    int r0, g0, b0, r1 = 0, g1 = 0, b1 = 0;
+    int r0, g0, b0;
     neth_bio_colour(here, &r0, &g0, &b0);
-    r1 = r0, g1 = g0, b1 = b0;
-    /* the four edges the cell shares with a cell of another biome: the nearest one
-     * (the signed distance, negative once you are past it) is the one faded toward */
-    static const int ex[4] = {1, -1, 0, 0}, ez[4] = {0, 0, 1, -1};
-    float best = 1e9f;
+    /* the cell's bounds, and each edge's distance into the cell */
+    float x0 = (float)(ix * NETHER_CELL), z0 = (float)(iz * NETHER_CELL);
+    float d[4] = {x0 + NETHER_CELL - x, x - x0, z0 + NETHER_CELL - z, z - z0};
+    static const int8_t ex[4] = {1, -1, 0, 0}, ez[4] = {0, 0, 1, -1};
+    /* the nearest edge past which lies another biome, and its colour (a blend away
+     * or further there is none: best starts a blend out, where the weight is 0) */
+    float best = NETHER_BLEND;
+    int r1 = r0, g1 = g0, b1 = b0;
     for (int k = 0; k < 4; k++) {
         int bio = neth_cell_biome(ix + ex[k], iz + ez[k]);
-        if (bio == here) continue;
-        float d = ex[k] ? (ex[k] > 0 ? (float)((ix + 1) * NETHER_CELL) - x : x - (float)(ix * NETHER_CELL))
-                        : (ez[k] > 0 ? (float)((iz + 1) * NETHER_CELL) - z : z - (float)(iz * NETHER_CELL));
-        if (d < best) {
-            best = d;
-            neth_bio_colour(bio, &r1, &g1, &b1);
-        }
+        if (bio == here || d[k] >= best) continue;
+        best = d[k];
+        neth_bio_colour(bio, &r1, &g1, &b1);
     }
-    /* 0 at a blend away from the edge and beyond, half of each on it, 1 a blend past */
+    /* 0 a blend from the edge, half of each on it */
     float w = 0.5f - 0.5f * best / NETHER_BLEND;
     if (w < 0.0f) w = 0.0f;
-    if (w > 1.0f) w = 1.0f;
     *r = (int)(r0 + (r1 - r0) * w + 0.5f);
     *g = (int)(g0 + (g1 - g0) * w + 0.5f);
     *b = (int)(b0 + (b1 - b0) * w + 0.5f);
@@ -6342,41 +6338,33 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
                         if (col[y] == B_NETHERRACK && col[y + 1] != B_NETHERRACK) col[y] = patch;
                 }
             }
-            /* the column's own biome (1.16): it gives its surface to the netherrack
-             * the generation left open - crimson or warped nylium for the forests,
-             * soul sand, with bone blocks in the ground, for the valley */
-            int ground = 0;
+            /* the column's own biome (1.16): its surface is every netherrack the
+             * generation left touching air - crimson or warped nylium for the
+             * forests, soul sand for the valley - not only the highest one, so a
+             * forest is nylium wherever its floor is open instead of pockets of it
+             * in netherrack. The conversion reads the whole column, never the slab
+             * window, so it is the same whichever window asks for the chunk. */
+            int ground = 0;   /* the highest solid with open air above it */
             for (int yy = 121; yy >= 8; yy--)
                 if (col[yy] != B_AIR && col[yy + 1] == B_AIR) {
                     ground = yy;
                     break;
                 }
             int bio = nether_biome_at(X, Z);
-            /* The biome's surface is every netherrack the generation left touching
-             * air, not only the highest one: a warped forest is nylium wherever its
-             * floor - or a ledge of it - is open, instead of pockets of nylium in
-             * netherrack, and a valley is soul ground all over. The conversion
-             * reads the whole column, never the slab window, so it is the same
-             * whichever window asks for the chunk. (surf is a 16-bit block: the
-             * nylium ids are past 255, and a byte would cut them to some other
-             * block's id.) */
-            uint16_t surf = bio == BI_CRIMSON_FOREST ? B_CRIMSON_NYLIUM
-                             : bio == BI_WARPED_FOREST ? B_WARPED_NYLIUM
-                             : bio == BI_SOUL_SAND_VALLEY ? B_SOUL_SAND : 0;
+            uint16_t surf = nether_surface(bio);   /* 16-bit: the nylium ids are past 255 */
             if (surf)
                 for (int yy = 121; yy >= 8; yy--)
                     if (col[yy] == B_NETHERRACK && col[yy + 1] == B_AIR) col[yy] = surf;
             if (ground > 31 && bio == BI_SOUL_SAND_VALLEY) {
-                    /* the valley's ground is soul ground a few blocks down too -
-                     * no netherrack left showing through the surface (a desert is
-                     * not sand with grass patches in it either) - with its fossils
-                     * breaking the surface where the mix says so */
-                    for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
-                        if (col[yy] == B_NETHERRACK) col[yy] = B_SOUL_SAND;
-                    if (neth_mix(X, Z, 0xB05Eu) % 211 == 0 && ground > 33) {
-                        col[ground] = B_BONE_BLOCK;
-                        if (col[ground - 1] == B_NETHERRACK) col[ground - 1] = B_BONE_BLOCK_X;
-                    }
+                /* the valley's ground is soul ground a few blocks down too - no
+                 * netherrack left showing through the surface - with its fossils
+                 * breaking the surface where the mix says so */
+                for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
+                    if (col[yy] == B_NETHERRACK) col[yy] = B_SOUL_SAND;
+                if (neth_mix(X, Z, 0xB05Eu) % 211 == 0 && ground > 33) {
+                    col[ground] = B_BONE_BLOCK;
+                    if (col[ground - 1] == B_NETHERRACK) col[ground - 1] = B_BONE_BLOCK_X;
+                }
             }
             gmap[z * 16 + x] = (uint8_t)ground;
             /* what the ground is, as a code the growth pass can read without the

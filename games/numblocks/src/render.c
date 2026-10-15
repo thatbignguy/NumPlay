@@ -213,13 +213,12 @@ static inline int texel_rgb(int b, int tex, int u, int v, int col, int *r, int *
 }
 
 /* ---------------------------------------------------------------- the sky */
-/* the nether: no time of day, no weather, no celestial bodies. The red *is* the
- * sky: the fog's colour is what a ray runs out of the world into, and where the
- * rays run out of it the fog has already turned everything the same red, so the
- * horizon dissolves into red haze in every direction (Java's Nether fog #330808) */
-#define NETHER_R 51
-#define NETHER_G 8
-#define NETHER_B 8
+/* the nether: no time of day, no weather, no celestial bodies. The fog's colour is
+ * what a ray runs out of the world into, and where the rays run out of it the fog
+ * has already turned everything the same colour, so the horizon dissolves into haze
+ * in every direction. The colour is the biome's under the camera (gen.c's
+ * gen_nether_sky_colour: the wastes' red #330808, the forests' and the valley's
+ * own, faded across their edges). */
 /* The eye in lava: Java's FogRenderer gives the lava fog the colour (0.6, 0.1, 0.0) = #991900,
  * and its overlay washes what is seen through it. Java puts the fog near full within a block or
  * two; that is far too close to tell where the lava is on the calculator, so it reaches much

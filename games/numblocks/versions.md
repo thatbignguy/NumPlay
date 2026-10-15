@@ -1,3 +1,22 @@
+## 1.5.50
+**The nether biome code is cleaned up: one description, no dead code, no behaviour change**
+
+- The section header still described the 1.5.45 seed lattice (`neth_seed_biome`,
+  192-block cells) two designs after it went away, contradicting the split's own
+  comment: the design is described once now, at the section's head.
+- `render.c`'s `NETHER_R/G/B` died when the sky started coming from
+  `gen_nether_sky_colour`: removed, and the sky comment updated to say where the
+  colour comes from. `gen.c`'s colour table no longer points across the file for
+  the wastes' red.
+- `neth_cell_biome` spends the hash low bits first without interleaved shifts;
+  the sky fade starts its search a blend out instead of at infinity (`1e9f`),
+  drops its dead upper clamp (the weight never passes half by construction) and
+  reads the four edge distances off the cell's bounds; the surface block is a
+  named `nether_surface` helper and the valley block is indented as written.
+- Proved byte-identical: 245 chunk slabs, the per-column biome grids and two sky
+  walks across five seeds hash the same, and all four biome rig shots plus seven
+  mid-blend flight frames render pixel-identical.
+
 ## 1.5.49
 **The nether's sky fades across biome edges, and the wastes are most of it**
 
