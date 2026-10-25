@@ -3,7 +3,30 @@
 Work list for `games/numblocks`. Each item: what it is, where the code lives,
 what "done" means. Order matters only where noted.
 
-## Done in the 1.17 merge
+## The rebuild on upstream 1.17.0
+
+- [x] **Upstream's NumBlocks, block for block** — replace the fork's Nether, End,
+      structures, mobs and textures with the official 1.17.0 code (`1.5.62`).
+- [x] **Version display** — `NB_VERSION` on the title screen (`1.5.63`).
+- [x] **Fullbright** — Mods and Cheats, gated on `cheats_on()` (`1.5.63`).
+- [x] **Superflat presets** — the Customize screen, presets saved with the world
+      in the NBW4 record (`1.5.64`).
+- [x] **Personalisation** — high-contrast outlines and the title's live panorama
+      (Random / World / Overworld / Nether, seed 123) (`1.5.65`).
+- [x] **Spectator** — mode 2, through blocks, no damage or interaction, and the
+      sin + cos game-mode switcher (`1.5.66`).
+- [x] **Test world, spawn eggs, barrier** — the showcase world, one egg per mob,
+      the invisible block (`1.5.67`).
+- [ ] **The fork's later additions** — deepslate, concrete, the desert temple,
+      `/locate` and the F3 overlay are not in the 1.17.0 base; they can come back
+      only where they do not disturb upstream's Nether, End and structures.
+- [ ] **Brightness slider** — Video Settings' brightness is still upstream's fixed
+      light table. Fullbright covers the see-in-the-dark case.
+
+## History: the 1.17 merge before the rebuild
+
+These were the fork's own implementations, replaced by upstream's in `1.5.62`;
+the notes stay for what they describe.
 
 - [x] **The End** — island, pillars, strongholds, the portal, the dragon, crystals,
       endermen, the boss bar and the saved fight (`gen_end.h`, `gen_stronghold.h`,

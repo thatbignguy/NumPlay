@@ -4,16 +4,20 @@ Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it fo
 
 <img src="docs/shot.png" width="320" alt="NumBlocks: oak trees and lilacs, with a sheep, a cow, a pig, a chicken and a creeper">
 
-- **The same worlds as Minecraft 1.8.8:** type a seed and you get the world Minecraft 1.8.8 makes, block for block: the same terrain, biomes, hills, caves, lakes and trees. Or a superflat world to build on.
+- **The same worlds as Minecraft 1.8.8:** type a seed and you get the world Minecraft 1.8.8 makes, block for block: the same terrain, biomes, hills, caves, lakes and trees. Or a superflat world to build on, with its preset customised layer by layer.
 - **Survival:** health, hunger, day and night, zombies, skeletons, creepers and spiders, and pigs, cows, sheep and chickens.
 - **Weather:** rain, snow and thunderstorms with lightning, as often as in 1.8.
-- **Crafting:** 129 items and all their 1.8 recipes, a furnace, chests, tools that wear out, armor.
+- **Crafting:** 143 items and all their 1.8 recipes, a furnace, chests, tools that wear out, armor.
+- **Spawn eggs:** one for each mob, to put one where you aim, and a barrier block for invisible walls.
 - **Fishing:** cast, wait for the bite, reel in fish, junk or treasure.
-- **Building:** 250 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
+- **Building:** 253 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
 - **Fire:** light it with flint and steel. It spreads and burns wood, leaves and wool, like in 1.8.
 - **Creative mode:** fly, every block and item, break things at once, and search for any block.
+- **Spectator mode:** fly through everything and watch, with the sin + cos game-mode switcher (as Minecraft's F3 + F4).
 - **Commands:** /gamemode, /give, /time, /weather, /tp and more, with cheats on (Allow Cheats, or Open to LAN).
 - **Your worlds:** keep several, give them names, and they save as you play and when you quit. A copy also goes into `numblocks_saves.py`, so installing the game again doesn't erase them.
+- **Options and personalisation:** Fullbright (with cheats), high-contrast block outlines, and the title's panorama: Random, the world played last, or a fixed world's Overworld or Nether.
+- **The Test world:** an empty showcase world with every block once, every mob once, and an endless flat platform to build on.
 - **The Nether and the End:** in `NumBlocks.nwa`, the app on its own (see below).
 - **Not in yet:** redstone circuits and pistons, villages and the other structures, enchanting and brewing.
 
@@ -50,6 +54,7 @@ Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it fo
 | × | Chat |
 | ÷ | Type a command (toolbox finishes words) |
 | ans | Pause |
+| sin + cos | Game mode switcher (creative, survival, spectator), with cheats on |
 | Home | Save and quit |
 
 You can change these keys in Options, then Controls. In the inventory, the arrows move between slots, OK picks up or puts down, EXE takes or leaves one, and shift with OK moves a whole stack. To spread a stack, hold OK and move over the slots: it splits evenly when you let go (hold EXE to drop one in each). In Creative, the Search Items tab finds blocks as you type, and shift with up or down jumps to the top or bottom of a tab. The game shows these keys the first time you open it, and again from Options, then Controls.
