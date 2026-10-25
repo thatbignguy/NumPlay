@@ -230,13 +230,14 @@ bool save_world(void) {
   /* one record: the head, the player, the tiles (written from a buffer made in the merge
    * scratch) and, after them, the monster spawners that have been set */
   uint32_t sp = (uint32_t)spawners_save(NULL);
-  uint32_t n = sizeof h + sizeof pl + tl + sp;
+  uint32_t n = sizeof h + sizeof pl + tl + sp + sizeof dst;
   uint8_t *b = (uint8_t *)edits_scratch(n);
   if (!b) return false;
   memcpy(b, &h, sizeof h);
   memcpy(b + sizeof h, &pl, sizeof pl);
   memcpy(b + sizeof h + sizeof pl, t, tl);
   spawners_save(b + sizeof h + sizeof pl + tl);
+  memcpy(b + sizeof h + sizeof pl + tl + sp, &dst, sizeof dst);
   char rec[8];
   record_of(slot, rec);
   ok = plat_save(rec, b, n) && ok;
@@ -261,7 +262,10 @@ bool load_world(int s) {
   void *t = tiles_data(&tl);
   /* the spawners are the bytes after the tiles: a count, then 10 for each (0 for a world
    * saved before spawners could be set) */
-  uint32_t sp = len - hl - sizeof pl - tl;
+  uint32_t tail = len - hl - sizeof pl - tl;
+  uint32_t sp = tail;
+  bool has_dims = tail >= sizeof dst && (tail - sizeof dst) % 10 == 1 && (tail - sizeof dst) / 10 <= SPAWNERS_MAX;
+  if (has_dims) sp = tail - sizeof dst;
   if (!d || h.h3.h2.h.tiles_size != tl || sp % 10 != 1 || sp / 10 > SPAWNERS_MAX) return false;
   slot = s;
   copy_name(cur_name, h.h3.h2.name);
@@ -276,7 +280,9 @@ bool load_world(int s) {
   thunder_str = weather.thundering ? 1 : 0;
   memcpy(&pl, d + hl, sizeof pl);
   memcpy(t, d + hl + sizeof pl, tl);
-  spawners_load(d + hl + sizeof pl + tl, (int)(len - hl - sizeof pl - tl));
+  spawners_load(d + hl + sizeof pl + tl, (int)sp);
+  if (has_dims) memcpy(&dst, d + hl + sizeof pl + tl + sp, sizeof dst);
+  else memset(&dst, 0, sizeof dst);
   memset(ents, 0, sizeof ents);
   char pre[4];
   prefix_of(s, pre);
@@ -339,6 +345,7 @@ void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char 
   memset(&weather, 0, sizeof weather);
   rain_str = thunder_str = 0;
   spawners_clear();
+  memset(&dst, 0, sizeof dst);
   world_new(seed, pre);
   nb_ret_x = nb_ret_y = nb_ret_z = 0, nb_ret_ok = false;   /* a new world has no return portal */
   player_spawn();

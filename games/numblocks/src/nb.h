@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.56"
+#define NB_VERSION "1.5.57"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -288,6 +288,7 @@ typedef struct {
 } Entity;
 #define N_ENT 56
 extern Entity ents[N_ENT];
+#include "end.h"      /* the End's dragon state and its fight */
 Entity *ent_new(int type, float x, float y, float z);
 Entity *mob_summon(int type, float x, float y, float z);   /* a mob as one spawns */
 Entity *ent_drop(int id, int count, int dmg, float x, float y, float z, bool thrown);

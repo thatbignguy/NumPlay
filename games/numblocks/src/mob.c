@@ -24,12 +24,16 @@ static const MobInfo info[] = {
     /* the nether's two (1.16): the piglin (16 health) and the zombified piglin (20,
      * 1.8's PigZombie), both bipeds at the zombie's speed and size */
     [E_PIGLIN] = {0.6f, 1.95f, 0.23f, 16}, [E_ZPIGLIN] = {0.6f, 1.95f, 0.23f, 20},
+    /* the End's (1.8.8): the dragon and its crystals count as mobs; the dragon is a big one */
+    [E_ENDERMAN] = {0.6f, 2.9f, 0.3f, 40}, [E_CRYSTAL] = {2.0f, 2.0f, 0.0f, 5},
+    [E_DRAGON] = {4.0f, 4.0f, 0.0f, 200},
 };
 float mob_width(int t) { return is_mob(t) ? info[t].w : 0.25f; }
 float mob_height(int t) { return is_mob(t) ? info[t].h : 0.25f; }
 static bool hostile(int t) { return is_hostile_mob(t); }
 
 float mob_scale(const Entity *e, float pt) {
+  if (e->type == E_CRYSTAL) return 2.0f;
   if (e->growth < 0) return 0.5f;   /* a baby */
   if (e->type != E_CREEPER || e->delay <= 0) return 1;
   /* RenderCreeper: swells by up to 40% (and flickers) over the fuse */
@@ -49,6 +53,8 @@ static Part *box(float x, float y, float z, int w, int h, int d, int u, int v, f
 }
 
 #define PI 3.14159265f
+static void end_parts(const Entity *e, float pt, float f, float a, float pitch, float age);
+static void enderman_tp(Entity *e);
 int mob_parts(const Entity *e, float pt, Part *o) {
   np = 0;
   out_parts = o;
@@ -214,6 +220,9 @@ int mob_parts(const Entity *e, float pt, Part *o) {
       ll->rx = swo * 1.4f * a;
       break;
     }
+    default:
+      end_parts(e, pt, f, a, pitch, age);
+      break;
   }
   return np;
 }
@@ -470,6 +479,24 @@ static void cages(void) {
 /* SpawnerAnimals, made small: a try every second */
 void mobs_spawn(void) {
   if (pl.dead) return;
+  if (world_dim == DIM_END) {
+    /* the End's endermen: on the island's end stone, around the player, in the dark */
+    if (opt.difficulty == 0) return;
+    for (int k = 0; k < 4; k++) {
+      int x = ifl(pl.x) + rnd(41) - 20, z = ifl(pl.z) + rnd(41) - 20;
+      float dx = x + 0.5f - pl.x, dz = z + 0.5f - pl.z;
+      if (dx * dx + dz * dz < 14 * 14) continue;
+      int y0 = ifl(pl.y) + 8;
+      for (int y = y0; y > y0 - 20; y--) {
+        if (!world_loaded(x, y + 1, z) || !world_loaded(x, y - 1, z) || !mob_can_stand(x, y, z)) continue;
+        if (count(true) >= 4 || !room_for_a_mob()) return;
+        if (world_get(x, y - 1, z) != B_END_STONE) return;
+        spawn(E_ENDERMAN, x + 0.5f, (float)y, z + 0.5f);
+        return;
+      }
+    }
+    return;
+  }
   if (world_type == WT_TEST) { cages(); return; }   /* the showcase's own ten, and nothing else */
   if (world_dim == DIM_NETHER) {
     /* The nether's own rule (vanilla nether mobs ignore light level: no sky light exists
@@ -586,12 +613,23 @@ static void loot(Entity *e) {
       drop(I_FEATHER, rnd(3), e);
       drop(e->fire > 0 ? I_COOKED_CHICKEN : I_CHICKEN, 1, e);
       break;
+    case E_ENDERMAN: drop(I_ENDER_PEARL, 1, e); break;
+    case E_DRAGON: player_add_xp(12000); break;
   }
-  player_add_xp(hostile(e->type) ? 5 : 1 + rnd(3));
+  if (e->type == E_ENDERMAN) player_add_xp(5);
+  else if (e->type != E_DRAGON) player_add_xp(hostile(e->type) ? 5 : 1 + rnd(3));
 }
 
 static void hurt(Entity *e, float dmg, float kx, float kz) {
   if (e->state == 255 || e->invuln > 10) return;
+  if (e->type == E_DRAGON) {
+    dragon_hurt(e, dmg);
+    return;
+  }
+  if (e->type == E_CRYSTAL) {
+    crystal_gone(e);
+    return;
+  }
   e->health = (int16_t)(e->health - (int)ceilf(dmg));
   e->invuln = 20;
   e->hurt = 10;
@@ -606,6 +644,7 @@ static void hurt(Entity *e, float dmg, float kx, float kz) {
   if (!hostile(e->type)) e->panic = 100;
   else if (kx != 0 || kz != 0) e->panic = e->panic > 100 ? e->panic : 100;   /* EntityAIHurtByTarget */
   if (e->type == E_SPIDER) e->panic = 600;   /* a hit spider fights back, even by day */
+  if (e->type == E_ENDERMAN) enderman_tp(e);
   if (e->type == E_ZPIGLIN) {
     /* 1.8's zombie pigman trick: any hit (a knockback one or not) turns it and its
      * neighbours on the player */
@@ -1038,6 +1077,15 @@ void mob_tick(Entity *e) {
     tnt_tick(e);
     return;
   }
+  if (e->type == E_DRAGON) {
+    dragon_tick(e);
+    return;
+  }
+  if (e->type == E_CRYSTAL) {
+    e->age++;
+    if (e->health <= 0) e->type = E_NONE;
+    return;
+  }
   const MobInfo *mi = &info[e->type];
   if (e->hurt > 0) e->hurt--;
   if (e->invuln > 0) e->invuln--;
@@ -1051,7 +1099,7 @@ void mob_tick(Entity *e) {
   float dx = pl.x - e->x, dz = pl.z - e->z, dy = pl.y - e->y;
   float dist = sqrtf(dx * dx + dz * dz);
   /* far away: gone (EntityLiving.despawnEntity) */
-  if (hostile(e->type) && dist > 32) {
+  if (hostile(e->type) && e->type != E_DRAGON && e->type != E_CRYSTAL && dist > 32) {
     e->type = E_NONE;
     return;
   }
@@ -1291,3 +1339,5 @@ void mob_tick(Entity *e) {
   if (e->y < (float)VOID_Y) e->type = E_NONE;   /* fell into the void */
   else pressure_plate_tick(e->x, e->y, e->z);   /* pressure plates take mobs too (temple TNT, doors) */
 }
+
+#include "mob_end.h"

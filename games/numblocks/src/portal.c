@@ -340,6 +340,7 @@ static void end_travel(void) {
         for (int y = 49; y <= 51; y++) world_set(100 + dx, y, dz, B_AIR);
       }
     pl.yaw = 90, pl.pitch = 0;
+    dragon_enter();
     gui_message("You entered the End");
   }
   portal_cool = PORTAL_COOL;

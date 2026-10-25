@@ -300,6 +300,7 @@ bool game_frame(void) {
     game_pressed = 0;
     ents_tick();
     world_tick();
+    end_tick();
     gui_tick();
     hand_tick();
     ticks_run++;

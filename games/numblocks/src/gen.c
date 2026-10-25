@@ -6015,7 +6015,7 @@ static void octaves_seed(i64 seed) {
 void gen_set_dim(int dim) {
     g_dim = dim;
     octaves_seed(dim == DIM_NETHER ? nether_seed(g_seed) : dim == DIM_END ? end_seed(g_seed) : g_seed);
-    if (dim == DIM_END) end_init();
+    if (dim == DIM_END) end_init(), SPK->ok = 0;
     /* nothing cached is this dimension's: the other one's columns would do */
     last_cx = bc_cx = 0x7fffffff;
     bg_ok = 0;

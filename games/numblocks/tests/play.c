@@ -452,16 +452,16 @@ int main(int argc, char **argv) {
   if (end) {
     /* the End: the obsidian ledge vanilla puts an arrival on, at (100, 49, 0) */
     world_switch_dim(DIM_END);
-    pl.x = 100.5f, pl.y = 70.0f, pl.z = 0.5f;
+    pl.x = 0.5f, pl.y = 120.0f, pl.z = 0.5f;
     pl.vx = pl.vy = pl.vz = 0, pl.fall = 0;
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     for (int dz = -2; dz <= 2; dz++)
       for (int dx = -2; dx <= 2; dx++) {
-        world_set(100 + dx, 69, dz, B_OBSIDIAN);
-        for (int y = 70; y <= 72; y++) world_set(100 + dx, y, dz, B_AIR);
+        world_set(dx, 119, dz, B_OBSIDIAN);
+        for (int y = 120; y <= 124; y++) world_set(dx, y, dz, B_AIR);
       }
-    pl.pitch = 22, pl.yaw = 90;
+    pl.pitch = -55, pl.yaw = 0;
     camera_reset();
   }
   if (nether) {

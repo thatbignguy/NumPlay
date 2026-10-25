@@ -285,6 +285,10 @@ int edits_count(void) { return nj; }
  * is built in it too (save.c), which is nothing to do with a merge in progress */
 void *edits_scratch(uint32_t n) { return n <= sizeof merge ? (void *)merge : NULL; }
 
+/* is there a change of the player's at (x, y, z)? (the End's portal and the dragon compare it
+ * with what the generator makes) */
+bool edits_changed(int x, int y, int z) { return edit_block(x, y, z) >= 0; }
+
 /* ---------------------------------------------------------------- old records
  * Records written before the states were 9 bits hold 8-bit blocks over a 24-bit
  * position (a head says NBW1..4: from 0); the records written while the position

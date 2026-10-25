@@ -1040,7 +1040,8 @@ def main():
                    ','.join(str(items.BNAMES.index(m)) for m in members) + ',0xFFFF};')
     # mob skins: 64 x 32, 4 bits a texel, index 0 see-through
     SKINS = ['zombie/zombie', 'skeleton/skeleton', 'creeper/creeper', 'spider/spider', 'pig/pig', 'cow/cow',
-             'sheep/sheep', 'sheep/sheep_fur', 'chicken', 'piglin/piglin', 'piglin/zombified_piglin']
+             'sheep/sheep', 'sheep/sheep_fur', 'chicken', 'piglin/piglin', 'piglin/zombified_piglin',
+             'enderman/enderman', 'enderdragon/dragon', 'end_crystal/end_crystal']
     out.append(f'const uint8_t skin_px[{len(SKINS)}][1024] = {{')
     spal = []
     for n in SKINS:
@@ -1208,7 +1209,7 @@ def main():
         h.append(f'extern const uint16_t group_{g[2:].lower()}[];   /* ends with 0xFFFF */')
     h += ['extern const uint8_t skin_px[][1024];   /* mob skins, 64 x 32 */', 'extern const uint16_t skin_pal[][16];',
           'enum { SKIN_ZOMBIE, SKIN_SKELETON, SKIN_CREEPER, SKIN_SPIDER, SKIN_PIG, SKIN_COW, SKIN_SHEEP, SKIN_SHEEP_FUR,'
-          ' SKIN_CHICKEN, SKIN_PIGLIN, SKIN_ZPIGLIN };',
+          ' SKIN_CHICKEN, SKIN_PIGLIN, SKIN_ZPIGLIN, SKIN_ENDERMAN, SKIN_DRAGON, SKIN_CRYSTAL };',
           'extern const uint8_t cracks[10][32];   /* destroy stages, 1 bit a texel */']
     h += [f'extern const uint16_t tab_items[], tab_start[{len(items.TABS) + 1}];   /* the creative tabs\' items */',
           f'extern const char *const tab_name[{len(items.TABS)}];']

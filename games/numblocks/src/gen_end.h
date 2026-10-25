@@ -72,6 +72,8 @@ typedef struct {
 } EndMem;
 _Static_assert(sizeof(EndMem) <= GEN_CACHE_BYTES, "the End's state fits in the summary cache");
 #define EM ((EndMem *)(void *)sumc)
+/* (the pillars live after the End's octaves in the same summary cache: gen_spikes is
+ * called from end_tick, where the generator's scratch is not on the stack) */
 static u64 SC_E1XZ, SC_E3XZ, SC_E3Y;
 
 static void end_init(void) {
@@ -159,7 +161,7 @@ typedef struct {
     int n, ok;
     EndSpike s[64];
 } SpikeList;
-#define SPK ((SpikeList *)(void *)U)
+#define SPK ((SpikeList *)(void *)((uint8_t *)sumc + sizeof(EndMem)))
 const EndSpike *gen_spikes(int *n) {
     SpikeList *l = SPK;
     if (!l->ok) {

@@ -591,6 +591,14 @@ static void hud(void) {
         }
       }
   }
+  /* the Ender Dragon's boss bar (BossStatus): its health, across the top */
+  float dbar = dragon_bar();
+  if (dbar >= 0 && gui == GUI_NONE) {
+    int bw = 182, bx = (SCREEN_W - bw) / 2, by = 16;
+    tint_rect(bx, by, bw, 7, RGB(0x10, 0, 0x18), 28);
+    tint_rect(bx, by, (int)(bw * dbar + 0.5f), 7, RGB(0xE0, 0x30, 0xFF), 28);
+    text_center("Ender Dragon", SCREEN_W / 2, by - 10, RGB(0xFF, 0xA0, 0xFF));
+  }
   if (clip_y1 <= SCREEN_H - 60) return;
   if (pl.mode == 2) return;   /* a spectator holds nothing: no hotbar, and nothing to eat, live or level */
   sprite(SP_HOTBAR, hx, hy);

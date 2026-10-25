@@ -20,6 +20,6 @@ void *edits_scratch(uint32_t n);   /* in the journal */
 void edits_apply9(int cx, int cz, int y0, int h, uint8_t *slab, uint8_t *hb);   /* NumBlocks.nwa: 9-bit blocks */
 void edits_dim(int d);   /* the dimension whose records are used */
 bool edits_find(int x, int y, int z, int r, int b0, int b1, int *out);   /* the nearest changed b0 or b1 */
-bool edits_changed(int x, int y, int z);   /* the block there is not as the world was made */
 #endif
+bool edits_changed(int x, int y, int z);   /* the block there is a change of the player's */
 #endif

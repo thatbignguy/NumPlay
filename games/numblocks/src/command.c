@@ -766,7 +766,7 @@ bool command_complete(const char *line, int k, int *at, char *o, int max) {
     case C_SUMMON:
       if (arg == 0) {
         static const char *const bolt_name[1] = {"LightningBolt"};
-        return offer_list(word, mob_name, 10, k, o, max) || offer_list(word, bolt_name, 1, k, o, max);
+        return offer_list(word, mob_name, N_MOB_NAMES, k, o, max) || offer_list(word, bolt_name, 1, k, o, max);
       }
       return false;
     case C_LOCATE: {

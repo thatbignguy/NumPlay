@@ -2377,6 +2377,28 @@ int main(void) {
       CHECK(portal >= 9 && frame >= 12);   /* the 3 x 3 portal and its twelve frames */
       world_switch_dim(DIM_OVER);
     }
+    /* ---- the End's dragon and its saved state ---------------------------------------- */
+    {
+      new_world(1, 7, 0, true, WT_DEFAULT, "ute2", NULL);
+      world_switch_dim(DIM_END);
+      pl.x = 0.5f, pl.y = 70, pl.z = 0.5f;
+      world_follow(pl.x, pl.y, pl.z);
+      while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+      dragon_enter();
+      int dragons = 0;
+      for (int i = 0; i < N_ENT; i++) dragons += ents[i].type == E_DRAGON;
+      CHECK(dragons == 1);
+      Entity *em = mob_summon(E_ENDERMAN, 2.5f, 70, 2.5f);
+      CHECK(em && mob_width(E_ENDERMAN) > 0.5f && mob_height(E_ENDERMAN) > 2.5f);
+      dst.dragon_hp = 123;
+      CHECK(save_world());
+      dst.dragon_hp = 0;
+      world_switch_dim(DIM_OVER);
+      CHECK(load_world(1));
+      CHECK(dst.dragon_hp == 123);   /* the dragon's health came back with the world */
+      world_switch_dim(DIM_OVER);
+      delete_world(1);
+    }
     /* and back: the overworld's own terrain again (the same seed, the same world) */
     world_switch_dim(DIM_OVER);
     world_follow(8, 70, 8);

@@ -388,7 +388,7 @@ void ents_tick(void) {
     e->px = e->x, e->py = e->y, e->pz = e->z;
     e->age++;
     /* far outside the loaded blocks: gone */
-    if (!world_loaded((int)floorf(e->x), vc_y0, (int)floorf(e->z))) {
+    if (!world_loaded((int)floorf(e->x), vc_y0, (int)floorf(e->z)) && e->type != E_DRAGON && e->type != E_CRYSTAL) {
       e->type = E_NONE;
       continue;
     }

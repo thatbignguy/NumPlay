@@ -1,3 +1,34 @@
+## 1.5.57
+**The End has its fight: the dragon, its crystals and endermen - and its state saves**
+
+The End's island was there; now the Ender Dragon flies it. It is 1.8.8's fight, on this
+fork's own entities and light: the dragon circles the island and comes at the player, its
+wings knock them back and its head bites; the ten ender crystals on the pillars heal it
+until they are broken, each blowing up and taking ten of its health with it. The boss bar
+across the top is its health. Killed, it rises, turns and leaves the exit portal with the
+dragon egg on its bedrock pillar, and the way back to the Overworld opens.
+
+- **The dragon's state saves.** Its health, whether it is dead, and which crystals are gone
+  are written after the world's spawners (old records without that tail still load); the
+  dragon comes back where it was in the fight, and it is not met again once killed.
+- **Endermen.** They spawn on the End's end stone in the dark, and in the Overworld's
+  night; they are neutral until hit, then blink away and fight back. Their drop is the
+  Ender Pearl. Their tall thin model is the modern skin.
+- **The crystals** are created on the nearest pillars as the player comes near (their
+  saving is by pillar, not by entity), glow, turn and bob; the healing crystal throws its
+  beam to the dragon. Breaking one explodes it and hurts the dragon.
+- **The models.** The dragon, crystal and enderman are in `mob_end.h`; their skins come
+  from the modern client through `tools/pack.py` (`SKIN_DRAGON`, `SKIN_CRYSTAL`,
+  `SKIN_ENDERMAN`). The fight and the portal are `end.c`; `end_tick` runs in the game loop.
+- **The data.** The world's saved state, the new `I_ENDER_PEARL` and the recipes that need
+  it are in the same tables; the End portal and frame are already in the inventory and
+  `/give`.
+
+`make test` passes, with a dragon/save round trip and the End's spawns; `make host`,
+`make build`, `make check` and `make -C games/numblocks-interest build check` pass, still
+inside CUSTOM_RAM (133652 B). The Nether fortresses, ghasts, blazes, magma cubes and wither
+skeletons are the next entry.
+
 ## 1.5.56
 **The End: its island, its pillars, its strongholds and its portal - in this fork's own Nether**
 
