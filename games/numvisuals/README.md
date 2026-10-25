@@ -11,6 +11,6 @@ Pick a background with **Left / Right** and press **OK**, then pick an add-on th
 
 Every background is drawn from a few formulas as it goes, and all the text uses one tiny font, so the app is only a few kilobytes.
 
-It comes inside [NumPlay](https://github.com/thatbignguy/NumPlay), or on its own as `NumVisuals.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest).
+It comes on its own as `NumVisuals.nwa` from the [latest release](https://github.com/thatbignguy/NumPlay/releases/latest), or inside [NumPlay](https://github.com/thatbignguy/NumPlay) (this fork keeps it in the launcher; press Backspace on the home screen).
 
 Build: `make` (needs `arm-none-eabi-gcc` and Node.js for nwlink).

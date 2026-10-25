@@ -48,7 +48,7 @@
 
 Choose Start Game, then a save. A new game first shows how to play: which key does what, then the basics. You can see them again with How to Play, on the title screen and in the pause menu. Then the Knight falls into King's Pass. Walk on to Dirtmouth and down the well into the Forgotten Crossroads.
 
-Hit enemies with the nail to fill your soul, then hold the spell key to focus it into health. Rest at benches to save and to change charms. When you die you lose your geo and leave a shade behind: defeat it to get them back.
+Hit enemies with the nail to fill your soul, then hold the spell key to focus it into health. Rest at benches to save and to change charms: Toolbox, right to Charms, then OK on a charm. When you die you lose your geo and leave a shade behind: defeat it to get them back.
 
 ⌫ pauses: from there you can go on or quit to the title screen, which saves.
 
@@ -72,8 +72,9 @@ In menus, OK or EXE confirms and Back goes back. In the inventory, left and righ
 ## Good to know
 
 * **One app at a time:** Hollow Knight takes all the room the calculator has for apps. Installing it from the NumWorks website swaps out NumPlay and the other apps, and installing NumPlay again swaps it back out. Your saves in each one are kept.
-* **Only the start of the game:** it ends with Hornet in Greenpath. The ways on to places further in stay shut, like Jiji's door, the lift down to the mines and the Dream Nail's paths.
+* **Only the start of the game:** it ends with Hornet in Greenpath. The ways on to places further in stay shut, like Jiji's door, the lift down to the mines and the Dream Nail's paths, and so do the Forgotten Crossroads' side rooms off the way to Greenpath, like Brooding Mawlek's and the Glowing Womb. The way to the False Knight is past the Temple of the Black Egg, through a tollbooth that starts open, as the rooms it's opened from in the game aren't in.
 * **No music or sound:** the calculator has no speaker.
+* **Text made to read:** what there is to read is bigger than in the game, in its own typefaces, and a shop shows what an item does beside its window.
 * **A few things are simpler:** dust, sparks and other particles are left out, and characters and scenery are drawn a little less finely so the whole game fits.
 * **Busy rooms stay smooth:** when the calculator falls behind, the room is drawn at half the height, each line shown twice. The HUD, text and menus stay sharp.
 

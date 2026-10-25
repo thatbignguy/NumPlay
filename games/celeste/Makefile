@@ -15,7 +15,7 @@ GAME = src/res.c src/gfx.c src/util.c src/ent.c src/level.c src/tiles.c src/styl
 SRC = $(GAME) src/plat_eadk.c src/main.c
 HEADERS = $(wildcard src/*.h) ../common/epsilon_app.h ../common/epsilon_files.h
 
-CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device) -DDATA_BIN='"src/data.bin"'
+CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device) -DEPSILON_XL=1 -DDATA_BIN='"src/data.bin"'
 CFLAGS += -O2 -Wall -Wextra -Wno-unused-parameter -fno-math-errno -fsingle-precision-constant
 CFLAGS += -fno-tree-loop-distribute-patterns -flto -fno-fat-lto-objects -fwhole-program -fvisibility=internal
 CFLAGS += -ffunction-sections -fdata-sections $(EXTRA)
@@ -30,7 +30,8 @@ build: $(BUILD_DIR)/celeste.nwa
 # 148928 on 23.2; checked against the least
 check: $(BUILD_DIR)/celeste.nwa
 	$(Q) $(NWLINK) nwa-bin --ram-length 148928 $< $(BUILD_DIR)/celeste.bin
-	@echo "BIN     $(BUILD_DIR)/celeste.bin: $$(wc -c < $(BUILD_DIR)/celeste.bin) bytes"
+	@n=$$(wc -c < $(BUILD_DIR)/celeste.bin); echo "BIN     $(BUILD_DIR)/celeste.bin: $$n bytes ($$((2031616 - n)) to spare)"; \
+	  [ $$n -le 2031616 ] || { echo "Celeste is bigger than the calculator's app space (2031616 bytes)"; exit 1; }
 
 $(BUILD_DIR)/data.o: src/data.S src/data.bin | $(BUILD_DIR)
 	$(Q) $(CC) -c -DDATA_BIN='"src/data.bin"' $< -o $@

@@ -6,7 +6,7 @@ OBJCOPY = arm-none-eabi-objcopy
 STRIP = arm-none-eabi-strip --strip-unneeded
 NWLINK ?= npx --yes -- nwlink@1.0.0
 BUILD_DIR = output
-DIST_DIR = ../../build/apps
+DIST_DIR ?= ../../build/data/apps
 DIST = $(DIST_DIR)/numblocks-interest.nwa
 
 NB = ../numblocks

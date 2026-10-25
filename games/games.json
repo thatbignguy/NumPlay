@@ -1,6 +1,7 @@
 [
   {
     "id": "numdash",
+    "rank": 4,
     "title": "NumDash",
     "tagline": "Jump to the beat",
     "credit": null,
@@ -24,6 +25,7 @@
   },
   {
     "id": "crossyroad",
+    "rank": 6,
     "title": "Crossy Road",
     "tagline": "Hop, dodge, survive",
     "credit": null,
@@ -39,7 +41,66 @@
     "repo": "https://github.com/Mason363/CrossyWorks"
   },
   {
+    "id": "numblocks",
+    "rank": 1,
+    "title": "NumBlocks",
+    "tagline": "Mine, craft, survive",
+    "credit": "Inspired by Minecraft, not affiliated with Mojang",
+    "top": "0x5D9C3A",
+    "bottom": "0x2E2116",
+    "accent": "0x7FCC4A",
+    "records": [
+      "numblocks.cfg",
+      "nb1.nbw",
+      "nb1r*",
+      "nb2.nbw",
+      "nb2r*",
+      "nb3.nbw",
+      "nb3r*",
+      "nb4.nbw",
+      "nb4r*",
+      "nb5.nbw",
+      "nb5r*",
+      "nb6.nbw",
+      "nb6r*",
+      "nb7.nbw",
+      "nb7r*",
+      "nb8.nbw",
+      "nb8r*",
+      "nb9.nbw",
+      "nb9r*"
+    ],
+    "reset": [
+      "nb1.nbw",
+      "nb1r*",
+      "nb2.nbw",
+      "nb2r*",
+      "nb3.nbw",
+      "nb3r*",
+      "nb4.nbw",
+      "nb4r*",
+      "nb5.nbw",
+      "nb5r*",
+      "nb6.nbw",
+      "nb6r*",
+      "nb7.nbw",
+      "nb7r*",
+      "nb8.nbw",
+      "nb8r*",
+      "nb9.nbw",
+      "nb9r*"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "NumBlocks.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/numblocks",
+    "default": false,
+    "xl": true
+  },
+  {
     "id": "numdrive",
+    "rank": 2,
     "title": "NumDrive",
     "tagline": "Drive, flip, finish",
     "credit": null,
@@ -56,6 +117,7 @@
   },
   {
     "id": "balatro",
+    "rank": 3,
     "title": "Balatro",
     "tagline": "Poker hands, wild jokers",
     "credit": null,
@@ -72,6 +134,7 @@
   },
   {
     "id": "buckshot",
+    "rank": 5,
     "title": "Buckshot Roulette",
     "tagline": "You, the Dealer, one shotgun",
     "credit": null,
@@ -88,6 +151,7 @@
   },
   {
     "id": "blockblast",
+    "rank": 8,
     "title": "Block Blast",
     "tagline": "Fit the blocks, blast the lines",
     "credit": "Based on Block Blast! by Hungry Studio",
@@ -105,7 +169,27 @@
     "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/blockblast"
   },
   {
+    "id": "suika",
+    "rank": 9,
+    "title": "Suika Game",
+    "tagline": "Merge the fruit into a watermelon",
+    "credit": "Based on Suika Game by Aladdin X",
+    "top": "0xF2C46A",
+    "bottom": "0x9A5A22",
+    "accent": "0x6CC530",
+    "colors": 16,
+    "records": [
+      "suika.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "SuikaGame.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/suika"
+  },
+  {
     "id": "portal",
+    "rank": 7,
     "title": "Portal Returns",
     "tagline": "Think with portals",
     "credit": null,
@@ -122,6 +206,7 @@
   },
   {
     "id": "tetris",
+    "rank": 10,
     "title": "Tetris",
     "tagline": "Stack and clear lines",
     "credit": "By Tatone26, from All the Apps",
@@ -138,7 +223,45 @@
     "repo": "https://github.com/Tatone26/Numworks-games/tree/main/apps/tetris"
   },
   {
+    "id": "dinorun",
+    "rank": 17,
+    "title": "Chrome Dino",
+    "tagline": "Jump, duck, survive",
+    "credit": "Based on Chrome's dinosaur game by Google",
+    "top": "0xE5E5E5",
+    "bottom": "0x555555",
+    "accent": "0x71A050",
+    "records": [
+      "dinorun.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "ChromeDino.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/dinorun"
+  },
+  {
+    "id": "doodlejump",
+    "rank": 11,
+    "title": "Doodle Jump",
+    "tagline": "Bounce as high as you can",
+    "credit": "Based on Doodle Jump by Lima Sky",
+    "top": "0xC8D84A",
+    "bottom": "0x4A7A22",
+    "accent": "0xF7F7F4",
+    "colors": 16,
+    "records": [
+      "doodlejump.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "DoodleJump.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/doodlejump"
+  },
+  {
     "id": "chess",
+    "rank": 15,
     "title": "Chess",
     "tagline": "Bots, puzzles, 2 players",
     "credit": null,
@@ -155,6 +278,7 @@
   },
   {
     "id": "flappybird",
+    "rank": 13,
     "title": "Flappy Bird",
     "tagline": "Flap through the pipes",
     "credit": "Inspired by Tatone26's All the Apps",
@@ -171,7 +295,65 @@
     "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/flappybird"
   },
   {
+    "id": "flappydunk",
+    "rank": 16,
+    "title": "Flappy Dunk",
+    "tagline": "Flap the ball down through every hoop",
+    "credit": "Based on Flappy Dunk by Voodoo",
+    "top": "0xFFA53D",
+    "bottom": "0xB8400F",
+    "accent": "0xFFE08A",
+    "colors": 16,
+    "records": [
+      "flappydunk.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "FlappyDunk.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/flappydunk"
+  },
+  {
+    "id": "towerblock",
+    "rank": 20,
+    "title": "Tower Blocks",
+    "tagline": "Stack the blocks as high as you can",
+    "credit": "Based on Tower Blocks by Steve Gardner",
+    "top": "0xD8C7E8",
+    "bottom": "0x6E7BA8",
+    "accent": "0xF2D27A",
+    "colors": 16,
+    "records": [
+      "towerblocks.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "TowerBlocks.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/towerblock"
+  },
+  {
+    "id": "coreball",
+    "rank": 18,
+    "title": "Core Ball",
+    "tagline": "Stick every ball to the spinning core",
+    "credit": "Based on Core Ball by Yang Hao",
+    "top": "0x5A5A5A",
+    "bottom": "0x0A0A0A",
+    "accent": "0x1CB01A",
+    "colors": 8,
+    "records": [
+      "coreball.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "CoreBall.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/coreball"
+  },
+  {
     "id": "pacman",
+    "rank": 12,
     "title": "Pac-Man",
     "tagline": "Eat dots, dodge ghosts",
     "credit": "Inspired by Tatone26's All the Apps",
@@ -189,6 +371,7 @@
   },
   {
     "id": "snake",
+    "rank": 19,
     "title": "Snake",
     "tagline": "Eat apples, grow long",
     "credit": "Inspired by Tatone26's All the Apps",
@@ -206,6 +389,7 @@
   },
   {
     "id": "connectfour",
+    "rank": 24,
     "title": "Connect Four",
     "tagline": "Four in a row wins",
     "credit": "Inspired by Tatone26's All the Apps",
@@ -223,6 +407,7 @@
   },
   {
     "id": "solitaire",
+    "rank": 29,
     "title": "Solitaire",
     "tagline": "The classic card game",
     "credit": "Inspired by Tatone26's All the Apps",
@@ -240,6 +425,7 @@
   },
   {
     "id": "g2048",
+    "rank": 23,
     "title": "2048",
     "tagline": "Slide, merge, reach 2048",
     "credit": "Based on 2048 by Gabriele Cirulli",
@@ -257,6 +443,7 @@
   },
   {
     "id": "minesweeper",
+    "rank": 28,
     "title": "Minesweeper",
     "tagline": "Clear the field, flag the mines",
     "credit": null,
@@ -274,6 +461,7 @@
   },
   {
     "id": "breakout",
+    "rank": 22,
     "title": "Block Breaker",
     "tagline": "Break every brick",
     "credit": null,
@@ -290,20 +478,721 @@
     "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/breakout"
   },
   {
+    "id": "twoplayer",
+    "rank": 14,
+    "title": "2 Players",
+    "tagline": "Pong and more, side by side",
+    "credit": null,
+    "top": "0xD33B3B",
+    "bottom": "0x172A72",
+    "accent": "0x2E7CF6",
+    "records": [
+      "twoplayer.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "colors": 16,
+    "app": "TwoPlayers.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/twoplayer"
+  },
+  {
+    "id": "invaders",
+    "rank": 21,
+    "title": "Space Invaders",
+    "tagline": "Stop the invasion, one cannon",
+    "credit": "Based on Space Invaders by Taito",
+    "top": "0x2B2F4A",
+    "bottom": "0x05060C",
+    "accent": "0x3CF03C",
+    "colors": 4,
+    "records": [
+      "invaders.sav"
+    ],
+    "shots": [
+      "docs/card.png"
+    ],
+    "app": "SpaceInvaders.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/invaders"
+  },
+  {
+    "id": "sudoku",
+    "rank": 27,
+    "title": "Sudoku",
+    "tagline": "Fill the grid, 1 to 9",
+    "credit": null,
+    "top": "0x3F67B5",
+    "bottom": "0x18243A",
+    "accent": "0x8EC5FF",
+    "colors": 3,
+    "records": [
+      "sudoku.sav"
+    ],
+    "shots": [
+      "docs/card.png"
+    ],
+    "app": "Sudoku.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/sudoku"
+  },
+  {
+    "id": "uttt",
+    "rank": 25,
+    "title": "Ultimate Tic-Tac-Toe",
+    "tagline": "Tic-tac-toe in tic-tac-toe",
+    "credit": null,
+    "top": "0x2B3470",
+    "bottom": "0x10132A",
+    "accent": "0xFF4D6D",
+    "colors": 6,
+    "records": [
+      "uttt.sav"
+    ],
+    "shots": [
+      "docs/card.png"
+    ],
+    "app": "UltimateTicTacToe.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/uttt"
+  },
+  {
+    "id": "sokoban",
+    "rank": 26,
+    "title": "Sokoban",
+    "tagline": "Push every box home",
+    "credit": "Levels: Microban by David W. Skinner",
+    "top": "0xA19555",
+    "bottom": "0x444024",
+    "accent": "0xFFB650",
+    "colors": 11,
+    "records": [
+      "sokoban.sav"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "Sokoban.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/sokoban"
+  },
+  {
+    "id": "retrogo",
+    "rank": 30,
+    "title": "Retro-Go",
+    "tagline": "Game Boy, NES and Sega games",
+    "credit": "Based on Retro-Go by ducalex",
+    "top": "0xE84B39",
+    "bottom": "0x1E1430",
+    "accent": "0x3199DC",
+    "records": [
+      "retrogo.cfg",
+      "rg_*"
+    ],
+    "reset": [
+      "rg_*"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "app": "RetroGo.nwa",
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/retrogo",
+    "default": false,
+    "roms": true,
+    "systems": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  {
+    "id": "celeste",
+    "rank": 2,
+    "title": "Celeste",
+    "tagline": "Climb the mountain",
+    "credit": "Based on Celeste by Maddy Makes Games",
+    "top": "0x5865C8",
+    "bottom": "0x161A3A",
+    "accent": "0xFF5A6E",
+    "colors": 16,
+    "records": [
+      "celeste.sav",
+      "celeste_saves.py"
+    ],
+    "shots": [
+      "docs/forsaken.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/celeste",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "hollowknight",
+    "rank": 1,
+    "title": "Hollow Knight",
+    "tagline": "Explore Hallownest",
+    "credit": "Based on Hollow Knight by Team Cherry",
+    "top": "0x4C5E7E",
+    "bottom": "0x0B0F17",
+    "accent": "0xE8EEF5",
+    "colors": 16,
+    "heap": 20480,
+    "records": [
+      "hk1.sav",
+      "hk2.sav",
+      "hk3.sav",
+      "hk4.sav",
+      "hollowknight_saves.py"
+    ],
+    "shots": [
+      "docs/kingspass.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/hollowknight",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "undertale",
+    "rank": 3,
+    "title": "Undertale",
+    "tagline": "Fall into the Underground",
+    "credit": "Based on Undertale by Toby Fox",
+    "top": "0x3A3A46",
+    "bottom": "0x050506",
+    "accent": "0xE8241C",
+    "colors": 16,
+    "records": [
+      "undertale.sav",
+      "utresume.sav",
+      "utconfig.sav",
+      "undertale_saves.py"
+    ],
+    "reset": [
+      "undertale.sav",
+      "utresume.sav",
+      "undertale_saves.py"
+    ],
+    "shots": [
+      "docs/flowers.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/undertale",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "championisland",
+    "rank": 22,
+    "title": "Champion Island",
+    "tagline": "Seven sports, one island",
+    "credit": "Based on Google's Champion Island Games",
+    "top": "0x3FA9F5",
+    "bottom": "0x15507A",
+    "accent": "0xF5B83D",
+    "colors": 16,
+    "heap": 24576,
+    "records": [
+      "champion.sav",
+      "champion_saves.py"
+    ],
+    "shots": [
+      "docs/pingpong.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/championisland",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "finalearth2",
+    "rank": 23,
+    "title": "The Final Earth 2",
+    "tagline": "Build a city in space",
+    "credit": "Based on the game by Florian van Strien",
+    "top": "0x4B3B8F",
+    "bottom": "0x140F33",
+    "accent": "0x6EDC5A",
+    "colors": 16,
+    "records": [
+      "finalearth2.sav",
+      "fe2meta.dat",
+      "finalearth2_saves.py"
+    ],
+    "shots": [
+      "docs/city.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/finalearth2",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "numpowder",
+    "rank": 17,
+    "title": "NumPowder",
+    "tagline": "Sand, water, fire and more",
+    "credit": "Inspired by The Powder Toy",
+    "top": "0xC9A15A",
+    "bottom": "0x3B2A12",
+    "accent": "0x3C8DFF",
+    "colors": 16,
+    "heap": 53000,
+    "records": [
+      "numpowder.cfg",
+      "numpowder.sav",
+      "numpowder1.sav",
+      "numpowder2.sav",
+      "numpowder3.sav",
+      "numpowder4.sav",
+      "numpowder_saves.py"
+    ],
+    "reset": [
+      "numpowder.cfg",
+      "numpowder.sav",
+      "numpowder_saves.py"
+    ],
+    "shots": [
+      "docs/sand_water.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/numpowder",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "subway",
+    "rank": 6,
+    "title": "Subway Surfers",
+    "tagline": "Dodge the trains",
+    "credit": "Based on Subway Surfers by SYBO and Kiloo",
+    "top": "0x3A8FD8",
+    "bottom": "0x173A5E",
+    "accent": "0xFFC93C",
+    "colors": 16,
+    "heap": 101920,
+    "records": [
+      "subway.sav",
+      "subway_saves.py"
+    ],
+    "shots": [
+      "docs/run.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/subway",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "fnaf",
+    "rank": 15,
+    "title": "Five Nights at Freddy's",
+    "tagline": "Survive five nights",
+    "credit": "Based on the game by Scott Cawthon",
+    "top": "0x4A3A30",
+    "bottom": "0x0A0806",
+    "accent": "0xD8A93A",
+    "colors": 16,
+    "records": [
+      "fnaf.sav",
+      "fnafres.sav",
+      "fnaf_saves.py"
+    ],
+    "shots": [
+      "docs/office.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/fnaf",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "doom",
+    "rank": 13,
+    "title": "Doom",
+    "tagline": "Rip and tear",
+    "credit": "Based on Doom by id Software",
+    "top": "0x6B4A2E",
+    "bottom": "0x1A0F08",
+    "accent": "0xD8261C",
+    "colors": 16,
+    "heap": 20480,
+    "records": [
+      "doomsav0.dsg",
+      "doomsav1.dsg",
+      "doomsav2.dsg",
+      "doomsav3.dsg",
+      "doomsav4.dsg",
+      "doomsav5.dsg",
+      "doomres.sav",
+      "doom.cfg",
+      "doom_saves.py"
+    ],
+    "reset": [
+      "doomsav0.dsg",
+      "doomsav1.dsg",
+      "doomsav2.dsg",
+      "doomsav3.dsg",
+      "doomsav4.dsg",
+      "doomsav5.dsg",
+      "doomres.sav",
+      "doom_saves.py"
+    ],
+    "shots": [
+      "docs/hangar.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/doom",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "isaac",
+    "rank": 19,
+    "title": "The Binding of Isaac",
+    "tagline": "Cry through the basement",
+    "credit": "Based on the game by Edmund McMillen",
+    "top": "0x7A5A44",
+    "bottom": "0x23170F",
+    "accent": "0xE04848",
+    "colors": 16,
+    "records": [
+      "isaac.sav",
+      "isaacrun.sav",
+      "isaac_saves.py"
+    ],
+    "shots": [
+      "docs/basement.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/isaac",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "hillclimb",
+    "rank": 20,
+    "title": "Hill Climb Racing",
+    "tagline": "Drive up, don't flip",
+    "credit": "Based on Hill Climb Racing by Fingersoft",
+    "top": "0x5BBEF0",
+    "bottom": "0x2D5A1A",
+    "accent": "0xE53935",
+    "colors": 16,
+    "heap": 32768,
+    "records": [
+      "hillclimb.sav",
+      "hillclimb_saves.py"
+    ],
+    "shots": [
+      "docs/countryside.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/hillclimb",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "pvz",
+    "rank": 9,
+    "title": "Plants vs. Zombies",
+    "tagline": "Plant your lawn",
+    "credit": "Based on the game by PopCap Games",
+    "top": "0x6CC04A",
+    "bottom": "0x1F4A17",
+    "accent": "0xFFE040",
+    "colors": 16,
+    "records": [
+      "pvz.sav",
+      "pvzlevel.sav",
+      "pvz_saves.py"
+    ],
+    "shots": [
+      "docs/day.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/pvz",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "sonic",
+    "rank": 18,
+    "title": "Sonic the Hedgehog",
+    "tagline": "Run through six zones",
+    "credit": "Based on the game by Sonic Team",
+    "top": "0x2E6FE0",
+    "bottom": "0x0E2766",
+    "accent": "0xFFD000",
+    "colors": 16,
+    "records": [
+      "sonic.sav",
+      "sonic_saves.py"
+    ],
+    "shots": [
+      "docs/ghz.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/sonic",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "cookieclicker",
+    "rank": 25,
+    "title": "Cookie Clicker",
+    "tagline": "Bake billions of cookies",
+    "credit": "Based on Cookie Clicker by Orteil",
+    "top": "0x4E6E9E",
+    "bottom": "0x1A2438",
+    "accent": "0xD9A35A",
+    "colors": 16,
+    "records": [
+      "cookieclicker.sav",
+      "cookieclicker_saves.py"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/cookieclicker",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "leveldevil",
+    "rank": 24,
+    "title": "Level Devil",
+    "tagline": "Run to the door",
+    "credit": "Based on Level Devil by Unept",
+    "top": "0xF2A33C",
+    "bottom": "0x6E3A12",
+    "accent": "0xE8402A",
+    "colors": 16,
+    "records": [
+      "leveldevil.sav",
+      "leveldevil_saves.py"
+    ],
+    "shots": [
+      "docs/title.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/leveldevil",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "jetpackjoyride",
+    "rank": 7,
+    "title": "Jetpack Joyride",
+    "tagline": "Fly Barry through the lab",
+    "credit": "Based on Jetpack Joyride by Halfbrick",
+    "top": "0x2C4A6E",
+    "bottom": "0x17283D",
+    "accent": "0xF2B33D",
+    "colors": 16,
+    "records": [
+      "jetpackjoyride.sav",
+      "jetpackjoyride_saves.py"
+    ],
+    "shots": [
+      "docs/title.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/jetpackjoyride",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "stickmanhook",
+    "rank": 11,
+    "title": "Stickman Hook",
+    "tagline": "Swing from hook to hook",
+    "credit": "Based on Stickman Hook by Madbox",
+    "top": "0x8A5CC8",
+    "bottom": "0x3E2C8A",
+    "accent": "0xE8303A",
+    "colors": 16,
+    "records": [
+      "stickmanhook.sav",
+      "stickmanhook_saves.py"
+    ],
+    "shots": [
+      "docs/title.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/stickmanhook",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "donkeykong",
+    "rank": 16,
+    "title": "Donkey Kong",
+    "tagline": "Climb the girders and save Pauline",
+    "credit": "Based on Donkey Kong by Nintendo",
+    "top": "0x2A1018",
+    "bottom": "0x0C0C14",
+    "accent": "0xE8406A",
+    "colors": 16,
+    "records": [
+      "donkeykong.sav",
+      "donkeykong_saves.py"
+    ],
+    "shots": [
+      "docs/title.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/donkeykong",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "dune",
+    "rank": 12,
+    "title": "Dune",
+    "tagline": "Roll down the dunes and fly over the line",
+    "credit": "Based on Dune! by Team Lava",
+    "top": "0x8FC8E8",
+    "bottom": "0x3E6A2A",
+    "accent": "0xF2C230",
+    "colors": 16,
+    "records": [
+      "dune.sav",
+      "dune_saves.py"
+    ],
+    "shots": [
+      "docs/title.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/dune",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "monkeymart",
+    "rank": 8,
+    "title": "Monkey Mart",
+    "tagline": "Run a grocery mart as a monkey",
+    "credit": "Based on Monkey Mart by TinyDobbins",
+    "top": "0x7DD86A",
+    "bottom": "0x2E8A3A",
+    "accent": "0xF2C230",
+    "colors": 16,
+    "records": [
+      "monkeymart.sav",
+      "monkeymart_saves.py"
+    ],
+    "shots": [
+      "docs/title.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/monkeymart",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "tombofthemask",
+    "rank": 10,
+    "title": "Tomb of the Mask",
+    "tagline": "Dash through the tomb ahead of the lava",
+    "credit": "Based on Tomb of the Mask by Playgendary",
+    "top": "0x3A1A78",
+    "bottom": "0x0C0620",
+    "accent": "0xFFF600",
+    "colors": 16,
+    "records": [
+      "tombofthemask.sav",
+      "tombofthemask_saves.py"
+    ],
+    "shots": [
+      "docs/title.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/tombofthemask",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "uno",
+    "rank": 14,
+    "title": "UNO",
+    "tagline": "Match the cards, shout UNO",
+    "credit": "Based on UNO by Mattel",
+    "top": "0x1F6B4A",
+    "bottom": "0x0B3324",
+    "accent": "0xE53935",
+    "colors": 16,
+    "records": [
+      "uno.sav",
+      "uno_saves.py"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/uno",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "fnf",
+    "rank": 4,
+    "title": "Friday Night Funkin'",
+    "tagline": "Win the rap battles, note by note",
+    "credit": "Based on Friday Night Funkin' by the Funkin' Crew",
+    "top": "0x3A1F5D",
+    "bottom": "0x140A24",
+    "accent": "0xF9393F",
+    "colors": 16,
+    "records": [
+      "fnf.sav",
+      "fnf_saves.py"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/fnf",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "turborush",
+    "rank": 21,
+    "title": "Turbo Rush",
+    "tagline": "Race seven rivals on six circuits",
+    "credit": "A game by Bobydeluxe",
+    "top": "0x3C8CCB",
+    "bottom": "0x1A2630",
+    "accent": "0xFFD052",
+    "colors": 16,
+    "records": [
+      "turborush.sav",
+      "turborush_saves.py"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/turborush",
+    "default": false,
+    "xl": true
+  },
+  {
+    "id": "angrybirds",
+    "rank": 5,
+    "title": "Angry Birds",
+    "tagline": "Fling the birds at the pigs",
+    "credit": "Based on Angry Birds by Rovio",
+    "top": "0x8FD3F4",
+    "bottom": "0x3D7A24",
+    "accent": "0xE0262B",
+    "colors": 16,
+    "heap": 65536,
+    "records": [
+      "angrybirds.sav",
+      "angrybirds_saves.py"
+    ],
+    "shots": [
+      "docs/shot.png"
+    ],
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/angrybirds",
+    "default": false,
+    "xl": true
+  },
+  {
     "id": "numvisuals",
+    "rank": 31,
     "title": "NumVisuals",
     "tagline": "Backgrounds, clocks, timers",
     "credit": null,
     "top": "0x7A2BFF",
     "bottom": "0x1B0B3A",
     "accent": "0xFF3E8A",
+    "colors": 48,
     "records": [
       "numvisuals.sav"
     ],
     "shots": [
       "docs/shot.png"
     ],
-    "colors": 48,
-    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/numvisuals"
+    "repo": "https://github.com/thatbignguy/NumPlay/tree/main/games/numvisuals",
+    "default": false
   }
 ]

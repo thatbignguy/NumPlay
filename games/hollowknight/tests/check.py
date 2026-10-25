@@ -1,12 +1,23 @@
 """The host build's checks (make test): check.py build/play src/data.bin
 
 - every room's hazard respawn points: ground under them, in the room
-- every gate: the Knight arrives in the next room, in control, on the ground, and can move; and spikes there send him
-  back to a good place
+- every gate and door (a door taking his control, as its FSM does): the Knight arrives in the next room, in control, on
+  the ground, and can slash and move; and spikes there send him back to a good place
+- the ground's seams, as the calculator rounds: landed a few float steps low, the Knight walks off both ways; jumping
+  at a wall, he falls back down
+- the text of the shops, the inventory (its items, charms and map), the menus, the messages and the stag's menu: in the
+  screen, in its box, no line over another
 - every arena won: its fight over and the room's battle gates open, also as the Knight comes back and after a save and
   a load
 - a long walk of made up keys from every room: the Knight never out of the room, without control, wedged, undrawn or
-  out of the view
+  out of the view, and the view never jumping
+- a bench: sat on, the inventory opened, a charm equipped, then up again (atBench off)
+- the charms: OK changes none away from a bench; at one, equipped (its effect on), none past the notches, unequipped,
+  overcharmed on the fifth try and off again, kept by Home in the inventory and a load
+- the stag stations: each seen (their blanker faded out), come in by its gate, by the stag (called by its bell) and
+  loaded at its bench
+- the way to the False Knight, played room by room as one game (the Knight unhurt): from a new game's fall into King's
+  Pass, and from the Aspid Hunters' arena by the hot spring, to his arena, where he comes down
 - every room played with its enemies hit, in a new game and after the bosses, drawn whole and fast (as a slow
   calculator draws it): the sanitizers stop on any fault
 """
@@ -19,7 +30,9 @@ from concurrent.futures import ThreadPoolExecutor
 PLAY, DATA = sys.argv[1], sys.argv[2]
 WALKS = [(seed, 4000) for seed in range(1, 5)]   # (seed, ticks of 20 ms)
 SWEEP_KEYS = "_*30,R*120,A*3,J*25,L*200,A*4,_*60,R*60,J*30,A*3,_*900"
-WORLDS = ("", "7,11")   # PlayerData bools on, by number: none, then the False Knight and Hornet beaten
+WORLDS = ("", "7,11")
+# Crossroads_47's bench: sit, the inventory, right to the charms, equip the first, close, get up
+BENCH_KEYS = "*60,U*3,*150,I*2,*60,R*2,*15,R*2,*15,R*2,*15,R*2,*30,O*2,*30,I*2,*60,R*2,*80"   # PlayerData bools on, by number: none, then the False Knight and Hornet beaten
 JOBS = os.cpu_count() or 2
 
 
@@ -47,9 +60,28 @@ def main():
     results.append(report("hazard respawn points", rc, out, ("BAD",)))
     rc, out = play("--gates", "all")
     results.append(report("gates", rc, out, ("FAIL",)))
+    rc, out = play("--gates", "seams")
+    results.append(report("seams", rc, out, ("FAIL",)))
+    with tempfile.TemporaryDirectory() as saves:
+        rc, out = play("--gates", "texts", env={"HKSAVES": saves})
+    results.append(report("texts", rc, out, ("FAIL",)))
     with tempfile.TemporaryDirectory() as saves:
         rc, out = play("--gates", "arenas", env={"HKSAVES": saves})
     results.append(report("arenas", rc, out, ("FAIL",)))
+    # (HKFLAGS: a charm had, Gathering Swarm; HKPD: the bools on at the end, 77 its equipped one, 0 atBench)
+    rc, out = play("--room", "Crossroads_47", "--at", "29.3,6.5", "--play", BENCH_KEYS, env={"HKFLAGS": "3,37", "HKPD": "1"})
+    pd = next((l.split()[1:] for l in out.splitlines() if l.startswith("pd:")), [])
+    pd = pd[:next((i for i, t in enumerate(pd) if not t.isdigit()), len(pd))]
+    bench = "77" in pd and "0" not in pd
+    results.append(report("bench: a charm equipped", rc, out if bench else out + "\nFAIL bools on: " + " ".join(pd), ("FAIL",)))
+    with tempfile.TemporaryDirectory() as saves:
+        rc, out = play("--gates", "charms", env={"HKSAVES": saves})
+    results.append(report("charms: changed at a bench only", rc, out, ("FAIL",)))
+    with tempfile.TemporaryDirectory() as saves:
+        rc, out = play("--gates", "stations", env={"HKSAVES": saves})
+    results.append(report("stag stations: seen, the rides", rc, out, ("FAIL",)))
+    rc, out = play("--gates", "way")
+    results.append(report("the way to the False Knight", rc, out, ("FAIL",)))
     with ThreadPoolExecutor(JOBS) as pool:
         walks = list(pool.map(lambda w: play("--gates", "wander:all:%d:%d" % w, env={"HKFAST": "1"} if w[0] % 2 else None), WALKS))
     for (seed, ticks), (rc, out) in zip(WALKS, walks):
