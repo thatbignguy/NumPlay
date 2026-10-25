@@ -4,6 +4,7 @@
  * See the comment at the top of gen.c for what differs from Minecraft. */
 #ifndef NB_GEN_H
 #define NB_GEN_H
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Starts a world: seed as a Java long (what /seed prints). Call before anything else. */
@@ -14,6 +15,13 @@ void gen_set_cache(void *mem);
 /* The world type: 0 Minecraft's default, 1 superflat (FlatGeneratorInfo's default preset
  * "2;7,2x3,2;1": bedrock, two dirt, grass, all plains, nothing else). Kept across gen_init. */
 void gen_set_flat(int flat);
+#define FLAT_DEFAULT "2;7,2x3,2;1"
+#define FLAT_MAX 63
+void gen_set_flat_preset(const char *preset);   /* superflat with this preset (NULL/empty: default) */
+bool flat_validate(const char *preset, char *err, int errmax);   /* NULL preset = default; err red message */
+bool flat_simplify(const char *preset, char *out, int outmax);   /* either shape as "block,..."; false if too long */
+int flat_height(void);             /* total layers high (default 4) */
+int flat_biome_id(void);           /* biome of the flat preset (default 1 plains) */
 
 /* Blocks of chunk (cx, cz) for y in [y0, y0 + h), after terrain, caves, ravines
  * and the decoration (population) that Minecraft would put in this chunk:

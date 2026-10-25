@@ -14,6 +14,7 @@
 #include <string.h>
 #include "blocks.h"
 #include "data.h"
+#include "gen.h"
 #include "../../common/np_text.h"
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
@@ -305,7 +306,7 @@ void break_block_at(int x, int y, int z, bool drops);
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_MODS
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_MODS, GUI_FLAT
 #if NB_DIMS
        , GUI_CREDITS   /* the End poem and the credits (gui.c) */
 #endif
@@ -325,6 +326,7 @@ extern char name_text[];   /* (ACT_NEW) the new world's name, as typed */
 extern int create_mode;
 extern bool create_cheats;
 extern int create_type;
+extern char create_preset[FLAT_MAX + 1];   /* the new world's superflat preset, as typed */
 extern char seed_text[21];
 
 /* ---------------------------------------------------------------- saves and options (save.c) */
@@ -350,6 +352,7 @@ extern Options opt;
 extern int64_t world_seed;
 enum { WT_DEFAULT, WT_FLAT };
 extern uint8_t world_type;   /* the world type (WT_*): Default, or Superflat */
+extern char world_preset[FLAT_MAX + 1];   /* the world's flat preset (default when Default type) */
 /* Worlds: up to MAX_WORLDS, each in a slot (1..MAX_WORLDS) whose records start "nb<slot>" */
 #define MAX_WORLDS 9
 #define WORLD_NAME 24   /* the longest name */
@@ -360,13 +363,14 @@ typedef struct {
   int type;          /* WT_* */
   int64_t seed;
   uint32_t played;   /* opt.plays when it was last played (the latest first in the list) */
+  char preset[FLAT_MAX + 1];   /* superflat preset (default when not flat) */
 } WorldInfo;
 bool world_info(int slot, WorldInfo *w);   /* false: no world there */
 int world_free_slot(void);                 /* 0: all taken */
 void world_unique_name(const char *base, char *out);   /* base, or "base (2)"... if taken */
 bool save_world(void);
 bool load_world(int slot);
-void new_world(int slot, int64_t seed, int mode, bool cheats, int type, const char *name);
+void new_world(int slot, int64_t seed, int mode, bool cheats, int type, const char *name, const char *preset);
 bool rename_world(int slot, const char *name);
 void delete_world(int slot);
 void load_options(void);

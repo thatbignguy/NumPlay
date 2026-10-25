@@ -99,7 +99,7 @@ void game_init(void) {
 #endif
   last = plat_millis();
   if (start_in_world) {
-    new_world(1, start_seed, 0, false, start_type, T("New World"));
+    new_world(1, start_seed, 0, false, start_type, T("New World"), create_preset);
     game_time = 1000;
 #ifdef BENCH_FALL
     pl.mode = 1, pl.y += BENCH_FALL;   /* (timing a fall from that high, in Creative: no harm) */
@@ -155,7 +155,7 @@ bool game_frame(void) {
         while (b > a && name_text[b - 1] == ' ') b--;
         name_text[b] = 0;
         world_unique_name(name_text + a, name);
-        new_world(slot, parse_seed(), create_mode, create_cheats, create_type, name);
+        new_world(slot, parse_seed(), create_mode, create_cheats, create_type, name, create_preset);
         game_time = 0;
         loading();
         save_world();
@@ -203,7 +203,7 @@ bool game_frame(void) {
     if (pl.pitch < -90) pl.pitch = -90;
   }
   bool paused = gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS ||
-                gui == GUI_MODS;
+                gui == GUI_MODS || gui == GUI_FLAT;
 #if NB_DIMS
   paused = paused || gui == GUI_CREDITS;   /* (the player is in no world while they roll) */
 #endif

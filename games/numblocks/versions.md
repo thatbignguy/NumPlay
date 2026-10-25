@@ -1,3 +1,21 @@
+## 1.5.64
+**Superflat worlds take a preset again**
+- Create New World's Superflat has "Customize..." beside the world type. The
+  preset field takes the fork's simple list ("bedrock,dirt,dirt,grass") or
+  1.8's full `version;layers;biome;structures` shape ("2;7,2x3,2;1"), with
+  counts in the full shape, block ids with metadata ("159:14") and the common
+  block names (underscores and case ignored, modern and 1.8 spellings). It is
+  validated before use, with the same short red messages ("Unknown block",
+  "Bad data value", "Too tall (max 128)") and a Reset to the default. The
+  biome layer selects the flat world's biome, and the player spawns on its top
+  layer.
+- The preset is saved with the world: the record becomes NBW4, with the
+  preset after the old head; NBW1-3 worlds read back with the default preset,
+  and Re-Create copies the selected world's preset. `numblocks.cfg` is
+  unchanged.
+- `--create` and `--flat <preset>` added to `build/play`, which take the
+  create screen and a custom flat world straight (not `build/desktop`).
+
 ## 1.5.63
 **The version lives in the source again, and Fullbright comes back**
 - `NB_VERSION` is back (1.5.63), and the title screen reads "Numblocks custom

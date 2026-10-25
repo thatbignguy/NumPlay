@@ -398,12 +398,12 @@ int main(void) {
     WorldInfo w;
     world_unique_name("New World", n);
     CHECK(!strcmp(n, "New World"));
-    new_world(world_free_slot(), 5, 0, false, WT_DEFAULT, n);
+    new_world(world_free_slot(), 5, 0, false, WT_DEFAULT, n, FLAT_DEFAULT);
     save_world();
     world_unique_name("New World", n);
     CHECK(!strcmp(n, "New World (2)"));
     int s2 = world_free_slot();
-    new_world(s2, 6, 1, true, WT_DEFAULT, n);
+    new_world(s2, 6, 1, true, WT_DEFAULT, n, FLAT_DEFAULT);
     save_world();
     CHECK(s2 == 2 && world_info(1, &w) && !strcmp(w.name, "New World") && w.mode == 0 && w.seed == 5);
     CHECK(world_info(2, &w) && !strcmp(w.name, "New World (2)") && w.mode == 1 && w.seed == 6);
@@ -454,7 +454,7 @@ int main(void) {
   {
     /* commands: what they do; most need cheats */
     extern uint32_t game_time;
-    new_world(1, 9, 0, false, WT_DEFAULT, "Commands");
+    new_world(1, 9, 0, false, WT_DEFAULT, "Commands", FLAT_DEFAULT);
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     command_run("/gamemode 1");
@@ -565,8 +565,13 @@ int main(void) {
     plat_remove_prefix("ut12");
   }
   {
-    /* superflat: bedrock, two dirt, grass; the player on it; kept as superflat */
-    new_world(2, 77, 0, false, WT_FLAT, "Flat");
+    /* superflat: the default preset and a custom one, kept with the world */
+    char out[64], err[32];
+    CHECK(flat_validate(FLAT_DEFAULT, err, sizeof err));
+    CHECK(flat_simplify(FLAT_DEFAULT, out, sizeof out) && !strcmp(out, "bedrock,dirt,dirt,grass"));
+    CHECK(flat_validate("bedrock,stone,grass,grass", err, sizeof err));
+    CHECK(!flat_validate("bedrock,bogus", err, sizeof err) && err[0]);
+    new_world(2, 77, 0, false, WT_FLAT, "Flat", FLAT_DEFAULT);
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     int x = (int)floorf(pl.x) + 7, z = (int)floorf(pl.z) - 5;
@@ -581,11 +586,25 @@ int main(void) {
     CHECK(world_get(x + 30, 3, z) == B_GRASS || !world_loaded(x + 30, 3, z));
     delete_world(2);
     world_type = WT_DEFAULT;
+    new_world(2, 77, 0, false, WT_FLAT, "Flat sand", "bedrock,stone,sand");
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    x = (int)floorf(pl.x) + 7, z = (int)floorf(pl.z) - 5;
+    CHECK(pl.y == 3 && world_get(x, 0, z) == B_BEDROCK && world_get(x, 1, z) == B_STONE &&
+          world_get(x, 2, z) == B_SAND && world_get(x, 3, z) == B_AIR);
+    CHECK(!strcmp(world_preset, "bedrock,stone,sand"));
+    save_world();
+    world_preset[0] = 0;
+    CHECK(load_world(2) && !strcmp(world_preset, "bedrock,stone,sand"));
+    CHECK(world_info(2, &wi) && !strcmp(wi.preset, "bedrock,stone,sand"));
+    delete_world(2);
+    world_type = WT_DEFAULT;
+    memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
   }
   {
     /* the copy in numblocks_saves.py: every save, and after an install (only scripts left) they come back */
     for (int s = 1; s <= MAX_WORLDS; s++) delete_world(s);
-    new_world(3, 42, 0, false, WT_DEFAULT, "Kept");
+    new_world(3, 42, 0, false, WT_DEFAULT, "Kept", FLAT_DEFAULT);
     world_follow(pl.x, pl.y, pl.z);
     while (world_pending()) world_follow(pl.x, pl.y, pl.z);
     for (int k = 0; k < 40; k++) world_set((int)pl.x + k, 70, (int)pl.z + 200, B_GOLD_BLOCK);   /* (another region too) */

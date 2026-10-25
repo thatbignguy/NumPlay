@@ -1203,7 +1203,8 @@ static int nbuttons, bcur;
 enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCEL, B_MODE, B_SEED, B_DOCREATE,
        B_DODELETE, B_DIFF, B_GFX, B_LOOK, B_CLOUDS, B_BOB, B_DONE, B_BACK_GAME, B_SAVEQUIT, B_RESPAWN, B_TITLE,
        B_CONTROLS, B_CONTROLS_DONE, B_NAME, B_RENAME, B_DORENAME, B_RECREATE, B_CHEATS, B_LAN, B_LAN_MODE,
-       B_LAN_CHEATS, B_LAN_START, B_TYPE, B_MODS, B_FULLBRIGHT, B_MODS_DONE };
+       B_LAN_CHEATS, B_LAN_START, B_TYPE, B_MODS, B_FULLBRIGHT, B_MODS_DONE, B_CUSTOMIZE, B_FLAT_FIELD,
+       B_FLAT_USE, B_FLAT_DONE, B_FLAT_RESET, B_FLAT_CANCEL };
 int menu_choice;            /* an action for main.c (ACT_*) */
 int create_mode;            /* the new world's game mode */
 bool create_cheats;         /* and whether it allows cheats */
@@ -1212,6 +1213,20 @@ static bool cheats_set;     /* (chosen, not following the game mode) */
 static bool lan_mode, lan_allow;   /* Open to LAN's settings: the game mode for others, cheats */
 char seed_text[21];         /* the new world's seed, as typed */
 char name_text[WORLD_NAME + 1];   /* the new world's name, or the world being renamed's */
+char create_preset[FLAT_MAX + 1] = FLAT_DEFAULT;   /* and its superflat preset */
+static char flat_text[FLAT_MAX + 1];   /* Customize superflat: the preset as typed */
+static char flat_err[48];              /* its red message, when invalid */
+static void copy_preset_text(char *d, const char *s) {
+  if (!s || !s[0]) s = FLAT_DEFAULT;
+  int i = 0;
+  for (; s[i] && i < FLAT_MAX; i++) d[i] = s[i];
+  d[i] = 0;
+  if (!flat_validate(d, NULL, 0)) {
+    int k = 0;
+    for (; FLAT_DEFAULT[k] && k < FLAT_MAX; k++) d[k] = FLAT_DEFAULT[k];
+    d[k] = 0;
+  }
+}
 int play_slot;              /* the world to play */
 static int options_from;    /* the screen the options go back to */
 /* the Controls list's selection: -1 the Key Sheet button, 0.. the actions (kcol 1: their Reset), N_ACTIONS Done
@@ -1239,7 +1254,7 @@ static void list_worlds(void) {
 /* Typing in a field: the calculator's keys as its own keyboard has them, letters (its alpha
  * letters: e^x is a, + is z, - a space) or digits; alpha switches between them, shift makes the
  * next letter a capital (twice: all of them), backspace deletes, OK or Back is done */
-enum { F_NONE, F_NAME, F_SEED };
+enum { F_NONE, F_NAME, F_SEED, F_FLAT };
 static int field;               /* the field being typed in */
 static uint8_t f_digits, f_caps;   /* (f_caps: 1 the next letter, 2 all of them) */
 static bool f_sel;              /* the text is selected: the first key typed replaces it (an arrow keeps it) */
@@ -1253,8 +1268,9 @@ static char key_char(int k) {
                                    [49] = '!'};
   static const char digits[53] = {[42] = '1', [43] = '2', [44] = '3', [36] = '4', [37] = '5', [38] = '6', [30] = '7',
                                   [31] = '8', [32] = '9', [48] = '0', [49] = '.', [46] = '-', [45] = '+', [33] = '(',
-                                  [34] = ')', [39] = '*', [40] = '/'};
+                                  [34] = ')', [39] = '*', [40] = '/', [22] = ','};
   if (k < 0 || k > 52) return 0;
+  if (field == F_FLAT && k == 15) return ':';   /* var (for block:meta) */
   char c = f_digits ? digits[k] : letters[k];
   if (c >= 'a' && c <= 'z' && f_caps) {
     c = (char)(c - 'a' + 'A');
@@ -1265,14 +1281,15 @@ static char key_char(int k) {
 static void field_open(int f) {
   field = f;
   f_digits = f == F_SEED, f_caps = 0;
-  f_sel = (f == F_NAME ? name_text : seed_text)[0] != 0;
+  const char *t = f == F_NAME ? name_text : f == F_FLAT ? flat_text : seed_text;
+  f_sel = t[0] != 0;
   raw_held = ~(uint64_t)0;   /* (the key that opened it is not typed) */
 }
 static void field_input(void) {
   uint64_t raw = plat_scan(), down = raw & ~raw_held;
   raw_held = raw;
-  char *t = field == F_NAME ? name_text : seed_text;
-  int max = field == F_NAME ? WORLD_NAME : 20, n = (int)strlen(t);
+  char *t = field == F_NAME ? name_text : field == F_FLAT ? flat_text : seed_text;
+  int max = field == F_NAME ? WORLD_NAME : field == F_FLAT ? FLAT_MAX : 20, n = (int)strlen(t);
   for (int k = 0; k < 64; k++) {
     if (!(down >> k & 1)) continue;
     if (k == RK_ALPHA) f_digits = !f_digits;
@@ -1291,11 +1308,20 @@ static void field_input(void) {
         press(B_DORENAME);
         return;
       }
+      if (gui == GUI_FLAT && k != RK_BACK) {
+        /* (OK in the preset field: use it, as Enter does) */
+        field = F_NONE;
+        press(B_FLAT_USE);
+        return;
+      }
       field = F_NONE;
     } else {
       char c = key_char(k);
       if (c && f_sel) t[n = 0] = 0, f_sel = false;
-      if (c && n < max) t[n++] = c, t[n] = 0;
+      if (c && n < max) {
+        if (field == F_FLAT && c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');   /* presets are lowercase */
+        t[n++] = c, t[n] = 0;
+      }
     }
   }
 }
@@ -1483,9 +1509,17 @@ static void menu(int screen) {
       cat(t, T("Seed: "), seed_text[0] ? seed_text : (field == F_SEED ? "" : T("(random)")));
       add_button(w / 2 - 100, 146, 200, 1, B_SEED, t);
       cat(t, T("World Type: "), create_type == WT_FLAT ? T("Superflat") : T("Default"));
-      add_button(w / 2 - 100, 182, 200, 1, B_TYPE, t);
+      add_button(w / 2 - 155, 182, 150, 1, B_TYPE, t);
+      add_button(w / 2 + 5, 182, 150, create_type == WT_FLAT, B_CUSTOMIZE, T("Customize..."));
       add_button(w / 2 - 155, h - 28, 150, 1, B_DOCREATE, T("Create New World"));
       add_button(w / 2 + 5, h - 28, 150, 1, B_CANCEL, T("Cancel"));
+      break;
+    case GUI_FLAT:
+      add_button(w / 2 - 140, 60, 280, 1, B_FLAT_FIELD, flat_text[0] ? flat_text : (field == F_FLAT ? "" : T("(default)")));
+      add_button(w / 2 - 155, 110, 150, 1, B_FLAT_USE, T("Use Preset"));
+      add_button(w / 2 + 5, 110, 150, 1, B_FLAT_RESET, T("Reset"));
+      add_button(w / 2 - 155, h - 28, 150, 1, B_FLAT_DONE, T("Done"));
+      add_button(w / 2 + 5, h - 28, 150, 1, B_FLAT_CANCEL, T("Cancel"));
       break;
     case GUI_RENAME:
       /* GuiRenameWorld */
@@ -1594,6 +1628,7 @@ static void press(int id) {
       create_mode = 0, create_type = WT_DEFAULT;
       create_cheats = cheats_set = false;
       seed_text[0] = 0;
+      memcpy(create_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
       world_unique_name(T("New World"), name_text);
       gui_menu(GUI_CREATE);
       break;
@@ -1616,6 +1651,7 @@ static void press(int id) {
       if (wi.seed < 0) seed_text[j++] = '-';
       while (k) seed_text[j++] = d[--k];
       seed_text[j] = 0;
+      copy_preset_text(create_preset, wi.preset);
       gui_menu(GUI_CREATE);
       break;
     }
@@ -1642,6 +1678,59 @@ static void press(int id) {
       break;
     case B_CHEATS: create_cheats = !create_cheats, cheats_set = true; break;
     case B_TYPE: create_type = create_type == WT_FLAT ? WT_DEFAULT : WT_FLAT; break;
+    case B_CUSTOMIZE:
+      if (create_type != WT_FLAT) break;
+      /* the preset as plain blocks (older version;layers;biome strings convert) */
+      if (!flat_simplify(create_preset, flat_text, sizeof flat_text))
+        copy_preset_text(flat_text, create_preset);
+      flat_err[0] = 0;
+      gui_menu(GUI_FLAT);
+      field_open(F_FLAT);
+      break;
+    case B_FLAT_FIELD: field_open(F_FLAT); break;
+    case B_FLAT_USE: {
+      /* GuiFlatPresets Use Preset: keep typing on error (red message), never crash */
+      char e[48];
+      if (!flat_text[0]) { flat_err[0] = 0; break; }
+      if (!flat_validate(flat_text, e, sizeof e)) {
+        int q = 0;
+        for (; e[q] && q < (int)sizeof flat_err - 1; q++) flat_err[q] = e[q];
+        flat_err[q] = 0;
+        break;
+      }
+      copy_preset_text(create_preset, flat_text);
+      flat_err[0] = 0;
+      break;
+    }
+    case B_FLAT_RESET:
+      if (!flat_simplify(FLAT_DEFAULT, flat_text, sizeof flat_text)) {
+        static const char dflt[] = "bedrock,dirt,dirt,grass";
+        int q = 0;
+        for (; dflt[q]; q++) flat_text[q] = dflt[q];
+        flat_text[q] = 0;
+      }
+      flat_err[0] = 0;
+      field = F_NONE;
+      break;
+    case B_FLAT_DONE: {
+      char e[48];
+      if (flat_text[0] && !flat_validate(flat_text, e, sizeof e)) {
+        int q = 0;
+        for (; e[q] && q < (int)sizeof flat_err - 1; q++) flat_err[q] = e[q];
+        flat_err[q] = 0;
+        break;
+      }
+      if (flat_text[0]) copy_preset_text(create_preset, flat_text);
+      flat_err[0] = 0;
+      field = F_NONE;
+      gui_menu(GUI_CREATE);
+      break;
+    }
+    case B_FLAT_CANCEL:
+      flat_err[0] = 0;
+      field = F_NONE;
+      gui_menu(GUI_CREATE);
+      break;
     case B_LAN:
       lan_mode = lan_allow = false;
       gui_menu(GUI_LAN);
@@ -1723,6 +1812,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     if (gui == GUI_PAUSE) gui = GUI_NONE;
     else if (gui == GUI_OPTIONS) press(B_DONE);
     else if (gui == GUI_MODS) press(B_MODS_DONE);
+    else if (gui == GUI_FLAT) press(B_FLAT_CANCEL);
     else if (gui == GUI_CONTROLS) press(B_CONTROLS_DONE);
     else if (gui == GUI_WORLDS || gui == GUI_CREATE || gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LAN)
       press(B_CANCEL);
@@ -2110,6 +2200,18 @@ static void menu_screen(void) {
       text_center(field ? T("alpha: letters or digits, shift: capitals, OK: done") : T("Leave blank for a random seed"),
                   w / 2, 169, RGB(0xA0, 0xA0, 0xA0));
       break;
+    case GUI_FLAT:
+      /* Superflat presets: plain blocks, one layer each, bottom to top */
+      text_center(T("Superflat Customization"), w / 2, 20, 0xFFFF);
+      text(T("Preset"), w / 2 - 140, 47, RGB(0xA0, 0xA0, 0xA0), true);
+      if (flat_err[0]) text_center(flat_err, w / 2, 84, RGB(0xFF, 0x55, 0x55));
+      else text_center(field == F_FLAT ? T("alpha: abc/123  shift: Abc  OK: use") : T("one block per layer, bottom to top"),
+                       w / 2, 84, RGB(0xA0, 0xA0, 0xA0));
+      text_center(T("comma key: , or e   var: :   alpha: letters/digits"), w / 2, 134, RGB(0xA0, 0xA0, 0xA0));
+      text_center(T("e.g. bedrock,dirt,dirt,grass"), w / 2, 144, RGB(0xA0, 0xA0, 0xA0));
+      text_center(T("blocks: id or bedrock,dirt,grass,stone,sand,glass"), w / 2, 154, RGB(0xA0, 0xA0, 0xA0));
+      text_center(T("max 16 layers"), w / 2, 164, RGB(0xA0, 0xA0, 0xA0));
+      break;
     case GUI_RENAME:
       text_center(T("Rename World"), w / 2, 20, 0xFFFF);
       text(T("Enter Name"), w / 2 - 100, 47, RGB(0xA0, 0xA0, 0xA0), true);
@@ -2139,6 +2241,7 @@ static void menu_screen(void) {
   }
   for (int i = 0; i < nbuttons; i++)
     if (buttons[i].id == B_NAME) text_field(&buttons[i], i == bcur, field == F_NAME);
+    else if (buttons[i].id == B_FLAT_FIELD) text_field(&buttons[i], i == bcur, field == F_FLAT);
     else button(&buttons[i], i == bcur && !field);
   if (field == F_SEED && gui == GUI_CREATE) {
     /* the field being typed in: a white frame and a blinking cursor */
@@ -2403,7 +2506,7 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
     case GUI_TITLE:
       menu_screen();
       break;
-    case GUI_WORLDS: case GUI_CREATE: case GUI_CONFIRM: case GUI_LOADING: case GUI_RENAME:
+    case GUI_WORLDS: case GUI_CREATE: case GUI_CONFIRM: case GUI_LOADING: case GUI_RENAME: case GUI_FLAT:
       dirt_background();
       menu_screen();
       break;

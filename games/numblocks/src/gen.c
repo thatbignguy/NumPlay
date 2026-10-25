@@ -99,6 +99,9 @@
 #include <string.h>
 
 #include "blocks.h"
+/* just the two tables the flat presets look blocks up by (data.c; not data.h, whose
+ * BF_* flags would clash with this file's own) */
+extern const uint8_t blk_id[B_N], blk_meta[B_N];
 #if NB_DIMS
 #include "dims.h"
 static int dims_slab(int cx, int cz, int y0, int h, uint8_t *out);   /* (gen_dims.h: the Nether, the End) */
@@ -5470,8 +5473,524 @@ static void slab_caves(int cx, int cz, const ColSum *sum, uint8_t *out, int y0, 
  * 0 when they are all there. */
 /* ---------------------------------------------------------------- superflat (ChunkProviderFlat) */
 static int g_flat;
-void gen_set_flat(int flat) { g_flat = flat; }
-static int flat_block(int y) { return y == 0 ? B_BEDROCK : y < 3 ? B_DIRT : y == 3 ? B_GRASS : B_AIR; }
+static uint8_t flat_layers[128];
+static int flat_n = 4;
+static int flat_biome = 1;
+static int flat_top = 3;   /* highest non-air layer (gen_top without a loop each call) */
+
+/* Simple block names for flat layers (lowercase, underscores ignored in match).
+ * Each block's modern (1.13) name comes first and its 1.8 spelling after it, so a preset
+ * kept with the old names still loads; e.g. "terracotta" and "hardenedclay" are both 172,
+ * "whiteterracotta", "stainedclay" and "whiteclay" are all 159:0.
+ * Legal numeric ids are any Minecraft id with a B_* state (blk_id[]/blk_meta[],
+ * same ids tools/pack.py uses, e.g. 1 stone, 2 grass, 3 dirt, 7 bedrock, 12 sand,
+ * 20 glass, 172 terracotta, 159:14 red terracotta). Unknown ids rejected. */
+static const struct { const char *name; uint16_t block; } flat_names[] = {
+  {"stone", B_STONE},
+  {"granite", B_GRANITE},
+  {"polishedgranite", B_POLISHED_GRANITE},
+  {"diorite", B_DIORITE},
+  {"polisheddiorite", B_POLISHED_DIORITE},
+  {"andesite", B_ANDESITE},
+  {"polishedandesite", B_POLISHED_ANDESITE},
+  {"grass", B_GRASS},
+  {"dirt", B_DIRT},
+  {"coarsedirt", B_COARSE_DIRT},
+  {"podzol", B_PODZOL},
+  {"cobblestone", B_COBBLESTONE},
+  {"oakplanks", B_PLANKS_OAK},
+  {"planks", B_PLANKS_OAK},
+  {"planksoak", B_PLANKS_OAK},
+  {"spruceplanks", B_PLANKS_SPRUCE},
+  {"planksspruce", B_PLANKS_SPRUCE},
+  {"birchplanks", B_PLANKS_BIRCH},
+  {"planksbirch", B_PLANKS_BIRCH},
+  {"jungleplanks", B_PLANKS_JUNGLE},
+  {"planksjungle", B_PLANKS_JUNGLE},
+  {"acaciaplanks", B_PLANKS_ACACIA},
+  {"planksacacia", B_PLANKS_ACACIA},
+  {"darkoakplanks", B_PLANKS_DARK_OAK},
+  {"planksdarkoak", B_PLANKS_DARK_OAK},
+  {"bedrock", B_BEDROCK},
+  {"sand", B_SAND},
+  {"redsand", B_RED_SAND},
+  {"gravel", B_GRAVEL},
+  {"goldore", B_GOLD_ORE},
+  {"ironore", B_IRON_ORE},
+  {"coalore", B_COAL_ORE},
+  {"oaklog", B_LOG_OAK},
+  {"logoak", B_LOG_OAK},
+  {"sprucelog", B_LOG_SPRUCE},
+  {"logspruce", B_LOG_SPRUCE},
+  {"birchlog", B_LOG_BIRCH},
+  {"logbirch", B_LOG_BIRCH},
+  {"junglelog", B_LOG_JUNGLE},
+  {"logjungle", B_LOG_JUNGLE},
+  {"acacialog", B_LOG_ACACIA},
+  {"logacacia", B_LOG_ACACIA},
+  {"darkoaklog", B_LOG_DARK_OAK},
+  {"logdarkoak", B_LOG_DARK_OAK},
+  {"oakleaves", B_LEAVES_OAK},
+  {"leavesoak", B_LEAVES_OAK},
+  {"spruceleaves", B_LEAVES_SPRUCE},
+  {"leavesspruce", B_LEAVES_SPRUCE},
+  {"birchleaves", B_LEAVES_BIRCH},
+  {"leavesbirch", B_LEAVES_BIRCH},
+  {"jungleleaves", B_LEAVES_JUNGLE},
+  {"leavesjungle", B_LEAVES_JUNGLE},
+  {"acacialeaves", B_LEAVES_ACACIA},
+  {"leavesacacia", B_LEAVES_ACACIA},
+  {"darkoakleaves", B_LEAVES_DARK_OAK},
+  {"leavesdarkoak", B_LEAVES_DARK_OAK},
+  {"sponge", B_SPONGE},
+  {"glass", B_GLASS},
+  {"lapisore", B_LAPIS_ORE},
+  {"lapisblock", B_LAPIS_BLOCK},
+  {"sandstone", B_SANDSTONE},
+  {"chiseledsandstone", B_SANDSTONE_CHISELED},
+  {"smoothsandstone", B_SANDSTONE_SMOOTH},
+  {"whitewool", B_WOOL_WHITE},
+  {"wool", B_WOOL_WHITE},
+  {"orangewool", B_WOOL_ORANGE},
+  {"magentawool", B_WOOL_MAGENTA},
+  {"lightbluewool", B_WOOL_LIGHT_BLUE},
+  {"yellowwool", B_WOOL_YELLOW},
+  {"limewool", B_WOOL_LIME},
+  {"pinkwool", B_WOOL_PINK},
+  {"graywool", B_WOOL_GRAY},
+  {"lightgraywool", B_WOOL_SILVER},
+  {"silverwool", B_WOOL_SILVER},
+  {"cyanwool", B_WOOL_CYAN},
+  {"purplewool", B_WOOL_PURPLE},
+  {"bluewool", B_WOOL_BLUE},
+  {"brownwool", B_WOOL_BROWN},
+  {"greenwool", B_WOOL_GREEN},
+  {"redwool", B_WOOL_RED},
+  {"blackwool", B_WOOL_BLACK},
+  {"goldblock", B_GOLD_BLOCK},
+  {"ironblock", B_IRON_BLOCK},
+  {"bricks", B_BRICKS},
+  {"brickblock", B_BRICKS},
+  {"tnt", B_TNT},
+  {"bookshelf", B_BOOKSHELF},
+  {"mossycobblestone", B_MOSSY_COBBLESTONE},
+  {"mossstone", B_MOSSY_COBBLESTONE},
+  {"obsidian", B_OBSIDIAN},
+  {"chest", B_CHEST},
+  {"diamondore", B_DIAMOND_ORE},
+  {"diamondblock", B_DIAMOND_BLOCK},
+  {"craftingtable", B_CRAFTING_TABLE},
+  {"workbench", B_CRAFTING_TABLE},
+  {"furnace", B_FURNACE},
+  {"ladder", B_LADDER},
+  {"rail", B_RAIL},
+  {"snowblock", B_SNOW},
+  {"snow", B_SNOW},
+  {"ice", B_ICE},
+  {"packedice", B_PACKED_ICE},
+  {"cactus", B_CACTUS},
+  {"clay", B_CLAY},
+  {"pumpkin", B_PUMPKIN},
+  {"jackolantern", B_JACK_O_LANTERN},
+  {"stonebricks", B_STONE_BRICKS},
+  {"stonebrick", B_STONE_BRICKS},
+  {"mossystonebricks", B_MOSSY_STONE_BRICKS},
+  {"crackedstonebricks", B_CRACKED_STONE_BRICKS},
+  {"chiseledstonebricks", B_CHISELED_STONE_BRICKS},
+  {"melon", B_MELON},
+  {"mycelium", B_MYCELIUM},
+  {"emeraldore", B_EMERALD_ORE},
+  {"emeraldblock", B_EMERALD_BLOCK},
+  {"cobblestonewall", B_COBBLESTONE_WALL},
+  {"terracotta", B_HARDENED_CLAY},
+  {"hardenedclay", B_HARDENED_CLAY},
+  {"whiteterracotta", B_STAINED_CLAY_WHITE},
+  {"stainedclay", B_STAINED_CLAY_WHITE},
+  {"stainedhardenedclay", B_STAINED_CLAY_WHITE},
+  {"whiteclay", B_STAINED_CLAY_WHITE},
+  {"orangeterracotta", B_STAINED_CLAY_ORANGE},
+  {"orangeclay", B_STAINED_CLAY_ORANGE},
+  {"magentaterracotta", B_STAINED_CLAY_MAGENTA},
+  {"magentaclay", B_STAINED_CLAY_MAGENTA},
+  {"lightblueterracotta", B_STAINED_CLAY_LIGHT_BLUE},
+  {"lightblueclay", B_STAINED_CLAY_LIGHT_BLUE},
+  {"yellowterracotta", B_STAINED_CLAY_YELLOW},
+  {"yellowclay", B_STAINED_CLAY_YELLOW},
+  {"limeterracotta", B_STAINED_CLAY_LIME},
+  {"limeclay", B_STAINED_CLAY_LIME},
+  {"pinkterracotta", B_STAINED_CLAY_PINK},
+  {"pinkclay", B_STAINED_CLAY_PINK},
+  {"grayterracotta", B_STAINED_CLAY_GRAY},
+  {"grayclay", B_STAINED_CLAY_GRAY},
+  {"lightgrayterracotta", B_STAINED_CLAY_SILVER},
+  {"silverclay", B_STAINED_CLAY_SILVER},
+  {"cyanterracotta", B_STAINED_CLAY_CYAN},
+  {"cyanclay", B_STAINED_CLAY_CYAN},
+  {"purpleterracotta", B_STAINED_CLAY_PURPLE},
+  {"purpleclay", B_STAINED_CLAY_PURPLE},
+  {"blueterracotta", B_STAINED_CLAY_BLUE},
+  {"blueclay", B_STAINED_CLAY_BLUE},
+  {"brownterracotta", B_STAINED_CLAY_BROWN},
+  {"brownclay", B_STAINED_CLAY_BROWN},
+  {"greenterracotta", B_STAINED_CLAY_GREEN},
+  {"greenclay", B_STAINED_CLAY_GREEN},
+  {"redterracotta", B_STAINED_CLAY_RED},
+  {"redclay", B_STAINED_CLAY_RED},
+  {"blackterracotta", B_STAINED_CLAY_BLACK},
+  {"blackclay", B_STAINED_CLAY_BLACK},
+  {"hayblock", B_HAY_BALE},
+  {"haybale", B_HAY_BALE},
+  {"coalblock", B_COAL_BLOCK},
+  {"redsandstone", B_RED_SANDSTONE},
+  {"glowstone", B_GLOWSTONE},
+#if NB_DIMS
+  {"netherrack", B_NETHERRACK},
+  {"soulsand", B_SOUL_SAND},
+  {"quartzblock", B_QUARTZ_BLOCK},
+  {"blockofquartz", B_QUARTZ_BLOCK},
+  {"endstone", B_END_STONE},
+  {"endstonebricks", B_END_STONE},
+  {"quartzore", B_QUARTZ_ORE},
+#endif
+};
+
+static bool flat_parse(const char *preset, uint8_t *out_layers, int *out_n, int *out_biome, char *err, int errmax);
+
+static int flat_tolower(int c) { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; }
+static bool flat_isdigit(int c) { return c >= '0' && c <= '9'; }
+static bool flat_isname(int c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+}
+/* Minecraft id + meta to NumBlocks block, -1: none (blk_id[]/blk_meta[] from data.h) */
+static int flat_from_id(int id, int meta) {
+  for (int i = 0; i < B_N; i++)
+    if (blk_id[i] == id && blk_meta[i] == meta) return i;
+  return -1;
+}
+/* simple name (len chars, already without minecraft: prefix or :meta) to block, -1: none */
+static int flat_from_name(const char *s, int len) {
+  char norm[32];
+  int k = 0;
+  for (int i = 0; i < len && k < (int)sizeof norm - 1; i++) {
+    int c = flat_tolower((unsigned char)s[i]);
+    if (c == '_' || c == '-') continue;
+    norm[k++] = (char)c;
+  }
+  norm[k] = 0;
+  for (unsigned i = 0; i < sizeof flat_names / sizeof flat_names[0]; i++) {
+    const char *n = flat_names[i].name;
+    int j = 0;
+    while (n[j] && norm[j] && n[j] == norm[j]) j++;
+    if (!n[j] && !norm[j]) return flat_names[i].block;
+  }
+  return -1;
+}
+static void flat_errmsg(char *err, int errmax, const char *msg) {
+  if (!err || errmax <= 0) return;
+  int i = 0;
+  while (msg[i] && i < errmax - 1) err[i] = msg[i], i++;
+  err[i] = 0;
+}
+/* parse one "block" (id[:meta] or name[:meta]) to B_*, -1: none (err set) */
+static int flat_parse_block(const char *s, int len, char *err, int errmax) {
+  int colon = -1;
+  for (int i = 0; i < len; i++)
+    if (s[i] == ':') { colon = i; break; }
+  int baselen = colon < 0 ? len : colon;
+  int meta = 0;
+  bool havemeta = false;
+  if (colon >= 0) {
+    if (colon + 1 >= len) { flat_errmsg(err, errmax, "Bad block"); return -1; }
+    int m = 0;
+    for (int i = colon + 1; i < len; i++) {
+      if (!flat_isdigit(s[i])) { flat_errmsg(err, errmax, "Bad data value"); return -1; }
+      m = m * 10 + (s[i] - '0');
+      if (m > 15) { flat_errmsg(err, errmax, "Bad data value"); return -1; }
+    }
+    meta = m, havemeta = true;
+  }
+  /* strip minecraft: prefix (case-insensitive) */
+  const char *base = s;
+  int blen = baselen;
+  if (blen > 10) {
+    bool ns = true;
+    static const char *pre = "minecraft:";
+    for (int i = 0; i < 10; i++)
+      if (flat_tolower((unsigned char)base[i]) != pre[i]) ns = false;
+    if (ns) base += 10, blen -= 10;
+  }
+  if (!blen) { flat_errmsg(err, errmax, "Bad block"); return -1; }
+  bool numeric = blen > 0;
+  for (int i = 0; i < blen; i++)
+    if (!flat_isdigit(base[i])) numeric = false;
+  if (numeric) {
+    int id = 0;
+    for (int i = 0; i < blen; i++) {
+      id = id * 10 + (base[i] - '0');
+      if (id > 255) break;
+    }
+    if (id < 0 || id > 255) { flat_errmsg(err, errmax, "Unknown block id"); return -1; }
+    int b = flat_from_id(id, havemeta ? meta : 0);
+    if (b < 0) {
+      char m[32] = "Unknown block: ";
+      int p = 15, q = 0;
+      while (m[p] && p < (int)sizeof m - 1) p++;
+      while (q < blen && p < (int)sizeof m - 1) m[p++] = base[q++];
+      m[p] = 0;
+      flat_errmsg(err, errmax, m);
+      return -1;
+    }
+    return b;
+  }
+  for (int i = 0; i < blen; i++)
+    if (!flat_isname(base[i])) { flat_errmsg(err, errmax, "Bad block"); return -1; }
+  int b = flat_from_name(base, blen);
+  if (b < 0) {
+    char m[40] = "Unknown block: ";
+    int p = 15;
+    for (int i = 0; i < blen && p < (int)sizeof m - 1 && i < 20; i++) m[p++] = (char)flat_tolower((unsigned char)base[i]);
+    m[p] = 0;
+    flat_errmsg(err, errmax, m);
+    return -1;
+  }
+  if (havemeta) {
+    int id = blk_id[b];
+    int nb = flat_from_id(id, meta);
+    if (nb < 0) { flat_errmsg(err, errmax, "Bad data value"); return -1; }
+    return nb;
+  }
+  return b;
+}
+
+/* first simple name for a block (for showing a preset back), NULL when it only has an id */
+static const char *flat_name_of(int b) {
+  for (unsigned i = 0; i < sizeof flat_names / sizeof flat_names[0]; i++)
+    if (flat_names[i].block == b) return flat_names[i].name;
+  return NULL;
+}
+/* decimal 0..255 into out, returns its length */
+static int flat_num(int v, char *out) {
+  char t[4];
+  int k = 0;
+  do t[k++] = (char)('0' + v % 10), v /= 10;
+  while (v);
+  for (int i = 0; i < k; i++) out[i] = t[k - 1 - i];
+  return k;
+}
+/* any valid preset (either shape) as a simple "block,block,..." list; false when it fits nowhere */
+bool flat_simplify(const char *preset, char *out, int outmax) {
+  uint8_t layers[128];
+  int n = 0, bio = 1;
+  if (outmax <= 0) return false;
+  if (!flat_parse(preset, layers, &n, &bio, NULL, 0) || !n) return false;
+  int p = 0;
+  for (int i = 0; i < n; i++) {
+    if (i) {
+      if (p + 1 >= outmax) return false;
+      out[p++] = ',';
+    }
+    const char *nm = flat_name_of(layers[i]);
+    if (nm) {
+      int l = (int)strlen(nm);
+      if (p + l >= outmax) return false;
+      memcpy(out + p, nm, (size_t)l), p += l;
+    } else {
+      char nb[8];
+      int q = flat_num(blk_id[layers[i]], nb);
+      if (blk_meta[layers[i]]) {
+        nb[q++] = ':';
+        q += flat_num(blk_meta[layers[i]], nb + q);
+      }
+      if (p + q >= outmax) return false;
+      memcpy(out + p, nb, (size_t)q), p += q;
+    }
+  }
+  out[p] = 0;
+  return true;
+}
+
+/* Flat presets come in two shapes, both valid: the simple "block,block,..." list
+ * (one layer per block, bottom to top, e.g. "bedrock,dirt,dirt,grass") and the
+ * 1.8 FlatGeneratorInfo "version;layers;biome;structures" (e.g. "2;7,2x3,2;1",
+ * kept so older saves still load). Returns true when valid, filling
+ * out_layers/out_n/out_biome; err gets a short red message. NULL/empty = default. */
+static bool flat_parse(const char *preset, uint8_t *out_layers, int *out_n, int *out_biome, char *err,
+                       int errmax) {
+  if (!preset || !preset[0]) {
+    if (out_layers) { out_layers[0] = B_BEDROCK, out_layers[1] = B_DIRT, out_layers[2] = B_DIRT, out_layers[3] = B_GRASS; }
+    if (out_n) *out_n = 4;
+    if (out_biome) *out_biome = 1;
+    if (err && errmax > 0) err[0] = 0;
+    return true;
+  }
+  int len = (int)strlen(preset);
+  if (len > FLAT_MAX) { flat_errmsg(err, errmax, "Preset too long"); return false; }
+  if (!strchr(preset, ';')) {
+    /* simple list: no version, counts or biome */
+    const char *layers = preset;
+    int laylen = len;
+    while (laylen > 0 && (layers[laylen - 1] == ' ' || layers[laylen - 1] == '\t')) laylen--;
+    while (laylen > 0 && (*layers == ' ' || *layers == '\t')) layers++, laylen--;
+    if (!laylen) { flat_errmsg(err, errmax, "No layers"); return false; }
+    int entries = 1;
+    for (int i = 0; i < laylen; i++) if (layers[i] == ',') entries++;
+    if (entries > 16) { flat_errmsg(err, errmax, "Too many layers (max 16)"); return false; }
+    uint8_t tmp[128];
+    int total = 0, at = 0;
+    for (int e = 0; e < entries; e++) {
+      int s = at;
+      while (at < laylen && layers[at] != ',') at++;
+      int blen = at - s;
+      if (at < laylen) at++;   /* skip ',' */
+      while (blen > 0 && (layers[s + blen - 1] == ' ' || layers[s + blen - 1] == '\t')) blen--;
+      while (blen > 0 && (layers[s] == ' ' || layers[s] == '\t')) s++, blen--;
+      if (!blen) { flat_errmsg(err, errmax, "Bad layer"); return false; }
+      int b = flat_parse_block(layers + s, blen, err, errmax);
+      if (b < 0) return false;
+      if (b == B_AIR) { flat_errmsg(err, errmax, "Air not allowed"); return false; }
+      if (total + 1 > 128) { flat_errmsg(err, errmax, "Too tall (max 128)"); return false; }
+      tmp[total++] = (uint8_t)b;
+    }
+    if (!total) { flat_errmsg(err, errmax, "No layers"); return false; }
+    if (out_layers) memcpy(out_layers, tmp, (size_t)total);
+    if (out_n) *out_n = total;
+    if (out_biome) *out_biome = 1;
+    if (err && errmax > 0) err[0] = 0;
+    return true;
+  }
+  const char *p1 = strchr(preset, ';');
+  const char *layers = p1 + 1;
+  const char *p2 = strchr(layers, ';');
+  const char *biome = NULL;
+  const char *layend;
+  if (p2) {
+    layend = p2;
+    biome = p2 + 1;
+    const char *p3 = strchr(biome, ';');
+    if (p3) biome = p3 == biome ? biome : biome;   /* structures after p3 ignored */
+  } else {
+    layend = layers + strlen(layers);
+    biome = NULL;
+  }
+  int laylen = (int)(layend - layers);
+  while (laylen > 0 && (layers[laylen - 1] == ' ' || layers[laylen - 1] == '\t')) laylen--;
+  while (laylen > 0 && (*layers == ' ' || *layers == '\t')) layers++, laylen--;
+  if (!laylen) { flat_errmsg(err, errmax, "No layers"); return false; }
+  /* count entries (max 16) */
+  int entries = 1;
+  for (int i = 0; i < laylen; i++) if (layers[i] == ',') entries++;
+  if (entries > 16) { flat_errmsg(err, errmax, "Too many layers (max 16)"); return false; }
+  uint8_t tmp[128];
+  int total = 0;
+  int at = 0;
+  for (int e = 0; e < entries; e++) {
+    int s = at;
+    while (at < laylen && layers[at] != ',') at++;
+    int elen = at - s;
+    if (at < laylen) at++;   /* skip ',' */
+    while (elen > 0 && (layers[s + elen - 1] == ' ' || layers[s + elen - 1] == '\t')) elen--;
+    while (elen > 0 && (layers[s] == ' ' || layers[s] == '\t')) s++, elen--;
+    if (!elen) { flat_errmsg(err, errmax, "Bad layer"); return false; }
+    /* split count 'x' block */
+    int xi = -1;
+    for (int i = 0; i < elen; i++)
+      if (layers[s + i] == 'x' || layers[s + i] == 'X' || layers[s + i] == '*') { xi = i; break; }
+    int count = 1;
+    const char *bs;
+    int blen;
+    if (xi >= 0) {
+      if (xi == 0 || xi + 1 >= elen) { flat_errmsg(err, errmax, "Bad layer"); return false; }
+      for (int i = 0; i < xi; i++)
+        if (!flat_isdigit(layers[s + i])) { flat_errmsg(err, errmax, "Bad count"); return false; }
+      /* block part must not hold another x (names hold none) */
+      for (int i = xi + 1; i < elen; i++)
+        if (layers[s + i] == 'x' || layers[s + i] == 'X' || layers[s + i] == '*') {
+          flat_errmsg(err, errmax, "Bad layer");
+          return false;
+        }
+      int c = 0;
+      for (int i = 0; i < xi; i++) {
+        c = c * 10 + (layers[s + i] - '0');
+        if (c > 128) break;
+      }
+      if (c < 1 || c > 128) { flat_errmsg(err, errmax, "Bad count"); return false; }
+      count = c;
+      bs = layers + s + xi + 1, blen = elen - xi - 1;
+    } else {
+      bs = layers + s, blen = elen;
+    }
+    while (blen > 0 && (bs[blen - 1] == ' ' || bs[blen - 1] == '\t')) blen--;
+    while (blen > 0 && (*bs == ' ' || *bs == '\t')) bs++, blen--;
+    if (!blen) { flat_errmsg(err, errmax, "Bad block"); return false; }
+    int b = flat_parse_block(bs, blen, err, errmax);
+    if (b < 0) return false;
+    if (b == B_AIR) { flat_errmsg(err, errmax, "Air not allowed"); return false; }
+    if (total + count > 128) { flat_errmsg(err, errmax, "Too tall (max 128)"); return false; }
+    for (int i = 0; i < count; i++) tmp[total++] = (uint8_t)b;
+  }
+  if (!total) { flat_errmsg(err, errmax, "No layers"); return false; }
+  int bio = 1;
+  if (biome) {
+    const char *bend = biome + strlen(biome);
+    const char *semi = strchr(biome, ';');
+    if (semi) bend = semi;
+    while (bend > biome && (bend[-1] == ' ' || bend[-1] == '\t')) bend--;
+    while (bend > biome && (*biome == ' ' || *biome == '\t')) biome++;
+    int blen = (int)(bend - biome);
+    if (blen) {
+      for (int i = 0; i < blen; i++)
+        if (!flat_isdigit(biome[i])) { flat_errmsg(err, errmax, "Bad biome"); return false; }
+      int v = 0;
+      for (int i = 0; i < blen; i++) {
+        v = v * 10 + (biome[i] - '0');
+        if (v > 255) break;
+      }
+      if (v < 0 || v > 255) { flat_errmsg(err, errmax, "Bad biome"); return false; }
+      bio = v;
+    }
+  }
+  if (out_layers) memcpy(out_layers, tmp, (size_t)total);
+  if (out_n) *out_n = total;
+  if (out_biome) *out_biome = bio;
+  if (err && errmax > 0) err[0] = 0;
+  return true;
+}
+
+bool flat_validate(const char *preset, char *err, int errmax) {
+  return flat_parse(preset, NULL, NULL, NULL, err, errmax);
+}
+int flat_height(void) { return flat_n; }
+int flat_biome_id(void) { return flat_biome; }
+
+/* the highest non-air layer (presets never hold air, but saves might) */
+static int flat_top_of(void) {
+  for (int y = flat_n - 1; y > 0; y--)
+    if (flat_layers[y] != B_AIR) return y;
+  return 0;
+}
+static void flat_use_default(void) {
+  flat_layers[0] = B_BEDROCK, flat_layers[1] = B_DIRT, flat_layers[2] = B_DIRT, flat_layers[3] = B_GRASS;
+  flat_n = 4, flat_biome = 1, g_flat = 1;
+  flat_top = flat_top_of();
+}
+void gen_set_flat_preset(const char *preset) {
+  uint8_t tmp[128];
+  int n = 0, bio = 1;
+  if (!preset || !preset[0]) { flat_use_default(); return; }
+  if (!flat_parse(preset, tmp, &n, &bio, NULL, 0)) { flat_use_default(); return; }
+  memcpy(flat_layers, tmp, (size_t)n);
+  flat_n = n, flat_biome = bio, g_flat = 1;
+  flat_top = flat_top_of();
+}
+void gen_set_flat(int flat) {
+  if (flat) flat_use_default();
+  else g_flat = 0;
+}
+static int flat_block(int y) {
+  if (y < 0 || y >= flat_n) return B_AIR;
+  return flat_layers[y];
+}
+
 
 int gen_prepare(int cx, int cz) {
     if (g_flat) return 0;
@@ -5553,7 +6072,7 @@ int gen_biome(int x, int z) {
 #if NB_DIMS
     if (gd_dim) return gd_dim == DIM_NETHER ? 8 : 9;   /* (BiomeGenHell, BiomeGenEnd) */
 #endif
-    if (g_flat) return BI_PLAINS;
+    if (g_flat) return flat_biome;
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx == last_cx && cz == last_cz) return c_b16[i];
     if (cx != bc_cx || cz != bc_cz) chunk_biomes(cx, cz);
@@ -5564,7 +6083,7 @@ int gen_top(int x, int z) {
 #if NB_DIMS
     if (gd_dim) return 127;
 #endif
-    if (g_flat) return 3;
+    if (g_flat) return flat_top;
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx != last_cx || cz != last_cz) gen_slab(cx, cz, 127, 1, col_tmp);
     int t = c_top[i];
@@ -5588,7 +6107,7 @@ void gen_spawn(int *px, int *py, int *pz) {
         /* WorldChunkManagerHell.findBiomePosition(0, 0, 256): anywhere within 256, all of it grass */
         *px = -256 + jr_int(&r, 513);
         *pz = -256 + jr_int(&r, 513);
-        *py = 4;
+        *py = flat_top + 1;
         return;
     }
     /* WorldChunkManager.a(0, 0, 256, spawn biomes, random): 129 x 129 cells of rivermix */
