@@ -1,3 +1,20 @@
+## 1.5.65
+**Personalisation: the title's panoramas, drawn from the game's own world, and high-contrast outlines**
+- Options gains "Personalisation..." beside "Mods and Cheats...", with High
+  Contrast Block Outlines and Panorama. High Contrast draws the block looked at
+  in the reference's cyan (#57FFE1) at 24/32 instead of black at 13/32.
+- Panorama is Random / World / Overworld / Nether. World is the world played
+  last, where the player left off; Overworld and Nether are one fixed seed's
+  (123) own world, drawn live at a chosen spot - a hill over the plains, and
+  over the Nether's lava - so a fresh install has a backdrop without a world
+  played, and the Nether shows without a portal. Random rolls one of the three
+  each time the title is entered, mixing `plat_entropy()` so even a run's first
+  roll differs. The backdrop builds its chunks a frame at a time (nothing
+  pauses the title).
+- `Options` grows to 40 bytes (contrast and panorama after the keys); records
+  from before read those as off and Random. `numblocks.cfg` is 40 bytes now.
+- `--panorama N` and `--contrast` added to `build/play`.
+
 ## 1.5.64
 **Superflat worlds take a preset again**
 - Create New World's Superflat has "Customize..." beside the world type. The
@@ -18,7 +35,7 @@
 
 ## 1.5.63
 **The version lives in the source again, and Fullbright comes back**
-- `NB_VERSION` is back (1.5.63), and the title screen reads "Numblocks custom
+- `NB_VERSION` is back (1.5.63), and the title screen reads "NumBlocks
   1.5.63" instead of upstream's hardcoded "NumBlocks 1.0". Upstream has no F3
   overlay, so the version shows on the title screen only for now.
 - Options gains "Mods and Cheats..." below Controls, opening a list screen with

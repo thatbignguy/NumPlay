@@ -681,7 +681,7 @@ int main(void) {
   {
     /* Fullbright fills the Options byte that used to be padding: the record stays 36 bytes,
        byte 7, and a record written before it reads it as off */
-    CHECK(sizeof(Options) == 36);
+    CHECK(sizeof(Options) == 40);
     CHECK((uint8_t *)&opt.fullbright - (uint8_t *)&opt == 7);
     opt.fullbright = 1;
     save_options();
@@ -692,6 +692,12 @@ int main(void) {
     load_options();
     CHECK(opt.fullbright == 1);
     opt.fullbright = 0;
+    opt.contrast = 1, opt.panorama = PAN_NETHER;
+    save_options();
+    opt.contrast = 0, opt.panorama = PAN_RANDOM;
+    load_options();
+    CHECK(opt.contrast == 1 && opt.panorama == PAN_NETHER);
+    opt.contrast = 0, opt.panorama = PAN_RANDOM;
     save_options();
   }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);

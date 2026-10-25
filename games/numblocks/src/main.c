@@ -23,23 +23,80 @@ static uint32_t last, acc, keys_held, autosave;
 static float px, py, pz;
 static bool in_world;      /* playing; else the title screens, the world turning behind */
 static float title_yaw;
+/* The title's backdrop comes from Personalisation's Panorama pick (opt.panorama). This is
+ * the whole state of it, packed into one byte: the pick showing (PAN_WORLD..PAN_NETHER)
+ * and the setting it was picked for (Random re-picks each entry). */
+static struct {
+  uint8_t show : 3, pick : 3;
+} title_pan;
+/* The fixed backdrop world: one seed, its overworld and its nether, the camera always
+ * at the same spot (the feet; the same block the pick was noted in). */
+#define TITLE_SEED 123
+static const float title_spot[2][3] = {
+  {500.5f, 70.0f, 0.5f},     /* (PAN_OVER) the overworld: a hill over the plains */
+  {100.5f, 33.0f, 0.5f},     /* (PAN_NETHER) the same world's nether, over its lava */
+};
 
 void camera_reset(void) {
   px = pl.x, py = pl.y, pz = pl.z;
   player_look(pl.x, pl.y + 1.62f, pl.z, pl.yaw, pl.pitch);
 }
 
-/* the title's backdrop: the saved world where the player is, else a world of seed 0 */
-static void title(void) {
-  in_world = false;
-  if (!opt.last_world || !load_world(opt.last_world)) {
+/* The title's backdrop (Personalisation's Panorama): a fixed pick keeps itself every
+ * visit; Random rolls one of the three. The roll mixes the clock - never the world's
+ * rnd() stream, which the tests replay - with plat_entropy(), which says where this
+ * run began, so even a run's first pick is a roll rather than always the same one.
+ * It happens on every entry, so Random shows a different one on different visits. */
+static void title_pick(void) {
+  uint8_t p = opt.panorama <= PAN_NETHER ? opt.panorama : PAN_RANDOM;
+  if (p == PAN_RANDOM) {
+    uint64_t r = (uint64_t)(plat_millis() ^ plat_entropy() * 2654435761u) * 0x9E3779B97F4A7C15ull + perf_frames;
+    r ^= r >> 30;
+    r *= 0xBF58476D1CE4E5B9ull;
+    r ^= r >> 31;
+    title_pan.show = (uint8_t)(PAN_WORLD + r % 3);
+  } else title_pan.show = p;
+  title_pan.pick = p;
+}
+
+/* the backdrop world of the pick: the world played last (the player where they left
+ * off), else a world of seed 0; or the fixed world - TITLE_SEED, the overworld or its
+ * nether - with the camera at the spot above, so a fresh install has a world to show
+ * without one being played, and the nether can be seen without walking to a portal */
+static void title_backdrop(void) {
+  if (title_pan.show == PAN_WORLD) {
+    if (!opt.last_world || !load_world(opt.last_world)) {
+      world_type = WT_DEFAULT;
+      memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
+      world_seed = 0;
+      world_new(0, "nbt");
+      player_spawn();
+    }
+  } else {
+    /* (the fixed world: never flat, whichever world was played last) */
     world_type = WT_DEFAULT;
-    world_new(0, "nbt");
-    player_spawn();
+    memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
+    world_seed = TITLE_SEED;
+    world_new(TITLE_SEED, "nbt");
+#if NB_DIMS
+    if (title_pan.show == PAN_NETHER) world_dim(DIM_NETHER);
+#else
+    if (title_pan.show == PAN_NETHER) title_pan.show = PAN_OVER;
+#endif
+    const float *s = title_spot[title_pan.show - PAN_OVER];
+    pl.x = s[0], pl.y = s[1], pl.z = s[2];
+    pl.vx = pl.vy = pl.vz = 0;
   }
-  gui_menu(GUI_TITLE);
   world_follow(pl.x, pl.y, pl.z);
   camera_reset();
+}
+
+/* the title's backdrop pick, and the world behind it */
+static void title(void) {
+  in_world = false;
+  title_pick();
+  title_backdrop();
+  gui_menu(GUI_TITLE);
 }
 
 /* the loading screen, drawn once before the world is built */
@@ -176,8 +233,14 @@ bool game_frame(void) {
     }
   }
   if (!in_world) {
-    /* the title: the world turns slowly, nothing moves */
+    /* the title: its backdrop turns slowly (a world, played or fixed), nothing moves */
+    if (opt.panorama != title_pan.pick) {
+      /* the setting changed under the title (Options, Personalisation): pick again */
+      title_pick();
+      title_backdrop();
+    }
     title_yaw += dt * 0.006f;
+    world_follow(pl.x, pl.y, pl.z);   /* the backdrop's chunks, one a frame (a fixed world is new) */
     Camera c = {pl.x, pl.y + 1.62f, pl.z, title_yaw, 8};
     render_frame(gui == GUI_TITLE ? &c : NULL, game_time);
     perf_frames++;
@@ -203,7 +266,7 @@ bool game_frame(void) {
     if (pl.pitch < -90) pl.pitch = -90;
   }
   bool paused = gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS ||
-                gui == GUI_MODS || gui == GUI_FLAT;
+                gui == GUI_MODS || gui == GUI_FLAT || gui == GUI_PERSONAL;
 #if NB_DIMS
   paused = paused || gui == GUI_CREDITS;   /* (the player is in no world while they roll) */
 #endif

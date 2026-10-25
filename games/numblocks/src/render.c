@@ -1849,7 +1849,12 @@ static void line_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW]) {
 
 /* ---------------------------------------------------------------- the block looked at */
 /* RenderGlobal.drawSelectionBox: the edges of the block's selection box (its shape, grown
- * by 0.002) in black at 40%, hidden where something is in front of them */
+ * by 0.002), hidden where something is in front of them. The line is the face's own colour
+ * blended towards black at 13/32; with High Contrast (Personalisation) towards the
+ * reference's cyan, #57FFE1, at 24/32 instead. */
+static inline uint16_t sel_edge(uint16_t c) {
+  return opt.contrast ? mix565(c, pack(0x57, 0xFF, 0xE1), 24) : mix565(c, 0, 13);
+}
 static float sel_pt[8][3];   /* the corners on the picture: x, y, 1 / depth (0: behind the camera) */
 static float sel_w[8][3];    /* and in the cache */
 static bool sel_on;
@@ -1894,7 +1899,7 @@ static void select_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[RW])
       lx = x, ly = y;
       /* in front of what was drawn there (or the face it outlines: a little give) */
       float t = 1 / (a[2] + (b[2] - a[2]) * s);
-      if (zb[y - py0][x] * 1.02f + 0.02f > t) cb[y - py0][x] = mix565(cb[y - py0][x], 0, 13);
+      if (zb[y - py0][x] * 1.02f + 0.02f > t) cb[y - py0][x] = sel_edge(cb[y - py0][x]);
     }
   }
 }
@@ -2022,7 +2027,7 @@ static uint32_t strip_hash(void) {
 static bool still_screen(void) {
   return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_WORLDS || gui == GUI_CREATE ||
          gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS ||
-         gui == GUI_MODS || gui == GUI_FLAT;
+         gui == GUI_MODS || gui == GUI_FLAT || gui == GUI_PERSONAL;
 }
 static void send_strip(int py, bool still) {
   if (still) {

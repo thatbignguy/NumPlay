@@ -19,7 +19,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen shows */
-#define NB_VERSION "1.5.63"
+#define NB_VERSION "1.5.65"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -42,6 +42,10 @@ enum {
   RK_OK = 4, RK_BACK = 5, RK_SHIFT = 12, RK_ALPHA = 13, RK_BACKSPACE = 17, RK_EXE = 52
 };
 uint32_t plat_millis(void);
+/* A number that differs between runs, for what wants one without touching the world's
+ * rnd() stream: the title's Random panorama pick mixes it, so even the first pick of a
+ * run is a roll (the host's simulated clock starts at 0 every run). */
+uint32_t plat_entropy(void);
 void plat_sleep(uint32_t ms);
 void plat_push(int x, int y, int w, int h, const uint16_t *px);
 void plat_pull(int x, int y, int w, int h, uint16_t *px);   /* what the screen shows there */
@@ -306,7 +310,7 @@ void break_block_at(int x, int y, int z, bool drops);
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_MODS, GUI_FLAT
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_MODS, GUI_FLAT, GUI_PERSONAL
 #if NB_DIMS
        , GUI_CREDITS   /* the End poem and the credits (gui.c) */
 #endif
@@ -340,7 +344,13 @@ typedef struct {
   uint8_t fullbright;   /* Mods and Cheats: see in the dark (only with cheats on) */
   uint32_t plays;       /* worlds opened so far: each world keeps the count when it was last played */
   uint8_t keys[24];     /* the key of each action (A_*): the calculator's number for it, 255 none */
+  uint8_t contrast;     /* High Contrast Block Outlines (Personalisation): the block looked at in cyan */
+  uint8_t panorama;     /* the title's backdrop (Personalisation): PAN_*, Random by default */
 } Options;
+/* The title's backdrop (Personalisation's Panorama): the world played last, or a fixed
+ * world's own overworld or nether (seed 123, the camera at the spot main.c keeps);
+ * Random rolls one of the three each time the title is entered. */
+enum { PAN_RANDOM, PAN_WORLD, PAN_OVER, PAN_NETHER };
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,
        A_LEFT, A_RIGHT, A_BACK, A_FORWARD, A_CHAT, A_COMMAND, N_ACTIONS };

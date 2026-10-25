@@ -1204,7 +1204,7 @@ enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCE
        B_DODELETE, B_DIFF, B_GFX, B_LOOK, B_CLOUDS, B_BOB, B_DONE, B_BACK_GAME, B_SAVEQUIT, B_RESPAWN, B_TITLE,
        B_CONTROLS, B_CONTROLS_DONE, B_NAME, B_RENAME, B_DORENAME, B_RECREATE, B_CHEATS, B_LAN, B_LAN_MODE,
        B_LAN_CHEATS, B_LAN_START, B_TYPE, B_MODS, B_FULLBRIGHT, B_MODS_DONE, B_CUSTOMIZE, B_FLAT_FIELD,
-       B_FLAT_USE, B_FLAT_DONE, B_FLAT_RESET, B_FLAT_CANCEL };
+       B_FLAT_USE, B_FLAT_DONE, B_FLAT_RESET, B_FLAT_CANCEL, B_PERSONAL, B_CONTRAST, B_PANORAMA, B_PERSONAL_DONE };
 int menu_choice;            /* an action for main.c (ACT_*) */
 int create_mode;            /* the new world's game mode */
 bool create_cheats;         /* and whether it allows cheats */
@@ -1225,6 +1225,17 @@ static void copy_preset_text(char *d, const char *s) {
     int k = 0;
     for (; FLAT_DEFAULT[k] && k < FLAT_MAX; k++) d[k] = FLAT_DEFAULT[k];
     d[k] = 0;
+  }
+}
+/* Personalisation: the Panorama row's picks (opt.panorama), as the row writes them */
+static const char *pan_name(uint8_t p) {
+  switch (p) {
+    case PAN_WORLD: return T("World");
+    case PAN_OVER: return T("Overworld");
+#if NB_DIMS
+    case PAN_NETHER: return T("Nether");
+#endif
+    default: return T("Random");
   }
 }
 int play_slot;              /* the world to play */
@@ -1548,8 +1559,16 @@ static void menu(int screen) {
       cat(t, T("View Bobbing: "), opt.bobbing ? T("ON") : T("OFF"));
       add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_BOB, t);
       add_button(w / 2 + 5, h / 6 + 36, 150, 1, B_CONTROLS, T("Controls..."));
-      add_button(w / 2 - 100, h / 6 + 60, 200, 1, B_MODS, T("Mods and Cheats..."));
+      add_button(w / 2 - 155, h / 6 + 60, 150, 1, B_MODS, T("Mods and Cheats..."));
+      add_button(w / 2 + 5, h / 6 + 60, 150, 1, B_PERSONAL, T("Personalisation..."));
       add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_DONE, T("Done"));
+      break;
+    case GUI_PERSONAL:
+      cat(t, T("High Contrast: "), opt.contrast ? T("ON") : T("OFF"));
+      add_button(w / 2 - 155, h / 6 - 12, 310, 1, B_CONTRAST, t);
+      cat(t, T("Panorama: "), pan_name(opt.panorama));
+      add_button(w / 2 - 155, h / 6 + 12, 310, 1, B_PANORAMA, t);
+      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_PERSONAL_DONE, T("Done"));
       break;
     case GUI_MODS:
       /* Mods and Cheats: a list screen, one switch for now. It opens only from a world's
@@ -1770,6 +1789,19 @@ static void press(int id) {
       save_options();
       gui_menu(GUI_OPTIONS);
       break;
+    case B_PERSONAL: gui_menu(GUI_PERSONAL); break;
+    case B_CONTRAST: opt.contrast = !opt.contrast; break;
+    case B_PANORAMA:
+#if NB_DIMS
+      opt.panorama = (uint8_t)(opt.panorama >= PAN_NETHER ? PAN_RANDOM : opt.panorama + 1);
+#else
+      opt.panorama = (uint8_t)(opt.panorama >= PAN_OVER ? PAN_RANDOM : opt.panorama + 1);
+#endif
+      break;
+    case B_PERSONAL_DONE:
+      save_options();
+      gui_menu(GUI_OPTIONS);
+      break;
     case B_CONTROLS: gui_menu(GUI_KEYS); break;
     case B_CONTROLS_DONE:
       if (opt.keys_seen != KEY_SHEET) opt.keys_seen = KEY_SHEET, save_options();
@@ -1813,6 +1845,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     else if (gui == GUI_OPTIONS) press(B_DONE);
     else if (gui == GUI_MODS) press(B_MODS_DONE);
     else if (gui == GUI_FLAT) press(B_FLAT_CANCEL);
+    else if (gui == GUI_PERSONAL) press(B_PERSONAL_DONE);
     else if (gui == GUI_CONTROLS) press(B_CONTROLS_DONE);
     else if (gui == GUI_WORLDS || gui == GUI_CREATE || gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LAN)
       press(B_CANCEL);
@@ -2157,7 +2190,7 @@ static void menu_screen(void) {
     case GUI_TITLE:
       logo(30);
       splash("Also try Minecraft!", w / 2 + 72, 72, 1.25f + 0.08f * fabsf(sinf((frame_no % 60) * 0.1047f)));
-      text("Numblocks custom " NB_VERSION, 2, h - 10, 0xFFFF, true);
+      text("NumBlocks " NB_VERSION, 2, h - 10, 0xFFFF, true);
       text(T("Inspired by Minecraft, not affiliated with Mojang"),
            w - text_width(T("Inspired by Minecraft, not affiliated with Mojang")) - 2, h - (TALL ? 24 : 20), 0xFFFF, true);
       text(T("Made by Mason Chen as part of NumPlay"), w - text_width(T("Made by Mason Chen as part of NumPlay")) - 2, h - 10,
@@ -2228,6 +2261,7 @@ static void menu_screen(void) {
     }
     case GUI_OPTIONS: text_center(T("Options"), w / 2, 15, 0xFFFF); break;
     case GUI_MODS: text_center(T("Mods and Cheats"), w / 2, 15, 0xFFFF); break;
+    case GUI_PERSONAL: text_center(T("Personalisation"), w / 2, 15, 0xFFFF); break;
     case GUI_CONTROLS: key_sheet(); break;
     case GUI_PAUSE: text_center(T("Game menu"), w / 2, 40, 0xFFFF); break;
     case GUI_LAN:
@@ -2480,7 +2514,7 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
     tint_rect(0, y0, SCREEN_W, rows, 0x0841, a > 30 ? 30 : a);
   }
   if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_DEATH || gui == GUI_LAN ||
-      ((gui == GUI_OPTIONS || gui == GUI_KEYS || gui == GUI_MODS) && options_from == GUI_PAUSE))
+      ((gui == GUI_OPTIONS || gui == GUI_KEYS || gui == GUI_MODS || gui == GUI_PERSONAL) && options_from == GUI_PAUSE))
     hud();
   if (gui == GUI_NONE || gui == GUI_CHAT) chat_lines();
   if (pl.hurt_time > 0 && gui == GUI_NONE) {
@@ -2497,7 +2531,7 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
       menu_screen();
       break;
     case GUI_CHAT: chat_screen(); break;
-    case GUI_OPTIONS: case GUI_CONTROLS: case GUI_KEYS: case GUI_MODS:
+    case GUI_OPTIONS: case GUI_CONTROLS: case GUI_KEYS: case GUI_MODS: case GUI_PERSONAL:
       if (options_from == GUI_PAUSE) dark_background();
       else dirt_background();
       if (gui == GUI_KEYS) keys_screen();

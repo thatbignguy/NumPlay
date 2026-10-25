@@ -10,7 +10,7 @@
 
 #define OPTIONS_REC "numblocks.cfg"
 
-Options opt = {2, 0, 100, 1, 1, 0, 0, 0, 0, {0}};
+Options opt = {2, 0, 100, 1, 1, 0, 0, 0, 0, {0}, 0, 0};
 int64_t world_seed;
 uint8_t world_type;
 char world_preset[FLAT_MAX + 1] = FLAT_DEFAULT;
@@ -436,6 +436,8 @@ void copy_restore(void) {
 
 void load_options(void) {
   keys_reset();
+  /* the options added after the first records: off/off/Random when a shorter one is read */
+  opt.fullbright = 0, opt.contrast = 0, opt.panorama = PAN_RANDOM;
   uint32_t len = 0;
   const uint8_t *d = plat_load(OPTIONS_REC, &len);
   /* (an older, shorter record: what it has; the rest stays as it was) */

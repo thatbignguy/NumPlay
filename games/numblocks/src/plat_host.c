@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 #include "nb.h"
 
 uint16_t host_fb[SCREEN_W * SCREEN_H];
@@ -13,6 +15,19 @@ uint32_t plat_keys(void) { return host_keys; }
 uint64_t host_raw;                 /* (tests: keys as the calculator numbers them) */
 uint64_t plat_scan(void) { return host_raw; }
 uint32_t plat_millis(void) { return host_time; }
+/* Where the run started, from the real clock: the simulated clock above is 0 every run,
+ * so the title's Random pick (main.c) would otherwise always land on the same backdrop
+ * on the desktop. The nanoseconds differ between two runs a moment apart, and the pid
+ * covers the rest. */
+uint32_t plat_entropy(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_MONOTONIC, &t);
+  uint32_t h = (uint32_t)((uint64_t)t.tv_sec * 1000000000ull + (uint32_t)t.tv_nsec);
+  h ^= h >> 16;
+  h *= 2654435761u;
+  h ^= h >> 13;
+  return h ^ (uint32_t)getpid();
+}
 void plat_sleep(uint32_t ms) { host_time += ms; }
 void plat_push(int x, int y, int w, int h, const uint16_t *px) {
   for (int r = 0; r < h; r++)
