@@ -1,11 +1,22 @@
-/* Nether fortresses (MapGenNetherBridge, StructureNetherBridgePieces), adapted from
- * NumPlay 1.17 to this fork\'s modern Nether and 9-bit slab. Included by gen.c. */
-#ifndef NB_GEN_FORTRESS_H
-#define NB_GEN_FORTRESS_H
-#include "gen_struct.h"
+/* NumBlocks.nwa only (NB_DIMS), included by gen_dims.h: Nether fortresses (MapGenNetherBridge,
+ * StructureNetherBridgePieces), laid out as 1.8.8 lays them, piece by piece from the same random, then
+ * built chunk by chunk.
+ *
+ * A fortress's layout is kept in the scratch union U while the player is in the Nether (gen.c's
+ * Overworld does not run there): the last one laid out, as the chunks around one are made one after
+ * the other. */
 
 enum { FP_STRAIGHT, FP_CROSSING3, FP_CROSSING, FP_STAIRS, FP_THRONE, FP_ENTRANCE, FP_CORRIDOR5, FP_CROSSING2,
        FP_CORRIDOR2, FP_CORRIDOR, FP_CORRIDOR3, FP_CORRIDOR4, FP_STALK, FP_END };
+enum { F_N, F_E, F_S, F_W };   /* EnumFacing.Plane.HORIZONTAL's order */
+static inline int iabs(int v) { return v < 0 ? -v : v; }
+
+typedef struct {
+    int16_t x0, y0, z0, x1, y1, z1;
+    uint8_t type, face, flag, depth;   /* flag: a corridor's chest; depth: getComponentType */
+    i32 seed;                          /* an End's fillSeed */
+} FPiece;
+
 #define FMAX 232
 typedef struct {
     int sx, sz, ok;                     /* the start's chunk */
@@ -15,9 +26,7 @@ typedef struct {
     uint8_t wl[2][7], wn[2], cnt[FP_END];   /* the weights left (types), how many each placed */
     int16_t bb[6];                      /* all of it */
 } Fort;
-/* (the layout lives in the summary cache, after the End's states: mob spawning asks
- * for it outside the generator's scratch) */
-#define FT ((Fort *)(void *)((uint8_t *)sumc + sizeof(EndMem) + sizeof(SpikeList)))
+#define FT ((Fort *)(void *)&U)
 
 /* PieceWeight: weight, most placed (0: any), may follow itself */
 static const uint8_t fw_weight[FP_END] = {30, 10, 10, 10, 5, 5, 25, 15, 5, 5, 10, 7, 5};
@@ -30,6 +39,20 @@ static const int8_t fp_box[FP_END + 1][6] = {
     {-1, 0, 0, 5, 7, 5},    {-1, 0, 0, 5, 7, 5},     {-1, -7, 0, 5, 14, 10}, {-3, 0, 0, 9, 7, 9},
     {-5, -3, 0, 13, 14, 13}, {-1, -3, 0, 5, 10, 8}};
 
+static void box_for(int x, int y, int z, const int8_t *b, int face, int16_t *o) {
+    int ox = b[0], oy = b[1], oz = b[2], sx = b[3], sy = b[4], sz = b[5];
+    switch (face) {
+    case F_N: o[0] = x + ox, o[1] = y + oy, o[2] = z - sz + 1 + oz, o[3] = x + sx - 1 + ox, o[4] = y + sy - 1 + oy, o[5] = z + oz; break;
+    case F_S: o[0] = x + ox, o[1] = y + oy, o[2] = z + oz, o[3] = x + sx - 1 + ox, o[4] = y + sy - 1 + oy, o[5] = z + sz - 1 + oz; break;
+    case F_W: o[0] = x - sz + 1 + oz, o[1] = y + oy, o[2] = z + ox, o[3] = x + oz, o[4] = y + sy - 1 + oy, o[5] = z + sx - 1 + ox; break;
+    default: o[0] = x + oz, o[1] = y + oy, o[2] = z + ox, o[3] = x + sz - 1 + oz, o[4] = y + sy - 1 + oy, o[5] = z + sx - 1 + ox; break;
+    }
+}
+static int boxes_meet(const int16_t *a, const FPiece *p) {
+    return a[3] >= p->x0 && a[0] <= p->x1 && a[5] >= p->z0 && a[2] <= p->z1 && a[4] >= p->y0 && a[1] <= p->y1;
+}
+
+/* the piece of a type there, if its box is above y 10 and free (each one's func_175xxx_a); -1 */
 static int fp_new(JRand *r, int type, int x, int y, int z, int face, int depth) {
     Fort *f = FT;
     int16_t b[6];
@@ -211,26 +234,28 @@ typedef struct {
     int cx, cz, y0, h;
     uint8_t *out;
 } FBuild;
-static int fb_get(const FBuild *b, int wx, int wy, int wz) {
+static int fb_x(const FPiece *p, int x, int z) { return p->face == F_W ? p->x1 - z : p->face == F_E ? p->x0 + z : p->x0 + x; }
+static int fb_z(const FPiece *p, int x, int z) { return p->face == F_N ? p->z1 - z : p->face == F_S ? p->z0 + z : p->z0 + x; }
+static uint8_t *fb_at(const FBuild *b, int wx, int wy, int wz) {
     int lx = wx - b->cx * 16, lz = wz - b->cz * 16, ly = wy - b->y0;
-    if ((unsigned)lx > 15 || (unsigned)lz > 15 || ly < 0 || ly >= b->h || wy < 1) return B_STONE;
-    return b9_get(b->out, (ly * 16 + lz) * 16 + lx);
+    if ((unsigned)lx > 15 || (unsigned)lz > 15 || ly < 0 || ly >= b->h || wy < 1) return NULL;
+    return &b->out[(ly * 16 + lz) * 16 + lx];
 }
-static void fb_set(const FBuild *b, int x, int y, int z, int v) {
-    int wx = fb_x(b->p, x, z), wy = b->p->y0 + y, wz = fb_z(b->p, x, z);
-    int lx = wx - b->cx * 16, lz = wz - b->cz * 16, ly = wy - b->y0;
-    if ((unsigned)lx > 15 || (unsigned)lz > 15 || ly < 0 || ly >= b->h || wy < 1) return;
-    b9_set(b->out, (ly * 16 + lz) * 16 + lx, v);
+static void fb_set(const FBuild *b, int x, int y, int z, uint8_t v) {
+    uint8_t *c = fb_at(b, fb_x(b->p, x, z), b->p->y0 + y, fb_z(b->p, x, z));
+    if (c) *c = v;
 }
 /* fillWithBlocks (the same block on the edges and inside) */
-static void fb_fill(const FBuild *b, int x0, int y0, int z0, int x1, int y1, int z1, int v) {
+static void fb_fill(const FBuild *b, int x0, int y0, int z0, int x1, int y1, int z1, uint8_t v) {
     for (int y = y0; y <= y1; y++)
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++) fb_set(b, x, y, z, v);
 }
-#define NB B_NETHER_BRICK
-#define FENCE B_NETHER_BRICK_FENCE
-/* replaceAirAndLiquidDownwards: a pillar down to the ground (the slab's terrain, or another piece) */
+#define NB GEN_CODE(GC_NETHER_BRICK)
+#define FENCE GEN_CODE(GC_FENCE)
+static int nq(int x, int y, int z);   /* (below: the terrain, without caves) */
+/* replaceAirAndLiquidDownwards: a pillar down to the ground (here, the terrain without its caves, or another
+ * piece) */
 static void fb_down(const FBuild *b, int x, int y, int z) {
     const FPiece *p = b->p;
     int wx = fb_x(p, x, z), wy = p->y0 + y, wz = fb_z(p, x, z);
@@ -244,11 +269,12 @@ static void fb_down(const FBuild *b, int x, int y, int z) {
             under[nu][0] = o->y0, under[nu++][1] = o->y1;
     }
     for (; wy > 1; wy--) {
-        int t = fb_get(b, wx, wy, wz);
+        int t = nq(wx, wy, wz);
         if (t != B_AIR && t != B_LAVA) return;
         for (int i = 0; i < nu; i++)
             if (wy >= under[i][0] && wy <= under[i][1]) return;
-        fb_set(b, x, wy - p->y0, z, NB);
+        uint8_t *c = fb_at(b, wx, wy, wz);
+        if (c) *c = NB;
     }
 }
 /* getMetadataWithOffset for stairs (0 east, 1 west, 2 south, 3 north), as the code */
@@ -256,7 +282,7 @@ static uint8_t fb_stairs(const FPiece *p, int m) {
     static const uint8_t rot[4][4] = {{0, 1, 2, 3}, {0, 1, 2, 3}, {0, 1, 3, 2}, {2, 3, 0, 1}};   /* N, -, S, W */
     static const uint8_t east[4] = {2, 3, 1, 0};
     int k = p->face == F_E ? east[m] : rot[p->face][m];
-    return B_NETHER_BRICK_STAIRS_E + k;
+    return GEN_CODE(GC_STAIRS_E + k);
 }
 /* the castle's rooms with the walls of fences on top (the entrance, the wart room) */
 static void fb_castle(const FBuild *b) {
@@ -550,10 +576,10 @@ static void fp_parts(const FBuild *b) {
         uint8_t i2 = fb_stairs(p, 0), j2 = fb_stairs(p, 1);
         fb_set(b, 4, 5, 2, j2), fb_set(b, 4, 5, 3, j2), fb_set(b, 4, 5, 9, j2), fb_set(b, 4, 5, 10, j2);
         fb_set(b, 8, 5, 2, i2), fb_set(b, 8, 5, 3, i2), fb_set(b, 8, 5, 9, i2), fb_set(b, 8, 5, 10, i2);
-        fb_fill(b, 3, 4, 4, 4, 4, 8, B_SOUL_SAND);
-        fb_fill(b, 8, 4, 4, 9, 4, 8, B_SOUL_SAND);
-        fb_fill(b, 3, 5, 4, 4, 5, 8, B_NETHER_WART_BLOCK);
-        fb_fill(b, 8, 5, 4, 9, 5, 8, B_NETHER_WART_BLOCK);
+        fb_fill(b, 3, 4, 4, 4, 4, 8, GEN_CODE(GC_SOUL_SAND));
+        fb_fill(b, 8, 4, 4, 9, 4, 8, GEN_CODE(GC_SOUL_SAND));
+        fb_fill(b, 3, 5, 4, 4, 5, 8, GEN_CODE(GC_WART));
+        fb_fill(b, 8, 5, 4, 9, 5, 8, GEN_CODE(GC_WART));
         fb_castle_base(b);
         break;
     }
@@ -599,7 +625,7 @@ static void fort_build(int cx, int cz, int y0, int h, uint8_t *out) {
 /* MapGenNetherBridge.func_175795_b, func_175796_a: in one of a fortress's pieces (2), or in its box (1),
  * of the fortress near (the one last laid out); 0 */
 int gen_fortress_at(int x, int y, int z) {
-    if (g_dim != DIM_NETHER || !fort_near(x >> 4, z >> 4)) return 0;
+    if (gd_dim != DIM_NETHER || !fort_near(x >> 4, z >> 4)) return 0;
     const Fort *f = FT;
     const int16_t *b = f->bb;
     if (x < b[0] || x > b[3] || y < b[1] || y > b[4] || z < b[2] || z > b[5]) return 0;
@@ -629,7 +655,7 @@ int gen_fortress_find(int x, int z, int *out) {
 
 /* the blaze spawners of the fortress whose pieces reach (x, z): in its thrones, up to n of them (x, y, z) */
 int gen_fortress_spawners(int x, int z, int *out, int n) {
-    if (g_dim != DIM_NETHER || !fort_near(x >> 4, z >> 4)) return 0;
+    if (gd_dim != DIM_NETHER || !fort_near(x >> 4, z >> 4)) return 0;
     int k = 0;
     for (int i = 0; i < FT->n && k < n; i++) {
         const FPiece *p = &FT->p[i];
@@ -639,6 +665,3 @@ int gen_fortress_spawners(int x, int z, int *out, int n) {
     }
     return k;
 }
-
-
-#endif

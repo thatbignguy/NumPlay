@@ -4,10 +4,8 @@
  * exit portal with the egg on its pillar of bedrock. */
 #include <math.h>
 #include "nb.h"
+#if NB_DIMS
 #include "edits.h"
-#include "end.h"
-
-DimsState dst;
 
 /* the dragon's own state (its place, health and turn are its entity's) */
 static struct {
@@ -186,7 +184,7 @@ void dragon_tick(Entity *e) {
     dg.tx = pl.x, dg.tz = pl.z;
     float a = dg.tx - e->x, b = dg.tz - e->z, d8 = 0.4f + sqrtf(a * a + b * b) / 80 - 1;
     dg.ty = pl.y + (d8 > 10 ? 10 : d8);
-    if (pl.dead || world_dim != DIM_END) dg.to_player = 0;
+    if (pl.dead || dim != DIM_END) dg.to_player = 0;
   } else
     dg.tx += gauss() * 2, dg.tz += gauss() * 2;
   if (dg.force_new || d2 < 100 || d2 > 22500) new_target(e);
@@ -228,7 +226,7 @@ void dragon_tick(Entity *e) {
   float bx = e->x + f16 * 0.5f, bz = e->z - f4 * 0.5f;
   float f17 = sinf(yr - dg.yaw_v * 0.01f), f18 = cosf(yr - dg.yaw_v * 0.01f);
   float hx = e->x + f17 * 5.5f * f2, hy = e->y + (o0y - o5y) + f15 * 5.5f, hz = e->z - f18 * 5.5f * f2;
-  if (e->hurt == 0 && !pl.dead && world_dim == DIM_END) {
+  if (e->hurt == 0 && !pl.dead && dim == DIM_END) {
     /* the wings knock the player away; the head bites (10) */
     for (int w = -1; w <= 1; w += 2) {
       float wx = e->x + w * f4 * 4.5f, wy = e->y + 2, wz = e->z + w * f16 * 4.5f;
@@ -298,7 +296,7 @@ void dragon_enter(void) {
 
 /* each tick in the End: the crystals of the pillars near, the dragon back if the entities were lost */
 void end_tick(void) {
-  if (world_dim != DIM_END) return;
+  if (dim != DIM_END) return;
   int n;
   const EndSpike *s = gen_spikes(&n);
   for (int i = 0; i < n; i++) {
@@ -324,7 +322,7 @@ void end_tick(void) {
 /* the boss bar: its health (0 to 1), or -1 with no dragon near (BossStatus, set as RenderDragon draws it) */
 float dragon_bar(void) {
   Entity *e = dragon();
-  if (!e || world_dim != DIM_END) return -1;
+  if (!e || dim != DIM_END) return -1;
   float dx = e->x - pl.x, dz = e->z - pl.z;
   if (dx * dx + dz * dz > 160 * 160) return -1;
   return e->health / 200.0f;
@@ -339,3 +337,4 @@ bool dragon_beam(float *from, float *to) {
   to[0] = e->x, to[1] = e->y + 2, to[2] = e->z;
   return true;
 }
+#endif

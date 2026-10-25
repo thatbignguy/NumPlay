@@ -130,8 +130,6 @@ static uint32_t block_color(int b) {
 }
 
 int main(int argc, char **argv) {
-    uint8_t gs[GEN_SCRATCH];
-    gen_scratch(gs);
     int64_t seed = argc > 1 ? strtoll(argv[1], 0, 10) : 12345;
     int cx0 = argc > 2 ? atoi(argv[2]) : -8, cz0 = argc > 3 ? atoi(argv[3]) : -8;
     int n = argc > 4 ? atoi(argv[4]) : 16;

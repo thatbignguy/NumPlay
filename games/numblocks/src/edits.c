@@ -2,17 +2,16 @@
  *
  * The world is cut in regions of 4 x 4 chunks (64 x 64 columns). Each region
  * the player changed has a record in the calculator's storage, read where it
- * lies: sorted 32-bit entries, chunk (4 bits), x and z in it (8), y (8), then
- * the block (9 bits, at the top: block states are 9 bits each, nb.h). The y is
- * 8 bits because a dimension's build height can pass 127: the nether's is 200,
- * and the overworld's floor (the deepslate layer, nb.h's WORLD_MIN_Y) is -64, so
- * its records store the y based on it (0..191).
- * New changes go to a small journal in RAM, kept in the same order; when it fills
- * up (and when the game saves), its entries are merged into the records.
+ * lies: sorted 32-bit entries, chunk (4 bits), x and z in it (8), y (7), then
+ * the block (8, the top byte). New changes go to a small journal in RAM, kept
+ * in the same order; when it fills up (and when the game saves), its entries
+ * are merged into the records.
  *
- * The two dimensions keep their own records: the region's name says which
- * ("nb1r-3_12.nbe" overworld, "nb1n-3_12.nbe" nether), so the nether's edits
- * never mix with the overworld's. */
+ * NumBlocks.nwa's blocks are 9 bits: one past 255 is kept with its ninth bit in bit 23 of the entry
+ * (outside every key NumPlay's NumBlocks looks up, which so never sees those blocks), its low byte
+ * on top; records stay sorted by the 24 bits. If a spot has both kinds of entry (NumPlay's
+ * NumBlocks changed it after), the other kind wins. Each dimension has its own records: the
+ * Nether's "nb1rn-3_12.nbe", the End's "nb1re...". */
 #include "edits.h"
 #include "nb.h"
 #pragma GCC optimize("Os")   /* (not where the time goes: small) */
@@ -22,53 +21,42 @@ typedef struct {
   uint32_t e;   /* the entry, as in the records */
 } Journal;
 
-#define J_MAX 128   /* 128 x 8 B = 1 KB; flushed to storage when full */
+#if NB_DIMS
+#define J_MAX 128   /* (NumBlocks.nwa: room for the 9th bits of blocks, nb.h) */
+#else
+#define J_MAX 256
+#endif
 static Journal jn[J_MAX];
 static int nj;
 static char prefix[8] = "nb1";
 static bool full;   /* a record could not grow: storage is full */
-static char edit_dim = 'r';   /* whose records these are: 'r' overworld, 'n' nether, 'e' the End */
-
-/* The merge: a record's entries and the journal's, in order, on their way into the
- * record. It has to hold the whole of a region's record, so it is sized for one:
- * 64 x 64 columns take 4096 entries at a row each, and a record that has outgrown
- * it cannot be merged at all - and a merge that does not happen loses the changes,
- * because the journal is then the only place they live and it holds 128. (It is a
- * buffer of its own rather than the chunk slab, which is the same memory the slab
- * is written into while a chunk is made.) */
-#define MERGE_MAX 2660   /* a region's record plus the journal's entries: the merge holds
- * both, and a record that has outgrown it makes way for the journal's (edits_flush) */
-static uint32_t merge[MERGE_MAX];
-
-/* a region's record (the last one looked up is remembered until records change) */
-static bool cache_ok;
-static int cache_rx, cache_rz, cache_n;
-static const uint8_t *cache_r;
+static uint32_t *scratch;
+static uint32_t scratch_n;
+#if NB_DIMS
+static char dim_tag;   /* 0 the Overworld, 'n' the Nether, 'e' the End */
+void edits_dim(int d) { dim_tag = d == DIM_NETHER ? 'n' : d == DIM_END ? 'e' : 0; }
+#define HI (1u << 23)
+#endif
 
 void edits_setup(const char *world, uint32_t *buf, uint32_t n) {
   int i = 0;
   for (; world[i] && i < 7; i++) prefix[i] = world[i];
   prefix[i] = 0;
-  (void)buf, (void)n;   /* (the chunk slab is the game's now: see merge, above) */
+  scratch = buf;
+  scratch_n = n;
 }
 bool edits_full(void) { return full; }
 
-/* the dimension the player's changes go to: the world's (DIM_OVER, DIM_NETHER).
- * The journal is flushed first: its entries are this dimension's (they are written
- * to its records), so they never travel to the other one's */
-void edits_set_dim(int dim) {
-  if (nj) edits_flush();
-  edit_dim = dim == DIM_OVER ? 'r' : dim == DIM_NETHER ? 'n' : 'e';
-  cache_ok = false;
-}
-
 static inline int floordiv(int a, int d) { return a >= 0 ? a / d : -((-a + d - 1) / d); }
 
-/* "nb1r-3_12.nbe": the world's prefix, the dimension's mark, then the region */
-static void region_name_d(char *out, int rx, int rz, char dim) {
+/* "nb1r-3_12.nbe" */
+static void region_name(char *out, int rx, int rz) {
   char *p = out;
   for (const char *s = prefix; *s;) *p++ = *s++;
-  *p++ = dim;
+  *p++ = 'r';
+#if NB_DIMS
+  if (dim_tag) *p++ = dim_tag;
+#endif
   int v[2] = {rx, rz};
   for (int k = 0; k < 2; k++) {
     if (k) *p++ = '_';
@@ -84,8 +72,11 @@ static void region_name_d(char *out, int rx, int rz, char dim) {
   while (*ext) *p++ = *ext++;
   *p = 0;
 }
-static void region_name(char *out, int rx, int rz) { region_name_d(out, rx, rz, edit_dim); }
 
+/* a region's record (the last one looked up is remembered until records change) */
+static bool cache_ok;
+static int cache_rx, cache_rz, cache_n;
+static const uint8_t *cache_r;
 static const uint8_t *region(int rx, int rz, int *n) {
   if (!cache_ok || rx != cache_rx || rz != cache_rz) {
     char name[32];
@@ -111,28 +102,20 @@ static inline uint32_t rd32(const uint8_t *p) {
 }
 #define R(i) rd32(r + 4 * (i))
 
-/* entries are sorted by their low 20 bits (the position: chunk, x and z in it, y);
- * the block state is the 9 bits above them, so a 32-bit entry holds both */
-#define KEY(e) ((e) & 0xFFFFF)
-#define BLK(e) ((int)((e) >> 20) & 511)
-#define ENTRY(key, b) ((key) | (uint32_t)(b) << 20)
-/* The overworld's deepslate floor (nb.h's WORLD_MIN_Y): its records store the y based on
- * it, so the byte reads 0..191 (y -64..127) and stays ordered. The nether has no deep
- * layer below 0, so it stores the y as it is. */
-static inline int y_base(void) { return edit_dim == 'r' ? WORLD_MIN_Y : 0; }
-
+/* entries are sorted by their low 24 bits */
+#define KEY(e) ((e) & 0xFFFFFF)
 static inline uint32_t entry_key(int x, int y, int z) {
   int cx = floordiv(x, 16), cz = floordiv(z, 16);
   int chunk = (cx & 3) | (cz & 3) << 2;
   int xz = (x & 15) | (z & 15) << 4;
-  return (uint32_t)(chunk << 16 | xz << 8 | ((y - y_base()) & 255));
+  return (uint32_t)(chunk << 15 | xz << 7 | (y & 127));
 }
 
 static int jcmp(int rx, int rz, uint32_t key, const Journal *j) {
   if (rz != j->rz) return rz < j->rz ? -1 : 1;
   if (rx != j->rx) return rx < j->rx ? -1 : 1;
   uint32_t k = KEY(j->e);
-  return key < k ? -1 : key > k ? 1 : 0;
+  return key < k ? -1 : key > k;
 }
 static int jlower(int rx, int rz, uint32_t key) {
   int lo = 0, hi = nj;
@@ -153,7 +136,18 @@ static int rlower(const uint8_t *r, int n, uint32_t key) {
   return lo;
 }
 
-/* the journal's entries go into their regions' records */
+#if NB_DIMS
+/* the journal has an entry of key in region (rx, rz), among its entries [i, j) */
+static bool journal_has(int rx, int rz, uint32_t key, int i, int j) {
+  int k = jlower(rx, rz, key);
+  return k >= i && k < j && jcmp(rx, rz, key, &jn[k]) == 0;
+}
+#endif
+
+static inline void wr32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
+
+/* the journal's entries go into their regions' records: each record grows in place in storage and the two
+ * are merged from the end, so a record can be as big as storage lets it be */
 bool edits_flush(void) {
   bool ok = true;
   int i = 0;
@@ -161,41 +155,36 @@ bool edits_flush(void) {
     int rx = jn[i].rx, rz = jn[i].rz, j = i;
     while (j < nj && jn[j].rx == rx && jn[j].rz == rz) j++;
     int n;
-    const uint8_t *r = region(rx, rz, &n);
-    /* Merge the record and the journal's entries for it, in key order. The journal's
-     * always go in: they are the player's, and they are at most J_MAX. A record that
-     * has outgrown the room makes way for them by losing its tail - the entries with
-     * the largest keys - which is the one thing here that can be cut, and cutting it
-     * is what keeps the merge possible. The alternative is worse: a record that cannot
-     * be merged at all leaves the journal holding the player's changes with nowhere to
-     * put them, so every change after that one is thrown away, and the structures come
-     * back whole. (Nothing makes a record that big any more - the showcase's liquids
-     * stand where they are put - so this is the old damage healing itself.) */
-    int room = MERGE_MAX - (j - i);   /* what is left of it for the record's own entries */
-    uint32_t m = 0;
-    int a = 0, b = i;
-    while (a < n || b < j) {
-      if (b >= j || (a < n && KEY(R(a)) < KEY(jn[b].e))) {
-        if (a >= room) {   /* the record's tail makes way for the journal's */
-          a++;
-          continue;
-        }
-        merge[m++] = R(a), a++;
-      } else {
-        if (a < n && KEY(R(a)) == KEY(jn[b].e)) a++;
-        merge[m++] = jn[b++].e;
-      }
-    }
+    region(rx, rz, &n);
     char name[32];
     region_name(name, rx, rz);
     cache_ok = false;
-    if (b < j || !plat_save(name, merge, m * 4)) {
-      /* the write failed (the storage is full): these changes stay in the journal */
+    int top = n + (j - i);
+    uint8_t *r = plat_save_grow(name, (uint32_t)top * 4);
+    if (!r) {
+      /* no room: these changes stay in the journal */
       ok = false;
       full = true;
       i = j;
       continue;
     }
+    int a = n - 1, b = j - 1, o = top;
+    while (a >= 0 || b >= i) {
+      if (a >= 0 && (b < i || KEY(R(a)) > KEY(jn[b].e))) {
+#if NB_DIMS
+        if (journal_has(rx, rz, KEY(R(a)) ^ HI, i, j)) {
+          a--;   /* (the journal has its spot, as the other kind) */
+          continue;
+        }
+#endif
+        wr32(r + 4 * --o, R(a)), a--;   /* (never past what is still to read: o > a) */
+      } else {
+        if (a >= 0 && KEY(R(a)) == KEY(jn[b].e)) a--;
+        wr32(r + 4 * --o, jn[b--].e);
+      }
+    }
+    if (o) memmove(r, r + 4 * o, (size_t)(top - o) * 4);
+    plat_save_done(name, (uint32_t)(top - o) * 4);
     memmove(&jn[i], &jn[j], (size_t)(nj - j) * sizeof jn[0]);
     nj -= j - i;
   }
@@ -205,18 +194,29 @@ bool edits_flush(void) {
 bool edits_put(int x, int y, int z, int b) {
   int rx = floordiv(x, 64), rz = floordiv(z, 64);
   uint32_t key = entry_key(x, y, z);
+#if NB_DIMS
+  {
+    /* the spot's entry of the other kind goes: this one replaces it */
+    int o = jlower(rx, rz, key ^ HI);
+    if (o < nj && jcmp(rx, rz, key ^ HI, &jn[o]) == 0) {
+      memmove(&jn[o], &jn[o + 1], (size_t)(nj - o - 1) * sizeof jn[0]);
+      nj--;
+    }
+    key |= (uint32_t)(b >> 8 & 1) << 23;
+  }
+#endif
   int i = jlower(rx, rz, key);
   if (i < nj && jcmp(rx, rz, key, &jn[i]) == 0) {
-    jn[i].e = ENTRY(key, b);
+    jn[i].e = key | (uint32_t)b << 24;
     return true;
   }
   if (nj >= J_MAX) {
     edits_flush();
-    if (nj >= J_MAX) return false;   /* the storage is full: this change is not kept */
+    if (nj >= J_MAX) return false;
     i = jlower(rx, rz, key);
   }
   memmove(&jn[i + 1], &jn[i], (size_t)(nj - i) * sizeof jn[0]);
-  jn[i] = (Journal){(int16_t)rx, (int16_t)rz, ENTRY(key, b)};
+  jn[i] = (Journal){(int16_t)rx, (int16_t)rz, key | (uint32_t)b << 24};
   nj++;
   return true;
 }
@@ -224,119 +224,128 @@ bool edits_put(int x, int y, int z, int b) {
 /* onto a chunk from gen_slab: the record's entries, then the journal's */
 void edits_apply(int cx, int cz, int y0, int h, uint8_t *slab) {
   int rx = floordiv(cx, 4), rz = floordiv(cz, 4), chunk = (cx & 3) | (cz & 3) << 2;
-  uint32_t k0 = (uint32_t)chunk << 16, k1 = k0 + (1 << 16);
+  uint32_t k0 = (uint32_t)chunk << 15, k1 = k0 + (1 << 15);
   int n;
   const uint8_t *r = region(rx, rz, &n);
   for (int i = rlower(r, n, k0); i < n && KEY(R(i)) < k1; i++) {
     uint32_t e = R(i);
-    int y = (int)(e & 255) + y_base() - y0, xz = (int)(e >> 8) & 255;
-    if (y >= 0 && y < h) b9_set(slab, (y * 16 + (xz >> 4)) * 16 + (xz & 15), BLK(e));
+    int y = (int)(e & 127) - y0, xz = (int)(e >> 7) & 255;
+    if (y >= 0 && y < h) slab[(y * 16 + (xz >> 4)) * 16 + (xz & 15)] = (uint8_t)(e >> 24);
   }
   for (int i = jlower(rx, rz, k0); i < nj && jn[i].rx == rx && jn[i].rz == rz && KEY(jn[i].e) < k1; i++) {
-    int y = (int)(jn[i].e & 255) + y_base() - y0, xz = (int)(jn[i].e >> 8) & 255;
-    if (y >= 0 && y < h) b9_set(slab, (y * 16 + (xz >> 4)) * 16 + (xz & 15), BLK(jn[i].e));
+    int y = (int)(jn[i].e & 127) - y0, xz = (int)(jn[i].e >> 7) & 255;
+    if (y >= 0 && y < h) slab[(y * 16 + (xz >> 4)) * 16 + (xz & 15)] = (uint8_t)(jn[i].e >> 24);
   }
 }
 
-/* The change recorded at (x, y, z), or -1: the journal's (the newest) then the record's,
- * as edits_apply reads them. */
-static int edit_block(int x, int y, int z) {
-  int rx = floordiv(x, 64), rz = floordiv(z, 64);
-  uint32_t k = entry_key(x, y, z);
+#if NB_DIMS
+/* edits_apply, the ninth bits in hb (a bit a cell of the slab): first the record's entries of each kind
+ * (the low ones last: they win), then the journal's */
+static void apply_range(const uint8_t *r, int n, uint32_t k0, uint32_t k1, int y0, int h, uint8_t *slab, uint8_t *hb,
+                        bool hi) {
+  for (int i = rlower(r, n, k0); i < n && KEY(R(i)) < k1; i++) {
+    uint32_t e = R(i);
+    int y = (int)(e & 127) - y0, xz = (int)(e >> 7) & 255;
+    if (y < 0 || y >= h) continue;
+    int c = (y * 16 + (xz >> 4)) * 16 + (xz & 15);
+    slab[c] = (uint8_t)(e >> 24);
+    hb[c >> 3] = (uint8_t)((hb[c >> 3] & ~(1 << (c & 7))) | hi << (c & 7));
+  }
+}
+void edits_apply9(int cx, int cz, int y0, int h, uint8_t *slab, uint8_t *hb) {
+  int rx = floordiv(cx, 4), rz = floordiv(cz, 4), chunk = (cx & 3) | (cz & 3) << 2;
+  uint32_t k0 = (uint32_t)chunk << 15, k1 = k0 + (1 << 15);
   int n;
   const uint8_t *r = region(rx, rz, &n);
-  int j = jlower(rx, rz, k);
-  if (j < nj && jn[j].rx == rx && jn[j].rz == rz && KEY(jn[j].e) == k) return BLK(jn[j].e);
-  int i = rlower(r, n, k);
-  if (i < n && KEY(R(i)) == k) return BLK(R(i));
-  return -1;
+  apply_range(r, n, k0 | HI, k1 | HI, y0, h, slab, hb, true);
+  apply_range(r, n, k0, k1, y0, h, slab, hb, false);
+  for (int pass = 0; pass < 2; pass++) {
+    uint32_t a = pass ? k0 | HI : k0, b = pass ? k1 | HI : k1;
+    for (int i = jlower(rx, rz, a); i < nj && jn[i].rx == rx && jn[i].rz == rz && KEY(jn[i].e) < b; i++) {
+      int y = (int)(jn[i].e & 127) - y0, xz = (int)(jn[i].e >> 7) & 255;
+      if (y < 0 || y >= h) continue;
+      int c = (y * 16 + (xz >> 4)) * 16 + (xz & 15);
+      slab[c] = (uint8_t)(jn[i].e >> 24);
+      hb[c >> 3] = (uint8_t)((hb[c >> 3] & ~(1 << (c & 7))) | pass << (c & 7));
+    }
+  }
 }
+#define BLOCK_OF(e) ((int)((e) >> 24) | (int)((e) >> 23 & 1) << 8)
+#else
+#define BLOCK_OF(e) ((e) >> 24)
+#endif
 
-/* The column's sky top (1 + the highest opaque y) with the changes. A block placed above
- * raises it; a block dug out of the top lowers it, down through the changes, until a cell
- * with no change - the ground itself, opaque below the generator's surface - or an opaque
- * one. (Without the lowering a dug shaft whose surface has left the cache read as if the
- * ground were still overhead, and the whole column went dark.) */
+/* the column's sky top (1 + the highest opaque y) with the changes */
 int edits_top(int x, int z, int top) {
   int rx = floordiv(x, 64), rz = floordiv(z, 64);
-  uint32_t k0 = entry_key(x, y_base(), z), k1 = k0 + 256;   /* the whole column, all y */
+  uint32_t k0 = entry_key(x, 0, z), k1 = k0 + 128;
   int n;
   const uint8_t *r = region(rx, rz, &n);
+#if NB_DIMS
+  for (int pass = 0; pass < 2; pass++, k0 |= HI, k1 |= HI) {
+#endif
   for (int i = rlower(r, n, k0); i < n && KEY(R(i)) < k1; i++) {
     uint32_t e = R(i);
-    int ey = (int)(e & 255) + y_base();
-    if ((blk_flags[BLK(e)] & BF_OPAQUE) && ey + 1 > top) top = ey + 1;
+    if ((blk_flags[BLOCK_OF(e)] & BF_OPAQUE) && (int)(e & 127) + 1 > top) top = (int)(e & 127) + 1;
   }
-  for (int i = jlower(rx, rz, k0); i < nj && jn[i].rx == rx && jn[i].rz == rz && KEY(jn[i].e) < k1; i++) {
-    int ey = (int)(jn[i].e & 255) + y_base();
-    if ((blk_flags[BLK(jn[i].e)] & BF_OPAQUE) && ey + 1 > top) top = ey + 1;
+  for (int i = jlower(rx, rz, k0); i < nj && jn[i].rx == rx && jn[i].rz == rz && KEY(jn[i].e) < k1; i++)
+    if ((blk_flags[BLOCK_OF(jn[i].e)] & BF_OPAQUE) && (int)(jn[i].e & 127) + 1 > top) top = (int)(jn[i].e & 127) + 1;
+#if NB_DIMS
   }
-  while (top > WORLD_MIN_Y) {
-    int b = edit_block(x, top - 1, z);
-    if (b < 0 || (blk_flags[b] & BF_OPAQUE)) break;
-    top--;
-  }
+#endif
   return top;
 }
 
+#if NB_DIMS
+/* was the block there changed (else it is as the world was made)? */
+bool edits_changed(int x, int y, int z) {
+  int rx = floordiv(x, 64), rz = floordiv(z, 64), n;
+  uint32_t key = entry_key(x, y, z);
+  const uint8_t *r = region(rx, rz, &n);
+  for (int pass = 0; pass < 2; pass++, key |= HI) {
+    int i = jlower(rx, rz, key);
+    if (i < nj && jcmp(rx, rz, key, &jn[i]) == 0) return true;
+    int k = rlower(r, n, key);
+    if (k < n && KEY(R(k)) == key) return true;
+  }
+  return false;
+}
+
+/* Teleporter.placeInExistingPortal: of the blocks b0 and b1 changed within r of (x, z) (portals: only made
+ * by changes), the nearest to (x, y, z) of those with neither below; false if none. Records only: the
+ * journal is flushed first */
+bool edits_find(int x, int y, int z, int rad, int b0, int b1, int *out) {
+  int64_t best = -1;
+  for (int rz = floordiv(z - rad, 64); rz <= floordiv(z + rad, 64); rz++)
+    for (int rx = floordiv(x - rad, 64); rx <= floordiv(x + rad, 64); rx++) {
+      int n;
+      const uint8_t *rec = region(rx, rz, &n);
+      const uint8_t *r_ = rec;
+#define RR(i) rd32(r_ + 4 * (i))
+      for (int i = n; i-- > 0 && (RR(i) & HI);) {
+        uint32_t e = RR(i);
+        int b = BLOCK_OF(e);
+        if (b != b0 && b != b1) continue;
+        uint32_t k = KEY(e) & ~HI;
+        /* (a plain entry of the spot wins over it: NumPlay's NumBlocks changed it since) */
+        const uint8_t *r = rec;
+        int j = rlower(r, n, k);
+        if (j < n && KEY(R(j)) == k) continue;
+        if ((e & 127) && i > 0 && KEY(RR(i - 1)) == KEY(e) - 1 && (BLOCK_OF(RR(i - 1)) == b0 || BLOCK_OF(RR(i - 1)) == b1))
+          continue;   /* (one below: the lowest of a column counts) */
+        int chunk = (int)(e >> 15) & 15, xz = (int)(e >> 7) & 255;
+        int bx = (rx * 4 + (chunk & 3)) * 16 + (xz & 15), bz = (rz * 4 + (chunk >> 2)) * 16 + (xz >> 4), by = (int)(e & 127);
+        if (bx < x - rad || bx > x + rad || bz < z - rad || bz > z + rad) continue;
+        int64_t d = (int64_t)(bx - x) * (bx - x) + (int64_t)(by - y) * (by - y) + (int64_t)(bz - z) * (bz - z);
+        if (best < 0 || d < best) best = d, out[0] = bx, out[1] = by, out[2] = bz;
+      }
+#undef RR
+    }
+  return best >= 0;
+}
+#endif
+
 int edits_count(void) { return nj; }
 
-/* the merge buffer, lent out between merges (n bytes at most): the world's own save
- * is built in it too (save.c), which is nothing to do with a merge in progress */
-void *edits_scratch(uint32_t n) { return n <= sizeof merge ? (void *)merge : NULL; }
-
-/* is there a change of the player's at (x, y, z)? (the End's portal and the dragon compare it
- * with what the generator makes) */
-bool edits_changed(int x, int y, int z) { return edit_block(x, y, z) >= 0; }
-
-/* ---------------------------------------------------------------- old records
- * Records written before the states were 9 bits hold 8-bit blocks over a 24-bit
- * position (a head says NBW1..4: from 0); the records written while the position
- * packed y in 7 bits hold 9-bit blocks over 19 (a head says NBW5: from 1); NBW6
- * holds the position 20 bits (y 8 of them) with the block at bits 20... All three
- * are read again and written back in the current shape (NBW7): NBW6's, with the
- * overworld's y based on the deepslate floor (nb.h's WORLD_MIN_Y) so the byte reads
- * 0..191 and -64..127 fits 8 bits. Once per world. Every entry is still 4 bytes, so
- * each record is rewritten in place and the records keep their places. */
-bool edits_convert(const char *world, int from) {
-  bool ok = true;
-  int pl = (int)strlen(world);
-  char rec[40];
-  for (int i = 0; plat_record(i, rec, sizeof rec); i++) {
-    /* the world's own: the world's prefix, then "r" (the overworld) or "n" (the
-     * nether), then the region */
-    if (strncmp(rec, world, (size_t)pl) || (rec[pl] != 'r' && rec[pl] != 'n')) continue;
-    int k = pl + 1;
-    bool shape = rec[k] == '-' || (rec[k] >= '0' && rec[k] <= '9');
-    while (rec[k] && (rec[k] == '-' || (rec[k] >= '0' && rec[k] <= '9') || rec[k] == '_')) k++;
-    if (!shape || strcmp(rec + k, ".nbe")) continue;
-    int base = rec[pl] == 'r' ? WORLD_MIN_Y : 0;   /* the overworld's y moved onto its floor */
-    uint32_t len = 0;
-    const uint8_t *r = plat_load(rec, &len);
-    if (!r || !len || len % 4 || len / 4 > MERGE_MAX) continue;
-    int n = (int)(len / 4), good = 1;
-    for (int j = 0; j < n && good; j++) {
-      uint32_t e = rd32(r + 4 * j), key, blk;
-      if (from == 0) {
-        key = e & 0xFFFFFF, blk = e >> 24;   /* the old shape: 24-bit position, block on top */
-        if (key >> 19 || blk >= NSTATES) good = 0;   /* not an 8-bit entry: leave this record alone */
-        else merge[j] = ENTRY(((key >> 7) << 8) | (key & 0x7F), (int)blk);
-      } else if (from == 1) {
-        key = e & 0x7FFFF, blk = (e >> 19) & 511;
-        if (e >> 28) good = 0;   /* not a 19-bit entry: already converted, leave it */
-        else merge[j] = ENTRY(((key >> 7) << 8) | (key & 0x7F), (int)blk);
-      } else {
-        blk = (e >> 20) & 511;
-        if (e >> 29 || blk >= NSTATES) good = 0;   /* not a 20-bit entry: leave it */
-        else merge[j] = e;
-      }
-      if (good) {   /* the stored y: y - base (the overworld moves down 64) */
-        int by = (int)(merge[j] & 255) - base;
-        merge[j] = (merge[j] & ~0xFFu) | (uint32_t)(by & 255);
-      }
-    }
-    if (!good || !plat_save(rec, merge, len)) ok = false;
-  }
-  edits_forget();
-  return ok;
-}
+/* the merge buffer, lent out between merges (n bytes at most) */
+void *edits_scratch(uint32_t n) { return n <= scratch_n * 4 ? scratch : NULL; }

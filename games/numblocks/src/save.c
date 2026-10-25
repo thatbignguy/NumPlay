@@ -10,16 +10,9 @@
 
 #define OPTIONS_REC "numblocks.cfg"
 
-/* the options' defaults, positional (the record is the struct as it comes):
- * difficulty, fancy, look speed, clouds, bobbing, key sheet version, last world,
- * plays, the keys, debug overlay, render distance, sprint toggle, brightness
- * (8, just over the middle of Moody..Bright: a dark room can be made out at once),
- * fullbright (off), high contrast outlines (off), panorama (Random) */
-Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}, 0, 2, 0, 8, 0, 0, 0};
+Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}};
 int64_t world_seed;
 uint8_t world_type;
-uint8_t world_dim;   /* the dimension (DIM_*): the overworld, or the nether */
-char world_preset[FLAT_MAX + 1] = FLAT_DEFAULT;
 
 /* the record's head: version 1 had no name (it was "New World") */
 typedef struct {
@@ -38,25 +31,12 @@ typedef struct {
   Head2 h2;
   uint8_t cheats, rules, type, pad;   /* (type: 0 in worlds from before there were others) */
 } Head;
-typedef struct {
-  Head h3;
-  char flat_preset[FLAT_MAX + 1];   /* version 4: superflat preset (default for older worlds) */
-} Head4;
-typedef struct {
-  Head4 h4;
-  uint8_t dim, pad;                  /* the dimension the player is in (DIM_*) */
-  int32_t ret_x, ret_y, ret_z;      /* where the nether's portal leads back to (0,0,0: none) */
-} Head5;
 
 extern uint32_t game_time;
 void *tiles_data(uint32_t *len);
 
 uint8_t game_rules = GR_DEFAULT;
 bool world_cheats, lan_open, lan_cheats;
-/* where the portal the player came through leads back to (the overworld), and
- * whether the world has one at all: the nether's return position */
-int32_t nb_ret_x, nb_ret_y, nb_ret_z;
-bool nb_ret_ok;
 static int slot = 1;                   /* the world being played */
 static char cur_name[WORLD_NAME + 1];  /* its name */
 static uint32_t cur_played;
@@ -69,117 +49,52 @@ static void record_of(int s, char *out) {
 static void copy_name(char *d, const char *s) {
   int i = 0;
   for (; s[i] && i < WORLD_NAME; i++) d[i] = s[i];
+  while (NP_TEXT_EXTRA && i && (s[i] & 0xC0) == 0x80) i--;   /* (not a letter cut) */
   d[i] = 0;
-}
-static void copy_preset(char *d, const char *s) {
-  if (!s || !s[0]) s = FLAT_DEFAULT;
-  int i = 0;
-  for (; s[i] && i < FLAT_MAX; i++) d[i] = s[i];
-  d[i] = 0;
-  /* invalid presets fall back to the default (never crash on a bad save) */
-  if (!flat_validate(d, NULL, 0)) {
-    const char *f = FLAT_DEFAULT;
-    int k = 0;
-    for (; f[k] && k < FLAT_MAX; k++) d[k] = f[k];
-    d[k] = 0;
-  }
 }
 
 /* a slot's record, read as the latest head (a version 1 record named "New World"); NULL: none */
-static const uint8_t *read_head(int s, Head4 *h, uint8_t *dim, int32_t ret[3], uint32_t *len, uint32_t *head_len) {
+static const uint8_t *read_head(int s, Head *h, uint32_t *len, uint32_t *head_len) {
   char rec[8];
   record_of(s, rec);
   const uint8_t *d = plat_load(rec, len);
   if (!d || *len < sizeof(Head1)) return NULL;
   memset(h, 0, sizeof *h);
-  *dim = 0, ret[0] = ret[1] = ret[2] = 0;
-  copy_preset(h->flat_preset, FLAT_DEFAULT);
   if (!memcmp(d, "NBW1", 4)) {
-    memcpy(&h->h3.h2.h, d, sizeof(Head1));
-    copy_name(h->h3.h2.name, "New World");
+    memcpy(&h->h2.h, d, sizeof(Head1));
+    copy_name(h->h2.name, T("New World"));
     *head_len = sizeof(Head1);
   } else if (!memcmp(d, "NBW2", 4) && *len >= sizeof(Head2)) {
-    memcpy(&h->h3.h2, d, sizeof(Head2));
+    memcpy(&h->h2, d, sizeof(Head2));
     *head_len = sizeof(Head2);
   } else if (!memcmp(d, "NBW3", 4) && *len >= sizeof(Head)) {
-    memcpy(&h->h3, d, sizeof(Head));
+    memcpy(h, d, sizeof(Head));
     *head_len = sizeof(Head);
-  } else if (!memcmp(d, "NBW4", 4) && *len >= sizeof(Head4)) {
-    memcpy(h, d, sizeof(Head4));
-    h->flat_preset[FLAT_MAX] = 0;
-    if (!flat_validate(h->flat_preset, NULL, 0)) copy_preset(h->flat_preset, FLAT_DEFAULT);
-    *head_len = sizeof(Head4);
-  } else if ((!memcmp(d, "NBW5", 4) || !memcmp(d, "NBW6", 4) || !memcmp(d, "NBW7", 4)) && *len >= sizeof(Head5)) {
-    Head5 h5;
-    memcpy(&h5, d, sizeof h5);
-    *h = h5.h4;
-    h->flat_preset[FLAT_MAX] = 0;
-    if (!flat_validate(h->flat_preset, NULL, 0)) copy_preset(h->flat_preset, FLAT_DEFAULT);
-    *dim = h5.dim;
-    memcpy(ret, &h5.ret_x, 3 * sizeof(int32_t));   /* (ret is a parameter: sizeof it is the pointer's) */
-    *head_len = sizeof(Head5);
   } else
     return NULL;
-  h->h3.h2.name[WORLD_NAME] = 0;
-  if (h->h3.h2.h.player_size != sizeof pl || *len < *head_len + sizeof pl) return NULL;
-  if (*head_len < sizeof(Head) + sizeof(h->flat_preset)) {
+  h->h2.name[WORLD_NAME] = 0;
+  if (h->h2.h.player_size != sizeof pl || *len < *head_len + sizeof pl) return NULL;
+  if (*head_len < sizeof(Head)) {
     /* (older worlds: cheats as a new world of their mode would have them, the rules as they start) */
-    h->h3.cheats = d[*head_len + offsetof(Player, mode)] != 0;
-    h->h3.rules = GR_DEFAULT;
+    h->cheats = d[*head_len + offsetof(Player, mode)] == 1;
+    h->rules = GR_DEFAULT;
   }
   return d;
 }
 
-/* The shape of a world's edit records, from the head's magic: NBW7 is the current
- * one (the position 20 bits, the overworld's y based on the deepslate floor), NBW6
- * the 20-bit one with a raw y, NBW5 the 19-bit one, NBW1..4 the 8-bit-block one.
- * 3, 2, 1, 0; -1: not a NumBlocks head (read_head would not have accepted it). */
-static int rec_shape(const char *magic) {
-  if (!memcmp(magic, "NBW7", 4)) return 3;
-  if (!memcmp(magic, "NBW6", 4)) return 2;
-  if (!memcmp(magic, "NBW5", 4)) return 1;
-  if (!memcmp(magic, "NBW1", 4) || !memcmp(magic, "NBW2", 4) || !memcmp(magic, "NBW3", 4) || !memcmp(magic, "NBW4", 4))
-    return 0;
-  return -1;
-}
-
-/* A world's records from an older shape, re-encoded, and the head written with the
- * current magic at once: a game killed before the world's next save must not find
- * records already converted under a head that says they are not. (The world record
- * is read again for the write: the copy it was read from may have moved.) */
-static void convert_records(int s, int shape) {
-  char pre[4];
-  prefix_of(s, pre);
-  if (!edits_convert(pre, shape)) return;
-  char rec[8];
-  record_of(s, rec);
-  uint32_t len = 0;
-  const uint8_t *d = plat_load(rec, &len);
-  uint8_t *b = d && len >= 4 ? (uint8_t *)edits_scratch(len) : NULL;
-  if (!b) return;
-  memcpy(b, d, len);
-  memcpy(b, "NBW7", 4);
-  plat_save(rec, b, len);
-  edits_forget();
-  copy_write();
-}
-
 bool world_info(int s, WorldInfo *w) {
-  Head4 h;
-  uint8_t dim;
-  int32_t ret[3];
+  Head h;
   uint32_t len, hl;
-  const uint8_t *d = read_head(s, &h, &dim, ret, &len, &hl);
+  const uint8_t *d = read_head(s, &h, &len, &hl);
   if (!d) return false;
   Player p;
   memcpy(&p, d + hl, sizeof p);
-  copy_name(w->name, h.h3.h2.name);
+  copy_name(w->name, h.h2.name);
   w->mode = p.mode;
-  w->cheats = h.h3.cheats;
-  w->type = h.h3.type;
-  w->seed = h.h3.h2.h.seed;
-  w->played = h.h3.h2.played;
-  copy_preset(w->preset, h.flat_preset);
+  w->cheats = h.cheats;
+  w->type = h.type;
+  w->seed = h.h2.h.seed;
+  w->played = h.h2.played;
   return true;
 }
 
@@ -199,7 +114,7 @@ static bool name_taken(const char *n) {
 
 void world_unique_name(const char *base, char *out) {
   char b[WORLD_NAME + 1];
-  copy_name(b, base[0] ? base : "New World");
+  copy_name(b, base[0] ? base : T("New World"));
   copy_name(out, b);
   for (int k = 2; name_taken(out) && k < 100; k++) {
     /* "New World (2)": the number kept whole, the name cut to fit */
@@ -209,39 +124,90 @@ void world_unique_name(const char *base, char *out) {
     sfx[n++] = (char)('0' + k % 10), sfx[n++] = ')', sfx[n] = 0;
     int bl = (int)strlen(b), room = WORLD_NAME - n;
     if (bl > room) bl = room;
+    while (NP_TEXT_EXTRA && bl && (b[bl] & 0xC0) == 0x80) bl--;
     memcpy(out, b, (size_t)bl);
     memcpy(out + bl, sfx, (size_t)n + 1);
   }
 }
 
+#if NB_DIMS
+/* NumBlocks.nwa: NumPlay's NumBlocks reads the same world record, so the record holds what it knows: the
+ * player in the Overworld (where they last were there), with none of the Nether's and the End's items,
+ * the Overworld's chests and furnaces. The rest is in "nb3rdim.nbx" by it: the dimension the player is
+ * in, the player as they are, every chest and furnace, the dimensions' state. If NumPlay's NumBlocks
+ * saved the world after (the record is not the one the copy goes with), the record wins, the player in
+ * the Overworld, and the Nether's and the End's chests and the dimensions' state come back from the copy */
+typedef struct {
+  char magic[4];
+  uint32_t time, played;   /* the record's: the copy goes with it */
+  int32_t dim;
+  Player pl;
+  DimsState dst;
+} Side;   /* then the tiles */
+static void side_of(int s, char *out) {
+  prefix_of(s, out);
+  memcpy(out + 3, "rdim.nbx", 9);
+}
+static void known(Stack *s, int n) {
+  for (int i = 0; i < n; i++)
+    if (s[i].id >= I_END) s[i].id = 0, s[i].aux = 0;
+}
+void tiles_for_numplay(void *t);
+void tiles_merge(const void *t);
+#endif
+
 bool save_world(void) {
   bool ok = edits_flush();
   uint32_t tl;
   void *t = tiles_data(&tl);
-  Head5 h;
+  Head h;
   memset(&h, 0, sizeof h);
-  h.h4.h3.h2.h = (Head1){{'N', 'B', 'W', '7'}, (uint16_t)sizeof pl, (uint16_t)tl, world_seed, game_time, weather};
-  copy_name(h.h4.h3.h2.name, cur_name);
-  h.h4.h3.h2.played = cur_played;
-  h.h4.h3.cheats = world_cheats, h.h4.h3.rules = game_rules, h.h4.h3.type = world_type;
-  copy_preset(h.h4.flat_preset, world_preset);
-  h.dim = world_dim;
-  h.ret_x = nb_ret_x, h.ret_y = nb_ret_y, h.ret_z = nb_ret_z;
-  /* one record: the head, the player, the tiles (written from a buffer made in the merge
-   * scratch) and, after them, the monster spawners that have been set */
-  uint32_t sp = (uint32_t)spawners_save(NULL);
-  uint32_t n = sizeof h + sizeof pl + tl + sp + sizeof dst;
+  h.h2.h = (Head1){{'N', 'B', 'W', '3'}, (uint16_t)sizeof pl, (uint16_t)tl, world_seed, game_time, weather};
+  copy_name(h.h2.name, cur_name);
+  h.h2.played = cur_played;
+  h.cheats = world_cheats, h.rules = game_rules, h.type = world_type;
+  /* one record: the head, the player, the tiles (written from a buffer made in the merge scratch) */
+  uint32_t n = sizeof h + sizeof pl + tl;
   uint8_t *b = (uint8_t *)edits_scratch(n);
   if (!b) return false;
   memcpy(b, &h, sizeof h);
+#if NB_DIMS
+  {
+    Player p = pl;
+    if (dim != DIM_OVERWORLD) {
+      p.x = dst.ow_x, p.y = dst.ow_y, p.z = dst.ow_z;
+      p.vx = p.vy = p.vz = 0, p.fall = 0, p.fire = 0;
+    }
+    known(p.inv, 36), known(p.armor, 4), known(p.craft, 4), known(&p.cursor, 1);
+    memcpy(b + sizeof h, &p, sizeof p);
+  }
+  memcpy(b + sizeof h + sizeof pl, t, tl);
+  tiles_for_numplay(b + sizeof h + sizeof pl);
+#else
   memcpy(b + sizeof h, &pl, sizeof pl);
   memcpy(b + sizeof h + sizeof pl, t, tl);
-  spawners_save(b + sizeof h + sizeof pl + tl);
-  memcpy(b + sizeof h + sizeof pl + tl + sp, &dst, sizeof dst);
+#endif
   char rec[8];
   record_of(slot, rec);
   ok = plat_save(rec, b, n) && ok;
   edits_forget();
+#if NB_DIMS
+  {
+    Side sd;
+    memset(&sd, 0, sizeof sd);
+    memcpy(sd.magic, "NBD1", 4);
+    sd.time = game_time, sd.played = cur_played, sd.dim = dim, sd.pl = pl, sd.dst = dst;
+    char rn[16];
+    side_of(slot, rn);
+    uint8_t *c = (uint8_t *)edits_scratch(sizeof sd + tl);
+    if (c) {
+      memcpy(c, &sd, sizeof sd);
+      memcpy(c + sizeof sd, t, tl);
+      ok = plat_save(rn, c, sizeof sd + tl) && ok;
+      edits_forget();
+    }
+  }
+#endif
   copy_write();
   return ok;
 }
@@ -254,61 +220,52 @@ static void played(int s) {
 }
 
 bool load_world(int s) {
-  Head4 h;
-  uint8_t dim;
-  int32_t ret[3];
+  Head h;
   uint32_t len, hl, tl;
-  const uint8_t *d = read_head(s, &h, &dim, ret, &len, &hl);
+  const uint8_t *d = read_head(s, &h, &len, &hl);
   void *t = tiles_data(&tl);
-  /* the spawners are the bytes after the tiles: a count, then 10 for each (0 for a world
-   * saved before spawners could be set) */
-  uint32_t tail = len - hl - sizeof pl - tl;
-  uint32_t sp = tail;
-  bool has_dims = tail >= sizeof dst && (tail - sizeof dst) % 10 == 1 && (tail - sizeof dst) / 10 <= SPAWNERS_MAX;
-  if (has_dims) sp = tail - sizeof dst;
-  if (!d || h.h3.h2.h.tiles_size != tl || sp % 10 != 1 || sp / 10 > SPAWNERS_MAX) return false;
+  if (!d || h.h2.h.tiles_size != tl || len != hl + sizeof pl + tl) return false;
   slot = s;
-  copy_name(cur_name, h.h3.h2.name);
-  cur_played = h.h3.h2.played;
-  world_seed = h.h3.h2.h.seed;
-  game_time = h.h3.h2.h.time;
-  world_cheats = h.h3.cheats, lan_open = lan_cheats = false, game_rules = h.h3.rules, world_type = h.h3.type;
-  copy_preset(world_preset, h.flat_preset);
+  copy_name(cur_name, h.h2.name);
+  cur_played = h.h2.played;
+  world_seed = h.h2.h.seed;
+  game_time = h.h2.h.time;
+  world_cheats = h.cheats, lan_open = lan_cheats = false, game_rules = h.rules, world_type = h.type;
   /* World.calculateInitialWeather */
-  weather = h.h3.h2.h.weather;
+  weather = h.h2.h.weather;
   rain_str = weather.raining ? 1 : 0;
   thunder_str = weather.thundering ? 1 : 0;
   memcpy(&pl, d + hl, sizeof pl);
   memcpy(t, d + hl + sizeof pl, tl);
-  spawners_load(d + hl + sizeof pl + tl, (int)sp);
-  if (has_dims) memcpy(&dst, d + hl + sizeof pl + tl + sp, sizeof dst);
-  else memset(&dst, 0, sizeof dst);
   memset(ents, 0, sizeof ents);
+#if NB_DIMS
+  {
+    dim = DIM_OVERWORLD;
+    memset(&dst, 0, sizeof dst);
+    char rn[16];
+    side_of(s, rn);
+    uint32_t sl;
+    const uint8_t *c = plat_load(rn, &sl);
+    Side sd;
+    if (c && sl == sizeof sd + tl && !memcmp(c, "NBD1", 4)) {
+      memcpy(&sd, c, sizeof sd);
+      dst = sd.dst;
+      if (sd.time == h.h2.h.time && sd.played == h.h2.played && sd.dim >= 0 && sd.dim <= DIM_END) {
+        dim = sd.dim, pl = sd.pl;
+        memcpy(t, c + sizeof sd, tl);
+      } else
+        tiles_merge(c + sizeof sd);
+    }
+  }
+#endif
   char pre[4];
   prefix_of(s, pre);
   world_new(world_seed, pre);
-  /* the dimension the player saved in: world_new starts in the overworld, so
-   * the nether's generator and records are put back when that is where the
-   * save is (the cache is still empty, so this is the whole volume again in
-   * the right dimension). Without this the title's backdrop and the spawn
-   * after loading are in the overworld at the nether's coordinates. */
-  world_dim = dim;
-  nb_ret_x = ret[0], nb_ret_y = ret[1], nb_ret_z = ret[2], nb_ret_ok = (ret[0] | ret[1] | ret[2]) != 0;
-  if (dim != DIM_OVER) {
-    gen_set_dim(dim);
-    edits_set_dim(dim);
-  }
-  /* a world from before the current record shape: its records are re-encoded once
-   * (the head is written as NBW7 from now on, which says it has been) */
-  {
-    int rs = rec_shape(h.h3.h2.h.magic);
-    if (rs >= 0 && rs < 3) convert_records(s, rs);
-  }
-  if (s != opt.last_world || h.h3.h2.played != opt.plays) played(s);
+  if (s != opt.last_world || h.h2.played != opt.plays) played(s);
   return true;
 }
 
-void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char *name, const char *preset) {
+void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char *name) {
   char pre[4];
   prefix_of(s, pre);
   plat_remove_prefix(pre);
@@ -321,73 +278,31 @@ void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char 
   world_seed = seed;
   game_time = 0;
   world_cheats = cheats, lan_open = lan_cheats = false, game_rules = GR_DEFAULT, world_type = (uint8_t)type;
-  if (type == WT_TEST) {
-    /* the showcase is looked at, not played through: the sun stands still, as /gamerule
-     * does it. It is the only rule this turns off - what keeps the blocks as they are and
-     * the natural spawning away lives in tick.c and mob.c; main.c starts the clock at noon */
-    game_rules = (uint8_t)(GR_DEFAULT & ~GR_DAYLIGHT_CYCLE);
-    /* its chests: one stack of each of the game's items that has no block of its own -
-     * the ones that place a block are shown in the grid of blocks - 27 a chest (gen.c
-     * puts the row of chests down, floating on barriers like the grid's blocks) */
-    Stack s[27];
-    int k = 0, n = 0;
-    for (int id = 256; id < 256 + ITEM_SLOTS; id++) {
-      if (!is_item_id(id) || it_place[id - 256] != 255) continue;
-      s[n].id = (uint16_t)id, s[n].aux = 1, n++;
-      if (n == 27) {
-        tiles_chest(TEST_ITEM_X0 + k, TEST_SECTION_Y + 1, TEST_ITEM_Z, s, n);
-        k++, n = 0;
-      }
-    }
-    if (n) tiles_chest(TEST_ITEM_X0 + k, TEST_SECTION_Y + 1, TEST_ITEM_Z, s, n);
-  }
-  copy_preset(world_preset, type == WT_FLAT ? preset : FLAT_DEFAULT);
   memset(&weather, 0, sizeof weather);
   rain_str = thunder_str = 0;
-  spawners_clear();
+#if NB_DIMS
+  dim = DIM_OVERWORLD;
   memset(&dst, 0, sizeof dst);
+#endif
   world_new(seed, pre);
-  nb_ret_x = nb_ret_y = nb_ret_z = 0, nb_ret_ok = false;   /* a new world has no return portal */
   player_spawn();
   pl.mode = (uint8_t)mode;
   played(s);
 }
 
 bool rename_world(int s, const char *name) {
-  Head4 h;
-  uint8_t dim;
-  int32_t ret[3];
+  Head h;
   uint32_t len, hl;
-  const uint8_t *d = read_head(s, &h, &dim, ret, &len, &hl);
+  const uint8_t *d = read_head(s, &h, &len, &hl);
   if (!d) return false;
-  /* the records first, if this world's are an older shape: the head below is written
-   * as NBW7, which says they are the current one, so an older record that cannot be
-   * re-encoded leaves the world as it was rather than a head that lies about it */
-  {
-    int rs = rec_shape(h.h3.h2.h.magic);
-    if (rs >= 0 && rs < 3) {
-      char pre[4];
-      prefix_of(s, pre);
-      if (!edits_convert(pre, rs)) return false;
-      d = read_head(s, &h, &dim, ret, &len, &hl);   /* (the storage moved under it) */
-      if (!d) return false;
-    }
-  }
-  /* the record again with the new head (made in the merge scratch, as saving does).
-   * An older record gains the current head, which is what brings the dimension
-   * and the return position with it */
-  Head5 h5;
-  memset(&h5, 0, sizeof h5);
-  h5.h4 = h;
-  memcpy(h5.h4.h3.h2.h.magic, "NBW7", 4);
-  h5.dim = dim;
-  memcpy(&h5.ret_x, ret, sizeof ret);
-  copy_name(h5.h4.h3.h2.name, name);
-  uint32_t body = len - hl, n = sizeof h5 + body;
+  /* the record again with the new head (made in the merge scratch, as saving does) */
+  uint32_t body = len - hl, n = sizeof h + body;
   uint8_t *b = (uint8_t *)edits_scratch(n);
   if (!b) return false;
-  memcpy(b + sizeof h5, d + hl, body);   /* (first: the scratch may be where nothing else is) */
-  memcpy(b, &h5, sizeof h5);
+  memcpy(b + sizeof h, d + hl, body);   /* (first: the scratch may be where nothing else is) */
+  memcpy(h.h2.h.magic, "NBW3", 4);
+  copy_name(h.h2.name, name);
+  memcpy(b, &h, sizeof h);
   char rec[8];
   record_of(s, rec);
   bool ok = plat_save(rec, b, n);
@@ -498,15 +413,6 @@ void load_options(void) {
   /* (an older, shorter record: what it has; the rest stays as it was) */
   if (d && len <= sizeof opt) memcpy(&opt, d, len);
   keys_update(opt.keys_seen);
-  /* (older records end in padding where distance now lives: 0 means "never set") */
-  if (opt.distance < 1 || opt.distance > 2) opt.distance = 2;
-  if (opt.sprint_toggle) opt.sprint_toggle = 1;
-  if (opt.fullbright) opt.fullbright = 1;
-  if (opt.contrast) opt.contrast = 1;
-  if (opt.panorama > PAN_NETHER) opt.panorama = PAN_RANDOM;
-  /* (an older record is shorter than the struct: the fields it has no room for stay
-   * as they were initialised above; a value past what the field holds is never set) */
-  if (opt.brightness > 15) opt.brightness = 0;
 }
 void save_options(void) {
   plat_save(OPTIONS_REC, &opt, sizeof opt);

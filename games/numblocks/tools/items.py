@@ -4,10 +4,7 @@
 CraftingManager and the Recipes* classes, RecipesFurnace, TileEntityFurnace).
 
 An item id is a block state (0 .. B_COUNT - 1, the blocks of tools/blocks.py
-that can be held), or 256 on with the item's own place in the it_* tables below:
-the two number spaces meet in the middle (the reserved states alias the items), so
-an item that needs an id of its own names one with `iid` (the nether's eggs, past
-every block state). tools/pack.py writes
+that can be held) or 256 + the index of an item below. tools/pack.py writes
 the tables into src/data.c; `items.py --header` writes src/items.h."""
 import sys
 import os
@@ -17,8 +14,7 @@ import blocks  # noqa: E402
 
 KINDS = ['none', 'block', 'pickaxe', 'axe', 'shovel', 'hoe', 'sword', 'shears', 'helmet', 'chestplate', 'leggings',
          'boots', 'food', 'stew', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'placer', 'flint_and_steel',
-         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod', 'spawn_egg', 'ender_pearl', 'ender_eye',
-         'fire_charge']
+         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod']
 # tool materials: harvest level, uses, efficiency, attack bonus (Item.EnumToolMaterial)
 TOOL_MAT = {'wood': (0, 59, 2, 0), 'stone': (1, 131, 4, 1), 'iron': (2, 250, 6, 2), 'diamond': (3, 1561, 8, 3),
             'gold': (0, 32, 12, 0)}
@@ -31,9 +27,9 @@ TOOL_DAMAGE = {'sword': 4, 'axe': 3, 'pickaxe': 2, 'shovel': 1, 'hoe': 0}
 I = []
 
 
-def item(name, label, tex, kind='none', stack=64, dur=0, tier=0, a=0, b=0, place=None, fuel=0, iid=None):
+def item(name, label, tex, kind='none', stack=64, dur=0, tier=0, a=0, b=0, place=None, fuel=0):
     I.append(dict(name=name, label=label, tex=tex, kind=kind, stack=stack, dur=dur, tier=tier, a=a, b=b, place=place,
-                  fuel=fuel, iid=iid))
+                  fuel=fuel))
 
 
 def food(name, label, tex, hunger, sat, stack=64, kind='food', place=None):
@@ -82,12 +78,12 @@ item('BONE', 'Bone', 'bone')
 item('GUNPOWDER', 'Gunpowder', 'gunpowder')
 item('LEATHER', 'Leather', 'leather')
 item('WHEAT', 'Wheat', 'wheat')
-item('WHEAT_SEEDS', 'Wheat Seeds', 'seeds_wheat', 'placer', place='WHEAT_0')
-item('REEDS', 'Sugar Cane', 'reeds', 'placer', place='SUGAR_CANE')
+item('WHEAT_SEEDS', 'Seeds', 'seeds_wheat', 'placer', place='WHEAT_0')
+item('REEDS', 'Sugar Canes', 'reeds', 'placer', place='SUGAR_CANE')
 item('SUGAR', 'Sugar', 'sugar')
 item('PAPER', 'Paper', 'paper')
 item('BOOK', 'Book', 'book_normal')
-item('CLAY_BALL', 'Clay Ball', 'clay_ball')
+item('CLAY_BALL', 'Clay', 'clay_ball')
 item('BRICK', 'Brick', 'brick')
 item('BOWL', 'Bowl', 'bowl')
 item('SNOWBALL', 'Snowball', 'snowball', 'snowball', stack=16)
@@ -97,17 +93,17 @@ item('GLOWSTONE_DUST', 'Glowstone Dust', 'glowstone_dust')
 item('BUCKET', 'Bucket', 'bucket_empty', 'bucket', stack=16)
 item('WATER_BUCKET', 'Water Bucket', 'bucket_water', 'water_bucket', stack=1)
 item('LAVA_BUCKET', 'Lava Bucket', 'bucket_lava', 'lava_bucket', stack=1, fuel=20000)
-item('MILK_BUCKET', 'Milk Bucket', 'bucket_milk', 'milk_bucket', stack=1)
+item('MILK_BUCKET', 'Milk', 'bucket_milk', 'milk_bucket', stack=1)
 item('WOODEN_DOOR', 'Oak Door', 'door_wood', 'placer', place='DOOR_OAK_LOWER')
-item('BED', 'White Bed', 'bed', 'placer', stack=1, place='BED_FOOT')
+item('BED', 'Bed', 'bed', 'placer', stack=1, place='BED_FOOT')
 item('COMPASS', 'Compass', 'compass')
 item('FISHING_ROD', 'Fishing Rod', 'fishing_rod_uncast', 'fishing_rod', stack=1, dur=64)
 item('CLOCK', 'Clock', 'clock')
 # dyes, in Minecraft's damage order (0 black (ink sac) .. 15 white (bone meal))
-DYES = [('BLACK', 'Ink Sac', 'black'), ('RED', 'Red Dye', 'red'), ('GREEN', 'Green Dye', 'green'),
+DYES = [('BLACK', 'Ink Sac', 'black'), ('RED', 'Rose Red', 'red'), ('GREEN', 'Cactus Green', 'green'),
         ('BROWN', 'Cocoa Beans', 'brown'), ('BLUE', 'Lapis Lazuli', 'blue'), ('PURPLE', 'Purple Dye', 'purple'),
         ('CYAN', 'Cyan Dye', 'cyan'), ('SILVER', 'Light Gray Dye', 'silver'), ('GRAY', 'Gray Dye', 'gray'),
-        ('PINK', 'Pink Dye', 'pink'), ('LIME', 'Lime Dye', 'lime'), ('YELLOW', 'Yellow Dye', 'yellow'),
+        ('PINK', 'Pink Dye', 'pink'), ('LIME', 'Lime Dye', 'lime'), ('YELLOW', 'Dandelion Yellow', 'yellow'),
         ('LIGHT_BLUE', 'Light Blue Dye', 'light_blue'), ('MAGENTA', 'Magenta Dye', 'magenta'),
         ('ORANGE', 'Orange Dye', 'orange'), ('WHITE', 'Bone Meal', 'white')]
 for n, lab, t in DYES:
@@ -128,87 +124,21 @@ food('ROTTEN_FLESH', 'Rotten Flesh', 'rotten_flesh', 4, 0.1)
 food('SPIDER_EYE', 'Spider Eye', 'spider_eye', 2, 0.8)
 food('MUSHROOM_STEW', 'Mushroom Stew', 'mushroom_stew', 6, 0.6, stack=1, kind='stew')
 food('COOKIE', 'Cookie', 'cookie', 2, 0.1)
-food('MELON_SLICE', 'Melon Slice', 'melon', 2, 0.3)
+food('MELON_SLICE', 'Melon', 'melon', 2, 0.3)
 food('CARROT', 'Carrot', 'carrot', 3, 0.6, place='CARROTS_0')
 food('POTATO', 'Potato', 'potato', 1, 0.3, place='POTATOES_0')
 food('BAKED_POTATO', 'Baked Potato', 'potato_baked', 5, 0.6)
 food('POISONOUS_POTATO', 'Poisonous Potato', 'potato_poisonous', 2, 0.3)
 food('PUMPKIN_PIE', 'Pumpkin Pie', 'pumpkin_pie', 8, 0.3)
-food('RAW_FISH', 'Raw Cod', 'fish_cod_raw', 2, 0.1)
+food('RAW_FISH', 'Raw Fish', 'fish_cod_raw', 2, 0.1)
 food('RAW_SALMON', 'Raw Salmon', 'fish_salmon_raw', 2, 0.1)
-food('CLOWNFISH', 'Tropical Fish', 'fish_clownfish_raw', 1, 0.1)
+food('CLOWNFISH', 'Clownfish', 'fish_clownfish_raw', 1, 0.1)
 food('PUFFERFISH', 'Pufferfish', 'fish_pufferfish_raw', 1, 0.1)
-food('COOKED_FISH', 'Cooked Cod', 'fish_cod_cooked', 5, 0.6)
+food('COOKED_FISH', 'Cooked Fish', 'fish_cod_cooked', 5, 0.6)
 food('COOKED_SALMON', 'Cooked Salmon', 'fish_salmon_cooked', 6, 0.8)
-item('RAW_IRON', 'Raw Iron', 'raw_iron')
-item('RAW_GOLD', 'Raw Gold', 'raw_gold')
-# --- spawn eggs (ItemMonsterPlacer): one per mob, with the modern per-mob item pictures
-# (1.21.5's <mob>_spawn_egg.png, which 1.8.8's jar has none of: it only has the grey
-# spawn_egg and spawn_egg_overlay). The last tuple item is Minecraft's numeric id for the
-# mob (EntityList), the data value /give names a spawn egg by.
-# The nether's two (piglin, zombified piglin) go last in the list but take ids of their
-# own (see MOBS_NETHER below): an item id is what a save keeps, and so is a block
-# state's, and the two spaces meet.
-MOBS = (('zombie', 'Zombie', 54), ('skeleton', 'Skeleton', 51), ('creeper', 'Creeper', 50),
-        ('spider', 'Spider', 52), ('pig', 'Pig', 90), ('cow', 'Cow', 92), ('sheep', 'Sheep', 91),
-        ('chicken', 'Chicken', 93))
-# The third of each is the data value 1.8's one spawn_egg (383) is told apart by: the
-# mob's own EntityList id. 1.8's PigZombie was 57, the zombified piglin's predecessor,
-# so it keeps it; the piglin is new in 1.16 and takes 8, a value the eight 1.8 eggs
-# never used (2, 3, 4, 6, A, B, C, D say theirs). /give takes 383 with the value.
-MOBS_NETHER = (('piglin', 'Piglin', 8), ('zombified_piglin', 'Zombified Piglin', 57))
-for m, lab, _mc_id in MOBS:
-    item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64)
-
-# (new items go last: their ids are what the saves keep)
-item('QUARTZ', 'Nether Quartz', 'quartz')
-# The Nether and the End's own items. They sit past 511, where the 9-bit block states end,
-# so the block and item number spaces do not meet.
-item('NETHERBRICK', 'Nether Brick', 'netherbrick', iid=512)
-item('ENDER_PEARL', 'Ender Pearl', 'ender_pearl', 'ender_pearl', stack=16, iid=513)
-item('ENDER_EYE', 'Eye of Ender', 'ender_eye', 'ender_eye', iid=514)
-item('BLAZE_ROD', 'Blaze Rod', 'blaze_rod', fuel=2400, iid=515)
-item('BLAZE_POWDER', 'Blaze Powder', 'blaze_powder', iid=516)
-item('GHAST_TEAR', 'Ghast Tear', 'ghast_tear', iid=517)
-item('MAGMA_CREAM', 'Magma Cream', 'magma_cream', iid=518)
-item('FIRE_CHARGE', 'Fire Charge', 'fireball', 'fire_charge', iid=519)
-# The nether's two eggs: the items' own id range (256 onwards, one an item) ends at 395
-# because the block states past it are blocks of their own (396: chiseled quartz block,
-# 397: quartz pillar, and on) - a holdable block's stack id is its own state's, so the
-# two may not cross. The state space's unused tail (447 on: past the last block state)
-# is where they go, named ids so nothing between 396 and 446 moves. (nb.h's is_item_id:
-# an id is an item's where the item tables have a row for it.)
-for m, lab, _mc_id in MOBS_NETHER:
-    iid = 447 if m == 'piglin' else 448
-    item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64, iid=iid)
-MOBS_NETHER = tuple(MOBS_NETHER)
-# the End's and the fortresses' eggs: theirs are past 519, where the new items end
-MOBS_END = (('enderman', 'Enderman', 520), ('ghast', 'Ghast', 521), ('blaze', 'Blaze', 522),
-            ('magma_cube', 'Magma Cube', 523), ('wither_skeleton', 'Wither Skeleton', 524))
-for m, lab, iid in MOBS_END:
-    item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64, iid=iid)
-MOBS = MOBS + MOBS_NETHER + tuple((m, lab, iid) for m, lab, iid in MOBS_END)
 
 INAMES = [x['name'] for x in I]
 assert len(set(INAMES)) == len(INAMES)
-
-# The item ids: 256 on, one an item, the table's own order - except the ones that name
-# their own (the nether's eggs, in the state space's unused tail: 396..446 are block
-# states of their own, so the item ids past the reserved range 258..395 may not use
-# them). ITEM_SLOTS is the tables' length: (the largest id) - 255.
-_next = 256
-for x in I:
-    if x['iid'] is None:
-        x['iid'] = _next
-    _next = max(_next, x['iid'] + 1)
-assert len(set(x['iid'] for x in I)) == len(I)
-ITEM_SLOTS = max(x['iid'] for x in I) - 255
-IEND = max(x['iid'] for x in I) + 1
-
-
-def item_id(name):
-    """an item's id by its name"""
-    return I[INAMES.index(name)]['iid']
 
 # --- the blocks you can hold: their names (en_US) and the item a block state counts as
 LABELS = {
@@ -219,93 +149,55 @@ LABELS = {
     'GOLD_ORE': 'Gold Ore', 'IRON_ORE': 'Iron Ore', 'COAL_ORE': 'Coal Ore', 'SPONGE': 'Sponge', 'GLASS': 'Glass',
     'LAPIS_ORE': 'Lapis Lazuli Ore', 'LAPIS_BLOCK': 'Lapis Lazuli Block', 'SANDSTONE': 'Sandstone',
     'SANDSTONE_CHISELED': 'Chiseled Sandstone', 'SANDSTONE_SMOOTH': 'Smooth Sandstone', 'COBWEB': 'Cobweb',
-    'DEAD_SHRUB': 'Dead Bush', 'TALL_GRASS': 'Grass', 'FERN': 'Fern', 'DEAD_BUSH': 'Dead Bush', 'DANDELION': 'Dandelion',
+    'DEAD_SHRUB': 'Shrub', 'TALL_GRASS': 'Grass', 'FERN': 'Fern', 'DEAD_BUSH': 'Dead Bush', 'DANDELION': 'Dandelion',
     'POPPY': 'Poppy', 'BLUE_ORCHID': 'Blue Orchid', 'ALLIUM': 'Allium', 'AZURE_BLUET': 'Azure Bluet',
     'RED_TULIP': 'Red Tulip', 'ORANGE_TULIP': 'Orange Tulip', 'WHITE_TULIP': 'White Tulip', 'PINK_TULIP': 'Pink Tulip',
-    'OXEYE_DAISY': 'Oxeye Daisy', 'BROWN_MUSHROOM': 'Brown Mushroom', 'RED_MUSHROOM': 'Red Mushroom',
-    'GOLD_BLOCK': 'Block of Gold', 'IRON_BLOCK': 'Block of Iron', 'STONE_SLAB_DOUBLE': 'Smooth Stone',
-    'STONE_SLAB': 'Smooth Stone Slab', 'SANDSTONE_SLAB': 'Sandstone Slab', 'WOOD_SLAB_OLD': 'Petrified Oak Slab',
-    'COBBLESTONE_SLAB': 'Cobblestone Slab', 'BRICK_SLAB': 'Brick Slab', 'STONE_BRICK_SLAB': 'Stone Brick Slab',
-    'BRICKS': 'Bricks', 'TNT': 'TNT', 'BOOKSHELF': 'Bookshelf', 'MOSSY_COBBLESTONE': 'Mossy Cobblestone',
-    'OBSIDIAN': 'Obsidian', 'TORCH': 'Torch', 'MOB_SPAWNER': 'Monster Spawner', 'OAK_STAIRS': 'Oak Stairs',
+    'OXEYE_DAISY': 'Oxeye Daisy', 'BROWN_MUSHROOM': 'Mushroom', 'RED_MUSHROOM': 'Mushroom',
+    'GOLD_BLOCK': 'Block of Gold', 'IRON_BLOCK': 'Block of Iron', 'STONE_SLAB_DOUBLE': 'Stone Slab',
+    'STONE_SLAB': 'Stone Slab', 'SANDSTONE_SLAB': 'Sandstone Slab', 'WOOD_SLAB_OLD': 'Wooden Slab',
+    'COBBLESTONE_SLAB': 'Cobblestone Slab', 'BRICK_SLAB': 'Bricks Slab', 'STONE_BRICK_SLAB': 'Stone Bricks Slab',
+    'BRICKS': 'Bricks', 'TNT': 'TNT', 'BOOKSHELF': 'Bookshelf', 'MOSSY_COBBLESTONE': 'Moss Stone',
+    'OBSIDIAN': 'Obsidian', 'TORCH': 'Torch', 'MOB_SPAWNER': 'Monster Spawner', 'OAK_STAIRS': 'Oak Wood Stairs',
     'CHEST': 'Chest', 'DIAMOND_ORE': 'Diamond Ore', 'DIAMOND_BLOCK': 'Block of Diamond',
     'CRAFTING_TABLE': 'Crafting Table', 'FARMLAND': 'Farmland', 'FURNACE': 'Furnace', 'LADDER': 'Ladder',
     'RAIL': 'Rail', 'COBBLESTONE_STAIRS': 'Cobblestone Stairs', 'REDSTONE_ORE': 'Redstone Ore', 'SNOW_LAYER': 'Snow',
-    'ICE': 'Ice', 'SNOW': 'Snow Block', 'CACTUS': 'Cactus', 'CLAY': 'Clay', 'FENCE_OAK': 'Oak Fence', 'PUMPKIN': 'Pumpkin',
+    'ICE': 'Ice', 'SNOW': 'Snow', 'CACTUS': 'Cactus', 'CLAY': 'Clay', 'FENCE_OAK': 'Oak Fence', 'PUMPKIN': 'Pumpkin',
     'JACK_O_LANTERN': "Jack o'Lantern", 'STONE_BRICKS': 'Stone Bricks', 'MOSSY_STONE_BRICKS': 'Mossy Stone Bricks',
     'CRACKED_STONE_BRICKS': 'Cracked Stone Bricks', 'CHISELED_STONE_BRICKS': 'Chiseled Stone Bricks',
-    'BROWN_MUSHROOM_CAP': 'Brown Mushroom Block', 'RED_MUSHROOM_CAP': 'Red Mushroom Block', 'GLASS_PANE': 'Glass Pane', 'MELON': 'Melon',
+    'BROWN_MUSHROOM_CAP': 'Mushroom', 'RED_MUSHROOM_CAP': 'Mushroom', 'GLASS_PANE': 'Glass Pane', 'MELON': 'Melon',
     'VINE': 'Vines', 'MYCELIUM': 'Mycelium', 'LILY_PAD': 'Lily Pad', 'EMERALD_ORE': 'Emerald Ore',
-    'EMERALD_BLOCK': 'Block of Emerald', 'COBBLESTONE_WALL': 'Cobblestone Wall', 'HARDENED_CLAY': 'Terracotta',
+    'EMERALD_BLOCK': 'Block of Emerald', 'COBBLESTONE_WALL': 'Cobblestone Wall', 'HARDENED_CLAY': 'Hardened Clay',
     'HAY_BALE': 'Hay Bale', 'COAL_BLOCK': 'Block of Coal', 'PACKED_ICE': 'Packed Ice', 'SUNFLOWER_LOWER': 'Sunflower',
-    'LILAC_LOWER': 'Lilac', 'DOUBLE_GRASS_LOWER': 'Tall Grass', 'LARGE_FERN_LOWER': 'Large Fern',
+    'LILAC_LOWER': 'Lilac', 'DOUBLE_GRASS_LOWER': 'Double Tallgrass', 'LARGE_FERN_LOWER': 'Large Fern',
     'ROSE_BUSH_LOWER': 'Rose Bush', 'PEONY_LOWER': 'Peony', 'RED_SANDSTONE': 'Red Sandstone', 'GLOWSTONE': 'Glowstone',
-    'NETHERRACK': 'Netherrack', 'SOUL_SAND': 'Soul Sand', 'NETHER_QUARTZ_ORE': 'Nether Quartz Ore',
-    'QUARTZ_BLOCK': 'Block of Quartz', 'CHISELED_QUARTZ_BLOCK': 'Chiseled Quartz Block',
-    'QUARTZ_PILLAR': 'Quartz Pillar', 'SMOOTH_QUARTZ': 'Smooth Quartz', 'QUARTZ_BRICKS': 'Quartz Bricks',
-    'DEEPSLATE': 'Deepslate', 'DEEPSLATE_COAL_ORE': 'Deepslate Coal Ore',
-    'DEEPSLATE_IRON_ORE': 'Deepslate Iron Ore', 'DEEPSLATE_GOLD_ORE': 'Deepslate Gold Ore',
-    'DEEPSLATE_REDSTONE_ORE': 'Deepslate Redstone Ore', 'DEEPSLATE_DIAMOND_ORE': 'Deepslate Diamond Ore',
-    'DEEPSLATE_LAPIS_ORE': 'Deepslate Lapis Lazuli Ore', 'DEEPSLATE_EMERALD_ORE': 'Deepslate Emerald Ore',
-    'STONE_PRESSURE_PLATE': 'Stone Pressure Plate', 'SANDSTONE_STAIRS': 'Sandstone Stairs',
-    'CRIMSON_NYLIUM': 'Crimson Nylium', 'WARPED_NYLIUM': 'Warped Nylium',
-    'CRIMSON_STEM': 'Crimson Stem', 'WARPED_STEM': 'Warped Stem',
-    'STRIPPED_CRIMSON_STEM': 'Stripped Crimson Stem', 'STRIPPED_WARPED_STEM': 'Stripped Warped Stem',
-    'CRIMSON_PLANKS': 'Crimson Planks', 'WARPED_PLANKS': 'Warped Planks',
-    'NETHER_WART_BLOCK': 'Nether Wart Block', 'WARPED_WART_BLOCK': 'Warped Wart Block',
-    'SHROOMLIGHT': 'Shroomlight', 'BONE_BLOCK': 'Bone Block',
-    'CRIMSON_FUNGUS': 'Crimson Fungus', 'WARPED_FUNGUS': 'Warped Fungus',
-    'CRIMSON_ROOTS': 'Crimson Roots', 'WARPED_ROOTS': 'Warped Roots', 'NETHER_SPROUTS': 'Nether Sprouts',
-    'WEEPING_VINES': 'Weeping Vines', 'TWISTING_VINES': 'Twisting Vines', 'SOUL_SOIL': 'Soul Soil',
-    'SOUL_FIRE': 'Soul Fire', 'BARRIER': 'Barrier',
-    'NETHER_BRICK': 'Nether Brick', 'NETHER_BRICK_FENCE': 'Nether Brick Fence',
-    'NETHER_BRICK_STAIRS_E': 'Nether Brick Stairs',
-    'END_PORTAL_FRAME': 'End Portal Frame', 'END_STONE': 'End Stone', 'DRAGON_EGG': 'Dragon Egg',
-    'IRON_BARS': 'Iron Bars', 'STONE_BRICK_STAIRS_E': 'Stone Brick Stairs',
-    'IRON_DOOR_LOWER_E': 'Iron Door', 'STONE_BUTTON': 'Stone Button',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
-    LABELS[f'PLANKS_{n}'] = f'{t} Planks'
+    LABELS[f'PLANKS_{n}'] = f'{t} Wood Planks'
     LABELS[f'SAPLING_{n}'] = f'{t} Sapling'
-    LABELS[f'LOG_{n}'] = f'{t} Log'
+    LABELS[f'LOG_{n}'] = f'{t} Wood'
     LABELS[f'LEAVES_{n}'] = f'{t} Leaves'
-    LABELS[f'WOOD_SLAB_{n}'] = f'{t} Slab'
+    LABELS[f'WOOD_SLAB_{n}'] = f'{t} Wood Slab'
 COLORS = ['WHITE', 'ORANGE', 'MAGENTA', 'LIGHT_BLUE', 'YELLOW', 'LIME', 'PINK', 'GRAY', 'SILVER', 'CYAN', 'PURPLE',
           'BLUE', 'BROWN', 'GREEN', 'RED', 'BLACK']
 CLAB = ['White', 'Orange', 'Magenta', 'Light Blue', 'Yellow', 'Lime', 'Pink', 'Gray', 'Light Gray', 'Cyan', 'Purple',
         'Blue', 'Brown', 'Green', 'Red', 'Black']
 for c, l in zip(COLORS, CLAB):
     LABELS[f'WOOL_{c}'] = 'Wool' if c == 'WHITE' else f'{l} Wool'
-    LABELS[f'STAINED_CLAY_{c}'] = f'{l} Terracotta'
-    LABELS[f'CONCRETE_{c}'] = f'{l} Concrete'
-    LABELS[f'CONCRETE_POWDER_{c}'] = f'{l} Concrete Powder'
+    LABELS[f'STAINED_CLAY_{c}'] = f'{l} Stained Clay'
 
 # block states that stand for another one in the inventory
-ITEM_OF = {'PORTAL_NS': None, 'PORTAL_EW': None,   # the nether portal: the game's own, never an item
-           'STONE_PRESSURE_PLATE_DOWN': 'STONE_PRESSURE_PLATE',
-           'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
+ITEM_OF = {'OAK_STAIRS_W': 'OAK_STAIRS', 'OAK_STAIRS_S': 'OAK_STAIRS', 'OAK_STAIRS_N': 'OAK_STAIRS',
            'COBBLESTONE_STAIRS_W': 'COBBLESTONE_STAIRS', 'COBBLESTONE_STAIRS_S': 'COBBLESTONE_STAIRS',
-           'COBBLESTONE_STAIRS_N': 'COBBLESTONE_STAIRS',
-           'SANDSTONE_STAIRS_W': 'SANDSTONE_STAIRS', 'SANDSTONE_STAIRS_S': 'SANDSTONE_STAIRS',
-           'SANDSTONE_STAIRS_N': 'SANDSTONE_STAIRS', 'GRASS_SNOWED': 'GRASS', 'FURNACE_LIT': 'FURNACE', 'TORCH_E': 'TORCH', 'TORCH_W': 'TORCH',
+           'COBBLESTONE_STAIRS_N': 'COBBLESTONE_STAIRS', 'GRASS_SNOWED': 'GRASS', 'FURNACE_LIT': 'FURNACE', 'TORCH_E': 'TORCH', 'TORCH_W': 'TORCH',
            'TORCH_S': 'TORCH', 'TORCH_N': 'TORCH', 'FARMLAND_WET': 'FARMLAND', 'DOOR_OAK_LOWER': 'I:WOODEN_DOOR',
            'DOOR_OAK_UPPER': 'I:WOODEN_DOOR', 'BED_FOOT': 'I:BED', 'BED_HEAD': 'I:BED', 'SUGAR_CANE': 'I:REEDS',
            'BROWN_MUSHROOM_INSIDE': 'BROWN_MUSHROOM_CAP', 'BROWN_MUSHROOM_STEM': 'BROWN_MUSHROOM_CAP',
            'RED_MUSHROOM_INSIDE': 'RED_MUSHROOM_CAP', 'RED_MUSHROOM_STEM': 'RED_MUSHROOM_CAP',
            'MONSTER_EGG_STONE': 'STONE'}
-ITEM_OF['UNUSED_447'] = ITEM_OF['UNUSED_448'] = None   # the piglin eggs own these item ids
 for v in ['OAK', 'SPRUCE', 'BIRCH', 'JUNGLE', 'ACACIA', 'DARK_OAK']:
     for s in ['_X', '_Z', '_BARK']:
         ITEM_OF[f'LOG_{v}{s}'] = f'LOG_{v}'
-ITEM_OF['QUARTZ_PILLAR_X'] = 'QUARTZ_PILLAR'
-ITEM_OF['QUARTZ_PILLAR_Z'] = 'QUARTZ_PILLAR'
-for _w in ['CRIMSON', 'WARPED', 'STRIPPED_CRIMSON', 'STRIPPED_WARPED']:
-    for _s in ['_X', '_Z', '_BARK']:
-        ITEM_OF[f'{_w}_STEM{_s}'] = f'{_w}_STEM'
-ITEM_OF['BONE_BLOCK_X'] = 'BONE_BLOCK'
-ITEM_OF['BONE_BLOCK_Z'] = 'BONE_BLOCK'
-ITEM_OF['SOUL_FIRE'] = None   # soul fire is a state, not an item (as fire is)
 for n in ['SUNFLOWER', 'LILAC', 'DOUBLE_GRASS', 'LARGE_FERN', 'ROSE_BUSH', 'PEONY']:
     ITEM_OF[f'{n}_UPPER'] = f'{n}_LOWER'
 for d in ['S', 'W', 'N', 'E_OPEN', 'S_OPEN', 'W_OPEN', 'N_OPEN']:
@@ -321,14 +213,6 @@ for s in blocks.S:
     if s['name'].startswith(('FLOWING_WATER', 'FLOWING_LAVA', 'FALLING_')):
         ITEM_OF[s['name']] = None
 ITEM_OF['AIR'] = None
-for _d in 'WSN':
-    ITEM_OF[f'NETHER_BRICK_STAIRS_{_d}'] = 'NETHER_BRICK_STAIRS_E'
-    ITEM_OF[f'STONE_BRICK_STAIRS_{_d}'] = 'STONE_BRICK_STAIRS_E'
-    ITEM_OF[f'IRON_DOOR_LOWER_{_d}'] = 'IRON_DOOR_LOWER_E'
-    ITEM_OF[f'IRON_DOOR_LOWER_{_d}_OPEN'] = 'IRON_DOOR_LOWER_E'
-ITEM_OF['IRON_DOOR_UPPER'] = None
-ITEM_OF['END_PORTAL'] = None
-ITEM_OF['END_PORTAL_FRAME_EYE'] = 'END_PORTAL_FRAME'
 
 BNAMES = [s['name'] for s in blocks.S]
 
@@ -336,10 +220,10 @@ BNAMES = [s['name'] for s in blocks.S]
 def resolve(n):
     """an item id from a name: 'I:NAME' or a known item name is an item, else a block state"""
     if n.startswith('I:'):
-        return item_id(n[2:])
+        return 256 + INAMES.index(n[2:])
     if n in INAMES:
         assert n not in BNAMES, n
-        return item_id(n)
+        return 256 + INAMES.index(n)
     if n.startswith('G_'):
         return GROUPS[n]
     return BNAMES.index(n)
@@ -424,10 +308,6 @@ for i, (n, lab, t) in enumerate(DYES):
     if wool != 'WOOL_WHITE':
         shapeless(wool, 1, [f'DYE_{n}', 'WOOL_WHITE'])
     shaped('STAINED_CLAY_' + COLORS[15 - i], 8, ['###', '#X#', '###'], {'#': 'HARDENED_CLAY', 'X': f'DYE_{n}'})
-    # modern concrete powder: shapeless, 4 sand and 4 gravel with the dye, 8 out (the concrete
-    # it sets into is not crafted)
-    shapeless('CONCRETE_POWDER_' + COLORS[15 - i], 8,
-              ['SAND', 'SAND', 'SAND', 'SAND', 'GRAVEL', 'GRAVEL', 'GRAVEL', 'GRAVEL', f'DYE_{n}'])
 shapeless('DYE_YELLOW', 1, ['DANDELION'])
 shapeless('DYE_RED', 1, ['POPPY'])
 shapeless('DYE_WHITE', 3, ['BONE'])
@@ -465,11 +345,6 @@ shaped('SNOW_LAYER', 6, ['###'], {'#': 'SNOW'})
 shaped('CLAY', 1, ['##', '##'], {'#': 'CLAY_BALL'})
 shaped('BRICKS', 1, ['##', '##'], {'#': 'BRICK'})
 shaped('GLOWSTONE', 1, ['##', '##'], {'#': 'GLOWSTONE_DUST'})
-shaped('QUARTZ_BLOCK', 1, ['##', '##'], {'#': 'QUARTZ'})   # 4 quartz items to a block, as modern does
-shaped('QUARTZ_PILLAR', 2, ['#', '#'], {'#': 'QUARTZ_BLOCK'})   # 2 blocks in a column, as modern does
-shaped('QUARTZ_BRICKS', 4, ['##', '##'], {'#': 'QUARTZ_BLOCK'})   # 4 blocks, as modern does
-shaped('CHISELED_QUARTZ_BLOCK', 1, ['##', '##'], {'#': 'QUARTZ_PILLAR'})   # (no slabs here: pillars instead)
-shaped('QUARTZ', 4, ['#'], {'#': 'QUARTZ_BLOCK'})
 shaped('WOOL_WHITE', 1, ['##', '##'], {'#': 'STRING'})
 shaped('TNT', 1, ['X#X', '#X#', 'X#X'], {'X': 'GUNPOWDER', '#': 'SAND'})
 shaped('COBBLESTONE_SLAB', 6, ['###'], {'#': 'COBBLESTONE'})
@@ -481,10 +356,6 @@ for n in ['OAK', 'SPRUCE', 'BIRCH', 'JUNGLE', 'ACACIA', 'DARK_OAK']:
     if f'WOOD_SLAB_{n}' in BNAMES:
         shaped(f'WOOD_SLAB_{n}', 6, ['###'], {'#': f'PLANKS_{n}'})
     shaped(f'PLANKS_{n}', 4, ['#'], {'#': f'LOG_{n}'})
-# the nether's planks, from a stem or a stripped stem (modern's tag recipe)
-for w in ['CRIMSON', 'WARPED']:
-    shaped(f'{w}_PLANKS', 4, ['#'], {'#': f'{w}_STEM'})
-    shaped(f'{w}_PLANKS', 4, ['#'], {'#': f'STRIPPED_{w}_STEM'})
 shaped('LADDER', 3, ['# #', '###', '# #'], {'#': 'STICK'})
 shaped('WOODEN_DOOR', 3, ['##', '##', '##'], {'#': 'PLANKS_OAK'})
 shaped('SUGAR', 1, ['#'], {'#': 'REEDS'})
@@ -499,41 +370,26 @@ shapeless('FLINT_AND_STEEL', 1, ['IRON_INGOT', 'FLINT'])
 shaped('BREAD', 1, ['###'], {'#': 'WHEAT'})
 shaped('OAK_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'PLANKS_OAK'})
 shaped('COBBLESTONE_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'COBBLESTONE'})
-shaped('SANDSTONE_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'SANDSTONE'})
-shaped('STONE_PRESSURE_PLATE', 1, ['##'], {'#': 'STONE'})
-shaped('NETHER_BRICK', 1, ['##', '##'], {'#': 'NETHERBRICK'})
-shaped('NETHER_BRICK_FENCE', 6, ['###', '###'], {'#': 'NETHER_BRICK'})
-shaped('NETHER_BRICK_STAIRS_E', 4, ['#  ', '## ', '###'], {'#': 'NETHER_BRICK'})
-shaped('IRON_BARS', 16, ['###', '###'], {'#': 'IRON_INGOT'})
-shaped('STONE_BRICK_STAIRS_E', 4, ['#  ', '## ', '###'], {'#': 'STONE_BRICKS'})
-shaped('STONE_BUTTON', 1, None, ['STONE'])
-shaped('IRON_DOOR_LOWER_E', 3, ['##', '##', '##'], {'#': 'IRON_INGOT'})
-shapeless('BLAZE_POWDER', 2, ['BLAZE_ROD'])
-shapeless('MAGMA_CREAM', 1, ['BLAZE_POWDER', 'SLIME_BALL'])
-shapeless('ENDER_EYE', 1, ['ENDER_PEARL', 'BLAZE_POWDER'])
-shapeless('FIRE_CHARGE', 3, ['GUNPOWDER', 'BLAZE_POWDER', 'COAL'])
-shapeless('FIRE_CHARGE', 3, ['GUNPOWDER', 'BLAZE_POWDER', 'CHARCOAL'])
 shaped('GOLDEN_APPLE', 1, ['###', '#X#', '###'], {'#': 'GOLD_INGOT', 'X': 'APPLE'})
 shaped('CLOCK', 1, [' # ', '#X#', ' # '], {'#': 'GOLD_INGOT', 'X': 'REDSTONE'})
 shaped('COMPASS', 1, [' # ', '#X#', ' # '], {'#': 'IRON_INGOT', 'X': 'REDSTONE'})
 shaped('BED', 1, ['###', 'XXX'], {'#': 'G_WOOL', 'X': 'G_PLANKS'})
 
 # --- smelting (RecipesFurnace): input, output
-SMELT = [('RAW_IRON', 'IRON_INGOT'), ('RAW_GOLD', 'GOLD_INGOT'), ('DIAMOND_ORE', 'DIAMOND'), ('SAND', 'GLASS'),
+SMELT = [('IRON_ORE', 'IRON_INGOT'), ('GOLD_ORE', 'GOLD_INGOT'), ('DIAMOND_ORE', 'DIAMOND'), ('SAND', 'GLASS'),
          ('RED_SAND', 'GLASS'), ('PORKCHOP', 'COOKED_PORKCHOP'), ('BEEF', 'COOKED_BEEF'),
          ('CHICKEN', 'COOKED_CHICKEN'), ('MUTTON', 'COOKED_MUTTON'), ('COBBLESTONE', 'STONE'),
          ('STONE_BRICKS', 'CRACKED_STONE_BRICKS'), ('CLAY_BALL', 'BRICK'), ('CLAY', 'HARDENED_CLAY'),
          ('CACTUS', 'DYE_GREEN'), ('EMERALD_ORE', 'EMERALD'), ('POTATO', 'BAKED_POTATO'), ('COAL_ORE', 'COAL'),
          ('REDSTONE_ORE', 'REDSTONE'), ('LAPIS_ORE', 'DYE_BLUE'), ('RAW_FISH', 'COOKED_FISH'),
-         ('RAW_SALMON', 'COOKED_SALMON'), ('QUARTZ_BLOCK', 'SMOOTH_QUARTZ'), ('NETHERRACK', 'NETHERBRICK')]
+         ('RAW_SALMON', 'COOKED_SALMON')]
 SMELT += [(n, 'CHARCOAL') for n in GROUP_OF['G_LOG']]
 
 
 def fuel_of(iid):
     """burn time in ticks (TileEntityFurnace.fuelTime)"""
-    it = next((x for x in I if x['iid'] == iid), None)
-    if it is not None:
-        return it['fuel']
+    if iid >= 256:
+        return I[iid - 256]['fuel']
     n = BNAMES[iid]
     if n == 'COAL_BLOCK':
         return 16000
@@ -547,121 +403,51 @@ def fuel_of(iid):
     return 0
 
 
-# the creative inventory's tabs, in the order they are shown: what the world is made of, what you build
-# with, what decorates it, what does something, then what you use. The Spawn Eggs tab is on the bottom
-# row, right of Materials, and Operator Utilities is Minecraft's own last-but-one: one tab left of
-# Survival Inventory, at the end of the bottom row, shown only with cheats on (gui.c's tab_shown).
-# (Brewing is only there for the numbering, NumBlocks brews nothing; Survival Inventory is a way out
-# to the survival inventory.)
-T_NATURAL, T_BLOCK, T_DECO, T_FUNC, T_MISC, T_SEARCH, T_FOOD, T_TOOL, T_COMBAT, T_BREW, T_MAT, T_MOBS, T_OP, T_SURV = range(14)
-TABS = ['Natural Blocks', 'Building Blocks', 'Decorative Items', 'Functional', 'Miscellaneous', 'Search Items',
-        'Foodstuffs', 'Tools', 'Combat', 'Brewing', 'Materials', 'Spawn Eggs', 'Operator Utilities',
-        'Survival Inventory']
-# what the world is made of: soil, stone, ores, ice; a natural block is a building block too, so it is
-# in both tabs (Minecraft keeps it in Building Blocks only)
-NATURAL = ('GRASS', 'DIRT', 'COARSE_DIRT', 'PODZOL', 'MYCELIUM', 'STONE', 'GRANITE', 'DIORITE', 'ANDESITE',
-           'SAND', 'RED_SAND', 'GRAVEL', 'CLAY', 'SNOW', 'ICE', 'PACKED_ICE', 'BEDROCK', 'OBSIDIAN', 'NETHERRACK',
-           'COAL_ORE', 'IRON_ORE', 'GOLD_ORE', 'DIAMOND_ORE', 'REDSTONE_ORE', 'LAPIS_ORE', 'EMERALD_ORE', 'DEEPSLATE',
-           'DEEPSLATE_COAL_ORE', 'DEEPSLATE_IRON_ORE', 'DEEPSLATE_GOLD_ORE', 'DEEPSLATE_REDSTONE_ORE',
-           'DEEPSLATE_DIAMOND_ORE', 'DEEPSLATE_LAPIS_ORE', 'DEEPSLATE_EMERALD_ORE', 'CRIMSON_NYLIUM',
-           'WARPED_NYLIUM', 'SOUL_SOIL')
-NATURAL_ONLY = ('SNOW_LAYER', 'SOUL_SAND', 'NETHER_QUARTZ_ORE')   # natural, but only in Natural Blocks:
-# Snow Block is already in Building Blocks, and soul sand and quartz ore are the nether's
-# ground and veins (quartz ore groups with the other ores through tab_group's _ORE rule)
-# blocks that do something rather than just sit there (Minecraft's decoration tab, most of it)
-FUNC = ('TNT', 'TORCH', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'RAIL',
-        'STONE_PRESSURE_PLATE')
-# of those, the ones that fill a whole cube, so they go first in their tab
-FUNC_FULL = ('TNT', 'MOB_SPAWNER', 'CHEST', 'CRAFTING_TABLE', 'FURNACE')
-# what is left of Minecraft's decoration tab: plants, bushes and leaves
-DECO = ('SAPLING_', 'LEAVES_', 'DEAD_SHRUB', 'TALL_GRASS', 'FERN', 'DEAD_BUSH', 'DANDELION', 'POPPY',
-        'BLUE_ORCHID', 'ALLIUM', 'AZURE_BLUET', '_TULIP', 'OXEYE_DAISY', 'BROWN_MUSHROOM', 'RED_MUSHROOM',
-        'CACTUS', 'VINE', 'LILY_PAD', 'SUNFLOWER_LOWER', 'LILAC_LOWER', 'DOUBLE_GRASS_LOWER', 'LARGE_FERN_LOWER',
-        'ROSE_BUSH_LOWER', 'PEONY_LOWER', 'CRIMSON_FUNGUS', 'WARPED_FUNGUS', 'CRIMSON_ROOTS', 'WARPED_ROOTS',
-        'NETHER_SPROUTS', 'WEEPING_VINES', 'TWISTING_VINES', 'SHROOMLIGHT')
+# the creative inventory's tabs (CreativeModeTab), in Minecraft's order; what NumBlocks puts in each
+TABS = ['Building Blocks', 'Decoration Blocks', 'Redstone', 'Transportation', 'Miscellaneous', 'Search Items',
+        'Foodstuffs', 'Tools', 'Combat', 'Brewing', 'Materials', 'Survival Inventory']
+DECO = ('SAPLING_', 'LEAVES_', 'COBWEB', 'DEAD_SHRUB', 'TALL_GRASS', 'FERN', 'DEAD_BUSH', 'DANDELION', 'POPPY',
+        'BLUE_ORCHID', 'ALLIUM', 'AZURE_BLUET', '_TULIP', 'OXEYE_DAISY', 'BROWN_MUSHROOM', 'RED_MUSHROOM', 'TORCH',
+        'CHEST', 'CRAFTING_TABLE', 'FURNACE', 'LADDER', 'SNOW_LAYER', 'CACTUS', 'FENCE_OAK', 'GLASS_PANE', 'VINE',
+        'LILY_PAD', 'SUNFLOWER_LOWER', 'LILAC_LOWER', 'DOUBLE_GRASS_LOWER', 'LARGE_FERN_LOWER', 'ROSE_BUSH_LOWER',
+        'PEONY_LOWER', 'MONSTER_EGG_STONE')
 
 
-def tab_of(iid, block=False):
-    """the tabs an item is in: a natural block is in Natural Blocks and in Building Blocks.
-    `block` says the id is a block state: the state ids 256 and up share the number space
-    with the items' ids (256..256+ITEM_SLOTS-1 at most, with the block states' own in
-    between), and a caller walking the block states passes it so a state past the item
-    tables is still read as the block it is)"""
-    it = None if block else next((x for x in I if x['iid'] == iid), None)
-    if it is not None:
-        k = it['kind']
-        if k == 'spawn_egg':
-            return (T_MOBS,)
-        if k in ('sword', 'bow', 'helmet', 'chestplate', 'leggings', 'boots') or it['name'] == 'ARROW':
-            return (T_COMBAT,)
-        if k in ('pickaxe', 'axe', 'shovel', 'hoe', 'shears', 'flint_and_steel', 'fishing_rod') or \
-                it['name'] in ('COMPASS', 'CLOCK'):
-            return (T_TOOL,)
-        if k in ('food', 'stew'):
-            return (T_FOOD,)
-        if k in ('bucket', 'water_bucket', 'lava_bucket', 'milk_bucket') or it['name'] in ('PAPER', 'BOOK', 'SNOWBALL',
+def tab_of(iid):
+    if iid < 256:
+        n = BNAMES[iid]
+        if ITEM_OF.get(n, n) != n or n not in LABELS:
+            return None   # not in the creative inventory
+        if n in ('TNT',):
+            return 2
+        if n == 'RAIL':
+            return 3
+        if n in ('BROWN_MUSHROOM_CAP', 'RED_MUSHROOM_CAP'):
+            return None
+        if any(n.startswith(d) or n.endswith(d) or n == d for d in DECO):
+            if n in ('COBBLESTONE_WALL',):
+                return 0
+            return 1
+        if n == 'COBBLESTONE_WALL':
+            return 0
+        return 0
+    it = I[iid - 256]
+    k = it['kind']
+    if k in ('sword', 'bow', 'helmet', 'chestplate', 'leggings', 'boots') or it['name'] == 'ARROW':
+        return 8
+    if k in ('pickaxe', 'axe', 'shovel', 'hoe', 'shears', 'flint_and_steel', 'fishing_rod') or \
+            it['name'] in ('COMPASS', 'CLOCK'):
+        return 7
+    if k in ('food', 'stew'):
+        return 6
+    if k in ('bucket', 'water_bucket', 'lava_bucket', 'milk_bucket') or it['name'] in ('PAPER', 'BOOK', 'SNOWBALL',
                                                                                          'SLIME_BALL'):
-            return (T_MISC,)
-        if it['name'] in ('WOODEN_DOOR', 'BED'):
-            return (T_FUNC,)   # you do something with a door or a bed; they are not decoration
-        return (T_MAT,)
-    n = BNAMES[iid]
-    if ITEM_OF.get(n, n) != n or n not in LABELS:
-        return None   # not in the creative inventory
-    if n == 'BARRIER':
-        return (T_OP,)   # an operator item: Minecraft's Operator Utilities tab (with cheats on)
-    if n in FUNC:
-        return (T_FUNC,)
-    if n in NATURAL_ONLY:
-        return (T_NATURAL,)
-    if n in NATURAL:
-        return (T_NATURAL, T_BLOCK)
-    if n in ('BROWN_MUSHROOM_CAP', 'RED_MUSHROOM_CAP'):
-        return None
-    if n in ('COBBLESTONE_WALL',):
-        return (T_BLOCK,)   # a building block, not decoration
-    if any(n.startswith(d) or n.endswith(d) or n == d for d in DECO):
-        return (T_DECO,)
-    return (T_BLOCK,)
-
-
-# a tab's order inside itself: the definition order (blocks first, then items), except the ores
-# together at the end of Natural Blocks, the blocks that fill a whole cube first in Functional, and
-# the armour before the swords in Combat. A few items read better after another (the raw iron and
-# gold after the stick, the compass after the fishing rod): moving them here keeps the item ids, and
-# so the saves, the same as moving them in the table above would not.
-AFTER = {'I:RAW_IRON': 'I:STICK', 'I:RAW_GOLD': 'I:RAW_IRON', 'I:COMPASS': 'I:FISHING_ROD'}
-ARMOR_KINDS = ('helmet', 'chestplate', 'leggings', 'boots')
-
-
-def tab_group(tab, iid):
-    """which group of its tab an item goes in"""
-    if tab == T_NATURAL:
-        return 1 if iid < 256 and BNAMES[iid].endswith('_ORE') else 0
-    if tab == T_FUNC:
-        return 0 if iid < 256 and BNAMES[iid] in FUNC_FULL else 1
-    if tab == T_COMBAT and iid >= 256:
-        it = item_of_id(iid)
-        if it['kind'] in ARMOR_KINDS: return 0
-        if it['kind'] == 'sword': return 1
-        return 2   # the bow and the arrow
-    return 0
-
-
-def item_of_id(iid):
-    """the item of an id (the slots between the ids are block states, not items)"""
-    return next(x for x in I if x['iid'] == iid)
-
-
-def tab_order(tab, ids):
-    """a tab's ids in the order they are shown"""
-    out = sorted(ids, key=lambda i: (tab_group(tab, i), i))
-    for name, after in AFTER.items():
-        iid, anchor = item_id(name[2:]), item_id(after[2:])
-        if iid in out and anchor in out:
-            out.remove(iid)
-            out.insert(out.index(anchor) + 1, iid)
-    return out
+        return 4
+    if it['name'] == 'WOODEN_DOOR':
+        return 2
+    if it['name'] == 'BED':
+        return 1
+    return 10
 
 
 # --- the Nether and the End: only in NumBlocks.nwa (NB_DIMS). Their blocks are numbered past 256 (see
@@ -784,11 +570,9 @@ def tab_of_dims(iid):
 def header():
     out = ['/* Generated by tools/items.py: the items NumBlocks knows (ids 256 and up; below 256 a block state). */',
            '#ifndef NB_ITEMS_H', '#define NB_ITEMS_H', '#include <stdint.h>', '#include "blocks.h"', '', 'enum {']
-    for x in I:
-        out.append(f'  I_{x["name"]} = {x["iid"]},')
-    out += [f'  I_END = {IEND}', '};',
-            f'#define N_ITEMS {len(I)}   /* how many items there are */',
-            f'#define ITEM_SLOTS {ITEM_SLOTS}   /* the it_* tables: 256..256+ITEM_SLOTS-1, an id a slot */', '']
+    for k, x in enumerate(I):
+        out.append(f'  I_{x["name"]} = {256 + k},')
+    out += [f'  I_END = {256 + len(I)}', '};', f'#define N_ITEMS {len(I)}', '']
     out.append('enum { ' + ', '.join(f'IK_{k.upper()}' for k in KINDS) + ' };')
     out.append('enum { ' + ', '.join(f'G_{g[2:]} = 0x{v:X}' for g, v in GROUPS.items()) + ' };')
     out += ['', '/* the Nether and the End (NumBlocks.nwa only) */', '#if NB_DIMS', 'enum {']
@@ -806,6 +590,6 @@ if __name__ == '__main__':
     if '--header' in sys.argv:
         sys.stdout.write(header())
     else:
-        for x in I:
-            print(x['iid'], x['name'], x['label'])
+        for k, x in enumerate(I):
+            print(256 + k, x['name'], x['label'])
         print(len(R), 'recipes')

@@ -21,21 +21,32 @@ static const MobInfo info[] = {
     [E_CREEPER] = {0.6f, 1.7f, 0.25f, 20},  [E_SPIDER] = {1.4f, 0.9f, 0.3f, 16},
     [E_PIG] = {0.9f, 0.9f, 0.25f, 10},      [E_COW] = {0.9f, 1.3f, 0.2f, 10},
     [E_SHEEP] = {0.9f, 1.3f, 0.23f, 8},     [E_CHICKEN] = {0.4f, 0.7f, 0.25f, 4},
-    /* the nether's two (1.16): the piglin (16 health) and the zombified piglin (20,
-     * 1.8's PigZombie), both bipeds at the zombie's speed and size */
-    [E_PIGLIN] = {0.6f, 1.95f, 0.23f, 16}, [E_ZPIGLIN] = {0.6f, 1.95f, 0.23f, 20},
-    /* the End's and the fortresses' (1.8.8): the dragon and its crystals count as mobs */
-    [E_GHAST] = {4.0f, 4.0f, 0.0f, 10}, [E_BLAZE] = {0.6f, 1.8f, 0.23f, 20},
-    [E_MAGMA] = {0.51f, 0.51f, 0.2f, 1}, [E_WSKELETON] = {0.72f, 2.535f, 0.25f, 20},
-    [E_ENDERMAN] = {0.6f, 2.9f, 0.3f, 40}, [E_CRYSTAL] = {2.0f, 2.0f, 0.0f, 5},
-    [E_DRAGON] = {4.0f, 4.0f, 0.0f, 200},
+#if NB_DIMS
+    [E_PIGMAN] = {0.6f, 1.95f, 0.23f, 20},  [E_GHAST] = {4.0f, 4.0f, 0.0f, 10},
+    [E_BLAZE] = {0.6f, 1.8f, 0.23f, 20},    [E_MAGMA] = {0.51f, 0.51f, 0.2f, 1},
+    [E_WSKELETON] = {0.72f, 2.535f, 0.25f, 20}, [E_ENDERMAN] = {0.6f, 2.9f, 0.3f, 40},
+    [E_CRYSTAL] = {2.0f, 2.0f, 0.0f, 5},    [E_DRAGON] = {16.0f, 8.0f, 0.0f, 200},
+#endif
 };
-float mob_width(int t) { return is_mob(t) ? info[t].w : 0.25f; }
-float mob_height(int t) { return is_mob(t) ? info[t].h : 0.25f; }
-static bool hostile(int t) { return is_hostile_mob(t); }
+#if NB_DIMS
+void ender_tp_random_(Entity *e);
+static bool fire_immune(int t);
+static bool neutral(int t);
+static float rnd_gauss(void);
+#endif
+float mob_width(int t) { return IS_MOB(t) ? info[t].w : 0.25f; }
+float mob_height(int t) { return IS_MOB(t) ? info[t].h : 0.25f; }
+static bool hostile(int t) { return IS_MONSTER(t); }
 
 float mob_scale(const Entity *e, float pt) {
-  if (e->type == E_CRYSTAL) return 2.0f;
+#if NB_DIMS
+  switch (e->type) {
+    case E_WSKELETON: return 1.2f;      /* RenderSkeleton */
+    case E_GHAST: return 4.5f;          /* RenderGhast */
+    case E_MAGMA: return e->sheared;    /* RenderMagmaCube: its size */
+    case E_CRYSTAL: return 2;           /* ModelEnderCrystal */
+  }
+#endif
   if (e->growth < 0) return 0.5f;   /* a baby */
   if (e->type != E_CREEPER || e->delay <= 0) return 1;
   /* RenderCreeper: swells by up to 40% (and flickers) over the fuse */
@@ -55,8 +66,6 @@ static Part *box(float x, float y, float z, int w, int h, int d, int u, int v, f
 }
 
 #define PI 3.14159265f
-static void end_parts(const Entity *e, float pt, float f, float a, float pitch, float age);
-static void enderman_tp(Entity *e);
 int mob_parts(const Entity *e, float pt, Part *o) {
   np = 0;
   out_parts = o;
@@ -183,48 +192,12 @@ int mob_parts(const Entity *e, float pt, Part *o) {
       box(-1, 0, -3, 1, 4, 6, 24, 13, 4, 13, 0, SKIN_CHICKEN)->rz = -flap;
       break;
     }
-    case E_PIGLIN:
-    case E_ZPIGLIN: {
-      /* The 1.16 piglin's model, read out of 26.3.jar (AbstractPiglinModel.addHead and
-       * AdultPiglinModel): a 10-wide skull at (0,0) with a 4 x 4 x 1 snout at (31,1),
-       * its two cream tusks at (2,0) and (2,4), and two 1 x 5 x 4 ears at (39,6) and
-       * (51,6) turned 30 degrees out from the skull's sides (4.5, -6); then the
-       * player's own body, arms and legs (HumanoidModel: (16,16), (40,16), (0,16)),
-       * the 1.8-scale ones this game has. 11 boxes all told - MAX_PARTS is 12. */
-      int sk = e->type == E_PIGLIN ? SKIN_PIGLIN : SKIN_ZPIGLIN;
-      box(-5, -8, -4, 10, 8, 8, 0, 0, 0, 0, 0, sk)->rx = pitch;       /* the skull */
-      box(-2, -4, -5, 4, 4, 1, 31, 1, 0, 0, 0, sk)->rx = pitch;       /* the snout */
-      box(-3, -2, -5, 1, 2, 1, 2, 0, 0, 0, 0, sk)->rx = pitch;        /* the tusks */
-      box(2, -2, -5, 1, 2, 1, 2, 4, 0, 0, 0, sk)->rx = pitch;
-      /* the ears: their boxes sit on their own origins at the skull's sides (4.5, -6, 0),
-       * turned 30 degrees out - the boxes' own coordinates are those origins' */
-      Part *er = box(0, 0, -2, 1, 5, 4, 51, 6, 4.5f, -6, 0, sk);
-      Part *el = box(-1, 0, -2, 1, 5, 4, 39, 6, -4.5f, -6, 0, sk);
-      er->rz = -0.5236f, er->rx = pitch;
-      el->rz = 0.5236f, el->rx = pitch;
-      box(-4, 0, -2, 8, 12, 4, 16, 16, 0, 0, 0, sk);
-      Part *ra = box(-3, -2, -2, 4, 12, 4, 40, 16, -5, 2, 0, sk);
-      Part *la = box(-1, -2, -2, 4, 12, 4, 40, 16, 5, 2, 0, sk);
-      Part *rl = box(-2, 0, -2, 4, 12, 4, 0, 16, -1.9f, 12, 0, sk);
-      Part *ll = box(-2, 0, -2, 4, 12, 4, 0, 16, 1.9f, 12, 0, sk);
-      la->mirror = ll->mirror = 1;
-      if (e->type == E_PIGLIN) {
-        /* the piglin swings its arms at its sides (the player's own walk) */
-        ra->rx = sw * 1.4f * a;
-        la->rx = swo * 1.4f * a;
-      } else {
-        /* the zombified piglin is 1.8's PigZombie: arms held out, swaying a little */
-        ra->rx = la->rx = -PI / 2 + sinf(age * 0.067f) * 0.05f;
-        ra->rz = cosf(age * 0.09f) * 0.05f + 0.05f;
-        la->rz = -ra->rz;
-      }
-      rl->rx = sw * 1.4f * a;
-      ll->rx = swo * 1.4f * a;
-      break;
+#if NB_DIMS
+    default: {
+      void dims_parts_(const Entity *e, float pt, float f, float a, float pitch, float age);
+      dims_parts_(e, pt, f, a, pitch, age);
     }
-    default:
-      end_parts(e, pt, f, a, pitch, age);
-      break;
+#endif
   }
   return np;
 }
@@ -243,9 +216,7 @@ static int light_there(int x, int y, int z) {
   sky -= sky_sub();
   return sky > blk ? sky : blk;
 }
-/* where a mob of NumBlocks' can stand: the box a zombie needs, a mob of any of them
- * (SpawnerAnimals.canSpawnEntityType, and where a spawn egg may put one) */
-bool mob_can_stand(int x, int y, int z) {
+static bool can_stand(int x, int y, int z) {
   int below = world_get(x, y - 1, z), feet = world_get(x, y, z), head = world_get(x, y + 1, z);
   return (blk_flags[below] & BF_OPAQUE) && !(blk_flags[feet] & BF_SOLID) && blk_model[feet] != M_LIQUID &&
          !(blk_flags[head] & BF_SOLID) && blk_model[head] != M_LIQUID;
@@ -255,7 +226,7 @@ bool mob_can_stand(int x, int y, int z) {
 static int count(bool host) {
   int n = 0;
   for (int i = 0; i < N_ENT; i++)
-    if (is_mob(ents[i].type) && hostile(ents[i].type) == host) n++;
+    if (IS_MOB(ents[i].type) && hostile(ents[i].type) == host) n++;
   return n;
 }
 
@@ -269,290 +240,15 @@ static Entity *spawn(int type, float x, float y, float z) {
 }
 Entity *mob_summon(int type, float x, float y, float z) { return spawn(type, x, y, z); }
 
-/* the mob a spawn egg makes (ItemMonsterPlacer). The eggs are not contiguous (QUARTZ
- * sits between the overworld's eight and the nether's two: 387..394, 395, 396,397),
- * so this is a lookup, not the id - I_ZOMBIE_SPAWN_EGG arithmetic it was: that ran to
- * egg_mob[8] for QUARTZ, hidden only because quartz is never asked as an egg. */
-static const uint8_t egg_mob[15] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN,
-                                    E_PIGLIN, E_ZPIGLIN, E_ENDERMAN, E_GHAST, E_BLAZE, E_MAGMA, E_WSKELETON};
-static const uint16_t egg_id[15] = {I_ZOMBIE_SPAWN_EGG, I_SKELETON_SPAWN_EGG, I_CREEPER_SPAWN_EGG, I_SPIDER_SPAWN_EGG,
-                                    I_PIG_SPAWN_EGG, I_COW_SPAWN_EGG, I_SHEEP_SPAWN_EGG, I_CHICKEN_SPAWN_EGG,
-                                    I_PIGLIN_SPAWN_EGG, I_ZOMBIFIED_PIGLIN_SPAWN_EGG, I_ENDERMAN_SPAWN_EGG,
-                                    I_GHAST_SPAWN_EGG, I_BLAZE_SPAWN_EGG, I_MAGMA_CUBE_SPAWN_EGG,
-                                    I_WITHER_SKELETON_SPAWN_EGG};
-int mob_of_egg(int id) {
-  for (int i = 0; i < 15; i++)
-    if (egg_id[i] == id) return egg_mob[i];
-  return 0;
-}
-int egg_of_mob(int mob) {
-  for (int i = 0; i < 15; i++)
-    if (egg_mob[i] == mob) return egg_id[i];
-  return 0;
-}
-
-/* the mobs' names, for /summon and what the spawner says when it is set */
-const char *const mob_name[N_MOB_NAMES] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig", "Cow", "Sheep",
-                                          "Chicken", "Piglin", "ZombifiedPiglin", "Ghast", "Blaze", "MagmaCube",
-                                          "WitherSkeleton", "Enderman", "EnderCrystal", "EnderDragon"};
-
-/* ---------------------------------------------------------------- monster spawners (MobSpawner) */
-/* Which mob a monster spawner makes: a spawn egg used on one sets it (ItemMonsterPlacer.onItemUse),
- * and the world remembers the ones set. Minecraft keeps that in the spawner's tile entity; here it
- * is a small table by position, which the world's record saves. A farm has two or three of them,
- * so twenty-four is plenty and costs 240 bytes of RAM. The table also notes the spawners nobody
- * has set (ones fresh from the inventory) with mob 0, so the once-a-second scan and the picture
- * find them again without looking the blocks over every frame. The world's own spawners, the
- * dungeon ones, are set when they are placed: the spawner of the table comes back (as a spawn egg
- * would have set it) with its mob, so the table keeps them and the record saves them. A spawner
- * nobody has set (one from the inventory) is empty: no mob turning inside it and no mobs out of it
- * until an egg is used on one. */
-typedef struct { int32_t x, z; uint8_t y, mob; } Spawner;
-static Spawner spawners[SPAWNERS_MAX];
-static int n_spawners;
-
-/* what it shows and makes: what it is set to, or 0 for one nobody has set (an empty one) */
-int spawner_mob_at(int x, int y, int z) {
-  for (int i = 0; i < n_spawners; i++)
-    if (spawners[i].x == x && spawners[i].y == y && spawners[i].z == z) return spawners[i].mob;
-  return 0;
-}
-
-/* the table knows this spawner (mob -1: as the scan and the inventory leave it, unset) */
-static void note(int x, int y, int z, int mob) {
-  int worst = -1, worst_unset = -1;
-  float wd = -1, wd_unset = -1;
-  for (int i = 0; i < n_spawners; i++) {
-    if (spawners[i].x == x && spawners[i].y == y && spawners[i].z == z) {
-      if (mob >= 0) spawners[i].mob = (uint8_t)mob;   /* (set again: the same one) */
-      return;
-    }
-    /* full later: the furthest unset one gives way first (a set one keeps its mob), else the furthest */
-    float dx = (float)(spawners[i].x - x), dz = (float)(spawners[i].z - z), d2 = dx * dx + dz * dz;
-    if (d2 > wd) wd = d2, worst = i;
-    if (!spawners[i].mob && d2 > wd_unset) wd_unset = d2, worst_unset = i;
-  }
-  if (y < 0 || y > 255) return;
-  if (n_spawners >= SPAWNERS_MAX) {
-    int v = worst_unset >= 0 ? worst_unset : worst;
-    spawners[v] = (Spawner){x, z, (uint8_t)y, (uint8_t)(mob < 0 ? 0 : mob)};
-  } else spawners[n_spawners++] = (Spawner){x, z, (uint8_t)y, (uint8_t)(mob < 0 ? 0 : mob)};
-}
-
-void spawners_set(int x, int y, int z, int mob) { note(x, y, z, mob); }
-void spawners_note(int x, int y, int z) { note(x, y, z, -1); }   /* fresh from the inventory */
-
-/* world generation placed a spawner (a dungeon's): the mob its own draw made of it
- * (WorldGenDungeons.a: its nextInt(4), two of the four a skeleton, one a zombie, one a spider).
- * The draw is the generator's, come back through gen_spawner_hook, so the same dungeon has the same
- * mob whenever the world is made, and the place is set as a spawn egg on it would have set it. */
-static const uint8_t dungeon_mob[4] = {E_SKELETON, E_SKELETON, E_ZOMBIE, E_SPIDER};
-
-void spawners_made(int x, int y, int z, int mob) { spawners_set(x, y, z, dungeon_mob[mob & 3]); }
-
-void spawners_clear(void) { n_spawners = 0; }
-
-int spawners_count(void) { return n_spawners; }
-
-/* the i-th one the table knows: its place, and what it is set to (0: nobody has set it) */
-int spawners_get(int i, int *x, int *y, int *z) {
-  if (i < 0 || i >= n_spawners) return -1;
-  *x = spawners[i].x, *y = spawners[i].y, *z = spawners[i].z;
-  return spawners[i].mob;
-}
-
-/* how many of a mob the world can hold: its 56 entity slots are shared with dropped items and
- * arrows, so the mobs keep to thirty-two of them */
-static bool room_for_a_mob(void) {
-  int n = 0;
-  for (int i = 0; i < N_ENT; i++)
-    if (is_mob(ents[i].type) && ents[i].state != 255) n++;
-  return n < 32;
-}
-
-/* MobSpawner.maxNearbyEntities: how many of its own kind may already be about it (six in
- * Minecraft; six here, as the world now has the slots for it) */
-static bool too_many_near(int x, int y, int z, int type) {
-  int n = 0;
-  for (int i = 0; i < N_ENT; i++) {
-    const Entity *e = &ents[i];
-    if (e->type != type || e->state == 255) continue;
-    if (fabsf(e->x - x) > 8 || fabsf(e->z - z) > 8 || fabsf(e->y - y) > 4) continue;
-    n++;
-  }
-  return n >= 6;
-}
-
-/* where a spawner's mob may appear (MobSpawner.findSuitableSpawnableBlock is where findChunksForSpawning's
- * is not): somewhere within three blocks of it, where the mob's own box fits, in the air as much as
- * on the ground (Minecraft's spawners drop their mobs from where they appear; no floor is needed,
- * and a mob that falls takes no hurt here) and not on top of the player */
-static bool spawner_spot(int x, int y, int z, int type) {
-  int feet = world_get(x, y, z), head = world_get(x, y + 1, z);
-  if ((blk_flags[feet] & BF_SOLID) || blk_model[feet] == M_LIQUID) return false;
-  if ((blk_flags[head] & BF_SOLID) || blk_model[head] == M_LIQUID) return false;
-  if (ifl(pl.x) == x && ifl(pl.z) == z && (int)pl.y <= y + 1 && y < (int)pl.y + 2) return false;
-  if (hostile(type)) return opt.difficulty > 0;   /* whatever the light: torches do not switch it off */
-  return light_there(x, y, z) > 8 && world_get(x, y - 1, z) == B_GRASS;   /* (an animal's rules) */
-}
-
-/* the spawners near the player do their work: once a second, about one try in 6 for each
- * (MobSpawner's 200 to 800 ticks between, short here: there are few of them, and the world
- * keeps at most six of a kind about one anyway). The blocks are all of them: 40 x 40 x 24 = 38 400
- * bytes looked over in one pass, a fraction of a frame, once a second. The same pass notes
- * the spawners nobody has set, so the picture finds them without its own pass every frame */
-void spawners_spawn(void) {
-  if (pl.dead || !rule(GR_MOB_SPAWNING)) return;
-  int px = ifl(pl.x), pz = ifl(pl.z);
-  /* one that is gone makes nothing any more */
-  for (int i = 0; i < n_spawners; ) {
-    if (world_get(spawners[i].x, spawners[i].y, spawners[i].z) == B_MOB_SPAWNER) i++;
-    else spawners[i] = spawners[--n_spawners];
-  }
-  for (int i = 0; i < VCY * VCZ * VCX; i++) {
-    if (vc_get(i) != B_MOB_SPAWNER) continue;
-    int x = vc_x0 + i % VCX, t = i / VCX, z = vc_z0 + t % VCZ, y = vc_y0 + t / VCZ;
-    note(x, y, z, -1);   /* (ones nobody has set: noted for the picture) */
-    if (rnd(6)) continue;
-    int dx = x - px, dz = z - pz;
-    if (dx * dx + dz * dz > 256) continue;   /* (no player near it) */
-    int mob = spawner_mob_at(x, y, z);
-    if (!mob) continue;   /* nobody has set it: it makes nothing until an egg is used on it */
-    if (!room_for_a_mob() || too_many_near(x, y, z, mob)) continue;
-    for (int k = 0; k < 4; k++) {
-      int sx = x + rnd(7) - 3, sy = y + rnd(3) - 1, sz = z + rnd(7) - 3;
-      if (!spawner_spot(sx, sy, sz, mob)) continue;
-      spawn(mob, sx + 0.5f, (float)sy, sz + 0.5f);
-      particles_spawner(sx + 0.5f, (float)sy, sz + 0.5f, x + 0.5f, (float)y, z + 0.5f);
-      break;
-    }
-  }
-}
-
-/* the spawners in the world's record: a count, then each as x, z, y and its mob */
-int spawners_save(uint8_t *b) {
-  int n = 0;
-  if (b) b[0] = (uint8_t)n_spawners;
-  n++;
-  for (int i = 0; i < n_spawners; i++) {
-    if (b) {
-      b[n] = (uint8_t)spawners[i].x, b[n + 1] = (uint8_t)((uint32_t)spawners[i].x >> 8);
-      b[n + 2] = (uint8_t)((uint32_t)spawners[i].x >> 16), b[n + 3] = (uint8_t)((uint32_t)spawners[i].x >> 24);
-      b[n + 4] = (uint8_t)spawners[i].z, b[n + 5] = (uint8_t)((uint32_t)spawners[i].z >> 8);
-      b[n + 6] = (uint8_t)((uint32_t)spawners[i].z >> 16), b[n + 7] = (uint8_t)((uint32_t)spawners[i].z >> 24);
-      b[n + 8] = spawners[i].y, b[n + 9] = spawners[i].mob;
-    }
-    n += 10;
-  }
-  return n;
-}
-
-void spawners_load(const uint8_t *b, int len) {
-  int n = 0;
-  if (len >= 1)
-    for (int i = 0; i < b[0] && n < SPAWNERS_MAX; i++) {
-      const uint8_t *e = b + 1 + 10 * i;
-      if (len < 10 * (i + 1) + 1) break;
-      spawners[n].x = (int32_t)((uint32_t)e[0] | (uint32_t)e[1] << 8 | (uint32_t)e[2] << 16 | (uint32_t)e[3] << 24);
-      spawners[n].z = (int32_t)((uint32_t)e[4] | (uint32_t)e[5] << 8 | (uint32_t)e[6] << 16 | (uint32_t)e[7] << 24);
-      spawners[n].y = e[8];
-      /* the mobs are E_ZOMBIE .. E_ZPIGLIN (2 .. 11): anything else in an old record is unset.
-       * Appending after E_CHICKEN keeps the old 2 .. 9 readable. */
-      spawners[n].mob = e[9] >= E_ZOMBIE && e[9] <= E_ZPIGLIN ? e[9] : 0;
-      n++;
-    }
-  n_spawners = n;
-}
-
-/* The test world's cages: one for each of the game's ten mobs, put back the moment
- * one of them is gone (a monster despawns 32 blocks out, a caged one the player kills
- * too), so the showcase always holds all of them. Nothing else spawns there. */
-static void cages(void) {
-  for (int k = 0; k < 10; k++) {
-    bool there = false;
-    for (int i = 0; i < N_ENT && !there; i++)
-      if (ents[i].type == E_ZOMBIE + k && ents[i].state != 255) there = true;
-    if (there) continue;
-    int x, y, z;
-    test_cage(k, &x, &y, &z);
-    Entity *e = mob_summon(E_ZOMBIE + k, x + 0.5f, (float)y, z + 0.5f);
-    if (e) e->yaw = 90, e->gx = e->x, e->gz = e->z;   /* facing the spawn platform, west */
-  }
-}
-
 /* SpawnerAnimals, made small: a try every second */
+#if NB_DIMS
+static bool dims_spawn(void);
+#endif
 void mobs_spawn(void) {
+#if NB_DIMS
+  if (dims_spawn()) return;
+#endif
   if (pl.dead) return;
-  if (world_dim == DIM_END) {
-    /* the End's endermen: on the island's end stone, around the player, in the dark */
-    if (opt.difficulty == 0) return;
-    for (int k = 0; k < 4; k++) {
-      int x = ifl(pl.x) + rnd(41) - 20, z = ifl(pl.z) + rnd(41) - 20;
-      float dx = x + 0.5f - pl.x, dz = z + 0.5f - pl.z;
-      if (dx * dx + dz * dz < 14 * 14) continue;
-      int y0 = ifl(pl.y) + 8;
-      for (int y = y0; y > y0 - 20; y--) {
-        if (!world_loaded(x, y + 1, z) || !world_loaded(x, y - 1, z) || !mob_can_stand(x, y, z)) continue;
-        if (count(true) >= 4 || !room_for_a_mob()) return;
-        if (world_get(x, y - 1, z) != B_END_STONE) return;
-        spawn(E_ENDERMAN, x + 0.5f, (float)y, z + 0.5f);
-        return;
-      }
-    }
-    return;
-  }
-  if (world_type == WT_TEST) { cages(); return; }   /* the showcase's own ten, and nothing else */
-  if (world_dim == DIM_NETHER) {
-    /* The nether's own rule (vanilla nether mobs ignore light level: no sky light exists
-     * there, so the overworld's light <= rnd(8) gate means nothing), on solid ground
-     * around the player and with the hostile cap in charge. The 1.16 biome lists we
-     * can represent: piglins and zombified piglins in the wastes and crimson forest;
-     * skeletons in the soul sand valley. The warped forest has endermen and striders,
-     * and the valley has ghasts: those mobs are not implemented, so neither is spawned.
-     * mob_can_stand's opaque-below refuses the lava sea. */
-    if (opt.difficulty == 0 || !rule(GR_MOB_SPAWNING)) return;
-    for (int k = 0; k < 4; k++) {
-      int x = ifl(pl.x) + rnd(41) - 20, z = ifl(pl.z) + rnd(41) - 20;
-      float dx = x + 0.5f - pl.x, dz = z + 0.5f - pl.z;
-      if (dx * dx + dz * dz < 14 * 14) continue;
-      int y0 = ifl(pl.y) + 8;
-      for (int y = y0; y > y0 - 20; y--) {
-        if (!world_loaded(x, y + 1, z) || !world_loaded(x, y - 1, z)) continue;
-        if (!mob_can_stand(x, y, z)) continue;
-        if (count(true) >= 8) return;
-        int lx = x - vc_x0, lz = z - vc_z0;
-        if ((unsigned)lx >= VCX || (unsigned)lz >= VCZ) continue;
-        int bio = vbiome[lz * VCX + lx];
-        int t, n;
-        if (bio == BI_SOUL_SAND_VALLEY) {
-          t = E_SKELETON;
-          n = 1 + rnd(2);
-        } else if (bio == BI_NETHER_WASTES || bio == BI_CRIMSON_FOREST) {
-          /* seven in ten a zombified piglin, the rest a piglin; in a fortress, its
-           * blaze, wither skeleton and magma cube (the 1.8.8 weights) */
-          int fort = gen_fortress_at(x, y, z);
-          if (fort == 2 || (fort == 1 && world_get(x, y - 1, z) == B_NETHER_BRICK)) {
-            int r = rnd(20);
-            t = r < 10 ? E_BLAZE : r < 15 ? E_ZPIGLIN : r < 18 ? E_MAGMA : E_WSKELETON;
-            n = 1 + rnd(2);
-          } else {
-            t = rnd(10) < 7 ? E_ZPIGLIN : E_PIGLIN;
-            n = 2 + rnd(2);
-          }
-        } else {
-          continue;   /* the warped forest has no implemented natural mob yet */
-        }
-        for (int i = 0; i < n; i++) {
-          int sx = x + (i ? rnd(5) - 2 : 0), sz = z + (i ? rnd(5) - 2 : 0);
-          if (!mob_can_stand(sx, y, sz)) continue;
-          if (!room_for_a_mob()) return;
-          spawn(t, sx + 0.5f, (float)y, sz + 0.5f);
-        }
-        return;
-      }
-    }
-    return;
-  }
   for (int k = 0; k < 4; k++) {
     int x = ifl(pl.x) + rnd(41) - 20, z = ifl(pl.z) + rnd(41) - 20;
     float dx = x + 0.5f - pl.x, dz = z + 0.5f - pl.z;
@@ -560,7 +256,7 @@ void mobs_spawn(void) {
     int y0 = ifl(pl.y) + 8;
     for (int y = y0; y > y0 - 20; y--) {
       if (!world_loaded(x, y + 1, z) || !world_loaded(x, y - 1, z)) continue;
-      if (!mob_can_stand(x, y, z)) continue;
+      if (!can_stand(x, y, z)) continue;
       int below = world_get(x, y - 1, z);
       int light = light_there(x, y, z);
       /* EntityMob.isValidLightLevel: in a storm, the sky counts as night's */
@@ -568,14 +264,21 @@ void mobs_spawn(void) {
         int i = VC_I(x - vc_x0, y - vc_y0, z - vc_z0), sky = light_at(i) - 10, blk = block_light_at(i);
         light = sky > blk ? sky : blk;
       }
-      if (opt.difficulty > 0 && count(true) < 8 && light <= rnd(8) && below != B_BEDROCK) {
+      if (opt.difficulty > 0 && count(true) < 4 && light <= rnd(8) && below != B_BEDROCK) {
         static const uint8_t kinds[4] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER};
         int t = kinds[rnd(4)];
-        if (t == E_SPIDER && !(mob_can_stand(x + 1, y, z) && mob_can_stand(x, y, z + 1))) t = E_ZOMBIE;
+        if (t == E_SPIDER && !(can_stand(x + 1, y, z) && can_stand(x, y, z + 1))) t = E_ZOMBIE;
+#if NB_DIMS
+        /* an enderman: weight 10 of the monsters' 410 */
+        if (rnd(41) == 0) {
+          if (!can_stand(x, y + 1, z)) return;
+          t = E_ENDERMAN;
+        }
+#endif
         spawn(t, x + 0.5f, (float)y, z + 0.5f);
         return;
       }
-      if (below == B_GRASS && light > 8 && count(false) < 8 && rnd(4) == 0) {
+      if (below == B_GRASS && light > 8 && count(false) < 4 && rnd(4) == 0) {
         /* sheep 12, pig 10, chicken 10, cow 8 */
         int r = rnd(40);
         int t = r < 12 ? E_SHEEP : r < 22 ? E_PIG : r < 32 ? E_CHICKEN : E_COW;
@@ -605,13 +308,6 @@ static void loot(Entity *e) {
       drop(I_STRING, rnd(3), e);
       if (rnd(3) == 0) drop(I_SPIDER_EYE, 1, e);
       break;
-    case E_PIGLIN: break;   /* modern's piglin loot is empty: nothing but XP */
-    case E_ZPIGLIN:
-      /* modern's zombified_piglin.json: rotten flesh 0-1 and gold nuggets 0-1 (plus a
-       * 2.5% gold ingot with looting, left out: no enchanting here) */
-      drop(I_ROTTEN_FLESH, rnd(2), e);
-      drop(I_GOLD_NUGGET, rnd(2), e);
-      break;
     case E_PIG: drop(e->fire > 0 ? I_COOKED_PORKCHOP : I_PORKCHOP, 1 + rnd(3), e); break;
     case E_COW:
       drop(e->fire > 0 ? I_COOKED_BEEF : I_BEEF, 1 + rnd(3), e);
@@ -625,23 +321,27 @@ static void loot(Entity *e) {
       drop(I_FEATHER, rnd(3), e);
       drop(e->fire > 0 ? I_COOKED_CHICKEN : I_CHICKEN, 1, e);
       break;
-    case E_ENDERMAN: drop(I_ENDER_PEARL, 1, e); break;
-    case E_DRAGON: player_add_xp(12000); break;
+#if NB_DIMS
+    default: {
+      bool dims_loot_(Entity *e);
+      if (dims_loot_(e)) return;
+    }
+#endif
   }
-  if (e->type == E_ENDERMAN) player_add_xp(5);
-  else if (e->type != E_DRAGON) player_add_xp(hostile(e->type) ? 5 : 1 + rnd(3));
+  player_add_xp(hostile(e->type) ? 5 : 1 + rnd(3));
 }
 
+#if NB_DIMS
+void dims_hurt_(Entity *e, float dmg, float kx, float kz);
+#endif
 static void hurt(Entity *e, float dmg, float kx, float kz) {
   if (e->state == 255 || e->invuln > 10) return;
-  if (e->type == E_DRAGON) {
-    dragon_hurt(e, dmg);
+#if NB_DIMS
+  if (e->type == E_DRAGON || e->type == E_CRYSTAL) {
+    dims_hurt_(e, dmg, kx, kz);
     return;
   }
-  if (e->type == E_CRYSTAL) {
-    crystal_gone(e);
-    return;
-  }
+#endif
   e->health = (int16_t)(e->health - (int)ceilf(dmg));
   e->invuln = 20;
   e->hurt = 10;
@@ -656,18 +356,9 @@ static void hurt(Entity *e, float dmg, float kx, float kz) {
   if (!hostile(e->type)) e->panic = 100;
   else if (kx != 0 || kz != 0) e->panic = e->panic > 100 ? e->panic : 100;   /* EntityAIHurtByTarget */
   if (e->type == E_SPIDER) e->panic = 600;   /* a hit spider fights back, even by day */
-  if (e->type == E_ENDERMAN) enderman_tp(e);
-  if (e->type == E_ZPIGLIN) {
-    /* 1.8's zombie pigman trick: any hit (a knockback one or not) turns it and its
-     * neighbours on the player */
-    e->panic = e->panic > 100 ? e->panic : 100;
-    for (int i = 0; i < N_ENT; i++) {
-      Entity *o = &ents[i];
-      if (o == e || o->type != E_ZPIGLIN || o->state == 255) continue;
-      float ox = o->x - e->x, oz = o->z - e->z;
-      if (ox * ox + oz * oz < 32 * 32) o->panic = o->panic > 400 ? o->panic : 400;
-    }
-  }
+#if NB_DIMS
+  dims_hurt_(e, dmg, kx, kz);
+#endif
   if (e->health <= 0) {
     e->state = 255;
     e->timer = 0;
@@ -681,7 +372,7 @@ Entity *entity_looked_at(float reach, float block_t) {
   Entity *hit = NULL;
   for (int i = 0; i < N_ENT; i++) {
     Entity *e = &ents[i];
-    if (!is_mob(e->type) || e->state == 255) continue;
+    if (NOT_MOB(e->type) || e->state == 255) continue;
     float w = info[e->type].w / 2 + 0.1f, h = info[e->type].h + 0.1f;
     float lo[3] = {e->x - w, e->y, e->z - w}, hi[3] = {e->x + w, e->y + h, e->z + w}, o[3] = {ex, ey, ez};
     float t0 = 0, t1 = best;
@@ -709,7 +400,7 @@ bool mob_attack(const Entity *ce) {
   Entity *e = (Entity *)ce;
   Stack *h = held();
   int k = item_kind(h->id);
-  float dmg = is_item_id(h->id) && k >= IK_PICKAXE && k <= IK_SWORD ? it_a[h->id - 256] : 1;
+  float dmg = h->id >= 256 && k >= IK_PICKAXE && k <= IK_SWORD ? it_a[h->id - 256] : 1;
   /* a critical hit: falling, not on a ladder or in water */
   if (pl.vy < 0 && !pl.on_ground && !pl.in_water) dmg *= 1.5f;
   float kx = e->x - pl.x, kz = e->z - pl.z;
@@ -818,14 +509,6 @@ void explode(float x, float y, float z, float power, bool blocks) {
         float f = power * (0.7f + rndf() * 0.6f) - d * 0.9f;
         int bx = ifl(x) + dx, by = ifl(y) + dy, bz = ifl(z) + dz;
         int b = world_get(bx, by, bz);
-        if (is_portal(b)) {
-          /* (no blast resistance, and nothing to drop: the rest of its interior goes too) */
-          if (f > 0) {
-            world_set(bx, by, bz, B_AIR);
-            portal_broken(bx, by, bz);
-          }
-          continue;
-        }
         if (b == B_AIR || blk_model[b] == M_LIQUID || blk_hard[b] == 255 || b == B_OBSIDIAN) continue;
         float resist = blk_hard[b] / 20.0f * 5 / 5 + 0.3f;   /* (blast resistance, about the hardness) */
         if (f - resist * 0.3f <= 0) continue;
@@ -854,7 +537,7 @@ void explode(float x, float y, float z, float power, bool blocks) {
   }
   for (int i = 0; i < N_ENT; i++) {
     Entity *e = &ents[i];
-    if (!is_mob(e->type)) continue;
+    if (NOT_MOB(e->type)) continue;
     float ex = e->x - x, ez = e->z - z, ey = e->y - y;
     float d = sqrtf(ex * ex + ey * ey + ez * ez) / (power * 2);
     if (d <= 1) hurt(e, ((1 - d) * (1 - d) + (1 - d)) / 2 * 7 * power * 2 + 1, ex, ez);
@@ -914,11 +597,19 @@ static void arrow_tick(Entity *e) {
   if (e->item.aux)
     for (int i = 0; i < N_ENT; i++) {
       Entity *m = &ents[i];
-      if (!is_mob(m->type) || m->state == 255) continue;
+      if (NOT_MOB(m->type) || m->state == 255) continue;
       float w = info[m->type].w / 2 + 0.15f, mx = m->x - nx, mz = m->z - nz;
       if (fabsf(mx) < w && fabsf(mz) < w && ny > m->y - 0.1f && ny < m->y + info[m->type].h) {
         /* EntityArrow: damage 2 x speed, rounded up (a full draw sometimes more) */
         float dmg = arrow ? ceilf(sp * 2) + (sp > 2.9f ? rnd((int)(sp * 2) / 2 + 2) : 0) : 0;
+#if NB_DIMS
+        if (m->type == E_ENDERMAN && arrow) {   /* (EntityEnderman: arrows send it away) */
+          ender_tp_random_(m);
+          e->type = E_NONE;
+          return;
+        }
+        if (e->item.id == I_ENDER_PEARL) pearl_land(e->x, e->y, e->z);
+#endif
         hurt(m, dmg, e->vx, e->vz);
         if (!arrow && dmg == 0) m->vx += e->vx * 0.2f, m->vz += e->vz * 0.2f;
         e->type = E_NONE;
@@ -930,6 +621,9 @@ static void arrow_tick(Entity *e) {
     if (!arrow) {
       /* EntityEgg: one in eight hatches a chick (a chicken here) */
       if (e->item.id == I_EGG && rnd(8) == 0) spawn(E_CHICKEN, e->x, e->y, e->z);
+#if NB_DIMS
+      if (e->item.id == I_ENDER_PEARL) pearl_land(e->x, e->y, e->z);
+#endif
       e->type = E_NONE;
       return;
     }
@@ -947,12 +641,6 @@ static void arrow_tick(Entity *e) {
 
 /* lit TNT: falls, flashes, and blows with power 4 after 80 ticks (EntityTNTPrimed) */
 static void tnt_tick(Entity *e) {
-  /* the fuse waits for the world that feeds it, as a liquid does (tick.c's below) and a
-   * falling block does (player.c's settle_fall): a cell the cache does not hold reads as
-   * air, so a blast whose centre has left the cache finds nothing to break and goes off
-   * into empty space - and what it was meant to open comes back whole when the player
-   * returns. It stands where it is until the cache holds it again, then the fuse runs on. */
-  if (!world_loaded(ifl(e->x), ifl(e->y), ifl(e->z))) return;
   float p[3] = {e->x, e->y, e->z}, v[3] = {e->vx, e->vy - 0.04f, e->vz};
   bool ground = phys_move(p, v, 0.98f, 0.98f);
   e->x = p[0], e->y = p[1], e->z = p[2];
@@ -979,7 +667,7 @@ static bool sees(const Entity *e) {
 }
 /* where a mob as tall as h can stand, going from height y onto the column (x, z): up a step, level,
  * or down up to three (PathFinder.getSafePoint); -1: nowhere */
-static bool clear(int b) { return !(blk_flags[b] & BF_SOLID) && !is_lava(b) && !is_fire(b) && b != B_CACTUS; }
+static bool clear(int b) { return !(blk_flags[b] & BF_SOLID) && !is_lava(b) && b != B_FIRE && b != B_CACTUS; }
 static int stand_at(int x, int y, int z, int tall) {
   for (int k = 0; k < 5; k++) {
     int ny = k == 0 ? y + 1 : y - k + 1;
@@ -1089,15 +777,10 @@ void mob_tick(Entity *e) {
     tnt_tick(e);
     return;
   }
-  if (e->type == E_DRAGON) {
-    dragon_tick(e);
-    return;
-  }
-  if (e->type == E_CRYSTAL) {
-    e->age++;
-    if (e->health <= 0) e->type = E_NONE;
-    return;
-  }
+#if NB_DIMS
+  bool dims_tick_(Entity *e);
+  if (e->type > E_BOBBER && dims_tick_(e)) return;
+#endif
   const MobInfo *mi = &info[e->type];
   if (e->hurt > 0) e->hurt--;
   if (e->invuln > 0) e->invuln--;
@@ -1111,20 +794,26 @@ void mob_tick(Entity *e) {
   float dx = pl.x - e->x, dz = pl.z - e->z, dy = pl.y - e->y;
   float dist = sqrtf(dx * dx + dz * dz);
   /* far away: gone (EntityLiving.despawnEntity) */
-  if (hostile(e->type) && e->type != E_DRAGON && e->type != E_CRYSTAL && dist > 32) {
+  if (hostile(e->type) && dist > 32) {
     e->type = E_NONE;
     return;
   }
   int bx = ifl(e->x), by = ifl(e->y), bz = ifl(e->z);
   bool in_water = blk_model[world_get(bx, ifl(e->y + 0.4f), bz)] == M_LIQUID;
   bool in_lava = is_lava(world_get(bx, ifl(e->y + 0.4f), bz));
+#if NB_DIMS
+  bool immune = fire_immune(e->type);
+  if (immune) in_lava = false, e->fire = 0;
+#else
+#define immune 0
+#endif
   /* daylight burns zombies and skeletons (EntityZombie.onLivingUpdate) */
   if ((e->type == E_ZOMBIE || e->type == E_SKELETON) && daylight() && !in_water &&
       light_there(bx, ifl(e->y + 1.6f), bz) >= 15 && world_get(bx, ifl(e->y + 1.6f), bz) == B_AIR) {
     if (e->fire < 160) e->fire = 160;
   }
   if (in_lava) e->fire = 300, hurt(e, 4, 0, 0);
-  if (is_fire(world_get(bx, by, bz)) || is_fire(world_get(bx, ifl(e->y + 1), bz))) {
+  if (!immune && (world_get(bx, by, bz) == B_FIRE || world_get(bx, ifl(e->y + 1), bz) == B_FIRE)) {
     hurt(e, 1, 0, 0);
     if (e->fire < 160) e->fire = 160;
   }
@@ -1165,16 +854,25 @@ void mob_tick(Entity *e) {
   if (e->state != 255 && hostile(e->type)) {
     bool can = opt.difficulty > 0 && !pl.dead && pl.mode == 0;
     /* EntityAINearestAttackableTarget: seen within 16 (a spider only in the dark); EntityAITarget: kept
-     * while seen in the last 3 seconds, within 16 (zombies 35). The nether's two ignore light
-     * (vanilla nether mobs do: no sky light exists there). 1.8's zombie pigman is the neutral
-     * one: EntityAIHurtByTarget only and no nearest-target task, so it never picks the player
-     * itself - it wanders until something hits it (hurt sets the panic it then chases by). */
+     * while seen in the last 3 seconds, within 16 (zombies 35) */
     bool dark = e->type != E_SPIDER || light_there(bx, by + 1, bz) < 8 || !daylight();
-    if (e->type == E_PIGLIN || e->type == E_ZPIGLIN) dark = true;
-    bool picks = e->type != E_ZPIGLIN;
-    if (picks && can && dist < 16 && (dark || e->panic > 60) && (ticks_run + (unsigned)(e - ents)) % 4 == 0 && sees(e))
+#if NB_DIMS
+    if (!neutral(e->type))
+#endif
+    if (can && dist < 16 && (dark || e->panic > 60) && (ticks_run + (unsigned)(e - ents)) % 4 == 0 && sees(e))
       e->panic = e->panic > 60 ? e->panic : 60;
     chase = can && e->panic > 0 && dist < (e->type == E_ZOMBIE ? 35 : 16);
+#if NB_DIMS
+    if (e->type == E_PIGMAN || e->type == E_ENDERMAN || e->type == E_BLAZE) chase = can && e->panic > 0 && dist < 40;
+    if (e->type == E_BLAZE) {
+      void blaze_tick_(Entity *e, bool chase, float dist);
+      blaze_tick_(e, chase, dist);
+    }
+    if (e->type == E_MAGMA) {
+      void magma_tick_(Entity *e, bool chase, float dist);
+      magma_tick_(e, chase, dist);
+    }
+#endif
     if (!can) e->panic = 0;
   }
   if (chase) {
@@ -1193,11 +891,7 @@ void mob_tick(Entity *e) {
       }
     }
   } else if (e->state != 255) {
-    /* the creeper's fuse waits for the cache to hold it, as the TNT's does (tnt_tick):
-     * a blast whose centre is out of the cache finds nothing to break */
-    if (e->type == E_CREEPER && e->delay > 0 &&
-        world_loaded(ifl(e->x), ifl(e->y), ifl(e->z)))
-      e->delay--;
+    if (e->type == E_CREEPER && e->delay > 0) e->delay--;
     int food = food_of(e->type);
     if (e->panic > 0 && !hostile(e->type)) {
       /* EntityAIPanic: somewhere within 5 blocks, fast, again and again */
@@ -1208,20 +902,17 @@ void mob_tick(Entity *e) {
     } else if (e->love > 0 && e->gx != e->x) {
       go = true;   /* (to its mate: set above) */
       e->tx = (int16_t)ifl(e->gx), e->tz = (int16_t)ifl(e->gz);
-    } else if (food && held()->id == food && dist < 10 && !pl.dead && pl.mode != 2) {
-      /* EntityAITempt: after the player holding its food, up to 2.5 blocks away. It looks at
-       * them on its way in, and beside them it watches them for a while like any other watch
-       * (vanilla holds that look for as long as the food is out; here it is timed).
-       * (a spectator is not noticed: it is not there, as far as the world is concerned) */
+    } else if (food && held()->id == food && dist < 10 && !pl.dead) {
+      /* EntityAITempt: after the player holding its food, up to 2.5 blocks away, looking at them */
       e->tx = (int16_t)ifl(pl.x), e->tz = (int16_t)ifl(pl.z);
-      go = dist > 2.5f, look = go;
+      go = dist > 2.5f, look = true;
     } else {
       /* EntityAIWander: one in 120 ticks somewhere within 10 blocks (RandomPositionGenerator: of ten
-       * tries, for an animal grass, for a monster the darkest); standing still, the two look tasks
-       * below take its place */
+       * tries, for an animal grass, for a monster the darkest); EntityAIWatchClosest: the player near */
       if (rnd(120) == 0) wander_to(e);
       int tx = e->tx - ifl(e->x), tz = e->tz - ifl(e->z);
       go = tx * tx + tz * tz > 0;
+      look = !go && dist < 6 && !pl.dead;
     }
   }
   if (go) {
@@ -1244,53 +935,27 @@ void mob_tick(Entity *e) {
       bool ground = false;
       for (int k = 1; k <= 4 && !ground; k++) ground = (blk_flags[world_get(ax, by - k + 1, az)] & BF_SOLID) != 0;
       int ahead = world_get(ax, by, az);
-      if ((!ground && !in_water) || is_lava(ahead) || is_fire(ahead)) go = false, e->gx = e->x, e->gz = e->z;
+      if ((!ground && !in_water) || is_lava(ahead) || ahead == B_FIRE) go = false, e->gx = e->x, e->gz = e->z;
     }
+  }
+  if (look && !chase) {
+    /* EntityLookHelper: turned towards the player, the head up or down to their eyes */
+    float turn = wrap(atan2f(-dx, dz) * 57.29578f - e->yaw);
+    e->yaw += turn > 10 ? 10 : turn < -10 ? -10 : turn;
+    e->pitch = -atan2f(dy + 1.62f - mi->h * 0.85f, dist) * 57.29578f;
   }
   if (chase) {
     float want = atan2f(-dx, dz) * 57.29578f;
     float turn = wrap(want - e->yaw);
-    /* A skeleton that has stopped to draw turns to face what it is shooting at
-     * (EntityAIArrowAttack looks at its target through EntityLookHelper). The 60-degree
-     * limiter keeps a walking mob steering to its path and not spinning at its goal, but
-     * it left a firing skeleton shooting over its shoulder once the player stepped past
-     * that cone; standing to shoot, the whole 180 is turned. */
-    if (e->type == E_SKELETON && !go) e->yaw += turn > 30 ? 30 : turn < -30 ? -30 : turn;
-    else if (fabsf(turn) < 60) e->yaw += turn * 0.5f;
+    if (fabsf(turn) < 60) e->yaw += turn * 0.5f;
     e->pitch = -atan2f(dy + 1.0f - mi->h * 0.85f, dist) * 57.29578f;
-  } else {
-    /* EntityLookHelper, and the two look tasks that drive it. They cannot run while another task
-     * moves the mob (their mutex): walking, panicking, going to a mate or chasing, the head goes
-     * where the mob goes. Standing still, EntityAIWatchClosest looks at the player near for a
-     * random while (maxRandomLookTime, 40 to 80 ticks), then EntityAILookIdle takes over looking
-     * about in a random direction (20 to 40 ticks), each with one chance in fifty a tick. */
-    if (go) e->look = 0;
-    if (e->look == 0) {
-      /* neither is running: roll one (each has one chance in fifty a tick of starting) */
-      bool watched = !hostile(e->type) || pl.mode == 0;   /* in creative a monster has no target */
-      if (watched && !go && e->state != 255 && !pl.dead && dist < 6 && sees(e) && rnd(50) == 0)
-        e->look = 40 + rnd(40);
-      else if (!go && e->state != 255 && !pl.dead && rnd(50) == 0)
-        e->look = 100 + rnd(20), e->look_yaw = (uint8_t)rnd(256);
-    } else if (e->look == 80) e->look = 0;
-    else e->look--;
-    if (look || (e->look > 0 && e->look < 80)) {
-      /* EntityLookHelper: turned towards the player, the head up or down to their eyes */
-      float turn = wrap(atan2f(-dx, dz) * 57.29578f - e->yaw);
-      e->yaw += turn > 10 ? 10 : turn < -10 ? -10 : turn;
-      e->pitch = -atan2f(dy + 1.62f - mi->h * 0.85f, dist) * 57.29578f;
-    } else {
-      if (e->look >= 80) {
-        /* looking about: towards the direction it picked, head level */
-        float want = (float)e->look_yaw * (360.0f / 256.0f);
-        float turn = wrap(want - e->yaw);
-        e->yaw += turn > 10 ? 10 : turn < -10 ? -10 : turn;
-      }
-      e->pitch *= 0.8f;   /* the head comes level again */
-    }
-  }
+  } else if (!look)
+    e->pitch *= 0.8f;
   /* moving: EntityLivingBase.moveEntityWithHeading, the AI's speed twice (as forward and as friction) */
   float fwd = go && e->state != 255 ? speed : 0;
+#if NB_DIMS
+  if (e->type == E_MAGMA) fwd = 0;   /* (it only hops: magma_tick) */
+#endif
   float yr = e->yaw * 0.017453292f;
   if (in_water) {
     if (rndf() < 0.8f) e->vy += 0.04f;   /* EntityAISwimming */
@@ -1321,6 +986,9 @@ void mob_tick(Entity *e) {
   }
   /* against a wall: a jump (EntityJumpHelper), set for the next move as Minecraft sets it before
    * moving, so the first rise is the whole 0.42 and a block is climbed */
+#if NB_DIMS
+  if (e->type != E_MAGMA)
+#endif
   if (blocked && go && ground && e->type != E_SPIDER) e->vy = 0.42f;
   /* the walk's swing (limbSwingAmount follows how fast it moves) */
   float target = moved * 4;
@@ -1331,13 +999,21 @@ void mob_tick(Entity *e) {
   /* attacks */
   if (chase && e->state != 255) {
     float reach = mi->w * 2 * mi->w * 2 + 0.6f;
-    if ((e->type == E_ZOMBIE || e->type == E_SPIDER || e->type == E_PIGLIN || e->type == E_ZPIGLIN ||
-         e->type == E_BLAZE || e->type == E_WSKELETON) &&
-        dist * dist < reach + 0.5f && fabsf(dy) < 1.5f && !e->delay) {
-      player_hurt(scaled(e->type == E_SPIDER ? 2 : 3), DMG_MOB);
+    if ((e->type == E_ZOMBIE || e->type == E_SPIDER) && dist * dist < reach + 0.5f && fabsf(dy) < 1.5f && !e->delay) {
+      player_hurt(scaled(e->type == E_ZOMBIE ? 3 : 2), DMG_MOB);
       push_player(dx, dz, 0.4f);
       e->delay = 20;
     }
+#if NB_DIMS
+    /* the pigman's golden sword 9, the wither skeleton's stone sword 8 (and the wither), the enderman 7 */
+    if ((e->type == E_PIGMAN || e->type == E_WSKELETON || e->type == E_ENDERMAN) && dist * dist < reach + 0.5f &&
+        fabsf(dy) < 2.0f && !e->delay) {
+      player_hurt(scaled(e->type == E_PIGMAN ? 9 : e->type == E_WSKELETON ? 8 : 7), DMG_MOB);
+      push_player(dx, dz, 0.4f);
+      if (e->type == E_WSKELETON) wither_ticks = 200;
+      e->delay = 20;
+    }
+#endif
     /* a spider leaps (EntityAILeapAtTarget) */
     if (e->type == E_SPIDER && ground && dist > 2 && dist < 4 && rnd(5) == 0) {
       e->vx += dx / dist * 0.4f;
@@ -1349,8 +1025,92 @@ void mob_tick(Entity *e) {
       e->delay = (int16_t)(20 + dist / 15 * 40);
     }
   }
-  if (e->y < (float)VOID_Y) e->type = E_NONE;   /* fell into the void */
-  else pressure_plate_tick(e->x, e->y, e->z);   /* pressure plates take mobs too (temple TNT, doors) */
+  if (e->y < -64) e->type = E_NONE;
 }
+#if !NB_DIMS
+#undef immune
+#endif
 
-#include "mob_end.h"
+#if NB_DIMS
+#include "mob_dims.h"
+void dims_parts_(const Entity *e, float pt, float f, float a, float pitch, float age) { dims_parts(e, pt, f, a, pitch, age); }
+bool dims_loot_(Entity *e) { return dims_loot(e); }
+bool dims_tick_(Entity *e) { return dims_tick(e); }
+void blaze_tick_(Entity *e, bool chase, float dist) { blaze_tick(e, chase, dist); }
+void magma_tick_(Entity *e, bool chase, float dist) { magma_tick(e, chase, dist); }
+void dims_hurt_(Entity *e, float dmg, float kx, float kz) {
+  if (e->type == E_DRAGON) dragon_hurt(e, dmg);
+  else if (e->type == E_CRYSTAL) crystal_gone(e);
+  else dims_hurt(e, kx, kz);
+}
+#endif
+#if NB_DIMS
+void ender_tp_random_(Entity *e) { ender_tp_random(e); }
+/* EntityEnderPearl.onImpact: the player there, 5 of falling's harm */
+void pearl_land(float x, float y, float z) {
+  if (pl.dead || pl.sleep_timer) return;
+  for (int k = 0; k < 16; k++)
+    particle_add(x + (rndf() - 0.5f), y + rndf() * 2, z + (rndf() - 0.5f), 0, 0.05f, 0, 0xA01F, 20);
+  pl.x = x, pl.y = y, pl.z = z, pl.fall = 0;
+  pl.vx = pl.vy = pl.vz = 0;
+  player_hurt(5, DMG_FALL);
+}
+#endif
+#if NB_DIMS
+void dims_explode(float x, float y, float z, float power, bool fire) { explode_fire(x, y, z, power, true, fire); }
+
+/* MobSpawnerBaseLogic, for the blaze spawners of the fortresses (the Nether's thrones): with the player within
+ * 16, after 200 to 800 ticks, four tries within 4 of it, while fewer than six blazes are about, where it is
+ * dark enough (EntityMob.getBlockPathWeight: block light up to 11) and there is room */
+static struct {
+  int16_t x, z;
+  uint8_t y, on;
+  int16_t delay;
+} spw[2];
+void dims_spawners_tick(void) {
+  extern uint32_t ticks_run;
+  if (dim != DIM_NETHER) {
+    spw[0].on = spw[1].on = 0;
+    return;
+  }
+  if (ticks_run % 20 == 0) {
+    int at[6], n = gen_fortress_spawners((int)floorf(pl.x), (int)floorf(pl.z), at, 2);
+    for (int i = 0; i < 2; i++) {
+      bool same = spw[i].on && i < n && spw[i].x == at[i * 3] && spw[i].y == at[i * 3 + 1] && spw[i].z == at[i * 3 + 2];
+      if (same) continue;
+      spw[i].on = (uint8_t)(i < n);
+      if (i < n) spw[i].x = (int16_t)at[i * 3], spw[i].y = (uint8_t)at[i * 3 + 1], spw[i].z = (int16_t)at[i * 3 + 2], spw[i].delay = -1;
+    }
+  }
+  for (int i = 0; i < 2; i++) {
+    int x = spw[i].x, y = spw[i].y, z = spw[i].z;
+    if (!spw[i].on || world_get(x, y, z) != B_MOB_SPAWNER) continue;
+    float dx = x + 0.5f - pl.x, dy = y + 0.5f - pl.y, dz = z + 0.5f - pl.z;
+    if (dx * dx + dy * dy + dz * dz > 16 * 16) continue;
+    if (spw[i].delay < 0) spw[i].delay = (int16_t)(200 + rnd(600));
+    if (spw[i].delay > 0) {
+      spw[i].delay--;
+      continue;
+    }
+    bool any = false;
+    for (int k = 0; k < 4; k++) {
+      int near = 0;
+      for (int j = 0; j < N_ENT; j++) {
+        const Entity *e = &ents[j];
+        if (e->type == E_BLAZE && e->x > x - 4 && e->x < x + 5 && e->y > y - 4 && e->y < y + 5 && e->z > z - 4 && e->z < z + 5) near++;
+      }
+      if (near >= 6) break;
+      float bx = x + (rndf() - rndf()) * 4 + 0.5f, by = (float)(y + rnd(3) - 1), bz = z + (rndf() - rndf()) * 4 + 0.5f;
+      int lx = (int)floorf(bx), ly = (int)floorf(by), lz = (int)floorf(bz);
+      if (!opt.difficulty || light_there(lx, ly, lz) > 11 || !room_for(bx, by, bz, info[E_BLAZE].w, info[E_BLAZE].h) ||
+          blk_model[world_get(lx, ly, lz)] == M_LIQUID)
+        continue;
+      Entity *e = spawn(E_BLAZE, bx, by, bz);
+      if (!e) break;
+      for (int q = 0; q < 12; q++) particle_add(bx + rndf() - 0.5f, by + rndf() * 1.8f, bz + rndf() - 0.5f, 0, 0.02f, 0, 0xC618, 15);
+      any = true;
+    }
+    spw[i].delay = any ? (int16_t)(200 + rnd(600)) : 0;
+  }
+}
+#endif

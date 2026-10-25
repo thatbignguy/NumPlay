@@ -15,8 +15,12 @@ typedef struct {
   float grow;            /* inflated by this much on every side (sheep's wool) */
 } Part;
 
-#define MAX_PARTS 14         /* (the dragon uses fewer here; a blaze would use thirteen) */
-#define MAX_PARTS_DRAGON 42  /* (kept for the full model: the renderer has room) */
+#if NB_DIMS
+#define MAX_PARTS 14         /* (a blaze's thirteen) */
+#define MAX_PARTS_DRAGON 42  /* (drawn in world_scratch: 6144 bytes) */
+#else
+#define MAX_PARTS 12
+#endif
 int mob_parts(const Entity *e, float pt, Part *out);   /* this frame's parts */
 float mob_width(int type), mob_height(int type);
 float mob_scale(const Entity *e, float pt);            /* a creeper swells before it blows */

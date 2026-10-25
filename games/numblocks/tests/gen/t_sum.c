@@ -12,8 +12,6 @@ static uint32_t hash(const uint8_t *p, int n) {
 }
 
 int main(int argc, char **argv) {
-    uint8_t gs[GEN_SCRATCH];
-    gen_scratch(gs);
     int64_t seed = argc > 1 ? strtoll(argv[1], 0, 10) : 12345;
     int n = argc > 2 ? atoi(argv[2]) : 6;
     int verbose = argc > 3;

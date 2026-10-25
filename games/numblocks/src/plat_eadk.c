@@ -10,9 +10,6 @@ uint32_t plat_keys(void) { return keys_of(eadk_keyboard_scan()); }
 
 uint64_t plat_scan(void) { return eadk_keyboard_scan(); }
 uint32_t plat_millis(void) { return (uint32_t)eadk_timing_millis(); }
-/* the calculator's own uptime a second time over: what it has, and it is real (the app
- * is opened at a time of the owner's choosing), which is all the entropy this asks for */
-uint32_t plat_entropy(void) { return (uint32_t)eadk_timing_millis(); }
 void plat_sleep(uint32_t ms) { eadk_timing_msleep(ms); }
 void plat_push(int x, int y, int w, int h, const uint16_t *px) {
   eadk_display_push_rect((eadk_rect_t){(uint16_t)x, (uint16_t)y, (uint16_t)w, (uint16_t)h}, px);

@@ -20,6 +20,9 @@ typedef struct {
 #define N_PENDING 160
 static Pending pend[N_PENDING];
 static int npend;
+#if NB_DIMS
+void tick_forget(void) { npend = 0; }
+#endif
 
 void fluid_schedule(int x, int y, int z) {
   int b = world_get(x, y, z);
@@ -28,7 +31,12 @@ void fluid_schedule(int x, int y, int z) {
     if (pend[i].x == x && pend[i].y == y && pend[i].z == z) return;
   if (npend >= N_PENDING) return;
   /* water moves every 5 ticks, lava every 30 */
+#if NB_DIMS
+  int rate = is_lava(b) ? (dim != DIM_OVERWORLD ? 10 : 30) : 5;   /* (BlockLiquid.tickRate: lava 10 without a sky) */
+  pend[npend++] = (Pending){(int16_t)x, (int16_t)z, (uint8_t)y, 0, (uint16_t)(ticks_run + rate)};
+#else
   pend[npend++] = (Pending){(int16_t)x, (int16_t)z, (uint8_t)y, 0, (uint16_t)(ticks_run + (is_lava(b) ? 30 : 5))};
+#endif
 }
 
 static int level_of(int b) { return blk_meta[b]; }   /* 0 source, 1-7 flowing, 8 falling */
@@ -40,6 +48,9 @@ static int liquid(int water, int level) {
   }
   if (level == 0) return B_LAVA;
   if (level >= 8) return B_FALLING_LAVA;
+#if NB_DIMS
+  if (level & 1) return B_FLOWING_LAVA_1 + level / 2;   /* (the Nether's) */
+#endif
   return level <= 2 ? B_FLOWING_LAVA : level <= 4 ? B_FLOWING_LAVA_4 : B_FLOWING_LAVA_6;
 }
 static bool same(int water, int b) { return water ? is_water(b) : is_lava(b); }
@@ -50,50 +61,10 @@ static bool open_to(int water, int b) {
   if (water && is_lava(b)) return false;   /* water never flows into lava: the lava turns to stone */
   if (!water && is_water(b)) return true;
   if (b == B_AIR) return true;
-  if (is_portal(b)) return false;   /* (the portal stands: liquids stop at it, as at a door) */
   if (blk_flags[b] & BF_SOLID) return false;
   /* plants, torches, snow... are washed away (doors, ladders and signs stop it) */
   int m = blk_model[b];
   return m == M_CROSS || m == M_TORCH || m == M_FLAT || m == M_LAYER || m == M_VINE;   /* (and fire) */
-}
-
-/* what a liquid has under it: at the bottom of the world the void, which it does not fall
- * into - a liquid stops at the world's floor as it does at its top (Minecraft drains it into
- * the void; there is nothing here under the world to drain it into). The floor is the
- * deepslate layer's (gen.h's WORLD_MIN_Y); the nether keeps 0. Out of the cache is not air
- * either (the settle_fall rule, player.c): a fall whose ground is out of sight waits where
- * it is, and the pass asks again once the cache has moved and the ground is there. A column
- * still to be made reads as stone (world_get) - solid, but equally unknown: it waits too.
- * Java has no such edge (its force-loaded chunks keep the region); this is the game's own
- * cache, so the rule is the game's own. */
-static int below(int x, int y, int z) {
-  if (y <= dim_min_y()) return B_BEDROCK;
-  if (!world_loaded(x, y - 1, z) || world_pending_at(x, y - 1, z)) return B_BEDROCK;
-  return world_get(x, y - 1, z);
-}
-
-/* The settle pass (world.c) asks here about a liquid generation left standing: a spring's
- * source in a cave wall, water a cave or a ravine was carved under. Nothing has ticked it,
- * so ask whether it can go anywhere at all - down through an open cell, or sideways into
- * one - and schedule it; from there it flows on its own, as if a neighbour had changed.
- * (The wake is only a tick: what the liquid does is worked out again when it runs.) A cell
- * the cache does not hold is not air, and one of a column still to be made is not either:
- * those are not somewhere to go, and the pass runs again when the world there is whole. */
-void fluid_wake(int x, int y, int z) {
-  int b = world_get(x, y, z);
-  if (blk_model[b] != M_LIQUID) return;
-  int water = is_water(b);
-  if (world_loaded(x, y - 1, z) && open_to(water, below(x, y, z))) {
-    fluid_schedule(x, y, z);
-    return;
-  }
-  for (int f = 2; f < 6; f++) {
-    int nx = x + NX[f], nz = z + NZ[f];
-    if (world_loaded(nx, y, nz) && open_to(water, world_get(nx, y, nz))) {
-      fluid_schedule(x, y, z);
-      return;
-    }
-  }
 }
 
 static void set(int x, int y, int z, int b) {
@@ -116,8 +87,6 @@ static bool mix(int x, int y, int z, int b) {
 }
 
 static void flow_into(int water, int x, int y, int z, int level) {
-  if (!world_loaded(x, y, z) || world_pending_at(x, y, z))
-    return;   /* out of the cache, or not made yet, is not somewhere to go: the tail waits there too */
   int b = world_get(x, y, z);
   if (!open_to(water, b)) return;
   if (!water && is_water(b)) {
@@ -128,24 +97,17 @@ static void flow_into(int water, int x, int y, int z, int level) {
   set(x, y, z, liquid(water, level));
 }
 
-/* how far (up to 4 for water, 2 for lava) a way down is going this way, 1000 if none,
- * -1 if unknown: a cell the cache does not hold reads as air (world_get), and one still
- * to be made reads as stone - both unknown, never "nothing" - so the update waits until the
- * world that feeds it is whole again (the settle_fall rule). Java has no such edge; this is
- * the game's own. */
+/* how far (up to 4 for water, 2 for lava) a way down is going this way, 1000 if none */
 static int slope_dist(int water, int x, int y, int z, int dist, int from, int max) {
   int best = 1000;
   for (int f = 2; f < 6; f++) {
     if (f == (from ^ 1)) continue;
     int nx = x + NX[f], nz = z + NZ[f];
-    if (!world_loaded(nx, y, nz) || world_pending_at(nx, y, nz)) return -1;
     int b = world_get(nx, y, nz);
     if ((blk_flags[b] & BF_SOLID) || (same(water, b) && level_of(b) == 0)) continue;
-    if (y > dim_min_y() && (!world_loaded(nx, y - 1, nz) || world_pending_at(nx, y - 1, nz))) return -1;
-    if (open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))) return dist;
+    if (open_to(water, world_get(nx, y - 1, nz)) || same(water, world_get(nx, y - 1, nz))) return dist;
     if (dist < max) {
       int d = slope_dist(water, nx, y, nz, dist + 1, f, max);
-      if (d < 0) return -1;
       if (d < best) best = d;
     }
   }
@@ -156,27 +118,11 @@ static void fluid_update(int x, int y, int z) {
   int b = world_get(x, y, z);
   if (blk_model[b] != M_LIQUID) return;
   int water = is_water(b);
-  /* At the cache's edge an unloaded cell reads as air, and one still to be made reads as
-   * stone - both unknown, never "nothing" - so a stream whose source leaves the loaded cache,
-   * or whose neighbour is still queued, drains to nothing without the guard: the update finds
-   * no same-liquid neighbour and airs the block. The liquid stands until the world that feeds
-   * it is whole again - the same "wait for the world to be whole" settle_fall uses. If any
-   * cell the update reads is out of the cache, or still to be made, it does nothing this run;
-   * the settle pass (world.c) wakes it again once the move's chunks are whole. Ticks run while
-   * a move's chunks are still queued (a jump down, then up, makes several), so without the
-   * pending half a fall re-levels against stone and leaves holes. */
-  if (!world_loaded(x + 1, y, z) || world_pending_at(x + 1, y, z) || !world_loaded(x - 1, y, z) ||
-      world_pending_at(x - 1, y, z) || !world_loaded(x, y, z + 1) || world_pending_at(x, y, z + 1) ||
-      !world_loaded(x, y, z - 1) || world_pending_at(x, y, z - 1))
-    return;
-  if (y + 1 < dim_height() && (!world_loaded(x, y + 1, z) || world_pending_at(x, y + 1, z))) return;
-  if (y > dim_min_y() && (!world_loaded(x, y - 1, z) || world_pending_at(x, y - 1, z))) return;
-  if (y > dim_min_y()) {
-    for (int f = 2; f < 6; f++)
-      if (!world_loaded(x + NX[f], y - 1, z + NZ[f]) || world_pending_at(x + NX[f], y - 1, z + NZ[f])) return;
-  }
   if (mix(x, y, z, b)) return;
   int level = level_of(b), decay = water ? 1 : 2;
+#if NB_DIMS
+  if (dim == DIM_NETHER) decay = 1;   /* (WorldProviderHell.doesWaterVaporize: lava runs as far as water) */
+#endif
   if (level > 0) {
     /* the level it should have: from the lowest neighbour, or falling from above */
     int lowest = -1, sources = 0;
@@ -194,8 +140,8 @@ static void fluid_update(int x, int y, int z) {
     if (same(water, above)) nl = 8;   /* falling */
     /* two sources beside it and something under: a new source (infinite water) */
     if (water && sources >= 2) {
-      int u = below(x, y, z);
-      if ((blk_flags[u] & BF_SOLID) || (is_water(u) && level_of(u) == 0)) nl = 0;
+      int under = world_get(x, y - 1, z);
+      if ((blk_flags[under] & BF_SOLID) || (is_water(under) && level_of(under) == 0)) nl = 0;
     }
     if (nl != level) {
       if (nl < 0) {
@@ -207,8 +153,8 @@ static void fluid_update(int x, int y, int z) {
     }
   }
   /* down first, then sideways towards the nearest way down */
-  int under = below(x, y, z);
-  if (y > dim_min_y() && open_to(water, under)) {
+  int under = world_get(x, y - 1, z);
+  if (y > 0 && open_to(water, under)) {
     if (!water && is_water(under)) set(x, y - 1, z, B_STONE);
     else flow_into(water, x, y - 1, z, 8);
     return;
@@ -217,17 +163,17 @@ static void fluid_update(int x, int y, int z) {
     int next = level >= 8 ? decay : level + decay;
     if (next >= 8) return;
     int dist[4], best = 1000, max = water ? 4 : 2;
+#if NB_DIMS
+    if (dim == DIM_NETHER) max = 4;
+#endif
     for (int f = 2; f < 6; f++) {
       int nx = x + NX[f], nz = z + NZ[f];
       int n = world_get(nx, y, nz);
       dist[f - 2] = 1000;
       if ((blk_flags[n] & BF_SOLID) || (same(water, n) && level_of(n) == 0)) continue;
-      if (open_to(water, below(nx, y, nz)) || same(water, below(nx, y, nz))) dist[f - 2] = 0;
-      else {
-        int d = slope_dist(water, nx, y, nz, 1, f, max);
-        if (d < 0) return;   /* the way down runs out of the cache: unknown, so wait */
-        dist[f - 2] = d;
-      }
+      dist[f - 2] = open_to(water, world_get(nx, y - 1, nz)) || same(water, world_get(nx, y - 1, nz))
+                        ? 0
+                        : slope_dist(water, nx, y, nz, 1, f, max);
       if (dist[f - 2] < best) best = dist[f - 2];
     }
     for (int f = 2; f < 6; f++)
@@ -247,7 +193,7 @@ static void fluids_tick(void) {
     Pending p = pend[i];
     pend[i] = pend[--npend];
     if (!world_loaded(p.x, p.y, p.z)) continue;
-    if (is_fire(world_get(p.x, p.y, p.z))) fire_update(p.x, p.y, p.z, p.age);
+    if (world_get(p.x, p.y, p.z) == B_FIRE) fire_update(p.x, p.y, p.z, p.age);
     else fluid_update(p.x, p.y, p.z);
     done++;
   }
@@ -256,7 +202,6 @@ static void fluids_tick(void) {
 /* ---------------------------------------------------------------- fire */
 /* Blocks.fire.setFireInfo: how readily a block sets fire to the air by it, and burns away (0: never) */
 static int fire_enc(int b) {
-  if (b == B_SOUL_FIRE) return 0;
   switch (blk_id[b]) {
     case 5: case 125: case 126: case 85: case 107: case 53: case 134: case 135: case 136: case 163: case 164:
     case 17: case 162: case 173: return 5;
@@ -267,7 +212,6 @@ static int fire_enc(int b) {
   return 0;
 }
 static int fire_flam(int b) {
-  if (b == B_SOUL_FIRE) return 0;
   switch (blk_id[b]) {
     case 5: case 125: case 126: case 85: case 107: case 53: case 134: case 135: case 136: case 163: case 164:
     case 47: case 170: case 171: return 20;
@@ -301,10 +245,10 @@ static void fire_schedule(int x, int y, int z, int age) {
   pend[npend++] = (Pending){(int16_t)x, (int16_t)z, (uint8_t)y, (uint8_t)age, (uint16_t)(ticks_run + 30 + rnd(10))};
 }
 void fire_set(int x, int y, int z, int age) {
-  /* BlockFire.getStateForPlacement: on soul sand or soul soil, fire is soul fire
-   * (1.16); everywhere else it is the ordinary kind */
-  int below = world_get(x, y - 1, z);
-  world_set(x, y, z, below == B_SOUL_SAND || below == B_SOUL_SOIL ? B_SOUL_FIRE : B_FIRE);
+#if NB_DIMS
+  if (dims_portal_light(x, y, z)) return;   /* (BlockFire.onBlockAdded) */
+#endif
+  world_set(x, y, z, B_FIRE);
   fire_schedule(x, y, z, age);
 }
 /* BlockFire.catchOnFire: what burns may burn away (or catch, the fire young enough); TNT is lit */
@@ -322,25 +266,17 @@ static void catch_fire(int x, int y, int z, int chance, int age) {
 /* BlockFire.updateTick */
 static void fire_update(int x, int y, int z, int age) {
   if (!rule(GR_FIRE_TICK)) return;
-  /* soul fire stays only on soul sand or soul soil, and fire on either becomes
-   * soul fire; a soul fire whose ground is gone goes out (1.16, BlockFire) */
-  int here = world_get(x, y, z), below = world_get(x, y - 1, z);
-  bool soul_base = below == B_SOUL_SAND || below == B_SOUL_SOIL;
-  if (here == B_FIRE && soul_base) world_set(x, y, z, here = B_SOUL_FIRE);
-  if (here == B_SOUL_FIRE && !soul_base) {
-    world_set(x, y, z, B_AIR);
-    return;
-  }
-  bool raining = here == B_FIRE && rain_str > 0.2f;
+  bool raining = rain_str > 0.2f;
   if (!fire_can_stay(x, y, z) || (raining && rained_on(x, y, z) && rndf() < 0.2f + age * 0.03f)) {
     world_set(x, y, z, B_AIR);
     return;
   }
   if (age < 15) age += rnd(3) / 2;
   fire_schedule(x, y, z, age);
-  /* Soul fire is a permanent, blue light: unlike ordinary fire it does not spread,
-   * burn neighbours away, or age out on a bare soul block. */
-  if (here == B_SOUL_FIRE) return;
+#if NB_DIMS
+  int under = world_get(x, y - 1, z);
+  if (under == B_NETHERRACK || (dim == DIM_END && under == B_BEDROCK)) goto spread;   /* (it burns for ever) */
+#endif
   if (!fire_near(x, y, z)) {
     /* nothing to burn: out, soon (at once off a solid top) */
     if (!(blk_flags[world_get(x, y - 1, z)] & BF_OPAQUE) || age > 3) world_set(x, y, z, B_AIR);
@@ -350,6 +286,9 @@ static void fire_update(int x, int y, int z, int age) {
     world_set(x, y, z, B_AIR);
     return;
   }
+#if NB_DIMS
+spread:
+#endif
   for (int f = 0; f < 6; f++) catch_fire(x + NX[f], y + NY[f], z + NZ[f], f < 2 ? 250 : 300, age);
   /* the air about it, above more than below: where it is next to something that burns */
   for (int dy = -1; dy <= 4; dy++)
@@ -412,7 +351,7 @@ static void grow_tree(int x, int y, int z, int sapling) {
         int b = world_get(x + dx, y + dy, z + dz);
         if (b != B_AIR && blk_model[b] != M_LEAVES && blk_model[b] != M_CROSS) return;
       }
-  if (y + h + 2 >= dim_height()) return;
+  if (y + h + 2 >= WORLD_H) return;
   if (v == 1) {
     /* spruce (WorldGenTaiga2): rings of leaves narrowing to the top */
     int r = 0;
@@ -441,7 +380,7 @@ static void grow_tree(int x, int y, int z, int sapling) {
 
 static void random_tick(int x, int y, int z) {
   int b = world_get(x, y, z);
-  if (is_fire(b)) {
+  if (b == B_FIRE) {
     fire_schedule(x, y, z, 8);
     return;
   }
@@ -449,6 +388,21 @@ static void random_tick(int x, int y, int z) {
     lava_fire(x, y, z);
     return;
   }
+#if NB_DIMS
+  if (b >= B_NETHER_WART_0 && b < B_NETHER_WART_3) {   /* BlockNetherWart: any light */
+    if (rnd(10) == 0) world_set(x, y, z, b + 1);
+    return;
+  }
+  if ((b == B_PORTAL_X || b == B_PORTAL_Z) && dim == DIM_OVERWORLD && rule(GR_MOB_SPAWNING) && rnd(2000) < opt.difficulty) {
+    /* BlockPortal.updateTick: a zombie pigman comes out, on the ground under the portal */
+    while (!(blk_flags[world_get(x, y, z)] & BF_OPAQUE) && y > 0) y--;
+    if (!(blk_flags[world_get(x, y + 1, z)] & BF_OPAQUE)) {
+      Entity *e = mob_summon(E_PIGMAN, x + 0.5f, y + 1.1f, z + 0.5f);
+      (void)e;
+    }
+    return;
+  }
+#endif
   int i = VC_I(x - vc_x0, y - vc_y0, z - vc_z0);
   int above = world_get(x, y + 1, z);
   int light = i + VCX * VCZ < VCY * VCZ * VCX && y + 1 - vc_y0 < VCY ? light_at(i + VCX * VCZ) : 15;
@@ -531,7 +485,6 @@ float celestial(uint32_t t) {
 
 /* World.calculateSkylightSubtracted: 0 by day, 11 at night, more in rain and storms */
 int sky_sub(void) {
-  if (world_dim != DIM_OVER) return 0;   /* no day, no night, no rain dimming it */
   float f = 1 - (cosf(celestial(game_time) * 6.2831853f) * 2 + 0.5f);
   f = f < 0 ? 0 : f > 1 ? 1 : f;
   f = (1 - f) * (1 - rain_str * 5 / 16) * (1 - thunder_str * rain_str * 5 / 16);
@@ -583,7 +536,7 @@ static void bolt_strikes(void) {
   }
   for (int i = 0; i < N_ENT; i++) {
     Entity *e = &ents[i];
-    if (is_mob(e->type) && fabsf(e->x - bolt.x) < 3.3f && fabsf(e->z - bolt.z) < 3.3f &&
+    if (IS_MOB(e->type) && fabsf(e->x - bolt.x) < 3.3f && fabsf(e->z - bolt.z) < 3.3f &&
         e->y > bolt.y - 4 && e->y < bolt.y + 9)
       mob_struck(e);
   }
@@ -666,25 +619,14 @@ static void freeze_tick(void) {
 }
 
 void world_tick(void) {
-  /* the test world's showcase never changes on its own: no weather (nothing rains on
-   * it, and the snow and the ice the cold would bring stay as they are put), no
-   * random block ticks (the fire does not spread or burn out, the grass does not
-   * spread, the saplings do not grow, the leaves do not decay, the snow and the ice
-   * do not melt, the canes and the cacti do not grow) and no liquid moves: the
-   * showcase's water and lava stand where they are put (the settle pass does not
-   * wake them either, world.c), like the blocks they were placed beside */
-  if (world_type != WT_TEST) {
-    if (world_dim == DIM_OVER) {   /* the nether and the End have no weather at all */
-      weather_tick();
-      bolt_tick();
-      freeze_tick();
-    }
-    /* about 3 a section: the cache is VCX x VCY x VCZ blocks */
-    int n = VCX * VCY * VCZ * 3 / 4096;
-    for (int k = 0; k < n; k++) {
-      int x = vc_x0 + rnd(VCX), y = vc_y0 + rnd(VCY), z = vc_z0 + rnd(VCZ);
-      random_tick(x, y, z);
-    }
-    fluids_tick();
+  weather_tick();
+  bolt_tick();
+  freeze_tick();
+  fluids_tick();
+  /* about 3 a section: the cache is VCX x VCY x VCZ blocks */
+  int n = VCX * VCY * VCZ * 3 / 4096;
+  for (int k = 0; k < n; k++) {
+    int x = vc_x0 + rnd(VCX), y = vc_y0 + rnd(VCY), z = vc_z0 + rnd(VCZ);
+    random_tick(x, y, z);
   }
 }

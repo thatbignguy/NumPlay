@@ -20,8 +20,6 @@ static void slab(int cx, int cz) {
 }
 
 int main(int argc, char **argv) {
-    uint8_t gs[GEN_SCRATCH];
-    gen_scratch(gs);
     int64_t seed = argc > 1 ? strtoll(argv[1], 0, 10) : 12345;
     if (argc > 2) y0 = atoi(argv[2]);
     gen_init(seed);

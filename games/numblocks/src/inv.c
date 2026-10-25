@@ -7,17 +7,17 @@
 /* ---------------------------------------------------------------- items */
 int item_max(int id) {
   if (id <= 0) return 0;
-  return is_item_id(id) ? it_stack[id - 256] : 64;
+  return id < 256 ? 64 : it_stack[id - 256];
 }
-int item_dur(int id) { return is_item_id(id) ? it_dur[id - 256] : 0; }
-int item_kind(int id) { return is_item_id(id) ? it_kind[id - 256] : (id > 0 ? IK_BLOCK : IK_NONE); }
+int item_dur(int id) { return id >= 256 ? it_dur[id - 256] : 0; }
+int item_kind(int id) { return id >= 256 ? it_kind[id - 256] : (id > 0 ? IK_BLOCK : IK_NONE); }
 int item_count(const Stack *s) { return !s->id ? 0 : item_dur(s->id) ? 1 : s->aux; }
 const char *item_label(int id) {
-  if (is_item_id(id)) return it_label[id - 256];
+  if (id >= 256) return it_label[id - 256];
   return id > 0 && blk_label[id] ? blk_label[id] : "";
 }
-int item_icon(int id) { return is_item_id(id) ? it_icon[id - 256] : id > 0 ? blk_icon[id] : -1; }
-int item_fuel(int id) { return is_item_id(id) ? it_fuel[id - 256] : id > 0 ? blk_fuel[id] : 0; }
+int item_icon(int id) { return id >= 256 ? it_icon[id - 256] : id > 0 ? blk_icon[id] : -1; }
+int item_fuel(int id) { return id >= 256 ? it_fuel[id - 256] : id > 0 ? blk_fuel[id] : 0; }
 
 int smelt_of(int id) {
   for (int i = 0; i < N_SMELTING; i++)
@@ -185,13 +185,6 @@ float dig_speed(int b, int held) {
 }
 
 static uint32_t rng = 0x2545F491;
-/* the game's random stream starts over at s (0: its own start); the state before goes back
- * (tests that count draws make a run of their own and put the shared stream back after) */
-uint32_t rnd_seed(uint32_t s) {
-  uint32_t old = rng;
-  rng = s ? s : 0x2545F491;
-  return old;
-}
 int rnd(int n) {
   rng ^= rng << 13;
   rng ^= rng >> 17;
@@ -213,22 +206,11 @@ int block_drops(int b, int held, Stack *out) {
       DROP(B_DIRT, 1);
       return n;
     case B_COAL_ORE: DROP(I_COAL, 1); return n;
-    case B_IRON_ORE: DROP(I_RAW_IRON, 1); return n;
-    case B_GOLD_ORE: DROP(I_RAW_GOLD, 1); return n;
     case B_DIAMOND_ORE: DROP(I_DIAMOND, 1); return n;
     case B_EMERALD_ORE: DROP(I_EMERALD, 1); return n;
     case B_LAPIS_ORE: DROP(I_DYE_BLUE, 4 + rnd(5)); return n;
     case B_REDSTONE_ORE: DROP(I_REDSTONE, 4 + rnd(2)); return n;
-    /* the deepslate ores drop what their stone ore drops (1.17: the same items) */
-    case B_DEEPSLATE_COAL_ORE: DROP(I_COAL, 1); return n;
-    case B_DEEPSLATE_IRON_ORE: DROP(I_RAW_IRON, 1); return n;
-    case B_DEEPSLATE_GOLD_ORE: DROP(I_RAW_GOLD, 1); return n;
-    case B_DEEPSLATE_DIAMOND_ORE: DROP(I_DIAMOND, 1); return n;
-    case B_DEEPSLATE_EMERALD_ORE: DROP(I_EMERALD, 1); return n;
-    case B_DEEPSLATE_LAPIS_ORE: DROP(I_DYE_BLUE, 4 + rnd(5)); return n;
-    case B_DEEPSLATE_REDSTONE_ORE: DROP(I_REDSTONE, 4 + rnd(2)); return n;
     case B_GRAVEL: DROP(rnd(10) == 0 ? I_FLINT : B_GRAVEL, 1); return n;
-    case B_NETHER_QUARTZ_ORE: DROP(I_QUARTZ, 1); return n;   /* the nether's ore drops quartz itself */
     case B_CLAY: DROP(I_CLAY_BALL, 4); return n;
     case B_GLOWSTONE: DROP(I_GLOWSTONE_DUST, 2 + rnd(3)); return n;
     case B_MELON: DROP(I_MELON_SLICE, 3 + rnd(5)); return n;
@@ -238,7 +220,7 @@ int block_drops(int b, int held, Stack *out) {
     case B_STONE_SLAB_DOUBLE: DROP(B_STONE_SLAB, 2); return n;
     case B_COBWEB: DROP(shears ? B_COBWEB : I_STRING, 1); return n;
     case B_GLASS: case B_GLASS_PANE: case B_ICE: case B_PACKED_ICE: case B_MOB_SPAWNER: case B_MONSTER_EGG_STONE:
-    case B_BEDROCK: case B_BARRIER:
+    case B_BEDROCK:
       return 0;
     case B_TALL_GRASS: case B_FERN: case B_DOUBLE_GRASS_LOWER: case B_DOUBLE_GRASS_UPPER: case B_LARGE_FERN_LOWER:
     case B_LARGE_FERN_UPPER:
@@ -250,8 +232,7 @@ int block_drops(int b, int held, Stack *out) {
       else DROP(I_STICK, rnd(3));
       return n;
     case B_VINE:
-    case B_WEEPING_VINES: case B_TWISTING_VINES:
-      if (shears) DROP(b, 1);
+      if (shears) DROP(B_VINE, 1);
       return n;
     case B_BROWN_MUSHROOM_CAP: case B_BROWN_MUSHROOM_INSIDE: case B_BROWN_MUSHROOM_STEM:
       DROP(B_BROWN_MUSHROOM, rnd(10) - 7);

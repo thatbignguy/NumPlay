@@ -50,7 +50,9 @@ int block_boxes(int b, int x, int y, int z, int8_t (*o)[6]) {
     int lo = world_get(x, y - 1, z);
     if (blk_model[lo] == M_DOOR && lo != B_DOOR_OAK_UPPER) b = lo;
   }
-  if (is_iron_door_upper(b) && is_iron_door_lower(world_get(x, y - 1, z))) b = world_get(x, y - 1, z);
+#if NB_DIMS
+  if (b == B_IRON_DOOR_UPPER && is_iron_door(world_get(x, y - 1, z))) b = world_get(x, y - 1, z);
+#endif
   int n = blk_nbox[b];
   memcpy(o, blk_box[b], (size_t)n * 6);
   return n;

@@ -61,10 +61,6 @@
  *    item draws are replayed, but not the enchanted book's enchantment draws
  *    (TODO, see dungeon_book), so after a dungeon chest the rest of that
  *    population draws differently from Minecraft (still a valid decoration).
- *  - Dungeon spawners are placed with the mob their draw made of them (as
- *    Minecraft keeps it in their tile entity, handed out through
- *    gen_spawner_hook); whoever takes it keeps it, so a dungeon keeps its mob
- *    when the world is loaded and its chunk is made again.
  *  - Structures are not generated (see TODO below), which matches Minecraft
  *    only where no structure exists.
  * Slabs (gen_slab's y range)
@@ -100,30 +96,16 @@
 #include "gen.h"
 
 #include <math.h>
-#include <stdbool.h>
 #include <string.h>
 
 #include "blocks.h"
-#include "states.h"   /* the 9-bit block states: the slab's and the columns' accessors */
-
-static int stronghold_prepare(int cx, int cz);   /* (gen_stronghold.h: a stronghold a call, ahead) */
-/* nb.h's E_ZOMBIE: the first of the game's ten mobs (E_ZOMBIE .. E_ZPIGLIN), which the
- * cages are filled in the order of. Declared here instead of including mob.h, which
- * brings nb.h, whose BF_OPAQUE is this file's own flag under another name. */
-#define MOB_FIRST 2
-#ifndef FLAT_DEFAULT
-#define FLAT_DEFAULT "2;7,2x3,2;1"
+#if NB_DIMS
+#include "dims.h"
+static int dims_slab(int cx, int cz, int y0, int h, uint8_t *out);   /* (gen_dims.h: the Nether, the End) */
+static int gd_dim;
+static void stronghold_slab(int cx, int cz, int y0, int h, uint8_t *out);   /* (gen_stronghold.h) */
+static int stronghold_prepare(int cx, int cz);
 #endif
-#ifndef FLAT_MAX
-#define FLAT_MAX 63
-#endif
-extern const uint8_t blk_id[], blk_meta[];
-bool flat_validate(const char *preset, char *err, int errmax);
-bool flat_simplify(const char *preset, char *out, int outmax);
-int flat_height(void);
-int flat_biome_id(void);
-static bool flat_parse(const char *preset, uint8_t *out_layers, int *out_n, int *out_biome, char *err,
-                       int errmax);
 
 /* The float arithmetic here must be done as written (IEEE single precision, each operation
  * rounded): the game builds with -ffast-math, which would fuse multiply-adds, reassociate sums
@@ -156,6 +138,7 @@ typedef uint64_t u64;
 typedef int32_t i32;
 typedef uint32_t u32;
 
+#define SEA 63
 
 /* left shifts of possibly negative values, without undefined behaviour */
 #define SHL(v, k) ((i64)((u64)(i64)(v) << (k)))
@@ -541,7 +524,7 @@ enum {
     BI_DEEP_OCEAN = 24, BI_STONE_BEACH = 25, BI_COLD_BEACH = 26, BI_BIRCH = 27, BI_BIRCH_HILLS = 28,
     BI_ROOFED = 29, BI_COLD_TAIGA = 30, BI_COLD_TAIGA_HILLS = 31, BI_MEGA_TAIGA = 32, BI_MEGA_TAIGA_HILLS = 33,
     BI_EH_PLUS = 34, BI_SAVANNA = 35, BI_SAVANNA_PLATEAU = 36, BI_MESA = 37, BI_MESA_PLATEAU_F = 38,
-    BI_MESA_PLATEAU = 39, BI_HELL = 8    /* 1.8's Hell: the nether's; BI_END is gen.h's 9 */
+    BI_MESA_PLATEAU = 39
 };
 
 /* Biome class (getClass(), with BiomeBaseSub reporting its parent's class) */
@@ -634,12 +617,6 @@ static const Biome BIOMES[] = {
     {37, C_MESA, S_MESA, D_PLAIN, T_MESA, F_DEFAULT, G_DEFAULT, 0, 3, B_RED_SAND, B_STAINED_CLAY_WHITE, 0, 0.1f, 0.2f, 2.0f, DEC(-999, 0, 1, 20, 0, 3, 5, 1, 3, 1, 0, 0), 0xD94515},
     {38, C_MESA, S_MESA, D_PLAIN, T_MESA, F_DEFAULT, G_DEFAULT, 0, 3, B_RED_SAND, B_STAINED_CLAY_WHITE, 2, 1.5f, 0.025f, 2.0f, DEC(5, 0, 1, 20, 0, 3, 5, 1, 3, 1, 0, 0), 0xB09765},
     {39, C_MESA, S_MESA, D_PLAIN, T_MESA, F_DEFAULT, G_DEFAULT, 0, 3, B_RED_SAND, B_STAINED_CLAY_WHITE, 0, 1.5f, 0.025f, 2.0f, DEC(-999, 0, 1, 20, 0, 3, 5, 1, 3, 1, 0, 0), 0xCA8C65},
-    /* the nether's biomes (1.16): crimson forest, warped forest and soul sand valley.
-     * No weather, warm and dry as their temperature and rainfall say; the surface and
-     * the growth are the nether pass's own (nether_slab), not the overworld's. */
-    {49, C_PLAINS, S_DEFAULT, D_PLAIN, T_DEFAULT, F_DEFAULT, G_DEFAULT, 0, 3, B_NETHERRACK, B_NETHERRACK, 0, 0.1f, 0.2f, 2.0f, DDEF, 0x5A1919},
-    {50, C_PLAINS, S_DEFAULT, D_PLAIN, T_DEFAULT, F_DEFAULT, G_DEFAULT, 0, 3, B_NETHERRACK, B_NETHERRACK, 0, 0.1f, 0.2f, 2.0f, DDEF, 0x49907B},
-    {51, C_PLAINS, S_DEFAULT, D_PLAIN, T_DEFAULT, F_DEFAULT, G_DEFAULT, 0, 3, B_NETHERRACK, B_NETHERRACK, 0, 0.1f, 0.2f, 2.0f, DDEF, 0x4C3E31},
     /* mutated variants */
     {129, C_PLAINS, S_DEFAULT, D_PLAINS, T_DEFAULT, F_PLAINS, G_DEFAULT, 0, 2, B_GRASS, B_DIRT, 1, 0.125f, 0.05f, 0.8f, DEC(-999, 4, 10, 0, 0, 0, 0, 1, 3, 1, 0, 0), 0xB5DB88},
     {130, C_DESERT, S_DEFAULT, D_PLAIN, T_DEFAULT, F_DEFAULT, G_DEFAULT, 0, 3, B_SAND, B_SAND, 0, 0.225f, 0.25f, 2.0f, DEC(-999, 2, 1, 2, 0, 50, 10, 1, 3, 1, 0, 0), 0xFFBC40},
@@ -673,105 +650,6 @@ static const Biome *bio(int id) {
 }
 
 static int bio_exists(int id) { return id >= 0 && id < 256 && biome_index[id] != 255; }
-
-/* ---------------------------------------------------------------- the biomes' names
- * The F3 line's names (1.8's own, mutated variants and all) and the keys /locate biome
- * takes: the name in lower case with underscores, plus the modern names where they
- * differ, so "plains", "swampland" and "swamp" all answer. */
-static const struct { uint8_t id; const char *key, *name; } BIOME_NAMES[] = {
-    {0, "ocean", "Ocean"},
-    {1, "plains", "Plains"},
-    {2, "desert", "Desert"},
-    {3, "extreme_hills", "Extreme Hills"},
-    {4, "forest", "Forest"},
-    {5, "taiga", "Taiga"},
-    {6, "swampland", "Swampland"},
-    {7, "river", "River"},
-    {8, "nether_wastes", "Nether Wastes"},
-    {9, "the_end", "The End"},
-    {10, "frozen_ocean", "FrozenOcean"},
-    {11, "frozen_river", "FrozenRiver"},
-    {12, "ice_plains", "Ice Plains"},
-    {13, "ice_mountains", "Ice Mountains"},
-    {14, "mushroom_island", "MushroomIsland"},
-    {15, "mushroom_shore", "MushroomShore"},
-    {16, "beach", "Beach"},
-    {17, "desert_hills", "DesertHills"},
-    {18, "forest_hills", "ForestHills"},
-    {19, "taiga_hills", "TaigaHills"},
-    {20, "extreme_hills_edge", "Extreme Hills Edge"},
-    {21, "jungle", "Jungle"},
-    {22, "jungle_hills", "JungleHills"},
-    {23, "jungle_edge", "JungleEdge"},
-    {24, "deep_ocean", "Deep Ocean"},
-    {25, "stone_beach", "Stone Beach"},
-    {26, "cold_beach", "Cold Beach"},
-    {27, "birch_forest", "Birch Forest"},
-    {28, "birch_forest_hills", "Birch Forest Hills"},
-    {29, "roofed_forest", "Roofed Forest"},
-    {30, "cold_taiga", "Cold Taiga"},
-    {31, "cold_taiga_hills", "Cold Taiga Hills"},
-    {32, "mega_taiga", "Mega Taiga"},
-    {33, "mega_taiga_hills", "Mega Taiga Hills"},
-    {34, "extreme_hills_plus", "Extreme Hills+"},
-    {35, "savanna", "Savanna"},
-    {36, "savanna_plateau", "Savanna Plateau"},
-    {37, "mesa", "Mesa"},
-    {38, "mesa_plateau_f", "Mesa Plateau F"},
-    {39, "mesa_plateau", "Mesa Plateau"},
-    {49, "crimson_forest", "Crimson Forest"},
-    {50, "warped_forest", "Warped Forest"},
-    {51, "soul_sand_valley", "Soul Sand Valley"},
-    {129, "sunflower_plains", "Sunflower Plains"},
-    {130, "desert_m", "Desert M"},
-    {131, "extreme_hills_m", "Extreme Hills M"},
-    {132, "flower_forest", "Flower Forest"},
-    {133, "taiga_m", "Taiga M"},
-    {134, "swampland_m", "Swampland M"},
-    {140, "ice_plains_spikes", "Ice Plains Spikes"},
-    {149, "jungle_m", "Jungle M"},
-    {151, "jungle_edge_m", "JungleEdge M"},
-    {155, "birch_forest_m", "Birch Forest M"},
-    {156, "birch_forest_hills_m", "Birch Forest Hills M"},
-    {157, "roofed_forest_m", "Roofed Forest M"},
-    {158, "cold_taiga_m", "Cold Taiga M"},
-    {160, "mega_spruce_taiga", "Mega Spruce Taiga"},
-    {161, "mega_spruce_hills", "Mega Spruce Hills"},
-    {162, "extreme_hills_plus_m", "Extreme Hills+ M"},
-    {163, "savanna_m", "Savanna M"},
-    {164, "savanna_plateau_m", "Savanna Plateau M"},
-    {165, "mesa_bryce", "Mesa (Bryce)"},
-    {166, "mesa_plateau_f_m", "Mesa Plateau F M"},
-    {167, "mesa_plateau_m", "Mesa Plateau M"},
-};
-#define N_BIOME_NAMES ((int)(sizeof BIOME_NAMES / sizeof BIOME_NAMES[0]))
-/* the modern names for the same ground (1.16-1.21's), taken as keys too */
-static const struct { const char *key; uint8_t id; } BIOME_ALIASES[] = {
-    {"swamp", 6}, {"snowy_plains", 12}, {"snowy_mountains", 13}, {"snowy_taiga", 30}, {"snowy_taiga_hills", 31},
-    {"snowy_beach", 26}, {"mushroom_fields", 14}, {"mushroom_field_shore", 15}, {"dark_forest", 29},
-    {"dark_forest_hills", 157}, {"old_growth_birch_forest", 155}, {"giant_tree_taiga", 32},
-    {"old_growth_pine_taiga", 32}, {"old_growth_spruce_taiga", 160}, {"windswept_hills", 3},
-    {"windswept_forest", 34}, {"windswept_gravelly_hills", 162}, {"mountain_edge", 20}, {"stony_shore", 25},
-    {"wooded_hills", 18}, {"sparse_jungle", 22}, {"badlands", 37}, {"badlands_plateau", 39},
-    {"wooded_badlands_plateau", 38}, {"eroded_badlands", 165}, {"ice_spikes", 140}, {"shattered_savanna", 163},
-    {"hell", 8},   /* 1.8's name for the nether wastes */
-};
-#define N_BIOME_ALIASES ((int)(sizeof BIOME_ALIASES / sizeof BIOME_ALIASES[0]))
-
-const char *gen_biome_name(int id) {
-    for (int i = 0; i < N_BIOME_NAMES; i++)
-        if (BIOME_NAMES[i].id == id) return BIOME_NAMES[i].name;
-    return "Unknown";
-}
-int gen_biome_id(const char *key) {
-    for (int i = 0; i < N_BIOME_NAMES; i++)
-        if (!strcmp(key, BIOME_NAMES[i].key)) return BIOME_NAMES[i].id;
-    for (int i = 0; i < N_BIOME_ALIASES; i++)
-        if (!strcmp(key, BIOME_ALIASES[i].key)) return (int)BIOME_ALIASES[i].id;
-    return -1;
-}
-const char *gen_biome_key(int i) { return i >= 0 && i < N_BIOME_NAMES ? BIOME_NAMES[i].key : 0; }
-int gen_biome_known(int id) { return bio_exists(id); }
 
 /* GenLayer.a(int, int): same biome "kind" */
 static int bio_same(int i, int j) {
@@ -1325,7 +1203,9 @@ static i32 *base_sub(const i32 *base, Win bw, Win sw) {
     return p;
 }
 
-static int chain_build(const LayerDef **chain_buf, const LayerDef *tail, int ntail, int with_base) {
+static const LayerDef *chain_buf[40];
+
+static int chain_build(const LayerDef *tail, int ntail, int with_base) {
     int n = 0;
     if (with_base)
         for (int i = 0; i < NBASE; i++) chain_buf[n++] = &LBASE[i];
@@ -1335,7 +1215,6 @@ static int chain_build(const LayerDef **chain_buf, const LayerDef *tail, int nta
 
 /* GenLayerRiverMix output for window (x,z,w,h) into dst (biome ids) */
 static void layers_rivermix(int x, int z, int w, int h, i32 *dst) {
-    const LayerDef *chain_buf[40];
     int mark0 = lay_top, mark = mark0;
     /* biome branch: base + biome1 to desert, then hills (needs the hills river noise), then biome2 */
     /* window of the hills layer input */
@@ -1363,16 +1242,16 @@ static void layers_rivermix(int x, int z, int w, int h, i32 *dst) {
         bw.w = x1 - bw.x;
         bw.h = z1 - bw.z;
     }
-    int n = chain_build(chain_buf, 0, 0, 1);
+    int n = chain_build(0, 0, 1);
     i32 *base = run_chain(chain_buf, n, bw.x, bw.z, bw.w, bw.h, 0, 0);
     /* river branch first (its result stays below the biome branch's work) */
-    n = chain_build(chain_buf, LRIVER, 9, 0);
+    n = chain_build(LRIVER, 9, 0);
     i32 *river = run_chain(chain_buf, n, x, z, w, h, 0, base_sub(base, bw, w3));
     /* hills river noise */
-    n = chain_build(chain_buf, LHILLSRIVER, 3, 0);
+    n = chain_build(LHILLSRIVER, 3, 0);
     i32 *hr = run_chain(chain_buf, n, hin.x, hin.z, hin.w, hin.h, 0, base_sub(base, bw, w1));
     /* biome chain up to desert */
-    n = chain_build(chain_buf, LBIOME1, 4, 0);
+    n = chain_build(LBIOME1, 4, 0);
     i32 *bd = run_chain(chain_buf, n, hin.x, hin.z, hin.w, hin.h, 0, base_sub(base, bw, w2));
     mark = (int)(hr - lay_mem); /* the biome branch's results go over hr and bd */
     /* hills .. smooth, fed by bd (the hills layer also reads hr) */
@@ -1620,28 +1499,6 @@ HOT static void perlin3_octave(const uint8_t *P, float *acc, const uint8_t *need
     }
 }
 
-/* one point of one octave, on its own (the nether's grid sampler): the same
- * point maths as perlin3_octave's inner loop, at the Q32 coordinates given */
-INLINE float perlin_pt(const uint8_t *P, u64 X, u64 Y, u64 Z) {
-    int xc, yc, zc;
-    float xf, yf, zf;
-    coord_split(X, &xc, &xf);
-    coord_split(Y, &yc, &yf);
-    coord_split(Z, &zc, &zf);
-    float ux = fade(xf), uy = fade(yf), uz = fade(zf);
-    float fx = xf, fy = yf, fz = zf, gx1 = xf - 1, gy1 = yf - 1, gz1 = zf - 1;
-    int l1 = xc, pa = P[l1], pb = P[(l1 + 1) & 255];
-    int j4 = zc, i5 = yc;
-    int j5 = pa + i5, l5 = P[(j5 + 1) & 255] + j4;
-    int i6 = pb + i5, i2 = P[i6 & 255] + j4, j6 = P[(i6 + 1) & 255] + j4;
-    int k5 = P[j5 & 255] + j4;
-    float d16 = lerp(ux, grad3(P[k5 & 255], fx, fy, fz), grad3(P[i2 & 255], gx1, fy, fz));
-    float d7 = lerp(ux, grad3(P[l5 & 255], fx, gy1, fz), grad3(P[j6 & 255], gx1, gy1, fz));
-    float d17 = lerp(ux, grad3(P[(k5 + 1) & 255], fx, fy, gz1), grad3(P[(i2 + 1) & 255], gx1, fy, gz1));
-    float d8 = lerp(ux, grad3(P[(l5 + 1) & 255], fx, gy1, gz1), grad3(P[(j6 + 1) & 255], gx1, gy1, gz1));
-    return lerp(uz, lerp(uy, d16, d7), lerp(uy, d17, d8));
-}
-
 /* per grid column, the range [lo, hi] of y whose points have one of the bits (lo > hi: none);
  * returns whether any point has them */
 static int need_ranges(const uint8_t *cls, int bits, uint8_t *rng) {
@@ -1824,7 +1681,7 @@ typedef struct {
         struct {          /* surface pass, after the density */
             float surf[256];       /* surface depth noise, index z*16+x */
             uint8_t mperm[6][256]; /* mesa noises (built when a mesa column shows up) */
-            uint16_t col[256];   /* states are 9 bits each: 16 bits a cell */
+            uint8_t col[256];
         };
     };
     uint8_t cls[825];     /* per grid point: sign decided by bounds / noise needed / limits needed */
@@ -1858,11 +1715,8 @@ typedef struct {
 } BigPos;
 
 /* Scratch memory. The phases never overlap: layers (in the terrain pass), terrain, then caves
- * and populations (PopScratch plus the cave walk's and big oak's tables after it). One buffer
- * serves them all, given to the generator by its caller (gen_scratch): the world keeps it on its
- * stack while it makes the world around the player, where the game would otherwise keep it in
- * the app's RAM. */
-typedef union {
+ * and populations (PopScratch plus the cave walk's and big oak's tables after it). */
+static union {
     TerrainScratch t;
     i32 lay[LAY_INTS];
     PopScratch p;
@@ -1872,19 +1726,9 @@ typedef union {
         BigPos big_list[48]; /* WorldGenBigTree's branch ends */
     } x;
     uint8_t spawn_rows[sizeof(i32) * LAY_INTS + 8 * 129];
-} GenScratch;
-
-static GenScratch *U;
-
-/* The scratch must outlive the calls that follow it: the generators keep it for the whole of the
- * move (or the spawn search), and it lives on the stack of whichever of the world's functions
- * is making the world. Passing NULL (as the world does when it is done) makes a stray call
- * fault at once instead of quietly writing through a dead pointer. */
-__attribute__((noinline)) void gen_scratch(void *buf) { U = buf; }
-/* GEN_SCRATCH (gen.h) is the size callers give it: keep the two together */
-_Static_assert(GEN_SCRATCH == sizeof(GenScratch), "GEN_SCRATCH must match GenScratch");
-#define canyon_w (U->x.canyon_w)
-#define big_list (U->x.big_list)
+} U;
+#define canyon_w (U.x.canyon_w)
+#define big_list (U.x.big_list)
 
 /* ======================================================================== */
 /* Terrain                                                                   */
@@ -1915,13 +1759,13 @@ static void chunk_biomes(int cx, int cz) {
         bg_z = z0 - 4;
         bg_seed = g_seed;
         bg_ok = 1;
-        lay_mem = U->lay + BG_W * BG_W;
+        lay_mem = U.lay + BG_W * BG_W;
         lay_cap = LAY_INTS - BG_W * BG_W;
         lay_top = 0;
-        layers_rivermix(bg_x, bg_z, BG_W, BG_W, U->lay);
-        for (int i = 0; i < BG_W * BG_W; i++) bgrid[i] = (uint8_t)U->lay[i];
+        layers_rivermix(bg_x, bg_z, BG_W, BG_W, U.lay);
+        for (int i = 0; i < BG_W * BG_W; i++) bgrid[i] = (uint8_t)U.lay[i];
     }
-    i32 *rm = U->lay;
+    i32 *rm = U.lay;
     for (int j = 0; j < 10; j++)
         for (int i = 0; i < 10; i++) rm[i + j * 10] = bgrid[(x0 - bg_x + i) + (z0 - bg_z + j) * BG_W];
     for (int i = 0; i < 100; i++) cb4[i] = (uint8_t)rm[i];
@@ -1930,7 +1774,7 @@ static void chunk_biomes(int cx, int cz) {
     voronoi(rm + 1 + 10, cx * 4 - 1, cz * 4 - 1, 10, cx * 16, cz * 16, 16, 16, cb16, 16);
 }
 
-static void octave_setup(const Octave *o, i64 off[3]) { perm_build(o->st, U->t.perm, off); }
+static void octave_setup(const Octave *o, i64 off[3]) { perm_build(o->st, U.t.perm, off); }
 
 /* octave o (generator state oc) of a 3D noise over the chunk grid at grid origin (bx, bz):
  * horizontal / vertical sample spacings sxz, sy (Q32), accumulated into acc as perlin3_octave */
@@ -1945,7 +1789,7 @@ HOT static void noise3_octave(const Octave *oc, int o, i64 bx, i64 bz, u64 sxz, 
         coord_split(coord_q32(bz, sxz, o, n, off[2]), &zc[n], &zf[n]);
     }
     for (int n = 0; n < 33; n++) coord_split(coord_q32(0, sy, o, n, off[1]), &yc[n], &yf[n]);
-    perlin3_octave(U->t.perm, acc, need, bit, rng, mul, xc, xf, zc, zf, yc, yf, (float)(1 << o));
+    perlin3_octave(U.t.perm, acc, need, bit, rng, mul, xc, xf, zc, zf, yc, yf, (float)(1 << o));
 }
 
 /* the density's height offset at grid level j2 (ChunkProviderGenerate: d4) */
@@ -1954,14 +1798,14 @@ INLINE float dens_offset(int j2, float d3, float d2) {
     return d4 < 0.0f ? d4 * 4.0f : d4;
 }
 
-/* noise grid for chunk (cx, cz) -> U->t.grid holds the 5x5x33 densities.
+/* noise grid for chunk (cx, cz) -> U.t.grid holds the 5x5x33 densities.
  * The density is lerp(min, max, main) / 512 - offset(y); each limit noise is a sum of 16
  * octaves of amplitude 2^o whose values are within [-2, 2] (gradient dots of fractions,
  * lerped), so the noise part is within +-256. Grid points where offset(y) alone decides the
  * sign for every cell around them do not need any noise: they get +-1 instead (cells whose
  * 8 corners all agree interpolate to the same sign whatever the values). */
 HOT static void chunk_density(int cx, int cz) {
-    TerrainScratch *T = &U->t;
+    TerrainScratch *T = &U.t;
     int xc[5], zc[5];
     float xf[5], zf[5];
     i64 off[3];
@@ -2109,9 +1953,9 @@ HOT static void chunk_density(int cx, int cz) {
     }
 }
 
-/* surface depth noise (NoiseGenerator3, 4 octaves) for chunk -> U->t.surf[z*16+x] */
+/* surface depth noise (NoiseGenerator3, 4 octaves) for chunk -> U.t.surf[z*16+x] */
 static void chunk_surface_noise(int cx, int cz) {
-    TerrainScratch *T = &U->t;
+    TerrainScratch *T = &U.t;
     i64 off[3];
     memset(T->surf, 0, sizeof T->surf);
     for (int o = 0; o < 4; o++) {
@@ -2167,7 +2011,7 @@ typedef struct {
     float temp;
 } SurfState;
 
-INLINE int surf_step(SurfState *s, uint16_t *col, int y) {
+INLINE int surf_step(SurfState *s, uint8_t *col, int y) {
     uint8_t blk = col[y];
     if (blk == B_AIR) {
         s->l = -1;
@@ -2204,20 +2048,7 @@ INLINE int surf_step(SurfState *s, uint16_t *col, int y) {
 /* highest non-air y of the column being built (column_density's result) */
 static int col_top;
 
-/* The top of a column's deepslate, as 1.18 makes the change from stone to deepslate: not a
- * flat line at y = 0 but a random boundary just below it (0 down to -4), so the deep layer
- * starts gradually and a little differently from column to column, and every column is all
- * deepslate by y = -4. The same column keeps the same boundary wherever it is asked. */
-static int deepslate_top(int x, int z) {
-    uint32_t h = (uint32_t)x * 2654435761u + (uint32_t)z * 40503u;
-    h = (h ^ (h >> 15)) * 2246822519u;
-    h ^= h >> 13;
-    return -(int)(h % 5u);   /* 0, -1, -2, -3 or -4: all deepslate by -4 */
-}
-/* the column being built's deepslate_top, for build_default/build_mesa (they have no x, z) */
-static int col_dtop;
-
-HOT static void build_default(uint16_t *col, const Biome *b, JRand *r, float noise, uint8_t top0, uint8_t fill0) {
+HOT static void build_default(uint8_t *col, const Biome *b, JRand *r, float noise, uint8_t top0, uint8_t fill0) {
     SurfState s;
     s.top0 = s.top = top0;
     s.fill0 = s.fill = fill0;
@@ -2231,20 +2062,22 @@ HOT static void build_default(uint16_t *col, const Biome *b, JRand *r, float noi
     unsigned skip = (unsigned)(255 - y);
     for (; y >= 0; y--) {
         if (y <= 4) {
-            /* 1.8's bedrock floor moved down to the deep layer (gen_slab's WORLD_MIN_Y):
-             * the five draws are kept so the random stream above is unchanged, and the old
-             * floor is deepslate - a clean boundary at y=0, as 1.18's deepslate is */
             jr_skip(r, skip);
             skip = 0;
-            (void)jr_int_i(r, 5);
-            if (y <= col_dtop) col[y] = B_DEEPSLATE;   /* else the stone column_density made */
-            continue;
+            if (y <= jr_int_i(r, 5)) {
+                col[y] = B_BEDROCK;
+                continue;
+            }
         } else {
             skip++;
             uint8_t blk = col[y];
             if ((blk == B_STONE && s.l == 0) || blk == B_WATER) {
                 int y2 = y - 1;
                 /* 4 blocks at a time (col is word aligned) */
+                u32 w4 = blk * 0x01010101u, word;
+                while (y2 > 7 && (y2 & 3) != 3 && col[y2] == blk) y2--;
+                if ((y2 & 3) == 3)
+                    while (y2 > 7 && (memcpy(&word, col + y2 - 3, 4), word == w4)) y2 -= 4;
                 while (y2 > 4 && col[y2] == blk) y2--;
                 skip += (unsigned)(y - 1 - y2);
                 y = y2 + 1;
@@ -2262,7 +2095,7 @@ HOT static void build_default(uint16_t *col, const Biome *b, JRand *r, float noi
 
 /* BiomeMesa band at (x, y): aD[(y + round(aH(x/512, x/512) * 2) + 64) % 64] */
 static uint8_t mesa_band(int x, int y) {
-    const uint8_t *P = U->t.mperm[0];
+    const uint8_t *P = U.t.mperm[0];
     float xf = (float)(x & 511) / 512.0f;
     float v = simplex2(P, x >> 9, xf, x >> 9, xf) * 2.0f;
     int l = (int)floor_f(v + 0.5f);
@@ -2270,9 +2103,9 @@ static uint8_t mesa_band(int x, int y) {
 }
 
 static void mesa_prepare(void) {
-    if (U->t.mesa_ready) return;
-    for (int i = 0; i < 6; i++) perm_build(oc_mesa[i].st, U->t.mperm[i], 0);
-    U->t.mesa_ready = 1;
+    if (U.t.mesa_ready) return;
+    for (int i = 0; i < 6; i++) perm_build(oc_mesa[i].st, U.t.mperm[i], 0);
+    U.t.mesa_ready = 1;
 }
 
 /* NoiseGenerator3.a(x, z) (single point, no offsets) over n octaves with perms P[o] */
@@ -2290,18 +2123,18 @@ static float simplex_oct_point(int n, uint8_t (*P)[256], i32 xi, float xf, i32 z
     return sum;
 }
 
-static void build_mesa(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
+static void build_mesa(uint8_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
     mesa_prepare();
     float d1 = 0.0f;
     if (b->mode & 1) { /* bryce */
         int k = (bx & -16) + (bz & 15), l = (bz & -16) + (bx & 15);
         /* aF: 4 octaves at (k*0.25, l*0.25): perms mperm[0..3] (aF[0] == aH) */
-        uint8_t(*P)[256] = U->t.mperm;
+        uint8_t(*P)[256] = U.t.mperm;
         float d2 = simplex_oct_point(4, P, k, 0.0f, l, 0.0f, 2);
         float an = noise < 0 ? -noise : noise;
         if (an < d2) d2 = an;
         if (d2 > 0.0f) {
-            float d4 = simplex_oct_point(1, &U->t.mperm[4], k, 0.0f, l, 0.0f, 9);
+            float d4 = simplex_oct_point(1, &U.t.mperm[4], k, 0.0f, l, 0.0f, 9);
             if (d4 < 0) d4 = -d4;
             d1 = d2 * d2 * 2.5f;
             float c = d4 * 50.0f;
@@ -2323,13 +2156,12 @@ static void build_mesa(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, 
     for (int y = 255; y >= 0; y--) {
         if (col[y] == B_AIR && y < d1i) col[y] = B_STONE;
         if (y <= 4) {
-            /* as build_default: the bedrock draw is kept, the old floor is deepslate now
-             * (its bedrock lives in gen_slab's deep layer) */
             jr_skip(r, skip);
             skip = 0;
-            (void)jr_int(r, 5);
-            if (y <= col_dtop) col[y] = B_DEEPSLATE;   /* else the stone it built */
-            continue;
+            if (y <= jr_int(r, 5)) {
+                col[y] = B_BEDROCK;
+                continue;
+            }
         } else {
             skip++;
         }
@@ -2369,7 +2201,7 @@ static void build_mesa(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, 
     (void)top;
 }
 
-static void build_surface(uint16_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
+static void build_surface(uint8_t *col, const Biome *b, JRand *r, int bx, int bz, float noise) {
     uint8_t top = b->top, fill = b->filler;
     switch (b->surf) {
     case S_HILLS:
@@ -2426,7 +2258,7 @@ static void build_surface(uint16_t *col, const Biome *b, JRand *r, int bx, int b
 INLINE int is_liquid_top(int blk) { return blk == B_WATER || blk == B_ICE || blk == B_LILY_PAD || blk == B_LAVA; }
 
 /* column summary of the undecorated, cave-less terrain (see ColSum) */
-HOT static void column_summary(const uint16_t *col, ColSum *s) {
+HOT static void column_summary(const uint8_t *col, ColSum *s) {
     int y = col_top + 2 < 255 ? col_top + 2 : 255; /* builders add at most a lily pad above it */
     while (y > 0 && col[y] == B_AIR) y--;
     int lily = 0;
@@ -2464,11 +2296,11 @@ HOT static void column_summary(const uint16_t *col, ColSum *s) {
 }
 
 /* Sign classes of the density grid for column_density: for each of the 4 x 4 grid cells and
- * each level, 1 if its four corners are > 0, 2 if they are all <= 0, else 0 (kept in U->t.cls,
+ * each level, 1 if its four corners are > 0, 2 if they are all <= 0, else 0 (kept in U.t.cls,
  * free after chunk_density). Bilinear values between corners of one sign keep it. */
 static void column_signs(void) {
-    const float *g = U->t.grid;
-    uint8_t *sg = U->t.cls;
+    const float *g = U.t.grid;
+    uint8_t *sg = U.t.cls;
     for (int gx = 0; gx < 4; gx++)
         for (int gz = 0; gz < 4; gz++) {
             const float *c00 = g + (gx * 5 + gz) * 33, *c01 = c00 + 33, *c10 = c00 + 165, *c11 = c00 + 198;
@@ -2484,30 +2316,30 @@ static void column_signs(void) {
  * two ends have the same sign are filled at once (the interpolated values between them keep
  * it: their distance to 0 is at least an eighth of an end's, far above rounding); levels are
  * interpolated only for the other cells. Returns the highest non-air y. */
-HOT static int column_density(int x, int z, uint16_t *col) {
-    const float *g = U->t.grid;
+HOT static int column_density(int x, int z, uint8_t *col) {
+    const float *g = U.t.grid;
     int gx = x >> 2, gz = z >> 2;
     float fx = (float)(x & 3) * 0.25f, fz = (float)(z & 3) * 0.25f;
     const float *c00 = g + (gx * 5 + gz) * 33, *c01 = g + (gx * 5 + gz + 1) * 33;
     const float *c10 = g + ((gx + 1) * 5 + gz) * 33, *c11 = g + ((gx + 1) * 5 + gz + 1) * 33;
-    const uint8_t *sg = U->t.cls + (gx * 4 + gz) * 33;
+    const uint8_t *sg = U.t.cls + (gx * 4 + gz) * 33;
     float v0 = 0.0f, v1;
     int have = -1; /* level whose value v0 holds */
     int top = 0;
     for (int k2 = 0; k2 < 32; k2++) {
         int y = k2 * 8;
         if (sg[k2] == 1 && sg[k2 + 1] == 1) {
-            for (int q = 0; q < 8; q++) col[y + q] = B_STONE;
+            memset(col + y, B_STONE, 8);
             top = y + 7;
             continue;
         }
         if (sg[k2] == 2 && sg[k2 + 1] == 2) {
             if (y >= SEA) {
-                for (int q = 0; q < 8; q++) col[y + q] = B_AIR;
+                memset(col + y, B_AIR, 8);
                 continue;
             }
             if (y + 8 <= SEA) {
-                for (int q = 0; q < 8; q++) col[y + q] = B_WATER;
+                memset(col + y, B_WATER, 8);
                 top = y + 7;
                 continue;
             }
@@ -2530,17 +2362,17 @@ HOT static int column_density(int x, int z, uint16_t *col) {
         v0 = v1;
         have = k2 + 1;
         if (base > 0.0f && v1 > 0.0f) {
-            for (int q = 0; q < 8; q++) col[y + q] = B_STONE;
+            memset(col + y, B_STONE, 8);
             top = y + 7;
             continue;
         }
         if (base <= 0.0f && v1 <= 0.0f) {
             if (y >= SEA) {
-                for (int q = 0; q < 8; q++) col[y + q] = B_AIR;
+                memset(col + y, B_AIR, 8);
                 continue;
             }
             if (y + 8 <= SEA) {
-                for (int q = 0; q < 8; q++) col[y + q] = B_WATER;
+                memset(col + y, B_WATER, 8);
                 top = y + 7;
                 continue;
             }
@@ -2558,22 +2390,21 @@ HOT static int column_density(int x, int z, uint16_t *col) {
  * the column summaries to sum (if sum). Also leaves the biomes in cb4/cb16. */
 HOT static void chunk_terrain(int cx, int cz, uint8_t *out, int y0, int h, ColSum *sum) {
     chunk_biomes(cx, cz);
-    U->t.mesa_ready = 0;
+    U.t.mesa_ready = 0;
     chunk_density(cx, cz);
     column_signs();
     chunk_surface_noise(cx, cz);
     JRand r;
     jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL));
-    uint16_t *col = U->t.col;
+    uint8_t *col = U.t.col;
     for (int z = 0; z < 16; z++)
         for (int x = 0; x < 16; x++) {
             col_top = column_density(x, z, col);
-            col_dtop = deepslate_top(cx * 16 + x, cz * 16 + z);   /* the column's own deepslate top */
             const Biome *b = bio(cb16[x + z * 16]);
-            build_surface(col, b, &r, cx * 16 + z, cz * 16 + x, U->t.surf[z * 16 + x]);
+            build_surface(col, b, &r, cx * 16 + z, cz * 16 + x, U.t.surf[z * 16 + x]);
             if (sum) column_summary(col, &sum[x + z * 16]);
             if (out)
-                for (int y = 0; y < h; y++) b9_set(out, y * 256 + z * 16 + x, col[y0 + y]);
+                for (int y = 0; y < h; y++) out[y * 256 + z * 16 + x] = col[y0 + y];
         }
 }
 
@@ -2593,10 +2424,10 @@ enum {
     BF_LIQUID = 128,
     BF_RPLANT = 256   /* Material.REPLACEABLE_PLANT (tall grass, ferns, double plants, vines, dead bush) */
 };
-static uint16_t bflags[NSTATES];
+static uint16_t bflags[256];
 
 static void bflags_init(void) {
-    for (int i = 0; i < NSTATES; i++) bflags[i] = BF_OPAQUE | BF_SOLID | BF_BUILD | BF_CUBE;
+    for (int i = 0; i < 256; i++) bflags[i] = BF_OPAQUE | BF_SOLID | BF_BUILD | BF_CUBE;
     bflags[B_AIR] = 0;
     bflags[B_WATER] = bflags[B_FLOWING_WATER] = BF_OPAQUE | BF_LIQUID;
     bflags[B_LAVA] = bflags[B_FLOWING_LAVA] = BF_LIQUID;
@@ -2619,11 +2450,6 @@ static void bflags_init(void) {
                                      B_LARGE_FERN_UPPER, B_ROSE_BUSH_LOWER, B_ROSE_BUSH_UPPER, B_PEONY_LOWER,
                                      B_PEONY_UPPER};
     for (unsigned i = 0; i < sizeof plants; i++) bflags[plants[i]] = BF_PLANT;
-    /* the nether's growth (1.16): the same plants as the overworld's, never solid,
-     * replaceable, and no place for a caller of replaceable() to trip on them */
-    static const uint16_t nplants[] = {B_CRIMSON_FUNGUS, B_WARPED_FUNGUS, B_CRIMSON_ROOTS, B_WARPED_ROOTS,
-                                       B_NETHER_SPROUTS, B_WEEPING_VINES, B_TWISTING_VINES};
-    for (unsigned i = 0; i < sizeof nplants / sizeof nplants[0]; i++) bflags[nplants[i]] = BF_PLANT | BF_RPLANT;
     static const uint8_t rplants[] = {B_DEAD_SHRUB, B_TALL_GRASS, B_FERN, B_DEAD_BUSH, B_VINE, B_SUNFLOWER_LOWER,
                                       B_SUNFLOWER_UPPER, B_LILAC_LOWER, B_LILAC_UPPER, B_DOUBLE_GRASS_LOWER,
                                       B_DOUBLE_GRASS_UPPER, B_LARGE_FERN_LOWER, B_LARGE_FERN_UPPER, B_ROSE_BUSH_LOWER,
@@ -2640,8 +2466,6 @@ static void bflags_init(void) {
     bflags[B_PUMPKIN] = BF_OPAQUE | BF_SOLID | BF_BUILD | BF_CUBE;
     bflags[B_SANDSTONE_SLAB] = BF_SOLID | BF_BUILD;
     bflags[B_STONE_SLAB] = BF_SOLID | BF_BUILD;
-    bflags[B_STONE_PRESSURE_PLATE] = 0; /* thin plate: no solidity, no opacity (like snow) */
-    bflags[B_STONE_PRESSURE_PLATE_DOWN] = 0;   /* and the pressed state is the same plate */
 }
 
 #define IS_AIR(b) ((b) == B_AIR)
@@ -2725,7 +2549,7 @@ INLINE int mask_index(int X, int Y, int Z) {
 HOT static uint8_t cv_get(int x, int y, int z) {
     if (y < 0 || y > 255) return B_AIR;
     if (cv->mode == CAVE_OUT) {
-        if (y >= cv->y0 && y < cv->y0 + cv->h) return b9_get(cv->out, (y - cv->y0) * 256 + z * 16 + x);
+        if (y >= cv->y0 && y < cv->y0 + cv->h) return cv->out[(y - cv->y0) * 256 + z * 16 + x];
         return sum_block(&cv->sum[x + z * 16], y);
     }
     int X = cv->tcx * 16 + x, Z = cv->tcz * 16 + z;
@@ -2749,7 +2573,7 @@ static int crep_dyn, crep_lo;
 HOT static void cv_set(int x, int y, int z, uint8_t b) {
     if (y < 0 || y > 255) return;
     if (cv->mode == CAVE_OUT) {
-        if (y >= cv->y0 && y < cv->y0 + cv->h) b9_set(cv->out, (y - cv->y0) * 256 + z * 16 + x, b);
+        if (y >= cv->y0 && y < cv->y0 + cv->h) cv->out[(y - cv->y0) * 256 + z * 16 + x] = b;
         if (cave_track_on) cave_track(x, y, z, b);
         return;
     }
@@ -2830,7 +2654,7 @@ static int water_col(int x, int z, int a, int b) {
     /* in the slab */
     lo = a > s0 ? a : s0, hi = b < s1 ? b : s1;
     for (int y = lo; y <= hi; y++) {
-        uint8_t blk = (uint8_t)b9_get(cv->out, (y - s0) * 256 + z * 16 + x);
+        uint8_t blk = cv->out[(y - s0) * 256 + z * 16 + x];
         if (blk == B_WATER || blk == B_FLOWING_WATER) return 1;
     }
     return 0;
@@ -2989,11 +2813,11 @@ typedef struct {
     uint16_t act;
 } Tunnel;
 #define TSTACK 4 /* branches (width < 1) never branch again: depth <= 2 */
+static Tunnel tstack[TSTACK];
 
 /* Walks one cave tunnel (WorldGenCaves.a, 13-argument version) and its branches. */
 NOINLINE HOT static void cave_tunnel(i64 seed0, Q32 x0, Q32 y0, Q32 z0, float f0, float f10, float f20, int l0, int i10, int room0,
                         unsigned act0) {
-    Tunnel tstack[TSTACK];   /* here on the stack: the walk is the only user */
     int sp = 0;
     tstack[sp++] = (Tunnel){seed0, x0, y0, z0, f0, f10, f20, (int16_t)l0, (int16_t)i10, (uint8_t)room0, (uint16_t)act0};
     while (sp > 0) {
@@ -3341,9 +3165,6 @@ static SumEntry *sumc = sumc_mem;
 static SumEntry *sumc;   /* on main's stack (gen_set_cache): calculator software gives apps 32 KB of it apart */
 void gen_set_cache(void *mem) { sumc = mem; }
 #endif
-
-#include "gen_end.h"   /* the End's terrain (gen_end.h) */
-
 static uint32_t sum_clock;
 
 static SumEntry *sum_find(int cx, int cz) {
@@ -3405,9 +3226,7 @@ static uint8_t *c_out;
 static int c_y0, c_h, c_cx, c_cz;
 /* (c_top, c_sl: declared with the caves, which keep them right) */
 
-#define PV (U->p.v)
-#define QMASK (U->p.qmask)
-#define QMASK_SIZE ((int)sizeof((GenScratch *)0)->p.qmask)
+#define PV (U.p.v)
 
 static inline int lake_bit(const LakeRec *L, int x, int y, int z) {
     int i = (x * 16 + z) * 8 + y;
@@ -3439,7 +3258,7 @@ HOT static uint8_t vget(int X, int Y, int Z) {
     if (!s) return Y < SEA ? B_STONE : B_AIR;
     if (Y > cs_top(s)) return B_AIR;
     if (v->qon && X >= v->qx0 && X < v->qx1 && Y >= v->qy0 && Y < v->qy1 && Z >= v->qz0 && Z < v->qz1) {
-        uint8_t m = U->p.qmask[((Y - v->qy0) * (v->qz1 - v->qz0) + (Z - v->qz0)) * (v->qx1 - v->qx0) + (X - v->qx0)];
+        uint8_t m = U.p.qmask[((Y - v->qy0) * (v->qz1 - v->qz0) + (Z - v->qz0)) * (v->qx1 - v->qx0) + (X - v->qx0)];
         if (m) return (uint8_t)(m - 1);
     }
     return sum_block(s, Y);
@@ -3475,7 +3294,7 @@ enum {
     R_NOTCHEST, R_WALL, R_SAND_SANDY
 };
 
-static int rule_ok(int rule, int b) {
+static int rule_ok(int rule, uint8_t b) {
     switch (rule) {
     case R_ALWAYS: return 1;
     case R_TREE: return b == B_AIR || IS_LEAVES(b) || IS_RPLANT(b);
@@ -3507,15 +3326,14 @@ static void c_lower_top(int i, int y) {
     const ColSum *s = &nb[1][1]->s[i];
     while (y > 0) {
         y--;
-        uint8_t b = (y >= c_y0 && y < c_y0 + c_h) ? (uint8_t)b9_get(c_out, (y - c_y0) * 256 + z * 16 + x)
-                                                    : sum_block(s, y);
+        uint8_t b = (y >= c_y0 && y < c_y0 + c_h) ? c_out[(y - c_y0) * 256 + z * 16 + x] : sum_block(s, y);
         if (b != B_AIR) break;
     }
     c_top[i] = (uint8_t)y;
 }
 
 /* chunk C bookkeeping for a block that was (or, out of the y range, presumably was) written */
-static void c_track(int i, int Y, int b) {
+static void c_track(int i, int Y, uint8_t b) {
     if (b == B_AIR) {
         if (Y == c_top[i]) c_lower_top(i, Y);
         if (Y == c_sl[i]) c_sl[i] = c_top[i] < c_sl[i] ? c_top[i] : (uint8_t)(Y - 1);
@@ -3528,7 +3346,7 @@ static void c_track(int i, int Y, int b) {
 static int put_skip_c; /* set: put() updates the view only */
 
 /* writes block b at world (X, Y, Z): into the view, and into C if the rule holds there */
-static void put(int X, int Y, int Z, int b, int rule) {
+static void put(int X, int Y, int Z, uint8_t b, int rule) {
     if (Y < 0 || Y > 255) return;
     View *v = &PV;
     int lx = X - v->ox, lz = Z - v->oz;
@@ -3570,21 +3388,21 @@ static void put(int X, int Y, int Z, int b, int rule) {
     if (!put_skip_c && cx >= 0 && cx < 16 && cz >= 0 && cz < 16) {
         int i = cz * 16 + cx;
         if (Y >= c_y0 && Y < c_y0 + c_h) {
-            int o = (Y - c_y0) * 256 + i;
-            if (!rule_ok(rule, b9_get(c_out, o))) return;
-            b9_set(c_out, o, b);
+            uint8_t *o = &c_out[(Y - c_y0) * 256 + i];
+            if (!rule_ok(rule, *o)) return;
+            *o = b;
         }
         c_track(i, Y, b);
     }
 }
 
 /* only into C (features whose result never feeds a later decision: ores...) */
-static void put_c(int X, int Y, int Z, int b, int rule) {
+static void put_c(int X, int Y, int Z, uint8_t b, int rule) {
     int cx = X - c_cx * 16, cz = Z - c_cz * 16;
     if (cx < 0 || cx > 15 || cz < 0 || cz > 15 || Y < c_y0 || Y >= c_y0 + c_h) return;
-    int o = (Y - c_y0) * 256 + cz * 16 + cx;
-    if (rule_ok(rule, b9_get(c_out, o))) {
-        b9_set(c_out, o, b);
+    uint8_t *o = &c_out[(Y - c_y0) * 256 + cz * 16 + cx];
+    if (rule_ok(rule, *o)) {
+        *o = b;
         c_track(cz * 16 + cx, Y, b);
     }
 }
@@ -3593,7 +3411,7 @@ static void put_c(int X, int Y, int Z, int b, int rule) {
 static uint8_t cget(int X, int Y, int Z) {
     int cx = X - c_cx * 16, cz = Z - c_cz * 16;
     if (cx >= 0 && cx < 16 && cz >= 0 && cz < 16 && Y >= c_y0 && Y < c_y0 + c_h)
-        return (uint8_t)b9_get(c_out, (Y - c_y0) * 256 + cz * 16 + cx);
+        return c_out[(Y - c_y0) * 256 + cz * 16 + cx];
     return vget(X, Y, Z);
 }
 
@@ -3622,11 +3440,11 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
     View *v = &PV;
     if (y0 < 0) y0 = 0;
     if (y1 > 256) y1 = 256;
-    if ((x1 - x0) * (y1 - y0) * (z1 - z0) > QMASK_SIZE || y1 <= y0) {
+    if ((x1 - x0) * (y1 - y0) * (z1 - z0) > (int)sizeof U.p.qmask || y1 <= y0) {
         v->qon = 0;
         return;
     }
-    memset(QMASK, 0, QMASK_SIZE);
+    memset(U.p.qmask, 0, sizeof U.p.qmask);
     CaveCtx ctx[4];
     unsigned tmask = 0;
     int n = 0;
@@ -3643,7 +3461,7 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
             c->by1 = y1;
             c->bz0 = z0;
             c->bz1 = z1;
-            c->mask = U->p.qmask;
+            c->mask = U.p.qmask;
             c->tcx = tcx;
             c->tcz = tcz;
             c->sum = nb[dz][dx]->s;
@@ -3674,15 +3492,10 @@ static void cave_query(int x0, int y0, int z0, int x1, int y1, int z1) {
  * gen_slab calls whose chunk it writes into, and each time these tests give the same result;
  * a failed one draws the same random numbers whatever made it fail. So the outcomes are kept
  * per population and a known failure only makes its draws. */
-/* dungeon tries per population: WorldGenDungeons's eight, more here as a dungeon is the one
- * place a monster spawner comes from and they were too rare to find */
-#define DUNG_TRIES 96
 typedef struct {
     int px, pz;
-    uint8_t valid, lakes, temple; /* bit set: lake (0 water, 1 lava) placed; temple: 1 placed */
-    uint8_t dungeons[(DUNG_TRIES + 7) / 8];   /* bit set: dungeon try passed, one bit per try */
+    uint8_t valid, lakes, dungeons; /* bit set: lake (0 water, 1 lava) placed, dungeon attempt passed */
 } PopMemo;
-_Static_assert(DUNG_TRIES <= 8 * sizeof((PopMemo *)0)->dungeons, "a bit is kept per dungeon try");
 #define NPMEMO 16
 static PopMemo pmemo[NPMEMO];
 static int pmemo_next;
@@ -3699,7 +3512,7 @@ static void pmemo_begin(int px, int pz) {
         }
     pm = &pmemo[pmemo_next];
     pmemo_next = (pmemo_next + 1) % NPMEMO;
-    *pm = (PopMemo){px, pz, 0, 0, 0, {0}};
+    *pm = (PopMemo){px, pz, 0, 0, 0};
     pm_known = 0;
 }
 
@@ -3846,7 +3659,7 @@ static void dungeon_loot(void) {
 static void dungeon(int X, int Y, int Z) {
     int i = RI(2) + 2, j = -i - 1, k = i + 1;
     int l = RI(2) + 2, i1 = -l - 1, j1 = l + 1;
-    if (pm_known && !(pm->dungeons[dung_idx >> 3] >> (dung_idx & 7) & 1)) return; /* failed before */
+    if (pm_known && !(pm->dungeons >> dung_idx & 1)) return; /* failed before */
     /* floor and ceiling must be buildable: caves only remove blocks, so test the view first */
     for (int a = j; a <= k; a++)
         for (int c = i1; c <= j1; c++)
@@ -3863,15 +3676,11 @@ static void dungeon(int X, int Y, int Z) {
                 }
                 if ((a == j || a == k || c == i1 || c == j1) && b == 0 && m == B_AIR && v_empty(X + a, Y + 1, Z + c)) ++k1;
             }
-    /* the population's first try makes its dungeon even with no way in: the ground about it is
-     * solid, so about one chunk in six has a sealed room of its own that nothing walks into
-     * (the opening count the other tries ask for is WorldGenDungeons's, one to five onto a
-     * cave, which is where a findable dungeon comes from) */
-    if (k1 > 5 || (k1 < 1 && dung_idx != 0)) {
+    if (k1 < 1 || k1 > 5) {
         PV.qon = 0;
         return;
     }
-    pm->dungeons[dung_idx >> 3] |= (uint8_t)(1u << (dung_idx & 7));
+    pm->dungeons |= (uint8_t)(1 << dung_idx);
     for (int a = j; a <= k; a++)
         for (int b = 3; b >= -1; b--)
             for (int c = i1; c <= j1; c++) {
@@ -3909,11 +3718,7 @@ static void dungeon(int X, int Y, int Z) {
             }
         }
     put(X, Y, Z, B_MOB_SPAWNER, R_ALWAYS);
-    /* WorldGenDungeons.a: the mob its spawner is set to (half skeletons, a quarter zombies, a
-     * quarter spiders). The generator has no world to keep that in, so whoever has one takes it
-     * from here; the draw is one of the population's either way. */
-    int spawner_mob = RI(4);
-    if (gen_spawner_hook) gen_spawner_hook(X, Y, Z, spawner_mob);
+    RI(4); /* mob type */
     PV.qon = 0;
 }
 
@@ -3971,15 +3776,15 @@ HOT static void minable(int X, int Y, int Z, int n, uint8_t blk) {
         for (int l1 = j; l1 <= i1; l1++) {
             float d12 = ((float)l1 + 0.5f - d6) / h, q12 = d12 * d12;
             if (q12 >= 1.0f) continue;
-            int colp = ((bx + l1) & 15);
+            uint8_t *colp = c_out + ((bx + l1) & 15);
             for (int i2 = k; i2 <= j1; i2++) {
                 float d13 = ((float)i2 + 0.5f - d7) / h, q = q12 + d13 * d13;
                 if (q >= 1.0f) continue;
-                int row = (i2 - c_y0) * 256 + colp;
+                uint8_t *row = colp + (i2 - c_y0) * 256;
                 for (int j2 = l; j2 <= k1; j2++)
                     if (q + q14[j2 - l] < 1.0f) {
-                        int o = row + ((bz + j2) & 15) * 16;
-                        if (b9_get(c_out, o) == B_STONE) b9_set(c_out, o, blk);
+                        uint8_t *o = row + ((bz + j2) & 15) * 16;
+                        if (*o == B_STONE) *o = blk;
                     }
             }
         }
@@ -4042,34 +3847,31 @@ static void tree_dirt(int x, int y, int z) {
 }
 
 /* The current tree's own blocks around its trunk (7x7 columns, 32 high): vine passes and
- * trunk vines read them. 0 = untouched, else block id + 1. Only trees use it, so tree_grow
- * keeps it on its stack and passes it down (tree_grow, below). */
-#define TOV_W 7
-#define TOV_H 32
+ * trunk vines read them. 0 = untouched, else block id + 1. */
+static uint8_t tov[7 * 7 * 32];
 static int tov_on, tov_x, tov_y, tov_z;
 
-static uint16_t tget(const uint16_t *tov, int x, int y, int z) {
+static uint8_t tget(int x, int y, int z) {
     if (tov_on) {
         int dx = x - tov_x + 3, dz = z - tov_z + 3, dy = y - tov_y;
-        if (dx >= 0 && dx < TOV_W && dz >= 0 && dz < TOV_W && dy >= 0 && dy < TOV_H) {
-            uint16_t m = tov[(dy * TOV_W + dz) * TOV_W + dx];
+        if (dx >= 0 && dx < 7 && dz >= 0 && dz < 7 && dy >= 0 && dy < 32) {
+            uint8_t m = tov[(dy * 7 + dz) * 7 + dx];
             if (m) return (uint8_t)(m - 1);
         }
     }
     return vget(x, y, z);
 }
 
-static void tput(uint16_t *tov, int x, int y, int z, uint8_t b, int rule) {
+static void tput(int x, int y, int z, uint8_t b, int rule) {
     if (tov_on) {
         int dx = x - tov_x + 3, dz = z - tov_z + 3, dy = y - tov_y;
-        if (dx >= 0 && dx < TOV_W && dz >= 0 && dz < TOV_W && dy >= 0 && dy < TOV_H)
-            tov[(dy * TOV_W + dz) * TOV_W + dx] = (uint16_t)(b + 1);
+        if (dx >= 0 && dx < 7 && dz >= 0 && dz < 7 && dy >= 0 && dy < 32) tov[(dy * 7 + dz) * 7 + dx] = (uint8_t)(b + 1);
     }
     put(x, y, z, b, rule);
 }
 
-static void tov_begin(uint16_t *tov, int x, int y, int z) {
-    memset(tov, 0, TOV_W * TOV_W * TOV_H);
+static void tov_begin(int x, int y, int z) {
+    memset(tov, 0, sizeof tov);
     tov_on = 1;
     tov_x = x;
     tov_y = y;
@@ -4079,9 +3881,9 @@ static void tov_begin(uint16_t *tov, int x, int y, int z) {
 static const int8_t HDIR[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}}; /* N, E, S, W */
 
 /* hanging vine (WorldGenTrees.b / WorldGenSwampTree.a) */
-static void vine_hang(uint16_t *tov, int x, int y, int z) {
-    tput(tov, x, y, z, B_VINE, R_AIR);
-    for (int i = 4; --y, tget(tov, x, y, z) == B_AIR && i > 0; --i) tput(tov, x, y, z, B_VINE, R_AIR);
+static void vine_hang(int x, int y, int z) {
+    tput(x, y, z, B_VINE, R_AIR);
+    for (int i = 4; --y, tget(x, y, z) == B_AIR && i > 0; --i) tput(x, y, z, B_VINE, R_AIR);
 }
 
 /* WorldGenTrees (oak, small jungle): base height c, vines */
@@ -4114,7 +3916,7 @@ static int space_ok(int x, int z, int rmax, const int lo[3], int yhi, int kind) 
     return 1;
 }
 
-static int gen_trees(uint16_t *tov, int x, int y, int z, int c, uint8_t log, uint8_t leaf, int vines) {
+static int gen_trees(int x, int y, int z, int c, uint8_t log, uint8_t leaf, int vines) {
     int i = RI(3) + c;
     if (y < 1 || y + i + 1 > 256) return 0;
     {
@@ -4123,7 +3925,7 @@ static int gen_trees(uint16_t *tov, int x, int y, int z, int c, uint8_t log, uin
     }
     uint8_t below = vget(x, y - 1, z);
     if (!((below == B_GRASS || IS_DIRTISH(below) || below == B_FARMLAND) && y < 256 - i - 1)) return 0;
-    if (vines) tov_begin(tov, x, y, z);
+    if (vines) tov_begin(x, y, z);
     tree_dirt(x, y - 1, z);
     for (int j = y - 3 + i; j <= y + i; j++) {
         int k = j - (y + i), i1 = 1 - k / 2;
@@ -4132,19 +3934,19 @@ static int gen_trees(uint16_t *tov, int x, int y, int z, int c, uint8_t log, uin
             for (int k1 = z - i1; k1 <= z + i1; k1++) {
                 int i2 = k1 - z;
                 if ((j1 < 0 ? -j1 : j1) != i1 || (i2 < 0 ? -i2 : i2) != i1 || (RI(2) != 0 && k != 0)) {
-                    if (TREE_REPL(tget(tov, l1, j, k1))) tput(tov, l1, j, k1, leaf, R_TREE);
+                    if (TREE_REPL(tget(l1, j, k1))) tput(l1, j, k1, leaf, R_TREE);
                 }
             }
         }
     }
     for (int j = 0; j < i; j++) {
-        if (!TREE_REPL(tget(tov, x, y + j, z))) continue;
-        tput(tov, x, y + j, z, log, R_TREE);
+        if (!TREE_REPL(tget(x, y + j, z))) continue;
+        tput(x, y + j, z, log, R_TREE);
         if (vines && j > 0) {
-            if (RI(3) > 0 && tget(tov, x - 1, y + j, z) == B_AIR) tput(tov, x - 1, y + j, z, B_VINE, R_AIR);
-            if (RI(3) > 0 && tget(tov, x + 1, y + j, z) == B_AIR) tput(tov, x + 1, y + j, z, B_VINE, R_AIR);
-            if (RI(3) > 0 && tget(tov, x, y + j, z - 1) == B_AIR) tput(tov, x, y + j, z - 1, B_VINE, R_AIR);
-            if (RI(3) > 0 && tget(tov, x, y + j, z + 1) == B_AIR) tput(tov, x, y + j, z + 1, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(x - 1, y + j, z) == B_AIR) tput(x - 1, y + j, z, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(x + 1, y + j, z) == B_AIR) tput(x + 1, y + j, z, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(x, y + j, z - 1) == B_AIR) tput(x, y + j, z - 1, B_VINE, R_AIR);
+            if (RI(3) > 0 && tget(x, y + j, z + 1) == B_AIR) tput(x, y + j, z + 1, B_VINE, R_AIR);
         }
     }
     if (vines) {
@@ -4152,11 +3954,11 @@ static int gen_trees(uint16_t *tov, int x, int y, int z, int c, uint8_t log, uin
             int k = j - (y + i), i1 = 2 - k / 2;
             for (int j1 = x - i1; j1 <= x + i1; j1++)
                 for (int k1 = z - i1; k1 <= z + i1; k1++) {
-                    if (!IS_LEAVES(tget(tov, j1, j, k1))) continue;
-                    if (RI(4) == 0 && tget(tov, j1 - 1, j, k1) == B_AIR) vine_hang(tov, j1 - 1, j, k1);
-                    if (RI(4) == 0 && tget(tov, j1 + 1, j, k1) == B_AIR) vine_hang(tov, j1 + 1, j, k1);
-                    if (RI(4) == 0 && tget(tov, j1, j, k1 - 1) == B_AIR) vine_hang(tov, j1, j, k1 - 1);
-                    if (RI(4) == 0 && tget(tov, j1, j, k1 + 1) == B_AIR) vine_hang(tov, j1, j, k1 + 1);
+                    if (!IS_LEAVES(tget(j1, j, k1))) continue;
+                    if (RI(4) == 0 && tget(j1 - 1, j, k1) == B_AIR) vine_hang(j1 - 1, j, k1);
+                    if (RI(4) == 0 && tget(j1 + 1, j, k1) == B_AIR) vine_hang(j1 + 1, j, k1);
+                    if (RI(4) == 0 && tget(j1, j, k1 - 1) == B_AIR) vine_hang(j1, j, k1 - 1);
+                    if (RI(4) == 0 && tget(j1, j, k1 + 1) == B_AIR) vine_hang(j1, j, k1 + 1);
                 }
         }
         if (RI(5) == 0 && i > 5) {
@@ -4263,7 +4065,7 @@ static int gen_taiga2(int x, int y, int z) {
     return 1;
 }
 
-static int gen_swamp_tree(uint16_t *tov, int x, int y, int z) {
+static int gen_swamp_tree(int x, int y, int z) {
     int i = RI(4) + 5;
     while (IS_WATER(vget(x, y - 1, z))) y--;
     if (y < 1 || y + i + 1 > 256) return 0;
@@ -4283,7 +4085,7 @@ static int gen_swamp_tree(uint16_t *tov, int x, int y, int z) {
     }
     uint8_t below = vget(x, y - 1, z);
     if (!((below == B_GRASS || IS_DIRTISH(below)) && y < 256 - i - 1)) return 0;
-    tov_begin(tov, x, y, z);
+    tov_begin(x, y, z);
     tree_dirt(x, y - 1, z);
     for (int j1 = y - 3 + i; j1 <= y + i; j1++) {
         int k1 = j1 - (y + i), j = 2 - k1 / 2;
@@ -4292,23 +4094,23 @@ static int gen_swamp_tree(uint16_t *tov, int x, int y, int z) {
             for (int i1 = z - j; i1 <= z + j; i1++) {
                 int i2 = i1 - z;
                 if ((l1 < 0 ? -l1 : l1) != j || (i2 < 0 ? -i2 : i2) != j || (RI(2) != 0 && k1 != 0))
-                    if (!IS_CUBE(tget(tov, k, j1, i1))) tput(tov, k, j1, i1, B_LEAVES_OAK, R_NOTCUBE);
+                    if (!IS_CUBE(tget(k, j1, i1))) tput(k, j1, i1, B_LEAVES_OAK, R_NOTCUBE);
             }
         }
     }
     for (int j1 = 0; j1 < i; j1++) {
-        uint8_t b = tget(tov, x, y + j1, z);
-        if (AIR_OR_LEAVES(b) || IS_WATER(b)) tput(tov, x, y + j1, z, B_LOG_OAK, R_ALWAYS);
+        uint8_t b = tget(x, y + j1, z);
+        if (AIR_OR_LEAVES(b) || IS_WATER(b)) tput(x, y + j1, z, B_LOG_OAK, R_ALWAYS);
     }
     for (int j1 = y - 3 + i; j1 <= y + i; j1++) {
         int k1 = j1 - (y + i), j = 2 - k1 / 2;
         for (int l1 = x - j; l1 <= x + j; l1++)
             for (int i1 = z - j; i1 <= z + j; i1++) {
-                if (!IS_LEAVES(tget(tov, l1, j1, i1))) continue;
-                if (RI(4) == 0 && tget(tov, l1 - 1, j1, i1) == B_AIR) vine_hang(tov, l1 - 1, j1, i1);
-                if (RI(4) == 0 && tget(tov, l1 + 1, j1, i1) == B_AIR) vine_hang(tov, l1 + 1, j1, i1);
-                if (RI(4) == 0 && tget(tov, l1, j1, i1 - 1) == B_AIR) vine_hang(tov, l1, j1, i1 - 1);
-                if (RI(4) == 0 && tget(tov, l1, j1, i1 + 1) == B_AIR) vine_hang(tov, l1, j1, i1 + 1);
+                if (!IS_LEAVES(tget(l1, j1, i1))) continue;
+                if (RI(4) == 0 && tget(l1 - 1, j1, i1) == B_AIR) vine_hang(l1 - 1, j1, i1);
+                if (RI(4) == 0 && tget(l1 + 1, j1, i1) == B_AIR) vine_hang(l1 + 1, j1, i1);
+                if (RI(4) == 0 && tget(l1, j1, i1 - 1) == B_AIR) vine_hang(l1, j1, i1 - 1);
+                if (RI(4) == 0 && tget(l1, j1, i1 + 1) == B_AIR) vine_hang(l1, j1, i1 + 1);
             }
     }
     tov_on = 0;
@@ -4831,11 +4633,10 @@ static TreeSel tree_select(const Biome *b) {
 
 /* generate() then, on success, the post step (podzol of mega spruces) */
 static void tree_grow(TreeSel t, int x, int y, int z) {
-    uint16_t tov[TOV_W * TOV_W * TOV_H];   /* this tree's blocks around its trunk: on the stack */
     int ok = 0;
     switch (t.type) {
-    case TR_OAK: ok = gen_trees(tov, x, y, z, 4, B_LOG_OAK, B_LEAVES_OAK, 0); break;
-    case TR_JUNGLE_SMALL: ok = gen_trees(tov, x, y, z, t.c, B_LOG_JUNGLE, B_LEAVES_JUNGLE, 1); break;
+    case TR_OAK: ok = gen_trees(x, y, z, 4, B_LOG_OAK, B_LEAVES_OAK, 0); break;
+    case TR_JUNGLE_SMALL: ok = gen_trees(x, y, z, t.c, B_LOG_JUNGLE, B_LEAVES_JUNGLE, 1); break;
     case TR_BIG: ok = gen_big_tree(x, y, z); break;
     case TR_BIRCH: ok = gen_birch(x, y, z, 0); break;
     case TR_BIRCH_TALL: ok = gen_birch(x, y, z, 1); break;
@@ -4844,7 +4645,7 @@ static void tree_grow(TreeSel t, int x, int y, int z) {
     case TR_TAIGA2: ok = gen_taiga2(x, y, z); break;
     case TR_MEGA_SPRUCE: ok = gen_mega_spruce(x, y, z, 0); break;
     case TR_MEGA_SPRUCE_H: ok = gen_mega_spruce(x, y, z, 1); break;
-    case TR_SWAMP: ok = gen_swamp_tree(tov, x, y, z); break;
+    case TR_SWAMP: ok = gen_swamp_tree(x, y, z); break;
     case TR_ACACIA: ok = gen_acacia(x, y, z); break;
     case TR_JUNGLE_MEGA: ok = gen_jungle_mega(x, y, z); break;
     case TR_BUSH: ok = gen_bush(x, y, z); break;
@@ -4874,7 +4675,7 @@ static int soil_ok(int soil, uint8_t below, int shaded) {
 /* a plant placed after a view decision: into the view; into C if C agrees */
 static void put_plant(int x, int y, int z, uint8_t b, int soil) {
     if (in_c_range(x, y, z)) {
-        uint8_t cur = (uint8_t)b9_get(c_out, (y - c_y0) * 256 + (z - c_cz * 16) * 16 + (x - c_cx * 16));
+        uint8_t cur = c_out[(y - c_y0) * 256 + (z - c_cz * 16) * 16 + (x - c_cx * 16)];
         int shaded = y < c_top[(z & 15) * 16 + (x & 15)];
         uint8_t below = cget(x, y - 1, z);
         if (cur != B_AIR || !soil_ok(soil, below, shaded)) {
@@ -5461,424 +5262,6 @@ static void decorate(const Biome *b) {
     }
 }
 
-/* ---- the desert pyramid (Basic structures [23]) ----
- * Modern Minecraft's desert pyramid (DesertPyramidPiece in 26.3.jar, one piece,
- * no NBT asset), read block for block out of the jar with CFR, not out of memory.
- * Placement is modern's RandomSpreadStructurePlacement (spacing 32, separation 8,
- * salt 14357617, LINEAR): the grid cell from the population's chunk, so a replayed
- * population makes the same decision, and the memo keeps its outcome - the same
- * temple whichever direction the world is walked, as the dungeons are. Writes go
- * through put/cget and land in each chunk as it is generated, which is how the
- * dungeons' cross-chunk pieces come out whole. The surface y and the biome come
- * from the column summary (ColSum, cs_top) and gen_biome, deserts only
- * (has_structure/desert_pyramid.json: minecraft:desert), above the sea.
- * Orientation is fixed (modern picks a random horizontal direction; the 21 x 21 is
- * square so the footprint is the same, only the entrance always faces the same way -
- * saves the rotation code; the shape still matches the jar's piece block for block
- * up to rotation). The height offset (-nextInt(3)) is drawn from the temple's own
- * stream, never the population's, so no other population draw moves.
- * CUT_SANDSTONE is the existing SANDSTONE_SMOOTH state (modern_map: sandstone_smooth
- * -> cut_sandstone); orange/blue terracotta are STAINED_CLAY_ORANGE/BLUE; the slab,
- * TNT and the chest are in. Only STONE_PRESSURE_PLATE (70) and SANDSTONE_STAIRS
- * (128, four facings) are new states. Suspicious sand / archaeology (the cellar the
- * jar adds under the floor) is left out: there is no brushing here. Flat worlds and
- * the nether get no temples. The pass takes the next structure as its own row. */
-#define TEMPLE_SPACING 32
-#define TEMPLE_SEPARATION 8
-#define TEMPLE_SALT 14357617
-#define TEMPLE_LIMIT (TEMPLE_SPACING - TEMPLE_SEPARATION)   /* 24 */
-
-
-
-/* forward (defined after populate): overworld default only */
-static int g_flat;
-static int g_dim;
-
-static int fdiv32(int a) { return a >= 0 ? a / 32 : (a - 31) / 32; }
-
-/* the origin chunk a placement cell picks: the same draw as temple_origin's */
-static void temple_cell_origin(int gx, int gz, int *ox, int *oz, JRand *tr) {
-    jr_seed(tr, (i64)(i64)gx * 341873128712LL + (i64)(i64)gz * 132897987541LL + g_seed + TEMPLE_SALT);
-    *ox = gx * TEMPLE_SPACING + jr_int(tr, TEMPLE_LIMIT);
-    *oz = gz * TEMPLE_SPACING + jr_int(tr, TEMPLE_LIMIT);
-}
-
-/* is (px,pz) a temple origin chunk? If so, *ox,*oz hold it (== px,pz) and the
- * temple stream (placement draws done) comes back in *tr for the offset draw. */
-static int temple_origin(int px, int pz, int *ox, int *oz, JRand *tr) {
-    int gx = fdiv32(px), gz = fdiv32(pz);
-    int cx, cz;
-    temple_cell_origin(gx, gz, &cx, &cz, tr);
-    if (cx != px || cz != pz) return 0;
-    *ox = cx;
-    *oz = cz;
-    return 1;
-}
-
-/* lowest surface y over the temple's 21 x 21 (ColSum), -1 if any column unknown.
- * This is the ground the base row sits over: modern's
- * updateHeightPositionToLowestGroundHeight takes the minimum over the piece's
- * whole bounding box. */
-static int temple_lowest(int ox, int oz) {
-    int lo = 256;
-    for (int lz = 0; lz < TEMPLE_SIZE; lz++)
-        for (int lx = 0; lx < TEMPLE_SIZE; lx++) {
-            const ColSum *s = col_sum(ox * 16 + lx, oz * 16 + lz);
-            if (!s) return -1;
-            int t = cs_top(s);
-            if (t < lo) lo = t;
-        }
-    return lo;
-}
-
-/* the lowest of the four corner columns modern's sea test reads
- * (Structure.getCornerHeights: the 21 x 21's corners, the far ones one block
- * past its edges), -1 if unknown. */
-static int temple_corner_lowest(int ox, int oz) {
-    int lo = 256;
-    for (int k = 0; k < 4; k++) {
-        const ColSum *s = col_sum(ox * 16 + (k & 1) * TEMPLE_SIZE, oz * 16 + (k >> 1) * TEMPLE_SIZE);
-        if (!s) return -1;
-        int t = cs_top(s);
-        if (t < lo) lo = t;
-    }
-    return lo;
-}
-
-/* ---------------------------------------------------------------- /locate's searches */
-/* The nearest desert pyramid to (x, z), or 0: the placement grid's cells outward from the
- * player's own cell, and the same tests the piece itself makes - a desert at the origin
- * chunk's centre, and dry ground (above the water line) at the piece's four corner columns,
- * which is modern's SinglePieceStructure guard. The answer is the origin chunk's corner
- * (modern's getLocatePos: the chunk's own corner, the piece's bounding box's), and the y is
- * not known without making the chunk, so /locate says "~" for it, as modern does. */
-int gen_find_temple(int x, int z, int *fx, int *fz) {
-    int gx = fdiv32(x >> 4), gz = fdiv32(z >> 4);
-    for (int r = 0; r <= 8; r++) {   /* 8 cells, 32 chunks apart: within 256 chunks */
-        int bx = 0, bz = 0, found = 0;
-        long long bd = 0;
-        for (int dz = -r; dz <= r; dz++)
-            for (int dx = -r; dx <= r; dx++) {
-                if (r && dx > -r && dx < r && dz > -r && dz < r) continue;
-                JRand tr;
-                int ox, oz;
-                temple_cell_origin(gx + dx, gz + dz, &ox, &oz, &tr);
-                if (gen_biome(ox * 16 + 8, oz * 16 + 8) != BI_DESERT) continue;
-                int dry = 1;
-                for (int k = 0; k < 4 && dry; k++) {
-                    int wx = ox * 16 + (k & 1) * TEMPLE_SIZE, wz = oz * 16 + (k >> 1) * TEMPLE_SIZE;
-                    SumEntry *e = sum_get(wx >> 4, wz >> 4);
-                    if (cs_top(&e->s[(wx & 15) + (wz & 15) * 16]) < SEA) dry = 0;
-                }
-                if (!dry) continue;
-                long long d = (long long)(ox * 16 - x) * (ox * 16 - x) + (long long)(oz * 16 - z) * (oz * 16 - z);
-                if (!found || d < bd) bx = ox * 16, bz = oz * 16, bd = d, found = 1;
-            }
-        if (found) {
-            *fx = bx;
-            *fz = bz;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/* The nearest place whose biome is `id`, or 0: modern's own shape - a spiral of 32-block
- * sample cells outward from the player's, one sample at each cell's middle - and then the
- * cell that first holds the biome is read at 4-block steps for the nearest cell its own
- * grid has (so the answer is within 4 blocks of the biome's edge, finer than modern's,
- * which answers with the coarse sample itself). A chunk's biome layers cost about a
- * hundredth of making the chunk, and the budget below is the calculator's own: past it the
- * talk is of "a reasonable distance", as modern says when 6400 blocks of it hold nothing.
- * The y is where the ground is, the column's own heightmap - the biome here has no depth. */
-int gen_find_biome(int id, int x, int z, int *fx, int *fz, int *fy) {
-    int cx = x >> 5, cz = z >> 5, budget = 1200;
-    for (int r = 0; r <= 34; r++) {   /* 34 cells of 32 blocks: past 1000 blocks */
-        int bx = 0, bz = 0, found = 0;
-        long long bd = 0;
-        for (int dz = -r; dz <= r; dz++)
-            for (int dx = -r; dx <= r; dx++) {
-                if (r && dx > -r && dx < r && dz > -r && dz < r) continue;
-                if (--budget < 0) return 0;
-                if (gen_biome((cx + dx) * 32 + 16, (cz + dz) * 32 + 16) != id) continue;
-                for (int sz = 0; sz <= 28; sz += 4)
-                    for (int sx = 0; sx <= 28; sx += 4) {
-                        int wx = (cx + dx) * 32 + sx, wz = (cz + dz) * 32 + sz;
-                        if (gen_biome(wx, wz) != id) continue;
-                        long long d = (long long)(wx - x) * (wx - x) + (long long)(wz - z) * (wz - z);
-                        if (!found || d < bd) bx = wx, bz = wz, bd = d, found = 1;
-                    }
-            }
-        if (found) {
-            *fx = bx;
-            *fz = bz;
-            *fy = gen_top(bx, bz) + 1;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static void tbox(int ox, int oz, int baseY, int x0, int y0, int z0, int x1, int y1, int z1, int edge,
-                 int fill) {
-    for (int y = y0; y <= y1; y++)
-        for (int x = x0; x <= x1; x++)
-            for (int z = z0; z <= z1; z++) {
-                int edgeCell = (y == y0 || y == y1 || x == x0 || x == x1 || z == z0 || z == z1);
-                put(ox * 16 + x, baseY + y, oz * 16 + z, edgeCell ? edge : fill, R_ALWAYS);
-            }
-}
-
-static void tput1(int ox, int oz, int baseY, int b, int x, int y, int z) {
-    put(ox * 16 + x, baseY + y, oz * 16 + z, b, R_ALWAYS);
-}
-
-/* the piece, block for block from DesertPyramidPiece.postProcess (CFR), without
- * the cellar/archaeology (no brushing): fixed orientation, CUT is SMOOTH. */
-static void temple_build(int ox, int oz, int baseY) {
-    int W = TEMPLE_SIZE;
-    int SAND = B_SANDSTONE, CUT = B_SANDSTONE_SMOOTH, CH = B_SANDSTONE_CHISELED;
-    uint8_t SLAB = B_SANDSTONE_SLAB, OR = B_STAINED_CLAY_ORANGE, BL = B_STAINED_CLAY_BLUE;
-    int STA_E = B_SANDSTONE_STAIRS, STA_W = B_SANDSTONE_STAIRS_W, STA_S = B_SANDSTONE_STAIRS_S,
-            STA_N = B_SANDSTONE_STAIRS_N;
-    /* base and steps */
-    tbox(ox, oz, baseY, 0, -4, 0, W - 1, 0, W - 1, SAND, SAND);
-    for (int pos = 1; pos <= 9; pos++) {
-        tbox(ox, oz, baseY, pos, pos, pos, W - 1 - pos, pos, W - 1 - pos, SAND, SAND);
-        tbox(ox, oz, baseY, pos + 1, pos, pos + 1, W - 2 - pos, pos, W - 2 - pos, B_AIR, B_AIR);
-    }
-    /* foundation: sandstone down where replaceable */
-    for (int x = 0; x < W; x++)
-        for (int z = 0; z < W; z++) {
-            int X = ox * 16 + x, Z = oz * 16 + z, Y = baseY - 5;
-            while (Y > 0) {
-                uint8_t cur = vget(X, Y, Z);
-                if (!(cur == B_AIR || cur == B_WATER || cur == B_FLOWING_WATER || cur == B_LAVA ||
-                      cur == B_FLOWING_LAVA))
-                    break;
-                put(X, Y, Z, SAND, R_ALWAYS);
-                Y--;
-            }
-        }
-    /* corner towers */
-    tbox(ox, oz, baseY, 0, 0, 0, 4, 9, 4, SAND, B_AIR);
-    tbox(ox, oz, baseY, 1, 10, 1, 3, 10, 3, SAND, SAND);
-    tput1(ox, oz, baseY, STA_N, 2, 10, 0);
-    tput1(ox, oz, baseY, STA_S, 2, 10, 4);
-    tput1(ox, oz, baseY, STA_E, 0, 10, 2);
-    tput1(ox, oz, baseY, STA_W, 4, 10, 2);
-    tbox(ox, oz, baseY, W - 5, 0, 0, W - 1, 9, 4, SAND, B_AIR);
-    tbox(ox, oz, baseY, W - 4, 10, 1, W - 2, 10, 3, SAND, SAND);
-    tput1(ox, oz, baseY, STA_N, W - 3, 10, 0);
-    tput1(ox, oz, baseY, STA_S, W - 3, 10, 4);
-    tput1(ox, oz, baseY, STA_E, W - 5, 10, 2);
-    tput1(ox, oz, baseY, STA_W, W - 1, 10, 2);
-    /* entrance */
-    tbox(ox, oz, baseY, 8, 0, 0, 12, 4, 4, SAND, B_AIR);
-    tbox(ox, oz, baseY, 9, 1, 0, 11, 3, 4, B_AIR, B_AIR);
-    tput1(ox, oz, baseY, CUT, 9, 1, 1);
-    tput1(ox, oz, baseY, CUT, 9, 2, 1);
-    tput1(ox, oz, baseY, CUT, 9, 3, 1);
-    tput1(ox, oz, baseY, CUT, 10, 3, 1);
-    tput1(ox, oz, baseY, CUT, 11, 3, 1);
-    tput1(ox, oz, baseY, CUT, 11, 2, 1);
-    tput1(ox, oz, baseY, CUT, 11, 1, 1);
-    tbox(ox, oz, baseY, 4, 1, 1, 8, 3, 3, SAND, B_AIR);
-    tbox(ox, oz, baseY, 4, 1, 2, 8, 2, 2, B_AIR, B_AIR);
-    tbox(ox, oz, baseY, 12, 1, 1, 16, 3, 3, SAND, B_AIR);
-    tbox(ox, oz, baseY, 12, 1, 2, 16, 2, 2, B_AIR, B_AIR);
-    /* gallery */
-    tbox(ox, oz, baseY, 5, 4, 5, W - 6, 4, W - 6, SAND, SAND);
-    tbox(ox, oz, baseY, 9, 4, 9, 11, 4, 11, B_AIR, B_AIR);
-    tbox(ox, oz, baseY, 8, 1, 8, 8, 3, 8, CUT, CUT);
-    tbox(ox, oz, baseY, 12, 1, 8, 12, 3, 8, CUT, CUT);
-    tbox(ox, oz, baseY, 8, 1, 12, 8, 3, 12, CUT, CUT);
-    tbox(ox, oz, baseY, 12, 1, 12, 12, 3, 12, CUT, CUT);
-    tbox(ox, oz, baseY, 1, 1, 5, 4, 4, 11, SAND, SAND);
-    tbox(ox, oz, baseY, W - 5, 1, 5, W - 2, 4, 11, SAND, SAND);
-    tbox(ox, oz, baseY, 6, 7, 9, 6, 7, 11, SAND, SAND);
-    tbox(ox, oz, baseY, W - 7, 7, 9, W - 7, 7, 11, SAND, SAND);
-    tbox(ox, oz, baseY, 5, 5, 9, 5, 7, 11, CUT, CUT);
-    tbox(ox, oz, baseY, W - 6, 5, 9, W - 6, 7, 11, CUT, CUT);
-    tput1(ox, oz, baseY, B_AIR, 5, 5, 10);
-    tput1(ox, oz, baseY, B_AIR, 5, 6, 10);
-    tput1(ox, oz, baseY, B_AIR, 6, 6, 10);
-    tput1(ox, oz, baseY, B_AIR, W - 6, 5, 10);
-    tput1(ox, oz, baseY, B_AIR, W - 6, 6, 10);
-    tput1(ox, oz, baseY, B_AIR, W - 7, 6, 10);
-    tbox(ox, oz, baseY, 2, 4, 4, 2, 6, 4, B_AIR, B_AIR);
-    tbox(ox, oz, baseY, W - 3, 4, 4, W - 3, 6, 4, B_AIR, B_AIR);
-    tput1(ox, oz, baseY, STA_N, 2, 4, 5);
-    tput1(ox, oz, baseY, STA_N, 2, 3, 4);
-    tput1(ox, oz, baseY, STA_N, W - 3, 4, 5);
-    tput1(ox, oz, baseY, STA_N, W - 3, 3, 4);
-    tbox(ox, oz, baseY, 1, 1, 3, 2, 2, 3, SAND, SAND);
-    tbox(ox, oz, baseY, W - 3, 1, 3, W - 2, 2, 3, SAND, SAND);
-    tput1(ox, oz, baseY, SAND, 1, 1, 2);
-    tput1(ox, oz, baseY, SAND, W - 2, 1, 2);
-    tput1(ox, oz, baseY, SLAB, 1, 2, 2);
-    tput1(ox, oz, baseY, SLAB, W - 2, 2, 2);
-    tput1(ox, oz, baseY, STA_W, 2, 1, 2);
-    tput1(ox, oz, baseY, STA_E, W - 3, 1, 2);
-    /* side aisles */
-    tbox(ox, oz, baseY, 4, 3, 5, 4, 3, 17, SAND, SAND);
-    tbox(ox, oz, baseY, W - 5, 3, 5, W - 5, 3, 17, SAND, SAND);
-    tbox(ox, oz, baseY, 3, 1, 5, 4, 2, 16, B_AIR, B_AIR);
-    tbox(ox, oz, baseY, W - 6, 1, 5, W - 5, 2, 16, B_AIR, B_AIR);
-    for (int z = 5; z <= 17; z += 2) {
-        tput1(ox, oz, baseY, CUT, 4, 1, z);
-        tput1(ox, oz, baseY, CH, 4, 2, z);
-        tput1(ox, oz, baseY, CUT, W - 5, 1, z);
-        tput1(ox, oz, baseY, CH, W - 5, 2, z);
-    }
-    /* terracotta pattern on the floor */
-    tput1(ox, oz, baseY, OR, 10, 0, 7);
-    tput1(ox, oz, baseY, OR, 10, 0, 8);
-    tput1(ox, oz, baseY, OR, 9, 0, 9);
-    tput1(ox, oz, baseY, OR, 11, 0, 9);
-    tput1(ox, oz, baseY, OR, 8, 0, 10);
-    tput1(ox, oz, baseY, OR, 12, 0, 10);
-    tput1(ox, oz, baseY, OR, 7, 0, 10);
-    tput1(ox, oz, baseY, OR, 13, 0, 10);
-    tput1(ox, oz, baseY, OR, 9, 0, 11);
-    tput1(ox, oz, baseY, OR, 11, 0, 11);
-    tput1(ox, oz, baseY, OR, 10, 0, 12);
-    tput1(ox, oz, baseY, OR, 10, 0, 13);
-    tput1(ox, oz, baseY, BL, 10, 0, 10);
-    for (int x = 0; x <= W - 1; x += W - 1) {
-        tput1(ox, oz, baseY, CUT, x, 2, 1);
-        tput1(ox, oz, baseY, OR, x, 2, 2);
-        tput1(ox, oz, baseY, CUT, x, 2, 3);
-        tput1(ox, oz, baseY, CUT, x, 3, 1);
-        tput1(ox, oz, baseY, OR, x, 3, 2);
-        tput1(ox, oz, baseY, CUT, x, 3, 3);
-        tput1(ox, oz, baseY, OR, x, 4, 1);
-        tput1(ox, oz, baseY, CH, x, 4, 2);
-        tput1(ox, oz, baseY, OR, x, 4, 3);
-        tput1(ox, oz, baseY, CUT, x, 5, 1);
-        tput1(ox, oz, baseY, OR, x, 5, 2);
-        tput1(ox, oz, baseY, CUT, x, 5, 3);
-        tput1(ox, oz, baseY, OR, x, 6, 1);
-        tput1(ox, oz, baseY, CH, x, 6, 2);
-        tput1(ox, oz, baseY, OR, x, 6, 3);
-        tput1(ox, oz, baseY, OR, x, 7, 1);
-        tput1(ox, oz, baseY, OR, x, 7, 2);
-        tput1(ox, oz, baseY, OR, x, 7, 3);
-        tput1(ox, oz, baseY, CUT, x, 8, 1);
-        tput1(ox, oz, baseY, CUT, x, 8, 2);
-        tput1(ox, oz, baseY, CUT, x, 8, 3);
-    }
-    for (int x = 2; x <= W - 3; x += W - 3 - 2) {
-        tput1(ox, oz, baseY, CUT, x - 1, 2, 0);
-        tput1(ox, oz, baseY, OR, x, 2, 0);
-        tput1(ox, oz, baseY, CUT, x + 1, 2, 0);
-        tput1(ox, oz, baseY, CUT, x - 1, 3, 0);
-        tput1(ox, oz, baseY, OR, x, 3, 0);
-        tput1(ox, oz, baseY, CUT, x + 1, 3, 0);
-        tput1(ox, oz, baseY, OR, x - 1, 4, 0);
-        tput1(ox, oz, baseY, CH, x, 4, 0);
-        tput1(ox, oz, baseY, OR, x + 1, 4, 0);
-        tput1(ox, oz, baseY, CUT, x - 1, 5, 0);
-        tput1(ox, oz, baseY, OR, x, 5, 0);
-        tput1(ox, oz, baseY, CUT, x + 1, 5, 0);
-        tput1(ox, oz, baseY, OR, x - 1, 6, 0);
-        tput1(ox, oz, baseY, CH, x, 6, 0);
-        tput1(ox, oz, baseY, OR, x + 1, 6, 0);
-        tput1(ox, oz, baseY, OR, x - 1, 7, 0);
-        tput1(ox, oz, baseY, OR, x, 7, 0);
-        tput1(ox, oz, baseY, OR, x + 1, 7, 0);
-        tput1(ox, oz, baseY, CUT, x - 1, 8, 0);
-        tput1(ox, oz, baseY, CUT, x, 8, 0);
-        tput1(ox, oz, baseY, CUT, x + 1, 8, 0);
-    }
-    tbox(ox, oz, baseY, 8, 4, 0, 12, 6, 0, CUT, CUT);
-    tput1(ox, oz, baseY, B_AIR, 8, 6, 0);
-    tput1(ox, oz, baseY, B_AIR, 12, 6, 0);
-    tput1(ox, oz, baseY, OR, 9, 5, 0);
-    tput1(ox, oz, baseY, CH, 10, 5, 0);
-    tput1(ox, oz, baseY, OR, 11, 5, 0);
-    /* burial chamber */
-    tbox(ox, oz, baseY, 8, -14, 8, 12, -11, 12, CUT, CUT);
-    tbox(ox, oz, baseY, 8, -10, 8, 12, -10, 12, CH, CH);
-    tbox(ox, oz, baseY, 8, -9, 8, 12, -9, 12, CUT, CUT);
-    tbox(ox, oz, baseY, 8, -8, 8, 12, -1, 12, SAND, SAND);
-    tbox(ox, oz, baseY, 9, -11, 9, 11, -1, 11, B_AIR, B_AIR);
-    tput1(ox, oz, baseY, B_STONE_PRESSURE_PLATE, 10, -11, 10);
-    tbox(ox, oz, baseY, 9, -13, 9, 11, -13, 11, B_TNT, B_AIR);
-    tput1(ox, oz, baseY, B_AIR, 8, -11, 10);
-    tput1(ox, oz, baseY, B_AIR, 8, -10, 10);
-    tput1(ox, oz, baseY, CH, 7, -10, 10);
-    tput1(ox, oz, baseY, CUT, 7, -11, 10);
-    tput1(ox, oz, baseY, B_AIR, 12, -11, 10);
-    tput1(ox, oz, baseY, B_AIR, 12, -10, 10);
-    tput1(ox, oz, baseY, CH, 13, -10, 10);
-    tput1(ox, oz, baseY, CUT, 13, -11, 10);
-    tput1(ox, oz, baseY, B_AIR, 10, -11, 8);
-    tput1(ox, oz, baseY, B_AIR, 10, -10, 8);
-    tput1(ox, oz, baseY, CH, 10, -10, 7);
-    tput1(ox, oz, baseY, CUT, 10, -11, 7);
-    tput1(ox, oz, baseY, B_AIR, 10, -11, 12);
-    tput1(ox, oz, baseY, B_AIR, 10, -10, 12);
-    tput1(ox, oz, baseY, CH, 10, -10, 13);
-    tput1(ox, oz, baseY, CUT, 10, -11, 13);
-    /* four chests (loot drawn on first open, from the world seed and the place) */
-    tput1(ox, oz, baseY, B_CHEST, 10, -11, 8);
-    tput1(ox, oz, baseY, B_CHEST, 12, -11, 10);
-    tput1(ox, oz, baseY, B_CHEST, 10, -11, 12);
-    tput1(ox, oz, baseY, B_CHEST, 8, -11, 10);
-    /* (no cellar: suspicious sand / archaeology needs brushing, left out) */
-}
-
-/* The desert pyramid's per-population biome answer: whether each of the four
- * populations of the chunk being generated sits on a temple origin chunk in a
- * desert (read in gen_slab before the populations run, where the biome layers
- * may still use the shared scratch). */
-static uint8_t temple_pb[4];
-
-
-/* one population's temple, if (px,pz) is its origin chunk. No PR draws.
- * `desert` is the biome answer for the origin's centre column, computed by
- * gen_slab before the populations run: the biome layers use the same scratch
- * the population view lives in, so they may not be asked here. */
-static void temple_try(int px, int pz, int desert) {
-    if (g_flat || g_dim) return;   /* overworld default only (flat has no deserts to hold one) */
-    if (pm_known && !pm->temple) return;   /* failed before */
-    int ox, oz;
-    JRand tr;
-    if (!temple_origin(px, pz, &ox, &oz, &tr)) {
-        return;
-    }
-    /* deserts only (desert_pyramid.json's biome tag) */
-    if (!desert) return;
-    int lowest = temple_lowest(ox, oz);
-    if (lowest < 0) return;
-    /* Below the sea: no temple. Modern's SinglePieceStructure asks getLowestY (the
-     * corners' first free cell) against the sea level (63, one above this world's
-     * water surface); the column summary floors a column's top at the water
-     * surface, so the same test here is the corner columns' top against SEA. */
-    int corner = temple_corner_lowest(ox, oz);
-    if (corner < SEA || corner > 250) return;
-    /* Modern's updateHeightPositionToLowestGroundHeight(level, -nextInt(3)):
-     * the piece's local y = 0 (the base box's top row) is the first free cell
-     * over the lowest ground column, buried 0..2 by the offset draw. */
-    int baseY = lowest + 1 - jr_int(&tr, 3);
-    if (baseY - 14 < 1 || baseY + 10 > 250) return;
-    pm->temple = 1;
-    temple_build(ox, oz, baseY);
-}
-
-/* is (x,y,z) one of a temple's four chests? (for the loot on first open) */
-/* The desert pyramid's placement grid: is the chunk holding (x, z) a cell the random
- * spread picks (spacing 32, separation 8, salt 14357617)? No desert check and no
- * world here: the caller has those (the generator when it builds, gui.c's chests
- * when a chest is opened). */
-int temple_cell(int x, int z) {
-    int qx, qz;
-    JRand tr;
-    return temple_origin(x >> 4, z >> 4, &qx, &qz, &tr);
-}
-
-
 /* ---- one population ---- */
 
 static void populate(int px, int pz, int biome) {
@@ -5903,10 +5286,7 @@ static void populate(int px, int pz, int biome) {
     const Biome *b = bio(biome);
     jr_seed(&PR, (i64)((u64)(i64)px * (u64)pop_mul_x + (u64)(i64)pz * (u64)pop_mul_z) ^ g_seed);
     pmemo_begin(px, pz);
-    /* the desert pyramid first (no PR draws, so nothing else moves); its biome
-     * answer was read before the populations ran (temple_pb) */
-    temple_try(px, pz, temple_pb[px - (c_cx - 1) + ((pz - (c_cz - 1)) << 1)]);
-    /* TODO: structures (mineshafts, villages, strongholds, monuments) would draw here */
+    /* TODO: structures (mineshafts, villages, strongholds, temples, monuments) would draw here */
     if (b->id != BI_DESERT && b->id != BI_DESERT_HILLS && RI(4) == 0) {
         int x = PK + RI(16) + 8, y = RI(256), z = PL + RI(16) + 8;
         lake(B_WATER, x, y, z);
@@ -5915,11 +5295,7 @@ static void populate(int px, int pz, int biome) {
         int x = PK + RI(16) + 8, y = RI(RI(248) + 8), z = PL + RI(16) + 8;
         if (y < SEA || RI(10) == 0) lake(B_LAVA, x, y, z);
     }
-    /* WorldGenDungeons is tried eight times per chunk in Minecraft; ninety-six here, as a
-     * dungeon is the one place a monster spawner comes from and they were too rare to find.
-     * Twice as many tries does not make twice as many dungeons: the ones of a population
-     * that pass dig the ground out from under the later tries' floor and ceiling test */
-    for (int i = 0; i < DUNG_TRIES; i++) {
+    for (int i = 0; i < 8; i++) {
         int x = PK + RI(16) + 8, y = RI(256), z = PL + RI(16) + 8;
         dung_idx = i;
         dungeon(x, y, z);
@@ -5966,602 +5342,7 @@ static void dungeon_book(void) {
 /* ======================================================================== */
 
 static int last_cx = 0x7fffffff, last_cz; /* chunk of the last gen_slab: c_top, c_b16 valid */
-/* ======================================================================== */
-/* The nether: Nether Wastes terrain, one density over the whole column        */
-/* ======================================================================== */
-/* Unlike the overworld there is no height field and no sea level: one noise
- * over the whole 128-block column, thresholded (> 0 -> netherrack, else air),
- * with a lava sea filling what is at y <= 31, a rough bedrock floor and ceiling,
- * glowstone on the ceiling, and the quartz veins 1.8 put in the nether. The
- * octaves are the overworld's statics, reseeded from the world seed mixed with
- * a constant (a documented deviation from vanilla's own chain), so the second
- * dimension costs no RAM of its own. */
-
-/* the dimension: 0 overworld, 1 nether, 2 End (nb.h's DIM_*) */
-static int g_dim;
-
-/* the nether's seed: the world seed mixed, so its terrain is not the overworld's */
-static i64 end_seed(i64 s) {
-    u64 v = (u64)s;
-    v ^= v >> 33;
-    v *= 0xFF51AFD7ED558CCDULL;
-    v ^= v >> 33;
-    v *= 0xC4B31B2F4B5CB593ULL;
-    v ^= v >> 33;
-    return (i64)(v ^ 0x656E6421ULL);   /* "end!" */
-}
-
-static i64 nether_seed(i64 s) {
-    u64 v = (u64)s;
-    v ^= v >> 33;
-    v *= 0xFF51AFD7ED558CCDULL;
-    v ^= v >> 33;
-    v *= 0xC4B31B2F4B5CB593ULL;
-    v ^= v >> 33;
-    return (i64)(v ^ 0x6E65746865ULL);   /* "nethe" */
-}
-
-/* ChunkProviderGenerate's noise octave states from a seed (the same draws
- * whatever dimension they are for), kept in the shared Octave statics */
-static void octaves_seed(i64 seed) {
-    JRand r;
-    jr_seed(&r, seed);
-    for (int i = 0; i < 16; i++) oc_min[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 16; i++) oc_max[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 8; i++) oc_main[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 4; i++) oc_surf[i].st = r.s, perm_skip(&r);
-    for (int i = 0; i < 10; i++) perm_skip(&r); /* scale noise (unused) */
-    for (int i = 0; i < 16; i++) oc_depth[i].st = r.s, perm_skip(&r);
-}
-
-void gen_set_dim(int dim) {
-    g_dim = dim;
-    octaves_seed(dim == DIM_NETHER ? nether_seed(g_seed) : dim == DIM_END ? end_seed(g_seed) : g_seed);
-    if (dim == DIM_END) end_init(), SPK->ok = 0;
-    /* nothing cached is this dimension's: the other one's columns would do */
-    last_cx = bc_cx = 0x7fffffff;
-    bg_ok = 0;
-}
-
-/* the density above which a block is netherrack (the threshold that leaves the
- * caverns: about half of the column is air between the sea and the ceiling,
- * open enough to walk through) */
-#define NETHER_DENS_MIN (0.0f)
-
-/* the nether's grid: 4 blocks across and 8 high a cell, 5 x 17 x 5 cells a chunk */
-#define NGC 5
-#define NGH 17
-#define NGCELLS (NGC * NGH * NGC)
-
-/* one point of one octave of one field, at a grid cell of the chunk: the perlin
- * value, added into the field (the same point maths as perlin3_octave's). The
- * horizontal and the vertical scale are separate: the caverns' height is what
- * makes it read as nether rather than as hills */
-static void nether_octave(const Octave *oc, int o, int cx, int cz, float *acc, u64 sxz, u64 sy, float amp) {
-    i64 off[3];
-    perm_build(oc[o].st, U->t.perm, off);
-    u64 sc = sxz >> o, vc = sy >> o;
-    for (int k = 0; k < NGC; k++) {
-        u64 Z = ((u64)(cz * 16 + k * 4) * sc) + (u64)off[2];
-        for (int j = 0; j < NGH; j++) {
-            u64 Y = ((u64)(j * 8) * vc) + (u64)off[1];
-            float *dst = acc + (j * NGC + k) * NGC;
-            for (int i = 0; i < NGC; i++) {
-                u64 X = ((u64)(cx * 16 + i * 4) * sc) + (u64)off[0];
-                dst[i] += perlin_pt(U->t.perm, X, Y, Z) * amp;
-            }
-        }
-    }
-}
-
-static void quartz_vein(JRand *r, int cx, int cz, int n);
-static void glow_blob(JRand *r, int cx, int cz);
-
-/* ---- the nether's biomes (1.16, todo [22]) ----
- * Modern picks its nether biomes with its multi-noise climate source; here 64-block
- * cells take one biome each, and every 5 x 4 cells is one macro holding the same mix:
- * eleven cells of wastes and three of each of the two forests and the valley, so the
- * wastes are a little over half the nether and the other three a sixth each. A macro
- * lays its three non-wastes out as blobs of three cells in a sea of wastes, then turns
- * over and reorders them by hash, so no macro copies its neighbour's and regions grow
- * across a macro's border. It is a pure function of (x, z), so the terrain, the growth,
- * the fog and the F3 line all agree whichever slab window is asked. */
-static uint32_t neth_mix(int x, int z, uint32_t salt) {
-    uint32_t h = (uint32_t)x * 0x9E3779B1u ^ (uint32_t)z * 0x85EBCA77u ^ (uint32_t)(uint64_t)g_seed ^ salt;
-    h ^= h >> 16;
-    h *= 0x7FEB352Du;
-    h ^= h >> 15;
-    h *= 0x846CA68Bu;
-    h ^= h >> 16;
-    return h;
-}
-/* The biome split: every cell takes one biome (nether_biome_at); every 5 x 4 macro
- * holds the same mix, so the four cover the same shares everywhere with no small
- * pockets of one biome inside another. */
-static inline int neth_idiv(int v, int d) {
-    int q = v / d;
-    if (v < 0 && v % d) q--;
-    return q;
-}
-static int neth_cell_biome(int cx, int cz) {
-    enum { MX = 5, MZ = 4 };
-    int mx = neth_idiv(cx, MX), mz = neth_idiv(cz, MZ);
-    int lx = cx - mx * MX, lz = cz - mz * MZ;
-    /* the three blobs in a field of wastes: 1 2 2 / 3 . . 2 / 3 . . . / 3 . . . */
-    static const uint8_t blob[MX * MZ] = {
-        1, 1, 1, 2, 2,
-        3, 0, 0, 0, 2,
-        3, 0, 0, 0, 0,
-        3, 0, 0, 0, 0,
-    };
-    /* the macro turned over one way, both or neither, then one of the six orders of
-     * the three: the hash is spent low bits first, so the order never sees the flips */
-    uint32_t h = neth_mix(mx, mz, 0xB105Eu);
-    if (h & 1) lx = MX - 1 - lx;
-    if (h & 2) lz = MZ - 1 - lz;
-    h >>= 2;
-    int slot = blob[lz * MX + lx];
-    if (!slot) return BI_HELL;
-    uint8_t p[3] = {BI_CRIMSON_FOREST, BI_WARPED_FOREST, BI_SOUL_SAND_VALLEY};
-    for (int i = 2; i > 0; i--) {
-        int j = (int)(h % (uint32_t)(i + 1));
-        h /= (uint32_t)(i + 1);
-        uint8_t t = p[i];
-        p[i] = p[j];
-        p[j] = t;
-    }
-    return p[slot - 1];
-}
-#define NETHER_CELL 64
-static int nether_biome_at(int x, int z) {
-    return neth_cell_biome(neth_idiv(x, NETHER_CELL), neth_idiv(z, NETHER_CELL));
-}
-
-/* the block a biome gives the netherrack its columns leave open: the forests'
- * nylium, soul sand or - in its patches - soul soil for the valley, none for
- * the wastes (0) */
-static uint16_t nether_surface(int bio, int soil) {
-    if (bio == BI_CRIMSON_FOREST) return B_CRIMSON_NYLIUM;
-    if (bio == BI_WARPED_FOREST) return B_WARPED_NYLIUM;
-    if (bio == BI_SOUL_SAND_VALLEY) return soil ? B_SOUL_SOIL : B_SOUL_SAND;
-    return 0;
-}
-
-/* ---- the nether's sky and fog colour (1.16's own four) ----
- * The wastes' #330808, the crimson forest's #330303, the warped forest's #1a051a and
- * the soul sand valley's #1b4745: what modern's fog and sky are under the camera. */
-static void neth_bio_colour(int bio, int *r, int *g, int *b) {
-    if (bio == BI_CRIMSON_FOREST) *r = 51, *g = 3, *b = 3;
-    else if (bio == BI_WARPED_FOREST) *r = 26, *g = 5, *b = 26;
-    else if (bio == BI_SOUL_SAND_VALLEY) *r = 27, *g = 71, *b = 69;
-    else *r = 51, *g = 8, *b = 8;   /* the wastes' #330808 */
-}
-/* The colour the sky and the fog take at (x, z): the biome's own colour - the way
- * 1.16's fog follows the camera - faded toward the biome across the edge being walked
- * to, because a step at the border would cut the screen in two flat colours. The fade
- * runs NETHER_BLEND blocks either side of the edge: the biome's own colour a blend
- * away from it, half of each on the line. A pure function of (x, z), like the split. */
-#define NETHER_BLEND 16.0f
-void gen_nether_sky_colour(float x, float z, int *r, int *g, int *b) {
-    int ix = neth_idiv((int)floorf(x), NETHER_CELL), iz = neth_idiv((int)floorf(z), NETHER_CELL);
-    int here = neth_cell_biome(ix, iz);
-    int r0, g0, b0;
-    neth_bio_colour(here, &r0, &g0, &b0);
-    /* the cell's bounds, and each edge's distance into the cell */
-    float x0 = (float)(ix * NETHER_CELL), z0 = (float)(iz * NETHER_CELL);
-    float d[4] = {x0 + NETHER_CELL - x, x - x0, z0 + NETHER_CELL - z, z - z0};
-    static const int8_t ex[4] = {1, -1, 0, 0}, ez[4] = {0, 0, 1, -1};
-    /* the nearest edge past which lies another biome, and its colour (a blend away
-     * or further there is none: best starts a blend out, where the weight is 0) */
-    float best = NETHER_BLEND;
-    int r1 = r0, g1 = g0, b1 = b0;
-    for (int k = 0; k < 4; k++) {
-        int bio = neth_cell_biome(ix + ex[k], iz + ez[k]);
-        if (bio == here || d[k] >= best) continue;
-        best = d[k];
-        neth_bio_colour(bio, &r1, &g1, &b1);
-    }
-    /* 0 a blend from the edge, half of each on it */
-    float w = 0.5f - 0.5f * best / NETHER_BLEND;
-    if (w < 0.0f) w = 0.0f;
-    *r = (int)(r0 + (r1 - r0) * w + 0.5f);
-    *g = (int)(g0 + (g1 - g0) * w + 0.5f);
-    *b = (int)(b0 + (b1 - b0) * w + 0.5f);
-}
-
-/* one cell of the nether's growth, into the slab window (out of it: left for the
- * window that holds it, the same place) */
-static void neth_set(int y0, int h, uint8_t *out, int lx, int y, int lz, uint16_t b) {
-    if (lx < 0 || lx > 15 || lz < 0 || lz > 15 || y < 0 || y > 127) return;
-    int col = lz * 16 + lx;
-    /* Column summaries cover the whole chunk, not just the slab window. Keep them
-     * window-independent too: a tall fungus does not disappear from gen_top just
-     * because the window which asked for its ground ended below its cap. */
-    if (y > c_top[col]) c_top[col] = (uint8_t)y;
-    if ((bflags[b] & BF_SOLID) && y > c_sl[col]) c_sl[col] = (uint8_t)y;
-    if (y < y0 || y >= y0 + h || !out) return;
-    b9_set(out, (y - y0) * 256 + lz * 16 + lx, b);
-}
-
-/* a huge fungus (1.16): a stem of four to seven blocks, a cap of wart blocks two
- * blocks about it and one above, a shroomlight or two in the cap, and - the warped
- * one - twisting vines up the stem's sides. */
-static void neth_huge_fungus(int y0, int h, uint8_t *out, JRand *r, int lx, int gy, int lz, int warped) {
-    uint16_t stem = warped ? B_WARPED_STEM : B_CRIMSON_STEM, wart = warped ? B_WARPED_WART_BLOCK : B_NETHER_WART_BLOCK;
-    int hgt = 4 + jr_int_i(r, 4);
-    for (int k = 1; k <= hgt; k++) neth_set(y0, h, out, lx, gy + k, lz, stem);
-    int ty = gy + hgt;
-    for (int dy = -1; dy <= 1; dy++)
-        for (int dx = -2; dx <= 2; dx++)
-            for (int dz = -2; dz <= 2; dz++) {
-                int ax = dx < 0 ? -dx : dx, az = dz < 0 ? -dz : dz;
-                if (ax == 2 && az == 2) continue;
-                if (dy == 1 && (ax == 2 || az == 2)) continue;
-                int x = lx + dx, z = lz + dz;
-                if (x < 0 || x > 15 || z < 0 || z > 15) continue;
-                neth_set(y0, h, out, x, ty + dy, z, wart);
-            }
-    int n = 1 + (jr_int_i(r, 2) == 0);
-    for (int k = 0; k < n; k++) {
-        int dx = jr_int_i(r, 3) - 1, dz = jr_int_i(r, 3) - 1;
-        if (!dx && !dz) dx = 1;
-        neth_set(y0, h, out, lx + dx, ty, lz + dz, B_SHROOMLIGHT);
-    }
-    if (warped)
-        for (int k = 2; k < hgt; k++)
-            if (jr_int_i(r, 3) == 0) {
-                int dx = jr_int_i(r, 2) ? 1 : -1;
-                neth_set(y0, h, out, lx + dx, gy + k, lz, B_TWISTING_VINES);
-            }
-}
-
-/* a patch of red or brown mushrooms, one kind per patch as in 1.16: the centre on
- * this column's face, the rest on neighbouring columns' own grounds (read off
- * their map entries, so the patch is the same whichever slab window is asked).
- * Members must stand on the centre's kind of ground (nylium for the forests,
- * netherrack for the wastes), so a patch never spills into another biome - and
- * never into the valley, which grows none. Offsets that leave the chunk are
- * skipped, as a huge fungus's cap is. */
-static void neth_shroom_patch(int y0, int h, uint8_t *out, JRand *r, const uint8_t *gmap,
-                              const uint8_t *smap, int x, int y, int z) {
-    uint16_t b = jr_int_i(r, 2) ? B_RED_MUSHROOM : B_BROWN_MUSHROOM;
-    neth_set(y0, h, out, x, y + 1, z, b);
-    int want = smap[z * 16 + x];
-    if (want != 0 && want != 3 && want != 4) return;   /* exotic ground: the centre is enough */
-    for (int q = 0; q < 3; q++) {
-        int nx = x + jr_int_i(r, 3) - 1, nz = z + jr_int_i(r, 3) - 1, ni, ng;
-        if (nx < 0 || nx > 15 || nz < 0 || nz > 15 || (nx == x && nz == z)) continue;
-        ni = nz * 16 + nx;
-        if (smap[ni] != want) continue;
-        ng = gmap[ni];
-        if (ng <= 31) continue;
-        neth_set(y0, h, out, nx, ng + 1, nz, b);
-    }
-}
-
-/* the growth of the chunk's biomes, from the chunk's own stream (the quartz veins
- * and the bedrock draw elsewhere, so this never moves their draws). The open faces
- * and the ceiling of each column were read off the whole 128-block column
- * (nether_slab's maps), so the growth is the same whatever slab window is asked. */
-static void nether_growth(int cx, int cz, int y0, int h, uint8_t *out, const uint8_t *gmap, const uint8_t *cmap,
-                          const uint8_t *smap, const uint8_t *fmap) {
-    JRand r;
-    jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x6E47726F77ULL);
-    for (int z = 0; z < 16; z++)
-        for (int x = 0; x < 16; x++) {
-            int X = cx * 16 + x, Z = cz * 16 + z, g = gmap[z * 16 + x];
-            if (g <= 31) continue;
-            int bio = nether_biome_at(X, Z);
-            /* the open faces to plant on: the highest and, where there is one,
-             * the lowest (the floor walked on) - the ledges were bare before */
-            int gy[2] = {g, fmap[z * 16 + x]};
-            if (bio == BI_CRIMSON_FOREST || bio == BI_WARPED_FOREST) {
-                int warped = bio == BI_WARPED_FOREST;
-                int fg = gy[1] > 31 ? gy[1] : g;   /* trees stand on the floor */
-                if (x >= 3 && x <= 12 && z >= 3 && z <= 12 && jr_int_i(&r, 32) == 0) {
-                    neth_huge_fungus(y0, h, out, &r, x, fg, z, warped);
-                    continue;
-                }
-                for (int f = 0; f < 2; f++) {
-                    int y = gy[f];
-                    if (y <= 31) continue;
-                    int k = jr_int_i(&r, 100);
-                    if (k < 20)
-                        neth_set(y0, h, out, x, y + 1,
-                                 z, !warped ? (k < 3 ? B_CRIMSON_FUNGUS : B_CRIMSON_ROOTS)
-                                            : (k < 3 ? B_WARPED_FUNGUS
-                                                     : (k < 7 ? B_WARPED_ROOTS : B_NETHER_SPROUTS)));
-                    int m = jr_int_i(&r, 200);
-                    if (m < 3) neth_shroom_patch(y0, h, out, &r, gmap, smap, x, y, z);
-                    if (warped && !f && jr_int_i(&r, 100) < 5) {
-                        /* twisting vines climb from the highest face: the ceiling
-                         * map bounds them, so the whole stack is open air - any
-                         * rock above the face would be a higher face still. Capped
-                         * at one where the ceiling sits on the face. */
-                        int top = cmap[z * 16 + x], len = 2 + jr_int_i(&r, 3);
-                        if (len > top - y) len = top - y;
-                        for (int q = 1; q <= len; q++) neth_set(y0, h, out, x, y + q, z, B_TWISTING_VINES);
-                    }
-                }
-                if (!warped && jr_int_i(&r, 12) == 0) {
-                    int len = 1 + jr_int_i(&r, 3), y = cmap[z * 16 + x];
-                    for (int q = 0; q < len; q++) neth_set(y0, h, out, x, y - q, z, B_WEEPING_VINES);
-                }
-            } else if (bio == BI_SOUL_SAND_VALLEY) {
-                /* the ground code (smap) came from the whole column, so the soul
-                 * fire does not depend on whether its ground is in this window */
-                int sb = smap[z * 16 + x], k = jr_int_i(&r, 80);
-                if ((sb == 1 || sb == 2) && k == 0) neth_set(y0, h, out, x, g + 1, z, B_SOUL_FIRE);
-                else if (jr_int_i(&r, 64) == 0 && (sb == 1 || sb == 2)) neth_set(y0, h, out, x, g + 1, z, B_NETHER_SPROUTS);
-                /* no mushrooms here: in 1.16 they grow in the forests and the
-                 * wastes, never in the valley */
-            } else {
-                /* the wastes grow only mushrooms, brown and red - nowhere else in
-                 * the nether is as bare, and nothing else grows here to hide them */
-                for (int f = 0; f < 2; f++) {
-                    int y = gy[f];
-                    if (y <= 31) continue;
-                    int m = jr_int_i(&r, 100);
-                    if (m < 3) neth_shroom_patch(y0, h, out, &r, gmap, smap, x, y, z);
-                }
-            }
-        }
-}
-
-#include "gen_fortress.h"    /* the Nether's fortresses (1.8.8) */
-
-/* the nether's chunk (cx, cz), rows [y0, y0 + h) to the slab (9 bits a state) */
-static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
-    TerrainScratch *T = &U->t;
-    float *A = T->grid, *B = T->acc;
-    uint8_t *cls = T->cls;
-    memset(A, 0, NGCELLS * sizeof(float));
-    memset(B, 0, NGCELLS * sizeof(float));
-    /* field A: the big masses (48-block cells down to 6), field B: the detail that
-     * opens the caverns between them */
-    nether_octave(&oc_min[0], 0, cx, cz, A, FX(1.0f / 40.0f), FX(1.0f / 18.0f), 1.0f);
-    nether_octave(&oc_min[1], 1, cx, cz, A, FX(1.0f / 40.0f), FX(1.0f / 18.0f), 0.5f);
-    nether_octave(&oc_min[2], 2, cx, cz, A, FX(1.0f / 40.0f), FX(1.0f / 18.0f), 0.25f);
-    nether_octave(&oc_max[0], 0, cx, cz, B, FX(1.0f / 12.0f), FX(1.0f / 7.0f), 0.5f);
-    nether_octave(&oc_max[1], 1, cx, cz, B, FX(1.0f / 12.0f), FX(1.0f / 7.0f), 0.25f);
-    /* the density per grid point (the two fields added once) */
-    for (int c = 0; c < NGCELLS; c++) A[c] += B[c];
-    /* per grid cell (4 x 8 x 4 blocks): 1 the eight corners around it are all
-     * netherrack, 2 all air, 0 mixed (a mixed cell's blocks are decided one by
-     * one; the runs that agree are filled whole, as column_density's are).
-     * The cell classes live after the point classes (cls + NGCELLS): writing
-     * them over the points they were read from made whole 4 x 4 cells read
-     * already-written neighbours, which showed as square pillars of rock in
-     * open space and square holes in the rock. */
-    for (int c = 0; c < NGCELLS; c++) cls[c] = A[c] > NETHER_DENS_MIN ? 1 : 2;
-    uint8_t *cell = cls + NGCELLS;
-    for (int k = 0; k < NGC - 1; k++)
-        for (int j = 0; j < NGH - 1; j++)
-            for (int i = 0; i < NGC - 1; i++) {
-                int solid = cls[(j * NGC + k) * NGC + i] & 1;
-                solid += cls[(j * NGC + k + 1) * NGC + i] & 1;
-                solid += cls[((j + 1) * NGC + k) * NGC + i] & 1;
-                solid += cls[((j + 1) * NGC + k + 1) * NGC + i] & 1;
-                solid += cls[(j * NGC + k) * NGC + i + 1] & 1;
-                solid += cls[(j * NGC + k + 1) * NGC + i + 1] & 1;
-                solid += cls[((j + 1) * NGC + k) * NGC + i + 1] & 1;
-                solid += cls[((j + 1) * NGC + k + 1) * NGC + i + 1] & 1;
-                cell[(j * (NGC - 1) + k) * (NGC - 1) + i] = (uint8_t)(solid == 8 ? 1 : solid == 0 ? 2 : 0);
-            }
-    JRand r;
-    jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x4E42ULL);
-    uint16_t *col = T->col;
-    /* The biome pass leaves four maps for the growth pass: the highest and the
-     * lowest open face of the cave floor the column's own features stand on, the
-     * ceiling's underside and the surface type, all read off the whole 128-block
-     * column so growth is independent of the slab window. The maps use the surface
-     * pass's own scratch (T->surf), which the nether never touches otherwise. */
-    _Static_assert(sizeof(T->surf) == 4 * 256, "gmap, cmap, smap and fmap share T->surf");
-    uint8_t *gmap = (uint8_t *)T->surf, *cmap = gmap + 256, *smap = cmap + 256, *fmap = smap + 256;
-    for (int z = 0; z < 16; z++)
-        for (int x = 0; x < 16; x++) {
-            int X = cx * 16 + x, Z = cz * 16 + z;
-            /* the column: whole cells where the corners agree, and the density
-             * interpolated (x, then z, then y: the x and z lerps are the same for
-             * all eight blocks of a level) where they do not */
-            int ci = x >> 2, ck = z >> 2, top = 0;
-            float fx = (float)(x & 3) * 0.25f, fz = (float)(z & 3) * 0.25f;
-            for (int j = 0; j < NGH - 1; j++) {
-                int cl = cell[(j * (NGC - 1) + ck) * (NGC - 1) + ci];
-                int y = j * 8;
-                if (cl == 1) {
-                    for (int q = 0; q < 8; q++) col[y + q] = B_NETHERRACK;
-                    top = y + 7;
-                    continue;
-                }
-                if (cl == 2) {
-                    for (int q = 0; q < 8; q++) col[y + q] = B_AIR;
-                    continue;
-                }
-                const float *p0 = A + (j * NGC + ck) * NGC + ci;
-                const float *p1 = A + ((j + 1) * NGC + ck) * NGC + ci;
-                float d0 = lerp(fx, p0[0], p0[1]), d1 = lerp(fx, p0[NGC], p0[NGC + 1]);
-                float d2 = lerp(fx, p1[0], p1[1]), d3 = lerp(fx, p1[NGC], p1[NGC + 1]);
-                float e0 = lerp(fz, d0, d1), e1 = lerp(fz, d2, d3);
-                float base = e0, step = (e1 - e0) * 0.125f;
-                for (int q = 0; q < 8; q++) {
-                    col[y + q] = base > NETHER_DENS_MIN ? B_NETHERRACK : B_AIR;
-                    if (col[y + q] != B_AIR) top = y + q;
-                    base += step;
-                }
-            }
-            /* the lava sea: everything at y <= 31 that is air is lava */
-            for (int y = 0; y <= 31; y++)
-                if (col[y] == B_AIR) col[y] = B_LAVA;
-            /* the bedrock floor and ceiling, each as rough as 1.8's */
-            int ceil;
-            {
-                int f = jr_int_i(&r, 5), c = jr_int_i(&r, 5);
-                for (int y = 0; y <= f; y++) col[y] = B_BEDROCK;
-                for (int y = 127 - c; y < 128; y++) col[y] = B_BEDROCK;
-                ceil = 127 - c;
-                if (ceil > top) top = ceil;
-            }
-            /* soul sand and gravel around the lava sea, where the surface noise
-             * says so (modern's patches, made of the same low-frequency noise) */
-            {
-                float p = grass_noise_div(X, Z, 24);
-                if (p > 0.45f || p < -0.45f) {
-                    uint8_t patch = p > 0.0f ? B_SOUL_SAND : B_GRAVEL;
-                    for (int y = 29; y <= 31; y++)
-                        if (col[y] == B_NETHERRACK && col[y + 1] != B_NETHERRACK) col[y] = patch;
-                }
-            }
-            /* the column's own biome (1.16): its surface is every netherrack the
-             * generation left touching air - crimson or warped nylium for the
-             * forests, soul sand and soil patches for the valley - not only the
-             * highest one, so a forest is nylium wherever its floor is open
-             * instead of pockets of it in netherrack. The conversion reads the
-             * whole column, never the slab window, so it is the same whichever
-             * window asks for the chunk. */
-            int ground = 0, floor = 0;   /* the highest and lowest open faces */
-            for (int yy = 121; yy >= 8; yy--)
-                if (col[yy] != B_AIR && col[yy + 1] == B_AIR) {
-                    if (!ground) ground = yy;
-                    floor = yy;
-                }
-            if (floor == ground) floor = 0;   /* one face only: no second to grow on */
-            int bio = nether_biome_at(X, Z);
-            /* soul soil lies in patches over the valley's floor, as in 1.16 -
-             * the same low noise the shores are patched with, so it blobs */
-            int soil = bio == BI_SOUL_SAND_VALLEY && grass_noise_div(X, Z, 16) > 0.3f;
-            uint16_t surf = nether_surface(bio, soil);   /* 16-bit: the nylium ids are past 255 */
-            if (surf)
-                for (int yy = 121; yy >= 8; yy--)
-                    if (col[yy] == B_NETHERRACK && col[yy + 1] == B_AIR) col[yy] = surf;
-            if (ground > 31 && bio == BI_SOUL_SAND_VALLEY) {
-                /* the valley's ground is soul ground a few blocks down too - no
-                 * netherrack left showing through the surface - with its fossils
-                 * breaking the surface where the mix says so */
-                for (int yy = ground; yy >= ground - 2 && yy > 31; yy--)
-                    if (col[yy] == B_NETHERRACK) col[yy] = soil ? B_SOUL_SOIL : B_SOUL_SAND;
-                if (neth_mix(X, Z, 0xB05Eu) % 211 == 0 && ground > 33) {
-                    col[ground] = B_BONE_BLOCK;
-                    if (col[ground - 1] == B_NETHERRACK) col[ground - 1] = B_BONE_BLOCK_X;
-                }
-            }
-            gmap[z * 16 + x] = (uint8_t)ground;
-            fmap[z * 16 + x] = (uint8_t)floor;
-            /* what the ground is, as a code the growth pass can read without the
-             * window (a cell above a block outside the window was the trap: its
-             * feature must not depend on whether its ground is in the window) */
-            {
-                int gb = ground > 31 ? col[ground] : B_AIR;
-                smap[z * 16 + x] = (uint8_t)(gb == B_SOUL_SAND ? 1 : gb == B_SOUL_SOIL ? 2 :
-                                             gb == B_CRIMSON_NYLIUM ? 3 : gb == B_WARPED_NYLIUM ? 4 :
-                                             gb == B_BONE_BLOCK ? 5 : 0);
-            }
-            if (out)
-                for (int y = 0; y < h; y++)
-                    b9_set(out, y * 256 + z * 16 + x, y0 + y < 128 ? col[y0 + y] : B_AIR);   /* (above the ceiling: air) */
-            c_top[z * 16 + x] = (uint8_t)top;
-            c_sl[z * 16 + x] = (uint8_t)top;
-            /* the column's glowstone ceiling: the highest open air with rock
-             * over it (0: none). Read off the whole column here so the glowstone
-             * below lands at the same place whichever slab window is asked for
-             * (cls[0..255] is free in this pass: the cell classes live past it) */
-            {
-                int c = 0;
-                for (int yy = 122; yy >= 8; yy--) {
-                    int above = col[yy + 1];
-                    if (col[yy] == B_AIR && (above == B_NETHERRACK || above == B_BEDROCK ||
-                                             above == B_NETHER_QUARTZ_ORE || above == B_GLOWSTONE)) {
-                        c = yy;
-                        break;
-                    }
-                }
-                cmap[z * 16 + x] = (uint8_t)c;
-                cls[z * 16 + x] = (uint8_t)c;
-            }
-        }
-    /* the biomes' growth (1.16): huge fungi, their wart caps and shroomlight,
-     * roots and sprouts on the nylium, hanging weeping vines under the crimson
-     * ceiling, twisting vines up the warped stems, soul fire on the valley's soul
-     * ground. It is drawn from a stream of the chunk's own (never the quartz's
-     * or the bedrock's), so a chunk's growth is the same however it is asked. */
-    nether_growth(cx, cz, y0, h, out, gmap, cmap, smap, fmap);
-    /* the quartz veins: ninety of ten to twenty-four blocks, y 10..117 (1.8 had
-     * about twenty of four to eleven) */
-    for (int i = 0; i < 90; i++)
-        quartz_vein(&r, jr_int_i(&r, 16), jr_int_i(&r, 16), 10 + jr_int_i(&r, 15));
-    /* glowstone clusters up in the ceiling where the rock meets the open: each
-     * try finds the column's highest open ceiling and grows one there */
-    for (int i = 0; i < 3; i++)
-        glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16));
-    /* the fortresses: after the growth, so their bricks and fences stand whole */
-    fort_build(cx, cz, y0, h, out);
-    memset(sum_pin, 0, sizeof sum_pin);
-    last_cx = cx;
-    last_cz = cz;
-}
-
-/* the vein: a small blob among the netherrack (WorldGenMinable's shape). The
- * walk always takes its n steps, whatever the slab window holds: its draws are
- * the chunk's own, so another window finds the same veins in the same places
- * (a walk cut short at the window's edge would leave the stream elsewhere). */
-static void quartz_vein(JRand *r, int cx, int cz, int n) {
-    int y = 10 + jr_int_i(r, 108);
-    for (int i = 0; i < n; i++) {
-        /* (absolute y into the slab's window: out of it, another window has it) */
-        if (cx >= 0 && cx <= 15 && cz >= 0 && cz <= 15 && y >= c_y0 && y < c_y0 + c_h) {
-            int o = (y - c_y0) * 256 + cz * 16 + cx;
-            if (b9_get(c_out, o) == B_NETHERRACK) b9_set(c_out, o, B_NETHER_QUARTZ_ORE);
-        }
-        /* the next block of the vein: a step in a random direction, mostly down */
-        int d = jr_int_i(r, 6);
-        cx += d == 4 ? 1 : d == 5 ? -1 : 0;
-        cz += d == 2 ? 1 : d == 3 ? -1 : 0;
-        y += d == 0 ? -1 : d == 1 && i * 2 < n ? 1 : 0;
-    }
-}
-
-/* the glowstone: small vein-like clusters up in the ceiling where the rock meets
- * open air, like the ore veins of the walls. The column's ceiling was read off
- * the whole column in nether_slab's pass (cls[z*16+x], 0 if none), so the vein
- * lands at the same place whatever slab window is asked for. Each try picks a
- * couple of small lumps scattered about that point and keeps the cells that are
- * open air: the rock keeps the rest, and no outline survives. */
-static void glow_blob(JRand *r, int cx, int cz) {
-    if (cx < 0 || cx > 15 || cz < 0 || cz > 15) return;
-    int y = U->t.cls[cz * 16 + cx];   /* the ceiling pass left the map in cls[0..255] */
-    if (y < 8) return;
-    /* the lumps: the first on the ceiling cell, the rest a block about it */
-    int n = 1 + (jr_int_i(r, 4) == 0);   /* 1, a quarter of them 2 */
-    int cxx[3], cyy[3], czz[3], rr[3];
-    for (int k = 0; k < n; k++) {
-        cxx[k] = cx + (k ? jr_int_i(r, 3) - 1 : 0);
-        cyy[k] = y + (k ? -jr_int_i(r, 2) : 0);
-        czz[k] = cz + (k ? jr_int_i(r, 3) - 1 : 0);
-        rr[k] = 1 + (jr_int_i(r, 5) == 0);   /* 1, a fifth of them 2 */
-    }
-    for (int dy = -2; dy <= 2; dy++)
-        for (int dz = -3; dz <= 3; dz++)
-            for (int dx = -3; dx <= 3; dx++) {
-                int tx = cx + dx, ty = y + dy, tz = cz + dz;
-                if (tx < 0 || tx > 15 || tz < 0 || tz > 15) continue;
-                if (ty < c_y0 || ty + 1 >= c_y0 + c_h) continue;   /* (other windows place their rows) */
-                int hit = 0;
-                for (int k = 0; k < n && !hit; k++) {
-                    int ax = tx - cxx[k], ay = ty - cyy[k], az = tz - czz[k], rk = rr[k];
-                    hit = ax * ax + ay * ay + az * az <= rk * rk;
-                }
-                if (!hit) continue;
-                int o = (ty - c_y0) * 256 + tz * 16 + tx;
-                if (b9_get(c_out, o) != B_AIR) continue;   /* only in the open */
-                b9_set(c_out, o, B_GLOWSTONE);
-            }
-}
-
-
-static uint8_t col_tmp[256 / 8 * 9 + 4];   /* one row of the slab above: 9-bit states */
-
-/* who takes the mob of a monster spawner world generation places (gen.h) */
-void (*gen_spawner_hook)(int x, int y, int z, int mob) = 0;
+static uint8_t col_tmp[256];
 
 /* carve hook: keep c_top / c_sl of C right when caves open the surface */
 static void cave_track(int x, int y, int z, uint8_t b) {
@@ -6580,12 +5361,15 @@ void gen_init(int64_t seed) {
     for (int i = 0; i < NBIOMES; i++) biome_index[BIOMES[i].id] = (uint8_t)i;
     for (int i = 0; i < NLSEEDS; i++) lay_wseed[i] = layer_world(LSEEDS[i]);
     vor_c = layer_world(10);
-    /* ChunkProviderGenerate's noise generators (octaves_seed: shared with the nether) */
-    octaves_seed(seed);
-    /* the dimension the world is in: the overworld until the world says otherwise */
-    g_dim = 0;
+    /* ChunkProviderGenerate's noise generators */
     JRand r;
     jr_seed(&r, seed);
+    for (int i = 0; i < 16; i++) oc_min[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 16; i++) oc_max[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 8; i++) oc_main[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 4; i++) oc_surf[i].st = r.s, perm_skip(&r);
+    for (int i = 0; i < 10; i++) perm_skip(&r); /* scale noise (unused) */
+    for (int i = 0; i < 16; i++) oc_depth[i].st = r.s, perm_skip(&r);
     SC_LIMIT = FX(684.412f);
     SC_MAINXZ = FX(684.412f / 80.0f);
     SC_MAINY = FX(684.412f / 160.0f);
@@ -6634,6 +5418,9 @@ void gen_init(int64_t seed) {
     jr_seed(&r, seed);
     cave_mul_x = jr_long(&r);
     cave_mul_z = jr_long(&r);
+#if NB_DIMS
+    gd_dim = DIM_OVERWORLD;
+#endif
     /* caches */
     memset(sumc, 0, NSUM * sizeof *sumc);
     memset(pmemo, 0, sizeof pmemo);
@@ -6683,985 +5470,43 @@ static void slab_caves(int cx, int cz, const ColSum *sum, uint8_t *out, int y0, 
  * 0 when they are all there. */
 /* ---------------------------------------------------------------- superflat (ChunkProviderFlat) */
 static int g_flat;
-static uint8_t flat_layers[128];
-static int flat_n = 4;
-static int flat_biome = 1;
-static int flat_top = 3;   /* highest non-air layer (gen_top without a loop each call) */
-
-/* Simple block names for flat layers (lowercase, underscores ignored in match).
- * Each block's modern (1.13) name comes first and its 1.8 spelling after it, so a preset
- * kept with the old names still loads; e.g. "terracotta" and "hardenedclay" are both 172,
- * "whiteterracotta", "stainedclay" and "whiteclay" are all 159:0.
- * Legal numeric ids are any Minecraft id with a B_* state (blk_id[]/blk_meta[],
- * same ids tools/pack.py uses, e.g. 1 stone, 2 grass, 3 dirt, 7 bedrock, 12 sand,
- * 20 glass, 172 terracotta, 159:14 red terracotta). Unknown ids rejected. */
-static const struct { const char *name; uint16_t block; } flat_names[] = {
-  {"air", B_AIR}, {"stone", B_STONE}, {"granite", B_GRANITE}, {"polishedgranite", B_POLISHED_GRANITE},
-  {"diorite", B_DIORITE}, {"polisheddiorite", B_POLISHED_DIORITE}, {"andesite", B_ANDESITE},
-  {"polishedandesite", B_POLISHED_ANDESITE}, {"grass", B_GRASS}, {"dirt", B_DIRT},
-  {"coarsedirt", B_COARSE_DIRT}, {"podzol", B_PODZOL}, {"cobblestone", B_COBBLESTONE},
-  {"oakplanks", B_PLANKS_OAK}, {"planks", B_PLANKS_OAK}, {"planksoak", B_PLANKS_OAK},
-  {"spruceplanks", B_PLANKS_SPRUCE}, {"planksspruce", B_PLANKS_SPRUCE},
-  {"birchplanks", B_PLANKS_BIRCH}, {"planksbirch", B_PLANKS_BIRCH},
-  {"jungleplanks", B_PLANKS_JUNGLE}, {"planksjungle", B_PLANKS_JUNGLE},
-  {"acaciaplanks", B_PLANKS_ACACIA}, {"planksacacia", B_PLANKS_ACACIA},
-  {"darkoakplanks", B_PLANKS_DARK_OAK}, {"planksdarkoak", B_PLANKS_DARK_OAK}, {"bedrock", B_BEDROCK},
-  {"sand", B_SAND}, {"redsand", B_RED_SAND}, {"gravel", B_GRAVEL}, {"goldore", B_GOLD_ORE},
-  {"ironore", B_IRON_ORE}, {"coalore", B_COAL_ORE}, {"oaklog", B_LOG_OAK}, {"logoak", B_LOG_OAK},
-  {"sprucelog", B_LOG_SPRUCE}, {"logspruce", B_LOG_SPRUCE}, {"birchlog", B_LOG_BIRCH},
-  {"logbirch", B_LOG_BIRCH}, {"junglelog", B_LOG_JUNGLE}, {"logjungle", B_LOG_JUNGLE},
-  {"acacialog", B_LOG_ACACIA}, {"logacacia", B_LOG_ACACIA},
-  {"darkoaklog", B_LOG_DARK_OAK}, {"logdarkoak", B_LOG_DARK_OAK},
-  {"oakleaves", B_LEAVES_OAK}, {"leavesoak", B_LEAVES_OAK},
-  {"spruceleaves", B_LEAVES_SPRUCE}, {"leavesspruce", B_LEAVES_SPRUCE},
-  {"birchleaves", B_LEAVES_BIRCH}, {"leavesbirch", B_LEAVES_BIRCH},
-  {"jungleleaves", B_LEAVES_JUNGLE}, {"leavesjungle", B_LEAVES_JUNGLE},
-  {"acacialeaves", B_LEAVES_ACACIA}, {"leavesacacia", B_LEAVES_ACACIA},
-  {"darkoakleaves", B_LEAVES_DARK_OAK}, {"leavesdarkoak", B_LEAVES_DARK_OAK},
-  {"sponge", B_SPONGE}, {"glass", B_GLASS},
-  {"lapisore", B_LAPIS_ORE}, {"lapisblock", B_LAPIS_BLOCK}, {"sandstone", B_SANDSTONE},
-  {"chiseledsandstone", B_SANDSTONE_CHISELED}, {"smoothsandstone", B_SANDSTONE_SMOOTH},
-  {"whitewool", B_WOOL_WHITE}, {"wool", B_WOOL_WHITE}, {"orangewool", B_WOOL_ORANGE},
-  {"magentawool", B_WOOL_MAGENTA}, {"lightbluewool", B_WOOL_LIGHT_BLUE}, {"yellowwool", B_WOOL_YELLOW},
-  {"limewool", B_WOOL_LIME}, {"pinkwool", B_WOOL_PINK}, {"graywool", B_WOOL_GRAY},
-  {"lightgraywool", B_WOOL_SILVER}, {"silverwool", B_WOOL_SILVER}, {"cyanwool", B_WOOL_CYAN},
-  {"purplewool", B_WOOL_PURPLE}, {"bluewool", B_WOOL_BLUE}, {"brownwool", B_WOOL_BROWN},
-  {"greenwool", B_WOOL_GREEN}, {"redwool", B_WOOL_RED}, {"blackwool", B_WOOL_BLACK},
-  {"goldblock", B_GOLD_BLOCK}, {"ironblock", B_IRON_BLOCK}, {"bricks", B_BRICKS},
-  {"brickblock", B_BRICKS}, {"tnt", B_TNT}, {"bookshelf", B_BOOKSHELF},
-  {"mossycobblestone", B_MOSSY_COBBLESTONE}, {"mossstone", B_MOSSY_COBBLESTONE},
-  {"obsidian", B_OBSIDIAN}, {"chest", B_CHEST}, {"diamondore", B_DIAMOND_ORE},
-  {"diamondblock", B_DIAMOND_BLOCK}, {"craftingtable", B_CRAFTING_TABLE},
-  {"workbench", B_CRAFTING_TABLE}, {"furnace", B_FURNACE}, {"ladder", B_LADDER},
-  {"rail", B_RAIL}, {"snowblock", B_SNOW}, {"snow", B_SNOW}, {"ice", B_ICE}, {"packedice", B_PACKED_ICE},
-  {"cactus", B_CACTUS}, {"clay", B_CLAY}, {"pumpkin", B_PUMPKIN},
-  {"jackolantern", B_JACK_O_LANTERN}, {"stonebricks", B_STONE_BRICKS},
-  {"stonebrick", B_STONE_BRICKS}, {"mossystonebricks", B_MOSSY_STONE_BRICKS},
-  {"crackedstonebricks", B_CRACKED_STONE_BRICKS}, {"chiseledstonebricks", B_CHISELED_STONE_BRICKS},
-  {"melon", B_MELON}, {"mycelium", B_MYCELIUM}, {"emeraldore", B_EMERALD_ORE},
-  {"emeraldblock", B_EMERALD_BLOCK}, {"cobblestonewall", B_COBBLESTONE_WALL},
-  {"terracotta", B_HARDENED_CLAY}, {"hardenedclay", B_HARDENED_CLAY},
-  {"whiteterracotta", B_STAINED_CLAY_WHITE},
-  {"stainedclay", B_STAINED_CLAY_WHITE},
-  {"stainedhardenedclay", B_STAINED_CLAY_WHITE},
-  {"whiteclay", B_STAINED_CLAY_WHITE},
-  {"orangeterracotta", B_STAINED_CLAY_ORANGE}, {"orangeclay", B_STAINED_CLAY_ORANGE},
-  {"magentaterracotta", B_STAINED_CLAY_MAGENTA}, {"magentaclay", B_STAINED_CLAY_MAGENTA},
-  {"lightblueterracotta", B_STAINED_CLAY_LIGHT_BLUE}, {"lightblueclay", B_STAINED_CLAY_LIGHT_BLUE},
-  {"yellowterracotta", B_STAINED_CLAY_YELLOW}, {"yellowclay", B_STAINED_CLAY_YELLOW},
-  {"limeterracotta", B_STAINED_CLAY_LIME}, {"limeclay", B_STAINED_CLAY_LIME},
-  {"pinkterracotta", B_STAINED_CLAY_PINK}, {"pinkclay", B_STAINED_CLAY_PINK},
-  {"grayterracotta", B_STAINED_CLAY_GRAY}, {"grayclay", B_STAINED_CLAY_GRAY},
-  {"lightgrayterracotta", B_STAINED_CLAY_SILVER}, {"silverclay", B_STAINED_CLAY_SILVER},
-  {"cyanterracotta", B_STAINED_CLAY_CYAN}, {"cyanclay", B_STAINED_CLAY_CYAN},
-  {"purpleterracotta", B_STAINED_CLAY_PURPLE}, {"purpleclay", B_STAINED_CLAY_PURPLE},
-  {"blueterracotta", B_STAINED_CLAY_BLUE}, {"blueclay", B_STAINED_CLAY_BLUE},
-  {"brownterracotta", B_STAINED_CLAY_BROWN}, {"brownclay", B_STAINED_CLAY_BROWN},
-  {"greenterracotta", B_STAINED_CLAY_GREEN}, {"greenclay", B_STAINED_CLAY_GREEN},
-  {"redterracotta", B_STAINED_CLAY_RED}, {"redclay", B_STAINED_CLAY_RED},
-  {"blackterracotta", B_STAINED_CLAY_BLACK}, {"blackclay", B_STAINED_CLAY_BLACK},
-  {"hayblock", B_HAY_BALE}, {"haybale", B_HAY_BALE},
-  {"coalblock", B_COAL_BLOCK}, {"redsandstone", B_RED_SANDSTONE}, {"glowstone", B_GLOWSTONE},
-  /* the nether's (a superflat nether, for looking at them) */
-  {"netherrack", B_NETHERRACK}, {"soulsand", B_SOUL_SAND}, {"netherquartzore", B_NETHER_QUARTZ_ORE},
-  {"quartzore", B_NETHER_QUARTZ_ORE}, {"quartzblock", B_QUARTZ_BLOCK}, {"blockofquartz", B_QUARTZ_BLOCK},
-  {"chiseledquartz", B_CHISELED_QUARTZ_BLOCK}, {"quartzpillar", B_QUARTZ_PILLAR},
-  {"smoothquartz", B_SMOOTH_QUARTZ}, {"quartzbricks", B_QUARTZ_BRICKS},
-  {"portal", B_PORTAL_NS}, {"netherportal", B_PORTAL_NS},
-  /* the nether's biomes (1.16): nylium, stems, planks, wart, shroomlight, soul soil */
-  {"crimsonnylium", B_CRIMSON_NYLIUM}, {"warpednylium", B_WARPED_NYLIUM},
-  {"crimsonstem", B_CRIMSON_STEM}, {"warpedstem", B_WARPED_STEM},
-  {"strippedcrimsonstem", B_STRIPPED_CRIMSON_STEM}, {"strippedwarpedstem", B_STRIPPED_WARPED_STEM},
-  {"crimsonplanks", B_CRIMSON_PLANKS}, {"warpedplanks", B_WARPED_PLANKS},
-  {"netherwartblock", B_NETHER_WART_BLOCK}, {"warpedwartblock", B_WARPED_WART_BLOCK},
-  {"shroomlight", B_SHROOMLIGHT}, {"soulsoil", B_SOUL_SOIL}, {"boneblock", B_BONE_BLOCK},
-  {"crimsonroots", B_CRIMSON_ROOTS}, {"warpedroots", B_WARPED_ROOTS}, {"nethersprouts", B_NETHER_SPROUTS},
-};
-
-static int flat_tolower(int c) { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; }
-static bool flat_isdigit(int c) { return c >= '0' && c <= '9'; }
-static bool flat_isname(int c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
-}
-/* Minecraft id + meta to NumBlocks block, -1: none (blk_id[]/blk_meta[] from data.h) */
-static int flat_from_id(int id, int meta) {
-  for (int i = 0; i < B_COUNT; i++)
-    if (blk_id[i] == id && blk_meta[i] == meta) return i;
-  return -1;
-}
-/* simple name (len chars, already without minecraft: prefix or :meta) to block, -1: none */
-static int flat_from_name(const char *s, int len) {
-  char norm[32];
-  int k = 0;
-  for (int i = 0; i < len && k < (int)sizeof norm - 1; i++) {
-    int c = flat_tolower((unsigned char)s[i]);
-    if (c == '_' || c == '-') continue;
-    norm[k++] = (char)c;
-  }
-  norm[k] = 0;
-  for (unsigned i = 0; i < sizeof flat_names / sizeof flat_names[0]; i++) {
-    const char *n = flat_names[i].name;
-    int j = 0;
-    while (n[j] && norm[j] && n[j] == norm[j]) j++;
-    if (!n[j] && !norm[j]) return flat_names[i].block;
-  }
-  return -1;
-}
-static void flat_errmsg(char *err, int errmax, const char *msg) {
-  if (!err || errmax <= 0) return;
-  int i = 0;
-  while (msg[i] && i < errmax - 1) err[i] = msg[i], i++;
-  err[i] = 0;
-}
-/* parse one "block" (id[:meta] or name[:meta]) to B_*, -1: none (err set) */
-static int flat_parse_block(const char *s, int len, char *err, int errmax) {
-  int colon = -1;
-  for (int i = 0; i < len; i++)
-    if (s[i] == ':') { colon = i; break; }
-  int baselen = colon < 0 ? len : colon;
-  int meta = 0;
-  bool havemeta = false;
-  if (colon >= 0) {
-    if (colon + 1 >= len) { flat_errmsg(err, errmax, "Bad block"); return -1; }
-    int m = 0;
-    for (int i = colon + 1; i < len; i++) {
-      if (!flat_isdigit(s[i])) { flat_errmsg(err, errmax, "Bad data value"); return -1; }
-      m = m * 10 + (s[i] - '0');
-      if (m > 15) { flat_errmsg(err, errmax, "Bad data value"); return -1; }
-    }
-    meta = m, havemeta = true;
-  }
-  /* strip minecraft: prefix (case-insensitive) */
-  const char *base = s;
-  int blen = baselen;
-  if (blen > 10) {
-    bool ns = true;
-    static const char *pre = "minecraft:";
-    for (int i = 0; i < 10; i++)
-      if (flat_tolower((unsigned char)base[i]) != pre[i]) ns = false;
-    if (ns) base += 10, blen -= 10;
-  }
-  if (!blen) { flat_errmsg(err, errmax, "Bad block"); return -1; }
-  bool numeric = blen > 0;
-  for (int i = 0; i < blen; i++)
-    if (!flat_isdigit(base[i])) numeric = false;
-  if (numeric) {
-    int id = 0;
-    for (int i = 0; i < blen; i++) {
-      id = id * 10 + (base[i] - '0');
-      if (id > 255) break;
-    }
-    if (id < 0 || id > 255) { flat_errmsg(err, errmax, "Unknown block id"); return -1; }
-    int b = flat_from_id(id, havemeta ? meta : 0);
-    if (b < 0) {
-      char m[32] = "Unknown block: ";
-      int p = 15, q = 0;
-      while (m[p] && p < (int)sizeof m - 1) p++;
-      while (q < blen && p < (int)sizeof m - 1) m[p++] = base[q++];
-      m[p] = 0;
-      flat_errmsg(err, errmax, m);
-      return -1;
-    }
-    return b;
-  }
-  for (int i = 0; i < blen; i++)
-    if (!flat_isname(base[i])) { flat_errmsg(err, errmax, "Bad block"); return -1; }
-  int b = flat_from_name(base, blen);
-  if (b < 0) {
-    char m[40] = "Unknown block: ";
-    int p = 15;
-    for (int i = 0; i < blen && p < (int)sizeof m - 1 && i < 20; i++) m[p++] = (char)flat_tolower((unsigned char)base[i]);
-    m[p] = 0;
-    flat_errmsg(err, errmax, m);
-    return -1;
-  }
-  if (havemeta) {
-    int id = blk_id[b];
-    int nb = flat_from_id(id, meta);
-    if (nb < 0) { flat_errmsg(err, errmax, "Bad data value"); return -1; }
-    return nb;
-  }
-  return b;
-}
-
-/* first simple name for a block (for showing a preset back), NULL when it only has an id */
-static const char *flat_name_of(int b) {
-  for (unsigned i = 0; i < sizeof flat_names / sizeof flat_names[0]; i++)
-    if (flat_names[i].block == b) return flat_names[i].name;
-  return NULL;
-}
-/* decimal 0..255 into out, returns its length */
-static int flat_num(int v, char *out) {
-  char t[4];
-  int k = 0;
-  do t[k++] = (char)('0' + v % 10), v /= 10;
-  while (v);
-  for (int i = 0; i < k; i++) out[i] = t[k - 1 - i];
-  return k;
-}
-/* any valid preset (either shape) as a simple "block,block,..." list; false when it fits nowhere */
-bool flat_simplify(const char *preset, char *out, int outmax) {
-  uint8_t layers[128];
-  int n = 0, bio = 1;
-  if (outmax <= 0) return false;
-  if (!flat_parse(preset, layers, &n, &bio, NULL, 0) || !n) return false;
-  int p = 0;
-  for (int i = 0; i < n; i++) {
-    if (i) {
-      if (p + 1 >= outmax) return false;
-      out[p++] = ',';
-    }
-    const char *nm = flat_name_of(layers[i]);
-    if (nm) {
-      int l = (int)strlen(nm);
-      if (p + l >= outmax) return false;
-      memcpy(out + p, nm, (size_t)l), p += l;
-    } else {
-      char nb[8];
-      int q = flat_num(blk_id[layers[i]], nb);
-      if (blk_meta[layers[i]]) {
-        nb[q++] = ':';
-        q += flat_num(blk_meta[layers[i]], nb + q);
-      }
-      if (p + q >= outmax) return false;
-      memcpy(out + p, nb, (size_t)q), p += q;
-    }
-  }
-  out[p] = 0;
-  return true;
-}
-
-/* Flat presets come in two shapes, both valid: the simple "block,block,..." list
- * (one layer per block, bottom to top, e.g. "bedrock,dirt,dirt,grass") and the
- * 1.8 FlatGeneratorInfo "version;layers;biome;structures" (e.g. "2;7,2x3,2;1",
- * kept so older saves still load). Returns true when valid, filling
- * out_layers/out_n/out_biome; err gets a short red message. NULL/empty = default. */
-static bool flat_parse(const char *preset, uint8_t *out_layers, int *out_n, int *out_biome, char *err,
-                       int errmax) {
-  if (!preset || !preset[0]) {
-    if (out_layers) { out_layers[0] = B_BEDROCK, out_layers[1] = B_DIRT, out_layers[2] = B_DIRT, out_layers[3] = B_GRASS; }
-    if (out_n) *out_n = 4;
-    if (out_biome) *out_biome = 1;
-    if (err && errmax > 0) err[0] = 0;
-    return true;
-  }
-  int len = (int)strlen(preset);
-  if (len > FLAT_MAX) { flat_errmsg(err, errmax, "Preset too long"); return false; }
-  if (!strchr(preset, ';')) {
-    /* simple list: no version, counts or biome */
-    const char *layers = preset;
-    int laylen = len;
-    while (laylen > 0 && (layers[laylen - 1] == ' ' || layers[laylen - 1] == '\t')) laylen--;
-    while (laylen > 0 && (*layers == ' ' || *layers == '\t')) layers++, laylen--;
-    if (!laylen) { flat_errmsg(err, errmax, "No layers"); return false; }
-    int entries = 1;
-    for (int i = 0; i < laylen; i++) if (layers[i] == ',') entries++;
-    if (entries > 16) { flat_errmsg(err, errmax, "Too many layers (max 16)"); return false; }
-    uint8_t tmp[128];
-    int total = 0, at = 0;
-    for (int e = 0; e < entries; e++) {
-      int s = at;
-      while (at < laylen && layers[at] != ',') at++;
-      int blen = at - s;
-      if (at < laylen) at++;   /* skip ',' */
-      while (blen > 0 && (layers[s + blen - 1] == ' ' || layers[s + blen - 1] == '\t')) blen--;
-      while (blen > 0 && (layers[s] == ' ' || layers[s] == '\t')) s++, blen--;
-      if (!blen) { flat_errmsg(err, errmax, "Bad layer"); return false; }
-      int b = flat_parse_block(layers + s, blen, err, errmax);
-      if (b < 0) return false;
-      if (b == B_AIR) { flat_errmsg(err, errmax, "Air not allowed"); return false; }
-      if (total + 1 > 128) { flat_errmsg(err, errmax, "Too tall (max 128)"); return false; }
-      tmp[total++] = (uint8_t)b;
-    }
-    if (!total) { flat_errmsg(err, errmax, "No layers"); return false; }
-    if (out_layers) memcpy(out_layers, tmp, (size_t)total);
-    if (out_n) *out_n = total;
-    if (out_biome) *out_biome = 1;
-    if (err && errmax > 0) err[0] = 0;
-    return true;
-  }
-  const char *p1 = strchr(preset, ';');
-  const char *layers = p1 + 1;
-  const char *p2 = strchr(layers, ';');
-  const char *biome = NULL;
-  const char *layend;
-  if (p2) {
-    layend = p2;
-    biome = p2 + 1;
-    const char *p3 = strchr(biome, ';');
-    if (p3) biome = p3 == biome ? biome : biome;   /* structures after p3 ignored */
-  } else {
-    layend = layers + strlen(layers);
-    biome = NULL;
-  }
-  int laylen = (int)(layend - layers);
-  while (laylen > 0 && (layers[laylen - 1] == ' ' || layers[laylen - 1] == '\t')) laylen--;
-  while (laylen > 0 && (*layers == ' ' || *layers == '\t')) layers++, laylen--;
-  if (!laylen) { flat_errmsg(err, errmax, "No layers"); return false; }
-  /* count entries (max 16) */
-  int entries = 1;
-  for (int i = 0; i < laylen; i++) if (layers[i] == ',') entries++;
-  if (entries > 16) { flat_errmsg(err, errmax, "Too many layers (max 16)"); return false; }
-  uint8_t tmp[128];
-  int total = 0;
-  int at = 0;
-  for (int e = 0; e < entries; e++) {
-    int s = at;
-    while (at < laylen && layers[at] != ',') at++;
-    int elen = at - s;
-    if (at < laylen) at++;   /* skip ',' */
-    while (elen > 0 && (layers[s + elen - 1] == ' ' || layers[s + elen - 1] == '\t')) elen--;
-    while (elen > 0 && (layers[s] == ' ' || layers[s] == '\t')) s++, elen--;
-    if (!elen) { flat_errmsg(err, errmax, "Bad layer"); return false; }
-    /* split count 'x' block */
-    int xi = -1;
-    for (int i = 0; i < elen; i++)
-      if (layers[s + i] == 'x' || layers[s + i] == 'X' || layers[s + i] == '*') { xi = i; break; }
-    int count = 1;
-    const char *bs;
-    int blen;
-    if (xi >= 0) {
-      if (xi == 0 || xi + 1 >= elen) { flat_errmsg(err, errmax, "Bad layer"); return false; }
-      for (int i = 0; i < xi; i++)
-        if (!flat_isdigit(layers[s + i])) { flat_errmsg(err, errmax, "Bad count"); return false; }
-      /* block part must not hold another x (names hold none) */
-      for (int i = xi + 1; i < elen; i++)
-        if (layers[s + i] == 'x' || layers[s + i] == 'X' || layers[s + i] == '*') {
-          flat_errmsg(err, errmax, "Bad layer");
-          return false;
-        }
-      int c = 0;
-      for (int i = 0; i < xi; i++) {
-        c = c * 10 + (layers[s + i] - '0');
-        if (c > 128) break;
-      }
-      if (c < 1 || c > 128) { flat_errmsg(err, errmax, "Bad count"); return false; }
-      count = c;
-      bs = layers + s + xi + 1, blen = elen - xi - 1;
-    } else {
-      bs = layers + s, blen = elen;
-    }
-    while (blen > 0 && (bs[blen - 1] == ' ' || bs[blen - 1] == '\t')) blen--;
-    while (blen > 0 && (*bs == ' ' || *bs == '\t')) bs++, blen--;
-    if (!blen) { flat_errmsg(err, errmax, "Bad block"); return false; }
-    int b = flat_parse_block(bs, blen, err, errmax);
-    if (b < 0) return false;
-    if (b == B_AIR) { flat_errmsg(err, errmax, "Air not allowed"); return false; }
-    if (total + count > 128) { flat_errmsg(err, errmax, "Too tall (max 128)"); return false; }
-    for (int i = 0; i < count; i++) tmp[total++] = (uint8_t)b;
-  }
-  if (!total) { flat_errmsg(err, errmax, "No layers"); return false; }
-  int bio = 1;
-  if (biome) {
-    const char *bend = biome + strlen(biome);
-    const char *semi = strchr(biome, ';');
-    if (semi) bend = semi;
-    while (bend > biome && (bend[-1] == ' ' || bend[-1] == '\t')) bend--;
-    while (bend > biome && (*biome == ' ' || *biome == '\t')) biome++;
-    int blen = (int)(bend - biome);
-    if (blen) {
-      for (int i = 0; i < blen; i++)
-        if (!flat_isdigit(biome[i])) { flat_errmsg(err, errmax, "Bad biome"); return false; }
-      int v = 0;
-      for (int i = 0; i < blen; i++) {
-        v = v * 10 + (biome[i] - '0');
-        if (v > 255) break;
-      }
-      if (v < 0 || v > 255) { flat_errmsg(err, errmax, "Bad biome"); return false; }
-      bio = v;
-    }
-  }
-  if (out_layers) memcpy(out_layers, tmp, (size_t)total);
-  if (out_n) *out_n = total;
-  if (out_biome) *out_biome = bio;
-  if (err && errmax > 0) err[0] = 0;
-  return true;
-}
-
-bool flat_validate(const char *preset, char *err, int errmax) {
-  return flat_parse(preset, NULL, NULL, NULL, err, errmax);
-}
-int flat_height(void) { return flat_n; }
-int flat_biome_id(void) { return flat_biome; }
-
-/* the highest non-air layer (presets never hold air, but saves might) */
-static int flat_top_of(void) {
-  for (int y = flat_n - 1; y > 0; y--)
-    if (flat_layers[y] != B_AIR) return y;
-  return 0;
-}
-static void flat_use_default(void) {
-  flat_layers[0] = B_BEDROCK, flat_layers[1] = B_DIRT, flat_layers[2] = B_DIRT, flat_layers[3] = B_GRASS;
-  flat_n = 4, flat_biome = 1, g_flat = 1;
-  flat_top = flat_top_of();
-}
-void gen_set_flat_preset(const char *preset) {
-  uint8_t tmp[128];
-  int n = 0, bio = 1;
-  if (!preset || !preset[0]) { flat_use_default(); return; }
-  if (!flat_parse(preset, tmp, &n, &bio, NULL, 0)) { flat_use_default(); return; }
-  memcpy(flat_layers, tmp, (size_t)n);
-  flat_n = n, flat_biome = bio, g_flat = 1;
-  flat_top = flat_top_of();
-}
-void gen_set_flat(int flat) {
-  if (flat) flat_use_default();
-  else g_flat = 0;
-}
-static int flat_block(int y) {
-  if (y < 0 || y >= flat_n) return B_AIR;
-  return flat_layers[y];
-}
-
-/* ---------------------------------------------------------------- the test world
- * The Test world type (nb.h's WT_TEST): an empty world that is always the same,
- * whatever the seed, holding everything the game has once. Nothing here reads the
- * seed or any noise, so a chunk comes out the same every time it is asked for, and
- * nothing in it moves on its own: tick.c keeps the weather and the random block
- * ticks off it and mob.c keeps the natural spawning off it, so what is put here
- * stays as it is put. The sections stand in one row along +z, in the order of the
- * game's own:
- *   - the spawn platform, a square of bedrock with the player in its middle, under the
- *     middle of the grid of blocks;
- *   - every block state floating in a grid, one air gap between each. Each block stands
- *     on a barrier of its own (a barrier is drawn as air, so the gaps read as gaps) and
- *     the liquids have barriers on their four sides too: that is what keeps the sand and
- *     the gravel from falling and a source from spreading. The grid starts a bit before
- *     the spawn platform and runs past it, so the platform is in the middle of it;
- *   - the chests of every item that has no block of its own (the ones that place one are
- *     in the grid of blocks), in a row, floating on their barriers as the blocks do;
- *   - every mob in a cage of its own on a floating platform of grass, a ring of barriers
- *     on its four sides and one over its head (mob.c puts the mobs in them, gen.h's
- *     test_cage says where);
- *   - the structures the world makes - a desert pyramid, a dungeon and a desert well -
- *     baked as the generator makes them (`make bake-test` writes src/test_data.c) and
- *     stamped instead of generated, so the showcase is exactly the same every time: no
- *     seed, no random stream, no view and no write rules at runtime, just fixed blocks
- *     at fixed places. The pyramid brings the desert ground it stands on, the dungeon
- *     its room in the rock (closed on every side: its floor, its walls and a cobbled
- *     ceiling, with a doorway in its north wall and one ceiling block a glowstone so
- *     the room can be seen), the well its sand. Where each section is: gen.h, next to
- *     test_cage. */
-
-static int g_test;
-void gen_set_test(int test) { g_test = test ? 1 : 0; }
-
-/* a platform over [x0,x1] x [z0,z1], its blocks (blk) on the row y (the spawn
- * platform's bedrock; the mobs' grass) */
-static void t_platform(int x0, int z0, int x1, int z1, int y, int blk) {
-  for (int z = z0; z <= z1; z++)
-    for (int x = x0; x <= x1; x++) put(x, y, z, blk, R_ALWAYS);
-}
-/* whether the state id is a block of its own: the ids the block and the item number
- * spaces share (258 to 395, the items themselves, and the two reserved slots 447 and
- * 448) hold no block - a block laid down with one of them shows as an empty cube, and
- * picking it would give the item */
-static bool t_block(int s) { return blk_id[s] != 0; }
-/* the state the grid's (i, j) shows: one of each block state, in the order of the ids,
- * the ones that hold no block of their own left out (345 of them) */
-static int grid_state(int i, int j) {
-  int want = j * TEST_GRID_COLS + i, s = 0;
-  for (int k = 0; k <= want; k++) {
-    do s++;
-    while (s < NSTATES && !t_block(s));
-    if (s >= NSTATES) return B_AIR;   /* (the grid has a few cells past the last state) */
-  }
-  return s;
-}
-/* the fourteen liquid states, as nb.h's is_water and is_lava take them: the sources,
- * the flows and the falls of both. They are not one run of ids - the wood slabs and
- * the crops sit between the flows of water and the flows of lava - so each run is
- * named. What the barriers around them are for. */
-static inline bool t_liquid(int b) {
-  return b == B_WATER || b == B_FLOWING_WATER || (b >= B_FLOWING_WATER_2 && b <= B_FALLING_WATER) ||
-         b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA);
-}
-/* a baked box into the slab being made, at (px, py, pz): air (0) is not stamped (the
- * slab is cleared to air first). Cells outside the chunk or the rows are left: a box
- * comes out the same whichever chunk and whichever window asks. */
-static void t_stamp(const uint16_t *cells, int sx, int sy, int sz, int px, int py, int pz, uint8_t *out, int cx,
-                    int cz, int y0, int h) {
-  for (int ly = 0; ly < sy; ly++) {
-    int Y = py + ly;
-    if (Y < y0 || Y >= y0 + h) continue;
-    for (int lz = 0; lz < sz; lz++) {
-      int clz = pz + lz - cz * 16;
-      if (clz < 0 || clz >= 16) continue;
-      for (int lx = 0; lx < sx; lx++) {
-        int clx = px + lx - cx * 16;
-        if (clx < 0 || clx >= 16) continue;
-        int b = cells[(ly * sz + lz) * sx + lx];
-        if (b) b9_set(out, (Y - y0) * 256 + clz * 16 + clx, b);
-      }
-    }
-  }
-}
-/* the showcase, for the chunk (cx, cz) over the rows [y0, y0 + h). Everything is
- * written through put(), the generator's own path, so the structures below build on
- * what the platforms and the grid have already put down. */
-static void test_slab(int cx, int cz, int y0, int h, uint8_t *out) {
-  int x0 = cx * 16, z0 = cz * 16;
-  /* the showcase is all there is in this world: everything else of the window is air,
-   * written out so a chunk asked for again comes out the same (the slab is not cleared
-   * by fill_chunk when it asks the generator for a whole one) */
-  memset(out, 0, (size_t)h * 256 / 8 * 9);
-  c_out = out, c_y0 = y0, c_h = h, c_cx = cx, c_cz = cz;
-#define T_TOUCH(a, b, c, d) (x0 <= (c) && x0 + 15 >= (a) && z0 <= (d) && z0 + 15 >= (b))
-  if (T_TOUCH(TEST_SPAWN_X0, TEST_SPAWN_Z0, TEST_SPAWN_X1, TEST_SPAWN_Z1))
-    t_platform(TEST_SPAWN_X0, TEST_SPAWN_Z0, TEST_SPAWN_X1, TEST_SPAWN_Z1, TEST_PLATFORM_Y, B_BEDROCK);
-  if (T_TOUCH(TEST_GRID_X0, TEST_GRID_Z0, TEST_GRID_X1, TEST_GRID_Z1)) {
-    static const int8_t d[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-    for (int j = 0; j < TEST_GRID_ROWS; j++)
-      for (int i = 0; i < TEST_GRID_COLS; i++) {
-        int X = TEST_GRID_X0 + i * 2, Z = TEST_GRID_Z0 + j * 2, b = grid_state(i, j);
-        if (!b) continue;   /* (past the last block state: air, not a cell of the grid) */
-        put(X, TEST_SECTION_Y, Z, B_BARRIER, R_ALWAYS);   /* what it floats on */
-        put(X, TEST_BLOCK_Y, Z, b, R_ALWAYS);
-        if (t_liquid(b))   /* held in by barriers on its four sides, so it goes nowhere */
-          for (int k = 0; k < 4; k++) put(X + d[k][0], TEST_BLOCK_Y, Z + d[k][1], B_BARRIER, R_ALWAYS);
-      }
-  }
-  if (T_TOUCH(TEST_ITEM_X0, TEST_ITEM_Z, TEST_ITEM_X0 + TEST_ITEM_CHESTS - 1, TEST_ITEM_Z)) {
-    /* the chests of every item that has no block of its own, in a row, floating on their
-     * barriers as the grid's blocks do (their contents are put in when the world is
-     * made: the chests' items are the game's own, saved with it) */
-    for (int k = 0; k < TEST_ITEM_CHESTS; k++) {
-      put(TEST_ITEM_X0 + k, TEST_SECTION_Y, TEST_ITEM_Z, B_BARRIER, R_ALWAYS);
-      put(TEST_ITEM_X0 + k, TEST_SECTION_Y + 1, TEST_ITEM_Z, B_CHEST, R_ALWAYS);
-    }
-  }
-  if (T_TOUCH(TEST_CAGE_X0, TEST_CAGE_Z0, TEST_CAGE_X1, TEST_CAGE_Z1)) {
-    static const int8_t d[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-    for (int j = 0; j < TEST_CAGE_ROWS; j++)
-      for (int i = 0; i < TEST_CAGE_COLS; i++) {
-        int X = TEST_CAGE_X0 + i * TEST_CAGE_STEP, Z = TEST_CAGE_Z0 + j * TEST_CAGE_STEP;
-        /* 5 x 5 of grass, each on its own, floating */
-        for (int z = 0; z < 5; z++)
-          for (int x = 0; x < 5; x++) put(X + x, TEST_SECTION_Y, Z + z, B_GRASS, R_ALWAYS);
-        /* the mob on its middle block, a ring of barriers on its four sides and one
-         * over its head. The ring is two rows of it - a mob jumps a block and a
-         * quarter, so a one-row ring would be climbed - and the barrier over the mob's
-         * own column is what keeps it in: its box never clears the ring's sides while
-         * it is up, and nothing burns in a cell that is not air. How tall the cage
-         * reads is the mob's own height: two blocks for the tall ones, one for the
-         * small. A barrier is drawn as air until one is held, so each mob stands in
-         * plain sight - and holding one shows the cage it is in, as Minecraft's */
-        for (int y = TEST_CAGE_Y; y <= TEST_CAGE_Y + 1; y++)
-          for (int q = 0; q < 4; q++)
-            put(X + 2 + d[q][0], y, Z + 2 + d[q][1], B_BARRIER, R_ALWAYS);
-        put(X + 2, TEST_CAGE_Y + 1, Z + 2, B_BARRIER, R_ALWAYS);
-      }
-  }
-  /* the desert pyramid: the baked box holds two blocks of the desert around its 21 x 21
-   * footprint (tests/bake.c's margin), so it is stamped two blocks before the footprint */
-  int tx0 = TEST_TEMPLE_OX * 16 - 2, ty0 = TEST_TEMPLE_Y0 + TEST_TEMPLE_DY, tz0 = TEST_TEMPLE_OZ * 16 - 2;
-  if (T_TOUCH(tx0, tz0, tx0 + TEST_TEMPLE_SX - 1, tz0 + TEST_TEMPLE_SZ - 1))
-    t_stamp(test_temple, TEST_TEMPLE_SX, TEST_TEMPLE_SY, TEST_TEMPLE_SZ, tx0, ty0, tz0, out, cx, cz, y0, h);
-  /* the dungeon: the baked box holds the room in its rock, stamped with the room's
-   * middle (its spawner) at (TEST_DUNG_X, TEST_DUNG_Z). Its spawner stays as one from
-   * the inventory is: nothing is ever set, so nothing comes out of it (the showcase
-   * holds its own mobs already). */
-  int dx0 = TEST_DUNG_X - TEST_DUNG_SPAWN_X, dy0 = TEST_DUNG_Y0 + TEST_DUNG_DY, dz0 = TEST_DUNG_Z - TEST_DUNG_SPAWN_Z;
-  if (T_TOUCH(dx0, dz0, dx0 + TEST_DUNG_SX - 1, dz0 + TEST_DUNG_SZ - 1)) {
-    t_stamp(test_dungeon, TEST_DUNG_SX, TEST_DUNG_SY, TEST_DUNG_SZ, dx0, dy0, dz0, out, cx, cz, y0, h);
-    /* the entrance passage: the doorway sits five rows deep in the rock, so a passage
-     * a block wide and two high is cut from the box's north face to it (air is written
-     * out, as the stamp does: cells outside the chunk or the rows are left) */
-    for (int ly = 0; ly < 2; ly++)
-      for (int lz = 0; lz < TEST_DUNG_DOOR_Z; lz++) {
-        int X = dx0 + TEST_DUNG_DOOR_X, Y = dy0 + TEST_DUNG_DOOR_Y + ly, Z = dz0 + lz;
-        int clx = X - cx * 16, clz = Z - cz * 16;
-        if (clx < 0 || clx >= 16 || clz < 0 || clz >= 16 || Y < y0 || Y >= y0 + h) continue;
-        b9_set(out, (Y - y0) * 256 + clz * 16 + clx, B_AIR);
-      }
-  }
-  /* the desert well, stamped with its roof's middle at (TEST_WELL_X, TEST_WELL_Z) */
-  int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ey0 = TEST_WELL_Y0 + TEST_WELL_DY, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
-  if (T_TOUCH(ex0, ez0, ex0 + TEST_WELL_SX - 1, ez0 + TEST_WELL_SZ - 1)) {
-    t_stamp(test_well, TEST_WELL_SX, TEST_WELL_SY, TEST_WELL_SZ, ex0, ey0, ez0, out, cx, cz, y0, h);
-    /* barriers under the whole of it: its sand stands over the void, and whatever
-     * came loose lands on them instead of falling out of the world (a barrier is
-     * drawn as air, so the island floats as before) */
-    for (int lz = 0; lz < TEST_WELL_SZ; lz++)
-      for (int lx = 0; lx < TEST_WELL_SX; lx++) {
-        int X = ex0 + lx, Z = ez0 + lz, Y = ey0 - 1;
-        int clx = X - cx * 16, clz = Z - cz * 16;
-        if (clx < 0 || clx >= 16 || clz < 0 || clz >= 16 || Y < y0 || Y >= y0 + h) continue;
-        b9_set(out, (Y - y0) * 256 + clz * 16 + clx, B_BARRIER);
-      }
-  }
-#undef T_TOUCH
-}
-
-/* where the k-th of the game's ten mobs (E_ZOMBIE .. E_ZPIGLIN) stands in its cage:
- * the block its feet are on, in the middle of the cage's 2 x 2 room */
-void test_cage(int k, int *x, int *y, int *z) {
-  *x = TEST_CAGE_X0 + (k % TEST_CAGE_COLS) * TEST_CAGE_STEP + 2;
-  *z = TEST_CAGE_Z0 + (k / TEST_CAGE_COLS) * TEST_CAGE_STEP + 2;
-  *y = TEST_CAGE_Y;
-}
-
-/* the highest non-air row of the showcase in the column (x, z), or 0 where the column
- * is all air - what vgtop and the sky light's top are made from, as gen_top is everywhere
- * else. It has to be the highest row, never the lowest anything stands on: world.c takes
- * rows above the top as air without generating them, so a top below the real one unmakes
- * whatever stands over it the moment the cache moves up through it. (A constant per box,
- * over the columns that hold less: overestimating only generates more often, never less.
- * The light's own top still walks each column down past what lets light through.) */
-static int test_top(int X, int Z) {
-  if (X >= TEST_SPAWN_X0 && X <= TEST_SPAWN_X1 && Z >= TEST_SPAWN_Z0 && Z <= TEST_SPAWN_Z1) return TEST_PLATFORM_Y;
-  if (X >= TEST_GRID_X0 && X <= TEST_GRID_X1 && Z >= TEST_GRID_Z0 && Z <= TEST_GRID_Z1) return TEST_BLOCK_Y;
-  if (X >= TEST_CAGE_X0 - 1 && X <= TEST_CAGE_X1 + 1 && Z >= TEST_CAGE_Z0 - 1 && Z <= TEST_CAGE_Z1 + 1)
-    return TEST_CAGE_Y + 1;
-  if (X >= TEST_ITEM_X0 - 2 && X <= TEST_ITEM_X0 + TEST_ITEM_CHESTS + 1 && Z >= TEST_ITEM_Z - 2 && Z <= TEST_ITEM_Z + 2)
-    return TEST_BLOCK_Y;
-  int tx0 = TEST_TEMPLE_OX * 16 - 2, tz0 = TEST_TEMPLE_OZ * 16 - 2;
-  if (X >= tx0 && X < tx0 + TEST_TEMPLE_SX && Z >= tz0 && Z < tz0 + TEST_TEMPLE_SZ) return TEST_TEMPLE_TOP - 1;
-  int dx0 = TEST_DUNG_X - TEST_DUNG_SPAWN_X, dz0 = TEST_DUNG_Z - TEST_DUNG_SPAWN_Z;
-  if (X >= dx0 && X < dx0 + TEST_DUNG_SX && Z >= dz0 && Z < dz0 + TEST_DUNG_SZ) return TEST_DUNG_TOP - 1;
-  int ex0 = TEST_WELL_X - TEST_WELL_MID_X, ez0 = TEST_WELL_Z - TEST_WELL_MID_Z;
-  if (X >= ex0 && X < ex0 + TEST_WELL_SX && Z >= ez0 && Z < ez0 + TEST_WELL_SZ) return TEST_WELL_TOP - 1;
-  return 0;
-}
+void gen_set_flat(int flat) { g_flat = flat; }
+static int flat_block(int y) { return y == 0 ? B_BEDROCK : y < 3 ? B_DIRT : y == 3 ? B_GRASS : B_AIR; }
 
 int gen_prepare(int cx, int cz) {
-    if (g_dim == DIM_END) return 0;
-    if (g_dim || g_flat || g_test) return 0;
+    if (g_flat) return 0;
+#if NB_DIMS
+    if (gd_dim) return 0;
+#endif
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++)
             if ((dx || dz) && !sum_find(cx + dx, cz + dz)) {
                 sum_get(cx + dx, cz + dz);
                 return 1;
             }
+#if NB_DIMS
     if (stronghold_prepare(cx, cz)) return 1;
+#endif
     return 0;
 }
 
-/* The overworld deep layer's bedrock floor: a hash of the column, so the same column gets
- * the same floor whichever slab window asks for it (1.18's bedrock sits about y -64..-60). */
-static int deep_bedrock(int x, int z) {
-    uint32_t h = (uint32_t)x * 374761393u + (uint32_t)z * 668265263u;
-    h = (h ^ (h >> 13)) * 1274126177u;
-    h ^= h >> 16;
-    return WORLD_MIN_Y + (int)(h % (unsigned)(BEDROCK_TOP - WORLD_MIN_Y + 1));
-}
-
-/* ---- the deep layer's caves ---------------------------------------------------
- * The 1.8 carver (WorldGenCaves, above) stops at the old floor, so under y = 0 the
- * deepslate was solid rock. Modern Minecraft carves its caves from noise fields;
- * tried here first (1.5.27-1.5.30), that read as glitchy, faceted terrain: on the
- * 4-block lattice this calculator can afford, thin tubes alias into beads and gaps
- * and the thresholded union into grid-aligned diamonds - never round holes. So the
- * deep layer is carved the way its surface caves are, by walking: every chunk draws
- * its own walks from a stream of its own (nothing of 1.8's terrain, population or
- * ore streams), and a chunk is carved by the walks of the 5 x 5 chunks around it, so
- * a tunnel runs whole across chunk borders and comes out the same whichever chunk -
- * and whichever slab window - asks. Rooms are single big ellipsoids (modern's cheese
- * caverns), tunnels walk 20-30 steps of round section (its spaghetti) and veins walk
- * thin (its noodle); water pools and the lava sea fill the carved cells as before. */
-
-#define DEEP_LAVA_Y (-54)   /* 1.18's lava level: an open deep cell at or below it is the lava sea */
-#define DEEP_WATER_Y (-50)   /* the water table: open cells below it (down to the lava sea) are water,
-                              * a thin flat layer like the lava's - never floating balls in the rock above it */
-/* A walk never travels more than 32 blocks sideways from its chunk (20-30 steps of
- * 0.9 blocks, radius under 3.2; rooms sit inset with radius under 13), so the 5 x 5
- * chunks around the one being carved hold every walk that can reach it. */
-#define DEEP_REACH 2
-#define DEEP_SALT 0xCA9E5A1EULL   /* the walks' own stream (deep_ores has its own beside it) */
-
-typedef struct { float x, y, z, rx, ry, rz; } DeepSpot;   /* one ellipsoid to carve */
-typedef struct { float x0, x1, y0, y1, z0, z1; } DeepBox;   /* what a chunk's walks may touch */
-
-typedef struct {
-    int raster;          /* 0: widen the box only; 1: carve into out */
-    int y0, deep;        /* the window out holds */
-    uint8_t *out;
-    int ccx, ccz;        /* the chunk being carved */
-    DeepBox *box;        /* (bbox mode) */
-} DeepCtx;
-
-/* One ellipsoid spot: widen the box, or carve it where the window holds deepslate.
- * Carved cells become air, the water layer (at or below DEEP_WATER_Y) or the lava sea
- * (at or below DEEP_LAVA_Y); the bedrock floor is never carved and nothing above
- * y = 0 is touched. */
-HOT static void deep_spot(const DeepSpot *s, DeepCtx *c) {
-    if (!c->raster) {
-        DeepBox *b = c->box;
-        if (s->x - s->rx < b->x0) b->x0 = s->x - s->rx;
-        if (s->x + s->rx > b->x1) b->x1 = s->x + s->rx;
-        if (s->y - s->ry < b->y0) b->y0 = s->y - s->ry;
-        if (s->y + s->ry > b->y1) b->y1 = s->y + s->ry;
-        if (s->z - s->rz < b->z0) b->z0 = s->z - s->rz;
-        if (s->z + s->rz > b->z1) b->z1 = s->z + s->rz;
-        return;
-    }
-    int cx0 = c->ccx * 16, cz0 = c->ccz * 16;
-    int wx0 = floor_f_i(s->x - s->rx), wx1 = floor_f_i(s->x + s->rx);
-    int wy0 = floor_f_i(s->y - s->ry), wy1 = floor_f_i(s->y + s->ry);
-    int wz0 = floor_f_i(s->z - s->rz), wz1 = floor_f_i(s->z + s->rz);
-    if (wx0 < cx0) wx0 = cx0;
-    if (wx1 > cx0 + 15) wx1 = cx0 + 15;
-    if (wz0 < cz0) wz0 = cz0;
-    if (wz1 > cz0 + 15) wz1 = cz0 + 15;
-    if (wy0 < c->y0) wy0 = c->y0;
-    if (wy1 > c->y0 + c->deep - 1) wy1 = c->y0 + c->deep - 1;
-    if (wy0 < WORLD_MIN_Y) wy0 = WORLD_MIN_Y;
-    if (wy1 > -1) wy1 = -1;
-    if (wx0 > wx1 || wy0 > wy1 || wz0 > wz1) return;
-    float ix2 = 1.0f / (s->rx * s->rx), iy2 = 1.0f / (s->ry * s->ry), iz2 = 1.0f / (s->rz * s->rz);
-    for (int wy = wy0; wy <= wy1; wy++)
-        for (int wz = wz0; wz <= wz1; wz++)
-            for (int wx = wx0; wx <= wx1; wx++) {
-                float dx = (float)wx + 0.5f - s->x, dy = (float)wy + 0.5f - s->y, dz = (float)wz + 0.5f - s->z;
-                if (dx * dx * ix2 + dy * dy * iy2 + dz * dz * iz2 > 1.0f) continue;
-                int o = (wy - c->y0) * 256 + (wz - cz0) * 16 + (wx - cx0);
-                uint8_t b = (uint8_t)b9_get(c->out, o);
-                if (b == B_AIR || b == B_BEDROCK) continue;
-                b9_set(c->out, o, wy <= DEEP_LAVA_Y ? B_LAVA : (wy <= DEEP_WATER_Y ? B_WATER : B_AIR));
-            }
-}
-
-/* One walk: len round spots along a wandering heading, the radius breathing slowly
- * (tunnels bulge and narrow the way dug ones do). Draws come in a fixed order, so the
- * walk is identical every time its chunk is replayed. */
-HOT static void deep_walk(JRand *r, DeepCtx *c, float x, float y, float z, float yaw, float pitch, int len,
-                          float r0, float squash) {
-    float ph = jr_float(r) * 6.2831853f;
-    float dip = (jr_float(r) - 0.5f) * 0.7f;   /* the walk's own slope: without it a pitch
-                                                * random walk barely leaves its start depth */
-    for (int i = 0; i < len; i++) {
-        yaw += (jr_float(r) - 0.5f) * 0.55f;
-        pitch += (jr_float(r) - 0.5f) * 0.5f;
-        if (pitch > 0.8f) pitch = 0.8f;
-        if (pitch < -0.8f) pitch = -0.8f;
-        float rr = r0 * (0.82f + 0.36f * mh_sin_i(ph + (float)i * 0.35f));
-        DeepSpot s = {x, y, z, rr, rr * squash, rr};
-        deep_spot(&s, c);
-        float cp = mh_cos_i(pitch);
-        x += mh_sin_i(yaw) * cp * 0.9f;
-        y += (mh_sin_i(pitch) + dip) * 0.9f;
-        z += mh_cos_i(yaw) * cp * 0.9f;
-        if (y < -60.0f) { y = -60.0f; pitch = 0.45f; }
-        if (y > -4.0f) { y = -4.0f; pitch = -0.45f; }
-    }
-}
-
-/* The walks of chunk (cx, cz): two tunnels, sometimes a room, one thin vein. A fixed
- * draw order - the same walks wherever they are replayed from. */
-HOT static void deep_walks(int cx, int cz, DeepCtx *c) {
-    JRand r;
-    jr_seed(&r, (i64)(((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ DEEP_SALT ^ (u64)g_seed));
-    for (int t = 0; t < 3; t++)
-        deep_walk(&r, c, (float)(cx * 16 + jr_int(&r, 16)), -58.0f + (float)jr_int(&r, 43),
-                  (float)(cz * 16 + jr_int(&r, 16)), jr_float(&r) * 6.2831853f,
-                  (jr_float(&r) - 0.5f) * 1.0f, 18 + jr_int(&r, 10), 1.6f + jr_float(&r) * 1.1f, 1.0f);
-    if (jr_int(&r, 3) < 2) {
-        float rxz = 6.0f + jr_float(&r) * 7.0f;
-        DeepSpot s = {(float)(cx * 16 + 3 + jr_int(&r, 10)), -50.0f + (float)jr_int(&r, 35),
-                      (float)(cz * 16 + 3 + jr_int(&r, 10)), rxz, rxz * (0.45f + jr_float(&r) * 0.25f), rxz};
-        deep_spot(&s, c);
-    }
-    deep_walk(&r, c, (float)(cx * 16 + jr_int(&r, 16)), -58.0f + (float)jr_int(&r, 43),
-              (float)(cz * 16 + jr_int(&r, 16)), jr_float(&r) * 6.2831853f,
-              (jr_float(&r) - 0.5f) * 1.0f, 15 + jr_int(&r, 16), 1.0f, 1.0f);
-}
-
-/* Carve the deep rows of chunk (cx, cz): replay the walks of the 5 x 5 chunks around
- * it, rasterizing the ones whose box reaches it. Cells outside the window (or the
- * chunk) are left - a chunk comes out the same whichever slab window asks. */
-HOT static void deep_caves(int cx, int cz, int y0, int deep, uint8_t *out) {
-    float bx0 = (float)(cx * 16), bx1 = (float)(cx * 16 + 16);
-    float bz0 = (float)(cz * 16), bz1 = (float)(cz * 16 + 16);
-    for (int oz = -DEEP_REACH; oz <= DEEP_REACH; oz++)
-        for (int ox = -DEEP_REACH; ox <= DEEP_REACH; ox++) {
-            DeepCtx c;
-            DeepBox box = {1e30f, -1e30f, 1e30f, -1e30f, 1e30f, -1e30f};
-            c.raster = 0;
-            c.box = &box;
-            deep_walks(cx + ox, cz + oz, &c);
-            if (box.x1 < bx0 || box.x0 > bx1 || box.z1 < bz0 || box.z0 > bz1 ||
-                box.y1 < (float)WORLD_MIN_Y || box.y0 > 0.0f)
-                continue;   /* none of its walks reach this chunk */
-            c.raster = 1;
-            c.y0 = y0;
-            c.deep = deep;
-            c.out = out;
-            c.ccx = cx;
-            c.ccz = cz;
-            deep_walks(cx + ox, cz + oz, &c);
-        }
-    /* Where the water layer meets the lava sea, the contact crusts to obsidian - exactly
-     * what the fluid tick's own mixing makes of lava touching water (tick.c's mix), so no
-     * water sits directly on lava. Lava only exists at wy <= DEEP_LAVA_Y, so only water at
-     * -53 can meet it, and every slab window holding -53 holds -54 too - the crust is the
-     * same whichever window asks. */
-    for (int zl = 0; zl < 16; zl++)
-        for (int xl = 0; xl < 16; xl++)
-            for (int yl = 0; yl < deep; yl++) {
-                int wy = y0 + yl;
-                if (wy <= WORLD_MIN_Y || wy >= 0) continue;
-                int o = yl * 256 + zl * 16 + xl;
-                if (b9_get(out, o) != B_WATER) continue;
-                int below = wy - 1;
-                if (below < y0 || below >= y0 + deep) continue;   /* outside the window: left for the tick */
-                if (b9_get(out, o - 256) == B_LAVA) b9_set(out, o, B_OBSIDIAN);
-            }
-}
-
-/* One ore vein in the deep layer: WorldGenMinable's shape (a chain of spheres along a
- * segment), placed at chunk-local (X, Y, Z), replacing deepslate only. Cells outside the
- * window (y0..y0+h-1) or the chunk's columns are left - a vein is the same whichever
- * slab window asks, because its draws come from the chunk's own stream (below). */
-static void deep_vein(int y0, int h, uint8_t *out, JRand *r, int X, int Y, int Z, int n, uint16_t blk) {
-    float f = jr_float(r) * 3.1415927f;
-    float s = mh_sin_i(f) * (float)n / 8.0f, c = mh_cos_i(f) * (float)n / 8.0f;
-    float d0 = (float)X + s, d1 = (float)X - s, d2 = (float)Z + c, d3 = (float)Z - c;
-    int d4 = Y + jr_int(r, 3) - 2, d5 = Y + jr_int(r, 3) - 2;
-    for (int i = 0; i < n; i++) {
-        float f1 = (float)i / (float)n;
-        float d6 = d0 + (d1 - d0) * f1, d7 = (float)d4 + (float)(d5 - d4) * f1, d8 = d2 + (d3 - d2) * f1;
-        float d9 = jr_doublef_i(r) * (float)n / 16.0f;
-        float d10 = (mh_sin_i(3.1415927f * f1) + 1.0f) * d9 + 1.0f, hh = d10 / 2.0f;
-        int j = floor_f_i(d6 - hh), k = floor_f_i(d7 - hh), l = floor_f_i(d8 - hh);
-        int j1 = floor_f_i(d6 + hh), k1 = floor_f_i(d7 + hh), l1 = floor_f_i(d8 + hh);
-        if (j < 0) j = 0;
-        if (j1 > 15) j1 = 15;
-        if (l < 0) l = 0;
-        if (l1 > 15) l1 = 15;
-        if (k < y0) k = y0;
-        if (k1 > y0 + h - 1) k1 = y0 + h - 1;
-        for (int a = j; a <= j1; a++)
-            for (int b = k; b <= k1; b++)
-                for (int zz = l; zz <= l1; zz++) {
-                    float da = ((float)a + 0.5f - d6) / hh, db = ((float)b + 0.5f - d7) / hh,
-                          dc = ((float)zz + 0.5f - d8) / hh;
-                    if (da * da + db * db + dc * dc >= 1.0f) continue;
-                    if (b >= 0 || b < WORLD_MIN_Y) continue;   /* the deep layer only */
-                    int o = (b - y0) * 256 + zz * 16 + a;
-                    if (b9_get(out, o) == B_DEEPSLATE) b9_set(out, o, blk);
-                }
-    }
-}
-
-/* 1.17's deepslate ores: the deep layer (y < 0) is all deepslate, so every ore that reaches
- * it is the deepslate variant - a stone ore never sits in the deep rock. The veins use their
- * own stream, seeded from the chunk, so the 1.8 terrain above 0 (t_refcmp's exactness) is
- * untouched. Ranges are 1.18's deepslate targets in spirit (the common ores reach the floor,
- * gold/redstone/diamond are lower; emerald, always a mountain ore above y 32 in 1.18, never
- * generates in the deep layer though its block exists). Counts are per chunk. */
-static void deep_ores(int cx, int cz, int y0, int h, uint8_t *out) {
-    static const struct {
-        uint8_t n, size, depth;
-        uint16_t blk;
-    } O[] = {{10, 17, 64, B_DEEPSLATE_COAL_ORE}, {12, 9, 64, B_DEEPSLATE_IRON_ORE},
-             {3, 9, 48, B_DEEPSLATE_GOLD_ORE},   {6, 8, 48, B_DEEPSLATE_REDSTONE_ORE},
-             {4, 8, 48, B_DEEPSLATE_DIAMOND_ORE}, {2, 7, 64, B_DEEPSLATE_LAPIS_ORE}};
-    JRand r;
-    jr_seed(&r, (i64)((u64)(i64)cx * 341873128712ULL + (u64)(i64)cz * 132897987541ULL) ^ 0x1E18DEEFULL);
-    for (int t = 0; t < 6; t++)
-        for (int c = 0; c < O[t].n; c++) {
-            int X = jr_int(&r, 16), Y = -1 - jr_int(&r, O[t].depth), Z = jr_int(&r, 16);
-            deep_vein(y0, h, out, &r, X, Y, Z, O[t].size, O[t].blk);
-        }
-}
-
-#include "gen_struct.h" /* the fortresses' and strongholds' pieces */
-#include "gen_stronghold.h"   /* overworld strongholds (1.8.8) */
-
 void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
-    /* the nether is NETHER_H tall: its terrain still ends at its ceiling (127), and the
-     * rows above it are the open air the player builds in (nb.h's dim_height). The
-     * overworld's top is WORLD_TOP; its floor is the deep layer below y = 0. */
-    int Htop = g_dim == DIM_NETHER ? NETHER_H : WORLD_TOP;
-    if (y0 + h > Htop) h = Htop - y0;
+    if (y0 < 0) {
+        h += y0;
+        y0 = 0;
+    }
+    if (y0 + h > 128) h = 128 - y0;
     if (h <= 0) return;
-    if (g_dim == DIM_END) {
-        /* the End's island: 0..127, its density and pillars (gen_end.h) */
-        c_out = out, c_y0 = y0, c_h = h, c_cx = cx, c_cz = cz;
-        end_slab(cx, cz, y0, h, out);
-        return;
-    }
-    if (g_dim) {        if (y0 < 0) {   /* the nether has no deep layer: below 0 is air */
-            h += y0;
-            y0 = 0;
-            if (h <= 0) return;
-        }
-        if (y0 >= 128) {
-            /* above the ceiling: only air, whatever slab window is asked for (no
-             * column of the density reaches up here) */
-            memset(out, 0, (size_t)h * 256 / 8 * 9);
-            return;
-        }
-        /* the nether's chunk needs the same slab state (c_out and its window):
-         * its veins and glowstone write into the slab directly */
-        c_out = out;
-        c_y0 = y0;
-        c_h = h;
-        c_cx = cx;
-        c_cz = cz;
-        nether_slab(cx, cz, y0, h, out);
-        return;
-    }
-    if (g_test) {
-        test_slab(cx, cz, y0, h, out);
-        last_cx = cx, last_cz = cz;   /* (gen_top's "the chunk just made" is this one) */
-        return;
-    }
+#if NB_DIMS
+    if (dims_slab(cx, cz, y0, h, out)) return;
+#endif
     if (g_flat) {
-        /* flat worlds keep their layers where the preset puts them (y = 0 up): below 0 is
-         * air, the void (flat_block answers air for a negative y) */
-        for (int y = 0; y < h; y++) {
-            int b = flat_block(y0 + y);
-            for (int i = 0; i < 256; i++) b9_set(out, y * 256 + i, b);
-        }
+        for (int y = 0; y < h; y++) memset(out + y * 256, flat_block(y0 + y), 256);
         return;
     }
-    /* the overworld's deep layer (1.18): rows below y = 0 are deepslate with bedrock on the
-     * floor, then 1.8's terrain above. The deep rows go straight into the slab; the terrain
-     * rows keep the whole (unchanged) 1.8 generator, addressed by a byte offset - 256 cells
-     * x 9 bits = 288 bytes a row - so its windows and col[] indices read as before. */
-    int deep = y0 < 0 ? (h < -y0 ? h : -y0) : 0;
-    for (int z = 0; z < 16; z++)
-        for (int x = 0; x < 16; x++) {
-            int wx = cx * 16 + x, wz = cz * 16 + z;
-            int dt = deepslate_top(wx, wz), bd = deep_bedrock(wx, wz);
-            for (int y = 0; y < deep; y++) {
-                int wy = y0 + y;
-                /* bedrock on the floor, else the column's own deepslate top (stone above it) */
-                b9_set(out, y * 256 + z * 16 + x, wy <= bd ? B_BEDROCK : wy <= dt ? B_DEEPSLATE : B_STONE);
-            }
-        }
-    if (deep) {
-        /* 1.17-1.19's noise caves first, then the ores into the deepslate they left:
-         * a vein never hangs in a cavern, and the ones a cave cut into show on its wall */
-        deep_caves(cx, cz, y0, deep, out);
-        deep_ores(cx, cz, y0, h, out);
-    }
-    if (deep == h) {
-        /* The window is all deep layer: no terrain rows to write. The column summaries and
-         * the biomes still have to be known (the world asks gen_top and gen_biome of every
-         * column), or each of them would rebuild the whole chunk - caves and population
-         * and all - a second time, far slower while the player is down here. */
-        SumEntry *se = sum_find(cx, cz);
-        if (!se) se = sum_slot(cx, cz);
-        sum_pin[se - sumc] = 1;
-        chunk_terrain(cx, cz, NULL, 0, 0, se->s);
-        memcpy(c_b16, cb16, 256);
-        se->b00 = cb16[0];
-        for (int i = 0; i < 256; i++) {
-            c_top[i] = (uint8_t)(cs_top(&se->s[i]) + (cs_blk(&se->s[i]) == B_LILY_PAD));
-            c_sl[i] = (uint8_t)cs_top(&se->s[i]);
-        }
-        last_cx = cx;
-        last_cz = cz;
-        memset(sum_pin, 0, sizeof sum_pin);
-        return;
-    }
-    uint8_t *tout = out + (size_t)deep * 288;
-    int ty0 = y0 + deep, th = h - deep;
-    c_out = tout;
-    c_y0 = ty0;
-    c_h = th;
+    c_out = out;
+    c_y0 = y0;
+    c_h = h;
     c_cx = cx;
     c_cz = cz;
     nb_cx = cx;
@@ -7671,7 +5516,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     if (!e) e = sum_slot(cx, cz);
     int ie = (int)(e - sumc);
     sum_pin[ie] = 1;
-    chunk_terrain(cx, cz, tout, ty0, th, e->s);
+    chunk_terrain(cx, cz, out, y0, h, e->s);
     e->b00 = cb16[0];
     memcpy(c_b16, cb16, 256);
     for (int i = 0; i < 256; i++) {
@@ -7680,7 +5525,7 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     }
     nb[1][1] = e;
     /* caves and ravines */
-    slab_caves(cx, cz, e->s, tout, ty0, th);
+    slab_caves(cx, cz, e->s, out, y0, h);
     /* the 3x3 summaries */
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++) {
@@ -7692,30 +5537,23 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     /* the four populations writing into C (their biome is the one at +16, +16) */
     int pb[4]; /* World.getBiome(population origin + (16, 16)): block (0, 0) of the next chunk */
     for (int k = 0; k < 4; k++) pb[k] = nb[1 + (k >> 1)][1 + (k & 1)]->b00;
-    /* which of the four is a temple origin chunk in a desert (the layers may run
-     * here, before the populations take the scratch) */
-    for (int k = 0; k < 4; k++) {
-        int px = cx - 1 + (k & 1), pz = cz - 1 + (k >> 1);
-        int ox, oz;
-        JRand tr;
-        temple_pb[k] = temple_origin(px, pz, &ox, &oz, &tr) && gen_biome(ox * 16 + 8, oz * 16 + 8) == BI_DESERT;
-    }
     populate(cx - 1, cz - 1, pb[0]);
     populate(cx, cz - 1, pb[1]);
     populate(cx - 1, cz, pb[2]);
     populate(cx, cz, pb[3]);
-    /* the strongholds' pieces, after the populations (they replace what they cross) */
-    stronghold_slab(cx, cz, ty0, th, tout);
+#if NB_DIMS
+    stronghold_slab(cx, cz, y0, h, out);
+#endif
     memset(sum_pin, 0, sizeof sum_pin);
     last_cx = cx;
     last_cz = cz;
 }
 
 int gen_biome(int x, int z) {
-    if (g_dim == DIM_END) return BI_END;
-    if (g_dim) return nether_biome_at(x, z);   /* the nether's four (1.16): the split of [22] */
-    if (g_flat) return flat_biome;
-    if (g_test) return BI_PLAINS;   /* the showcase's one biome: warm, so the weather is rain */
+#if NB_DIMS
+    if (gd_dim) return gd_dim == DIM_NETHER ? 8 : 9;   /* (BiomeGenHell, BiomeGenEnd) */
+#endif
+    if (g_flat) return BI_PLAINS;
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx == last_cx && cz == last_cz) return c_b16[i];
     if (cx != bc_cx || cz != bc_cz) chunk_biomes(cx, cz);
@@ -7723,8 +5561,10 @@ int gen_biome(int x, int z) {
 }
 
 int gen_top(int x, int z) {
-    if (g_flat) return flat_top;
-    if (g_test) return test_top(x, z);
+#if NB_DIMS
+    if (gd_dim) return 127;
+#endif
+    if (g_flat) return 3;
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx != last_cx || cz != last_cz) gen_slab(cx, cz, 127, 1, col_tmp);
     int t = c_top[i];
@@ -7744,37 +5584,22 @@ static int can_spawn(int x, int z) {
 void gen_spawn(int *px, int *py, int *pz) {
     JRand r;
     jr_seed(&r, g_seed);
-    if (g_dim) {
-        /* anywhere within 256, above the lava sea: the portal that brings the
-         * player here puts them somewhere safe of its own */
-        *px = -256 + jr_int(&r, 513);
-        *pz = -256 + jr_int(&r, 513);
-        *py = 40;
-        return;
-    }
     if (g_flat) {
         /* WorldChunkManagerHell.findBiomePosition(0, 0, 256): anywhere within 256, all of it grass */
         *px = -256 + jr_int(&r, 513);
         *pz = -256 + jr_int(&r, 513);
-        *py = flat_top + 1;
-        return;
-    }
-    if (g_test) {
-        /* the middle of the spawn platform, standing on it */
-        *px = (TEST_SPAWN_X0 + TEST_SPAWN_X1) / 2;
-        *pz = (TEST_SPAWN_Z0 + TEST_SPAWN_Z1) / 2;
-        *py = TEST_PLATFORM_Y + 1;
+        *py = 4;
         return;
     }
     /* WorldChunkManager.a(0, 0, 256, spawn biomes, random): 129 x 129 cells of rivermix */
     int found = 0, fx = 0, fz = 0, j2 = 0;
-    uint8_t *rows = (uint8_t *)U->lay + sizeof(i32) * LAY_INTS; /* 8 rows x 129, after the layer scratch */
+    uint8_t *rows = (uint8_t *)U.lay + sizeof(i32) * LAY_INTS; /* 8 rows x 129, after the layer scratch */
     for (int tz = 0; tz < 129; tz += 8) {
         int th = 129 - tz < 8 ? 129 - tz : 8;
         for (int tx = 0; tx < 129; tx += 43) { /* 43 x 8 tiles: the layers' cost is mostly per run */
             int tw = 43;
-            i32 *rm = U->lay;
-            lay_mem = U->lay + 43 * 8;
+            i32 *rm = U.lay;
+            lay_mem = U.lay + 43 * 8;
             lay_cap = LAY_INTS - 43 * 8;
             lay_top = 0;
             layers_rivermix(-64 + tx, -64 + tz, tw, th, rm);
@@ -7822,9 +5647,13 @@ unsigned gen_ram_bytes(void) {
                       sizeof reg_z0 + sizeof reg_z1 + sizeof vor_c + sizeof sum_pin + sizeof oc_surf +
                       sizeof nb + sizeof tg + sizeof oc_mesa + sizeof mesa_bands + sizeof oc_main +
                       sizeof tg_cx + sizeof tg_cz + sizeof jump_add + sizeof jump_mul + sizeof bweights +
-                      sizeof cb4 + sizeof oc_depth + sizeof oc_max + sizeof oc_min +
-                      sizeof pmemo + sizeof biome_index + sizeof c_b16 + sizeof c_sl +
+                      sizeof cb4 + sizeof oc_depth + sizeof oc_max + sizeof oc_min + sizeof chain_buf +
+                      sizeof pmemo + sizeof tstack + sizeof biome_index + sizeof c_b16 + sizeof c_sl +
                       sizeof c_top + sizeof cb16 + sizeof col_tmp + sizeof perm_grass + sizeof perm_temp +
-                      sizeof bgrid + sizeof lay_wseed + sizeof bflags + sizeof crec +
-                      NSUM * sizeof *sumc + sizeof gen_spawner_hook);
+                      sizeof bgrid + sizeof lay_wseed + sizeof bflags + sizeof tov + sizeof crec + sizeof U +
+                      NSUM * sizeof *sumc);
 }
+
+#if NB_DIMS
+#include "gen_dims.h"   /* NumBlocks.nwa: the Nether and the End */
+#endif

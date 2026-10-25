@@ -14,13 +14,7 @@
 #include <string.h>
 #include "blocks.h"
 #include "data.h"
-#include "states.h"   /* the 9-bit block states: the cache's accessors */
-#include "gen.h"     /* the generator's scratch (GEN_SCRATCH, gen_scratch) */
-#include "hand.h"    /* the hand's model for a frame, on render_frame's stack */
-
-/* the game's version (1.A.B); versions.md's first line says the same, and is bumped
- * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.61"
+#include "../../common/np_text.h"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -29,7 +23,7 @@ enum {
   K_JUMP = 1 << 8, K_USE = 1 << 9, K_ATTACK = 1 << 10, K_INV = 1 << 11,   /* shift, OK, Back, var */
   K_HOME = 1 << 12, K_SNEAK = 1 << 13, K_PAUSE = 1 << 14, K_DROP = 1 << 15,   /* Home, alpha, Toolbox, x,n,t */
   K_SLOT1 = 1 << 16,   /* K_SLOT1 << n: digit n + 1 */
-  K_SPRINT = 1 << 25,    /* i, next to forward (the key sheet's key) */
+  K_SPRINT = 1 << 25,    /* backspace (also deletes, typing a seed) */
   K_EXE = 1 << 26,       /* EXE alone (OK and EXE both give K_USE): right click in screens */
   K_SHIFT = 1 << 27,     /* shift (also K_JUMP): shift click in screens */
   K_BACK = 1 << 28,      /* Back alone: closes screens */
@@ -43,11 +37,6 @@ enum {
   RK_OK = 4, RK_BACK = 5, RK_SHIFT = 12, RK_ALPHA = 13, RK_BACKSPACE = 17, RK_EXE = 52
 };
 uint32_t plat_millis(void);
-/* A number that differs between runs, for what wants one without touching the world's
- * rnd() stream: main.c's Random panorama pick mixes it, so even the first pick of a
- * run is a roll (the host's simulated clock below starts at 0 every run and would say
- * the same thing every time; this is the real clock, or on the calculator its uptime) */
-uint32_t plat_entropy(void);
 void plat_sleep(uint32_t ms);
 void plat_push(int x, int y, int w, int h, const uint16_t *px);
 void plat_pull(int x, int y, int w, int h, uint16_t *px);   /* what the screen shows there */
@@ -58,6 +47,8 @@ uint32_t plat_storage_free(void);
 bool plat_record(int i, char *name, int max);   /* the i-th record's name; false past the last */
 uint8_t *plat_save_open(const char *name, uint32_t len);   /* a record of len bytes to fill (NULL: no room, nothing changed) */
 void plat_save_close(const char *name);         /* (done filling it) */
+uint8_t *plat_save_grow(const char *name, uint32_t len);   /* the record made len bytes long, keeping what it holds */
+void plat_save_done(const char *name, uint32_t len);       /* (done with it: len bytes long, at most as grown) */
 bool plat_in_launcher(void);                    /* running inside NumPlay (which keeps its own copy of the saves) */
 void plat_begin(void);
 int plat_end(void);
@@ -72,42 +63,18 @@ static inline bool is_water(int b) {
 static inline bool is_door_lower(int b) {
   return b == B_DOOR_OAK_LOWER || (b >= B_DOOR_OAK_LOWER_S && b <= B_DOOR_OAK_LOWER_N_OPEN);
 }
-/* the iron door's lower half: four facing states, then the four open ones */
-static inline bool is_iron_door_lower(int b) { return b >= B_IRON_DOOR_LOWER_E && b <= B_IRON_DOOR_LOWER_N_OPEN; }
-static inline bool is_iron_door_upper(int b) { return b == B_IRON_DOOR_UPPER; }
+#if NB_DIMS
+static inline bool is_lava(int b) {
+  return b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA) ||
+         (b >= B_FLOWING_LAVA_1 && b <= B_FLOWING_LAVA_7);
+}
+#else
 static inline bool is_lava(int b) { return b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA); }
-/* fire's two states: ordinary and the blue soul fire (on soul sand or soul soil) */
-static inline bool is_fire(int b) { return b == B_FIRE || b == B_SOUL_FIRE; }
-/* the nether portal's two states: NS faces north/south (thin in Z), EW faces east/west (thin in X) */
-static inline bool is_portal(int b) { return b == B_PORTAL_NS || b == B_PORTAL_EW; }
-/* the concrete pair (blocks.py): the powder falls like sand and gravel, and water - a source
- * or a flow - sets it into the concrete of its colour (player.c's neighbours_changed). The
- * states run the sixteen powders first and the concretes after, in the same colour order */
-static inline bool is_concrete_powder(int b) {
-  return b >= B_CONCRETE_POWDER_WHITE && b <= B_CONCRETE_POWDER_BLACK;
-}
-static inline int concrete_of(int b) { return b + (B_CONCRETE_WHITE - B_CONCRETE_POWDER_WHITE); }
-/* A stack id is one of the items' (I_*) rather than a block state's (B_*): the items'
- * ids are 256 on, one a slot of the it_* tables (ITEM_SLOTS of them). A holdable
- * block's stack id is its own state's, and the two number spaces share the middle
- * (the reserved states alias the items below them, and the states past them - 396's
- * chiseled quartz and on - are ids of their own, with the items' own tail past them
- * at 447): an id is an item's where the tables have a row for it, which is the one
- * place both worlds agree on. */
-static inline bool is_item_id(int id) {
-  return id >= 256 && id < 256 + ITEM_SLOTS && it_label[id - 256] != 0;
-}
+#endif
 
 /* ---------------------------------------------------------------- the generator (gen.c) */
 void gen_init(int64_t seed);
 void gen_set_flat(int flat);   /* superflat (kept across gen_init) */
-void gen_set_flat_preset(const char *preset);   /* superflat with preset FlatGeneratorInfo, NULL/default */
-#define FLAT_DEFAULT "2;7,2x3,2;1"   /* bedrock, 2x dirt, grass, plains */
-#define FLAT_MAX 63                  /* longest preset string (without 0) */
-bool flat_validate(const char *preset, char *err, int errmax);   /* NULL preset = default; err red message */
-bool flat_simplify(const char *preset, char *out, int outmax);   /* either shape as "block,..."; false if too long */
-int flat_height(void);             /* total layers high (default 4) */
-int flat_biome_id(void);           /* biome of the flat preset (default 1 plains) */
 void gen_slab(int cx, int cz, int y0, int h, uint8_t *out);   /* out[(y - y0) * 256 + z * 16 + x] */
 int gen_prepare(int cx, int cz);   /* a slice of the work for gen_slab(cx, cz) ahead; 0: nothing left */
 int gen_biome(int x, int z);
@@ -120,57 +87,54 @@ float gen_temp_noise(int x, int z);   /* BiomeGenBase.temperatureNoise at (x / 8
 #define VCZ 40
 #define VCY 24
 #define WORLD_H 128
-/* The nether's build height is gen.h's NETHER_H (200): its world is the same 128
- * blocks (its ceiling closes at 123..127), but above the ceiling there is open air
- * to build in, as on Minecraft's nether roof. The overworld's top stays 128, but its
- * floor is gen.h's WORLD_MIN_Y (-64): the deepslate layer of 1.18, with deepslate from
- * y=0 down to bedrock at -64 (see gen.c's build_default and gen_slab). */
-/* Under the world is the void (as in Minecraft, below the lowest block there is): nothing
- * stands there, and 64 below the bottom of the world what is in it starts to take damage
- * (Entity.checkBelowWorld, minBuildHeight - 64). Everything that goes under the world
- * falls to here: the player (player.c), the mobs and the dropped items (mob.c, entity.c). */
-#define VOID_Y (-128)
-/* Block states are 9 bits each (blocks.h's NSTATES), and 8 cells are exactly 9 bytes:
- * the cache's slides (world.c's recenter) move whole multiples of 8 cells, so they stay
- * byte-aligned. (A 32-bit load reads 4 bytes: the last cells run into 3 bytes of tail
- * padding the arrays carry: see states.h for the accessors.) */
-#define VC_CELLS (VCY * VCZ * VCX)
-#define VC_BYTES ((VC_CELLS * 9 + 7) / 8 + 4)
-extern uint8_t vc[VC_BYTES];         /* blocks: index (y * VCZ + z) * VCX + x, 9 bits each */
+extern uint8_t vc[VCY * VCZ * VCX];      /* blocks: index (y * VCZ + z) * VCX + x */
 extern uint8_t vl[VCY * VCZ * VCX];      /* light: sky light (low 4 bits), block light (high 4 bits) */
 extern uint8_t vbiome[VCZ * VCX];        /* biome of each column */
 extern int vc_x0, vc_y0, vc_z0;          /* world position of vc[0] */
 #define VC_I(x, y, z) (((y) * VCZ + (z)) * VCX + (x))
-/* the block cache: the module's own shortcuts over the accessors */
-static inline int vc_get(int i) { return b9_get(vc, i); }
-static inline void vc_set(int i, int b) { b9_set(vc, i, b); }
 /* 4 x 4 x 4 regions of the cache: 0 all air, 2 only water and air, 1 anything else (rays skip
  * the empty ones, and once in water, which sees through both, the water ones) */
 #define MCX (VCX / 4)
 #define MCY (VCY / 4)
 #define MCZ (VCZ / 4)
-extern uint8_t vmac[MCY * MCZ * MCX];   /* one byte a region (600 regions -> 600 B) */
+extern uint8_t vmac[MCY * MCZ * MCX];
 #define MC_I(x, y, z) ((((y) >> 2) * MCZ + ((z) >> 2)) * MCX + ((x) >> 2))
-static inline int vmac_get(int mi) { return vmac[mi]; }
-static inline void vmac_set(int mi, int v) { vmac[mi] = (uint8_t)v; }
 static inline int light_at(int i) { return vl[i] & 15; }          /* sky light */
 static inline int block_light_at(int i) { return vl[i] >> 4; }   /* torches, lava, glowstone... */
+#if NB_DIMS
+/* NumBlocks.nwa: a block is 9 bits (the Nether's and the End's are 257 and up): vc holds the low 8, vhi
+ * the ninth, a bit a cell. None of those blocks has the low byte of air (256 is none). */
+extern uint8_t vhi[(VCY * VCZ * VCX + 7) / 8];
+static inline int VB(int i) { return vc[i] | (vhi[i >> 3] >> (i & 7) & 1) << 8; }
+static inline void VSET(int i, int b) {
+  vc[i] = (uint8_t)b;
+  vhi[i >> 3] = (uint8_t)((vhi[i >> 3] & ~(1 << (i & 7))) | (b >> 8 & 1) << (i & 7));
+}
+#else
+#define VB(i) (vc[i])
+#define VSET(i, b) (vc[i] = (uint8_t)(b))
+#endif
 
 void world_new(int64_t seed, const char *name);   /* name: the save's record prefix */
-void world_switch_dim(int dim);   /* to the other dimension: the whole volume again */
 void world_follow(float x, float y, float z);   /* keeps the cache around (x, y, z) */
-void world_spawn(int *x, int *y, int *z);   /* the world's spawn point (the generator's own choice) */
-int world_get(int x, int y, int z);            /* B_AIR outside the cache, the deep layer's blocks below y=0 */
+int world_get(int x, int y, int z);            /* B_AIR outside the cache, B_BEDROCK below 0 */
 void world_set(int x, int y, int z, int b);     /* a player's change: kept in the edit log */
 void world_light_flush(void);   /* the light of changed blocks (world_follow does it each frame) */
 bool world_loaded(int x, int y, int z);
-/* A cell whose column is in the cache but whose chunk is still to be made: its block is not
- * known yet (world_get answers stone, which keeps everything that moves out of it). Nothing
- * may be mined, placed or picked there until the chunk is made. */
-bool world_pending_at(int x, int y, int z);
 bool world_pending(void);                       /* chunks still being made after a move */
 int world_rain_top(int x, int z);               /* the first y above what rain lands on, 255 if unknown */
 void *world_scratch(uint32_t n);                /* n bytes free while a frame is drawn, or NULL */
+#if NB_DIMS
+/* ---------------------------------------------------------------- the dimensions (dims.c): NumBlocks.nwa only */
+#include "dims.h"
+extern int dim;   /* where the player is (DIM_*) */
+bool world_dim(int d);   /* (world.c) there: false if the changes made here could not be kept */
+void world_finish(float x, float y, float z);   /* the cache around there, all of it made now */
+void tick_forget(void);  /* (tick.c) the liquids' and fires' waiting updates dropped */
+#define dims_slab gen_slab   /* (gen.c runs the dimension's generator: gen_dim) */
+#define dims_biome gen_biome
+#define dims_top gen_top
+#endif
 
 /* ---------------------------------------------------------------- items (inv.c) */
 typedef struct { uint16_t id, aux; } Stack;   /* aux: how many; for tools and armour, their damage (one) */
@@ -190,7 +154,6 @@ bool can_harvest(int b, int held);
 float dig_speed(int b, int held);
 int block_drops(int b, int held, Stack *out);   /* up to 2 */
 int rnd(int n);
-uint32_t rnd_seed(uint32_t s);   /* the world's random stream starts over; the old state comes back (tests) */
 float rndf(void);
 
 /* ---------------------------------------------------------------- collisions (phys.c) */
@@ -221,7 +184,7 @@ typedef struct {
   float walked, bob, prev_walked, prev_bob;   /* view bobbing (EntityPlayer.cameraYaw) */
   float xp;               /* 0..1 of the way to the next level */
   int spawn_x, spawn_y, spawn_z;
-  uint8_t mode;           /* 0 survival, 1 creative, 2 spectator */
+  uint8_t mode;           /* 0 survival, 1 creative */
   uint8_t eff_amp[3];     /* effects: their amplifiers (0: level I) */
   uint16_t eff[3];        /* effects: ticks left (poison, hunger, regeneration) */
 } Player;
@@ -230,46 +193,34 @@ extern Player pl;
 void player_spawn(void);
 void player_pick_block(void);   /* the block looked at, into the hand (Pick Block) */
 extern float look_ray[6];   /* the eyes' ray as last drawn: from, direction */
-/* the spectator's state (player.c): the entity its camera rides (its index in ents,
- * -1 none), the one under its crosshair (-1 none), and the eyes above the ridden
- * entity's feet (0 not riding) */
-extern int8_t spectate, spec_target;
-extern float spec_eye;
 void player_look(float ex, float ey, float ez, float yaw, float pitch);
 void player_tick(uint32_t keys, uint32_t pressed);   /* 20 a second */
-void player_set_mode(int m);   /* /gamemode, or the game mode switcher: 0 survival, 1 creative */
 static inline Stack *held(void) { return &pl.inv[pl.slot]; }
 void player_hurt(float amount, int kind);   /* kind: DMG_* */
 enum { DMG_GENERIC, DMG_FALL, DMG_DROWN, DMG_LAVA, DMG_FIRE, DMG_STARVE, DMG_WALL, DMG_VOID, DMG_MOB, DMG_ARROW,
-       DMG_EXPLOSION, DMG_CACTUS, DMG_LIGHTNING, DMG_MAGIC, DMG_KILL };
+       DMG_EXPLOSION, DMG_CACTUS, DMG_LIGHTNING, DMG_MAGIC };
 void player_add_xp(int n);
 void player_swing(void);   /* the arm swings (hand.c) */
 void hand_tick(void);
+void hand_frame(void);     /* the hand and what it holds, once a frame, */
+void hand_strip(uint16_t *buf, int y0, int rows);   /* then drawn on each strip */
 void gui_message(const char *s);   /* a line at the bottom left, as Minecraft's chat shows */
-void mode_open(void);              /* the game mode switcher (sin + cos), over the world */
-void mode_next(void);              /* cos again: the next mode */
-void mode_use(void);               /* sin let go (or OK): the mode picked */
-void mode_cancel(void);            /* Back: the way out, nothing changed */
 
 /* ---------------------------------------------------------------- entities (entity.c) */
-enum { E_NONE, E_ITEM, E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN, E_PIGLIN, E_ZPIGLIN,
-       E_ARROW, E_TNT, E_BOBBER,
-       /* the End and the Nether's fortresses (1.8.8): the dragon and its crystals count as
-        * mobs (they are hit), the fireball and the eye of ender as what flies */
-       E_GHAST, E_BLAZE, E_MAGMA, E_WSKELETON, E_ENDERMAN, E_CRYSTAL, E_DRAGON, E_FIREBALL, E_EYE };
-/* The mobs are E_ZOMBIE .. E_ZPIGLIN (2 .. 11), contiguous: appending after E_CHICKEN keeps
- * old spawner records (2 .. 9) readable. The eggs are not contiguous (QUARTZ sits between
- * the overworld eggs and the nether's), so mob_of_egg is a lookup, not arithmetic. */
-static inline bool is_mob(int t) {
-  return (t >= E_ZOMBIE && t <= E_ZPIGLIN) || (t >= E_GHAST && t <= E_DRAGON);
-}
-/* Hostiles are the overworld's four plus the nether's two (the passives sit between them,
- * so this is not a range). The zombified piglin counts as hostile for the cap, the despawn
- * and the chase once hit; its neutral wander is the AI's, not this bit's. */
-static inline bool is_hostile_mob(int t) {
-  return (t >= E_ZOMBIE && t <= E_SPIDER) || t == E_PIGLIN || t == E_ZPIGLIN ||
-         (t >= E_GHAST && t <= E_ENDERMAN) || t == E_CRYSTAL || t == E_DRAGON;
-}
+enum { E_NONE, E_ITEM, E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN, E_ARROW, E_TNT,
+       E_BOBBER };
+#if NB_DIMS
+/* NumBlocks.nwa's: the Nether's and the End's creatures (the ender crystal and the dragon count as mobs: they
+ * are hit), then what flies (fireballs, eyes of ender: their item in item) */
+enum { E_PIGMAN = E_BOBBER + 1, E_GHAST, E_BLAZE, E_MAGMA, E_WSKELETON, E_ENDERMAN, E_CRYSTAL, E_DRAGON, E_FIREBALL, E_EYE };
+#define IS_MOB(t) (((t) >= E_ZOMBIE && (t) <= E_CHICKEN) || ((t) >= E_PIGMAN && (t) <= E_DRAGON))
+#define NOT_MOB(t) (!IS_MOB(t))
+#define IS_MONSTER(t) (((t) >= E_ZOMBIE && (t) <= E_SPIDER) || ((t) >= E_PIGMAN && (t) <= E_ENDERMAN))
+#else
+#define IS_MOB(t) ((t) >= E_ZOMBIE && (t) <= E_CHICKEN)
+#define NOT_MOB(t) ((t) < E_ZOMBIE || (t) > E_CHICKEN)
+#define IS_MONSTER(t) ((t) >= E_ZOMBIE && (t) <= E_SPIDER)
+#endif
 typedef struct {
   uint8_t type, on_ground, hurt, state;   /* hurt: ticks of red; state 255: dying (timer counts) */
   int16_t age, health, timer, delay;   /* delay: an item's pickup delay, a mob's attack wait, a creeper's fuse */
@@ -280,18 +231,13 @@ typedef struct {
   int16_t panic, fire;
   int16_t love, growth;   /* animals: in love (ticks), a baby's growing up (negative: ticks left) */
   uint8_t invuln, sheared;
-  /* the head's two look AIs, in the two bytes Entity had padding at the end anyway:
-   * look 1..79 the ticks left of looking at the player (EntityAIWatchClosest), 80..119
-   * the ticks left of looking about (EntityAILookIdle, at the yaw in look_yaw), 0 neither */
-  uint8_t look, look_yaw;
   union {
     Stack item;                  /* an item, an arrow, TNT: what it is */
     struct { int16_t tx, tz; };  /* a mob: where it is going in the end (a block) */
   };
 } Entity;
-#define N_ENT 56
+#define N_ENT 24
 extern Entity ents[N_ENT];
-#include "end.h"      /* the End's dragon state and its fight */
 Entity *ent_new(int type, float x, float y, float z);
 Entity *mob_summon(int type, float x, float y, float z);   /* a mob as one spawns */
 Entity *ent_drop(int id, int count, int dmg, float x, float y, float z, bool thrown);
@@ -299,41 +245,21 @@ void ents_tick(void);
 /* particles: a block's bits when it breaks; drops (a texel or two, falling
  * faster) and floating bits (wakes, bubbles): life (ticks, up to 63) + kind */
 typedef struct { float x, y, z, vx, vy, vz; uint16_t c; uint8_t age, life; } Particle;
-#define N_PART 64
+#define N_PART 32
 #define RAIN_DROP 128
 #define P_FLOAT 64
 #define P_LIFE 63
 extern Particle parts[N_PART];
 void particles_break(int x, int y, int z, int b);
 void particle_add(float x, float y, float z, float vx, float vy, float vz, uint16_t c, int life);
-void particles_spawner(float mx, float my, float mz, float bx, float by, float bz);   /* a spawner's mob appearing */
-void particles_evaporate(int x, int y, int z);   /* a water bucket emptied in an ultra-warm dimension: smoke */
 /* fishing (EntityFishHook) */
 Entity *bobber(void);       /* the player's hook, if out */
 void fish_cast(void);
 int fish_reel(Entity *e);   /* how much it wears the rod */
 void mob_tick(Entity *e);
 void mobs_spawn(void);
-int mob_of_egg(int id);                /* the mob a spawn egg makes (0: not one) */
-int egg_of_mob(int mob);               /* the spawn egg that makes a mob (0: none) */
-bool mob_can_stand(int x, int y, int z);   /* room for a mob to stand there */
-enum { N_MOB_NAMES = 17 };
-extern const char *const mob_name[N_MOB_NAMES];   /* the mobs' names (Zombie .. Ender Dragon) */
-void spawners_set(int x, int y, int z, int mob);   /* a spawn egg used on a monster spawner */
-void spawners_made(int x, int y, int z, int mob);  /* world generation placed one (a dungeon's) */
-void spawners_note(int x, int y, int z);           /* one fresh from the inventory (unset) */
-void spawners_clear(void);                     /* a new world (or one loaded without any) */
-void spawners_spawn(void);                     /* the monster spawners near the player make their mob */
-int spawner_mob_at(int x, int y, int z);       /* what one shows and makes (0: nobody set it) */
-int spawners_count(void);                      /* how many the table knows */
-int spawners_get(int i, int *x, int *y, int *z);   /* the i-th's place and set mob (0 unset, -1 past) */
-int spawners_save(uint8_t *b);                 /* their bytes for the world's record; NULL: how many */
-void spawners_load(const uint8_t *b, int len); /* (len 0: none saved) */
-#define SPAWNERS_MAX 24                       /* the monster spawners the world remembers */
 void explode(float x, float y, float z, float power, bool blocks);
 void tnt_light(int x, int y, int z, int fuse);
-void pressure_plate_tick(float x, float y, float z);   /* a pressure plate where (x,y,z) stands: powers (lights TNT, opens doors) the blocks that need it and turns the plate pressed */
-void pressure_plates_update(void);   /* release any pressed plate no entity is on any more */
 void throw_item(int id, float speed, bool from_player);   /* arrows, snowballs, eggs */
 bool mob_attack(const Entity *e);   /* the player hits this mob (with the held item) */
 bool mob_use(Entity *e);            /* the player uses the held item on it (shears, bucket) */
@@ -343,20 +269,9 @@ Entity *entity_looked_at(float reach, float block_t);   /* the mob under the cro
 extern float tick_frac;
 
 void player_respawn(void);
-/* the nether portal (portal.c): lighting the frame the player stands in, the
- * tick that travels after standing in one for a few seconds, and how far
- * through the wait that is (the screen's purple overlay) */
-bool portal_light_here(int x, int y, int z);
-void portal_tick(void);
-int portal_anim(void);
-/* a block changed next to a portal block: without its whole frame it goes too */
-void portal_changed(int x, int y, int z);
-/* a portal block broken outright: the rest of its interior goes with it */
-void portal_broken(int x, int y, int z);
 
 /* ---------------------------------------------------------------- liquids and growing (tick.c) */
 void fluid_schedule(int x, int y, int z);   /* a liquid there may move */
-void fluid_wake(int x, int y, int z);       /* generation left it open: give it its first move */
 bool fire_can_stay(int x, int y, int z);    /* on a solid top, or by something that burns */
 void fire_set(int x, int y, int z, int age);   /* fire there (age 0 to 15: older spreads less, goes out sooner) */
 void bolt_start(float x, float y, float z);   /* lightning strikes there */
@@ -382,12 +297,15 @@ extern int last_bolt;                 /* ticks of the sky's flash left (World.la
 void sapling_grow(int x, int y, int z);      /* a step towards a tree */
 void neighbours_changed(int x, int y, int z);
 void break_block_at(int x, int y, int z, bool drops);
-bool settle_fall(int x, int y, int z);   /* the settle pass: drop a sand/gravel generation left in the air */
 
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_FLAT, GUI_VIDEO, GUI_CTRLMENU, GUI_MODE, GUI_MODS, GUI_PERSONAL };
+       GUI_RENAME, GUI_LAN, GUI_KEYS
+#if NB_DIMS
+       , GUI_CREDITS   /* the End poem and the credits (gui.c) */
+#endif
+};
 extern int gui;            /* the screen open */
 void gui_open(int screen, int x, int y, int z);
 void gui_close(void);
@@ -395,7 +313,6 @@ void gui_input(uint32_t keys, uint32_t pressed);
 void gui_tick(void);       /* 20 a second: furnaces */
 void tiles_removed(int x, int y, int z);   /* a chest or furnace broken: its items fall out */
 void tiles_forget(int x, int y, int z);    /* (or replaced by a command: they are gone) */
-void tiles_chest(int x, int y, int z, const Stack *items, int n);   /* a chest the world was made with */
 void gui_menu(int screen);  /* opens a menu screen */
 enum { ACT_NONE, ACT_PLAY, ACT_NEW, ACT_QUIT_APP, ACT_SAVE_QUIT, ACT_RESPAWN, ACT_TITLE };
 extern int menu_choice;    /* what a menu asks main.c to do (ACT_*), 0 if nothing */
@@ -405,7 +322,6 @@ extern int create_mode;
 extern bool create_cheats;
 extern int create_type;
 extern char seed_text[21];
-extern char create_preset[FLAT_MAX + 1];   /* the new world's superflat preset, as typed */
 
 /* ---------------------------------------------------------------- saves and options (save.c) */
 typedef struct {
@@ -416,47 +332,19 @@ typedef struct {
   uint8_t keys_seen;    /* the key sheet's version last shown (it opens when the keys change) */
   uint8_t last_world;   /* the world played last (its slot, 0: none): the title's backdrop */
   uint32_t plays;       /* worlds opened so far: each world keeps the count when it was last played */
-  uint8_t keys[25];     /* the key of each action (A_*): the calculator's number for it, 255 none */
-  uint8_t debug;        /* F3 debug overlay on */
-  uint8_t distance;     /* render distance, 1..2 chunks (2 is what the game had); global, in numblocks.cfg */
-  uint8_t sprint_toggle;   /* Sprint: 0 hold the key while walking, 1 a tap switches it on and off (1.15) */
-  uint8_t brightness;   /* Brightness (Video Settings): 0 Moody to 15 Bright (its default, 8) */
-  uint8_t fullbright;   /* Fullbright (Mods and Cheats): with cheats on, every block drawn as if lit at 15 */
-  uint8_t contrast;     /* High Contrast Block Outlines (Personalisation): the block looked at outlined in cyan */
-  uint8_t panorama;     /* the title's backdrop (Personalisation): PAN_*, Random by default */
+  uint8_t keys[24];     /* the key of each action (A_*): the calculator's number for it, 255 none */
 } Options;
-/* The title's backdrop (Personalisation's Panorama): the world played last, or a fixed
- * world's own overworld or nether (seed 123, the camera at the spot main.c keeps);
- * Random rolls one of the three each time the title is entered. */
-enum { PAN_RANDOM, PAN_WORLD, PAN_OVER, PAN_NETHER };
 /* the actions keys are set to (KeyBinding), in the order of Minecraft's list: by category, then name */
 enum { A_ATTACK, A_PICK, A_USE, A_DROP, A_SLOT1, A_INVENTORY = A_SLOT1 + 9, A_PAUSE, A_JUMP, A_SNEAK, A_SPRINT,
-       A_LEFT, A_RIGHT, A_BACK, A_FORWARD, A_CHAT, A_COMMAND, A_DEBUG, N_ACTIONS };
+       A_LEFT, A_RIGHT, A_BACK, A_FORWARD, A_CHAT, A_COMMAND, N_ACTIONS };
 uint32_t keys_of(uint64_t raw);   /* the K_ bits of the keys held (the calculator's keys, as bound) */
 void keys_reset(void);            /* the keys as they start */
 void keys_update(int seen);       /* keys saved by an older version (seen: its key sheet) brought up to date */
-#define KEY_SHEET 8       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places; 5: debug overlay; 6: sprint on i; 7: sin + cos, the game mode switcher; 8: forward twice no longer sprints, no EXE line) */
+#define KEY_SHEET 4       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places) */
 extern Options opt;
 extern int64_t world_seed;
-/* The world types (save.c): Default (Minecraft's own terrain), Superflat (a preset's
- * layers) and Test (an empty world that is always the same, showing everything the
- * game has once: every block, every mob, the structures). */
-enum { WT_DEFAULT, WT_FLAT, WT_TEST };
-extern uint8_t world_type;   /* the world type (WT_*): Default, Superflat, or Test */
-/* the dimension the world is in (save.c): the overworld, or the nether */
-extern uint8_t world_dim;
-/* How tall the dimension's world is (the y limit of world_set and the commands):
- * the overworld's 128, or the nether's 200 - its ceiling at 123..127 included, and
- * the open air above it (128..199), which is built on the way the overworld's sky
- * cannot be. The cache is 24 tall either way: only its window's place moves. */
-static inline int dim_height(void) { return world_dim == DIM_NETHER ? NETHER_H : WORLD_H; }
-/* The dimension's lowest y: the overworld's deepslate floor (gen.h's WORLD_MIN_Y), or the
- * nether's 0 (it has no deep layer). Every "y < 0" guard is this instead. */
-static inline int dim_min_y(void) { return world_dim == DIM_OVER ? WORLD_MIN_Y : 0; }
-/* where the nether's portal leads back to (the overworld), saved with the world */
-extern int32_t nb_ret_x, nb_ret_y, nb_ret_z;
-extern bool nb_ret_ok;
-extern char world_preset[FLAT_MAX + 1];   /* the world's flat preset (default when Default type) */
+enum { WT_DEFAULT, WT_FLAT };
+extern uint8_t world_type;   /* the world type (WT_*): Default, or Superflat */
 /* Worlds: up to MAX_WORLDS, each in a slot (1..MAX_WORLDS) whose records start "nb<slot>" */
 #define MAX_WORLDS 9
 #define WORLD_NAME 24   /* the longest name */
@@ -467,14 +355,13 @@ typedef struct {
   int type;          /* WT_* */
   int64_t seed;
   uint32_t played;   /* opt.plays when it was last played (the latest first in the list) */
-  char preset[FLAT_MAX + 1];   /* superflat preset (default when not flat) */
 } WorldInfo;
 bool world_info(int slot, WorldInfo *w);   /* false: no world there */
 int world_free_slot(void);                 /* 0: all taken */
 void world_unique_name(const char *base, char *out);   /* base, or "base (2)"... if taken */
 bool save_world(void);
 bool load_world(int slot);
-void new_world(int slot, int64_t seed, int mode, bool cheats, int type, const char *name, const char *preset);
+void new_world(int slot, int64_t seed, int mode, bool cheats, int type, const char *name);
 bool rename_world(int slot, const char *name);
 void delete_world(int slot);
 void load_options(void);
@@ -494,12 +381,10 @@ enum { GR_KEEP_INVENTORY = 1, GR_DAYLIGHT_CYCLE = 2, GR_MOB_SPAWNING = 4, GR_MOB
 /* ---------------------------------------------------------------- chat and commands (command.c) */
 enum { CHAT_WHITE, CHAT_RED, CHAT_GREEN, CHAT_DARK_GREEN, CHAT_GRAY };
 void chat_add(const char *s, int color);   /* a line in the chat (gui.c) */
-const char *chat_last_line(void);   /* the last line in it (tests) */
 void command_run(const char *line);        /* a line sent from the chat: a command ("/...") or said */
 /* tab completion: the k-th way to finish the last word of line (the word starts at *at); false: no more */
 bool command_complete(const char *line, int k, int *at, char *out, int max);
 extern const char *const mc_block_name[198], *const mc_item_name[176];   /* (names.c) */
-extern const char *const mc_state_name[];   /* each give entry's name: the block state or item it is (names.c) */
 extern const uint8_t mc_block_item[25];
 extern const uint16_t give_key[], give_id[];   /* Minecraft's id << 4 | data, and NumBlocks' id */
 extern const int n_give;
@@ -509,11 +394,8 @@ extern const int n_give;
 #define RH 120
 typedef struct { float x, y, z, yaw, pitch; } Camera;
 void render_frame(const Camera *c, uint32_t time_of_day);
-bool render_under_lava(void);   /* the eye is in lava: gui.c's orange screen wash (render.c) */
-/* the HUD and screens draw over each strip of the screen before it is sent
- * (hand: the hand's state for this frame, on render_frame's stack) */
-void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand);
+/* the HUD and screens draw over each strip of the screen before it is sent */
+void hud_strip(uint16_t *buf, int y0, int rows);
 void camera_reset(void);
 extern uint32_t ticks_run;   /* the player moved at once: the camera with them (main.c) */
-extern float dbg_fps;        /* frames a second, EMA of the frame time (main.c) */
 #endif

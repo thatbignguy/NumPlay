@@ -11,8 +11,6 @@ Entity ents[N_ENT];
 
 /* ---------------------------------------------------------------- particles (EntityDiggingFX, EntityRainFX) */
 Particle parts[N_PART];
-#define SMOKE 0xB5B6  /* a monster spawner's puffs of smoke: vanilla's light grey */
-#define FLAME 0xFDA0  /* the flames about one making a mob: vanilla's bright yellow */
 
 /* breaking a block: its bits, coloured like its texture, fly out and fall (EffectRenderer.addBlockDestroyEffects) */
 void particles_break(int x, int y, int z, int b) {
@@ -44,27 +42,6 @@ static Particle *part_slot(void) {
 void particle_add(float x, float y, float z, float vx, float vy, float vz, uint16_t c, int life) {
   Particle *p = part_slot();
   *p = (Particle){x, y, z, vx, vy, vz, c, 0, (uint8_t)life};
-}
-
-/* a monster spawner making a mob: puffs of smoke where the mob appears, and more flames about
- * the spawner itself (MobSpawner: both, when it spawns) */
-void particles_spawner(float mx, float my, float mz, float bx, float by, float bz) {
-  for (int k = 0; k < 5; k++)
-    particle_add(mx + (rndf() - 0.5f) * 0.8f, my + 0.2f + rndf() * 1.6f, mz + (rndf() - 0.5f) * 0.8f,
-                 (rndf() - 0.5f) * 0.03f, 0.06f + rndf() * 0.05f, (rndf() - 0.5f) * 0.03f, SMOKE, 14 + rnd(8));
-  for (int k = 0; k < 3; k++)
-    particle_add(bx + 0.3f + rndf() * 0.4f, by + 0.9f + rndf() * 0.25f, bz + 0.3f + rndf() * 0.4f,
-                 (rndf() - 0.5f) * 0.02f, 0.04f + rndf() * 0.04f, (rndf() - 0.5f) * 0.02f, FLAME, P_FLOAT | (10 + rnd(6)));
-}
-
-/* a water bucket emptied in an ultra-warm dimension (the nether): the water evaporates on the
- * spot - a short, dense burst of grey smoke from the target cell, Java's SMOKE/LARGE_SMOKE */
-void particles_evaporate(int x, int y, int z) {
-  for (int k = 0; k < 8; k++) {
-    particle_add(x + 0.3f + rndf() * 0.4f, y + 0.2f + rndf() * 0.4f, z + 0.3f + rndf() * 0.4f,
-                 (rndf() - 0.5f) * 0.08f, 0.12f + rndf() * 0.08f, (rndf() - 0.5f) * 0.08f, SMOKE,
-                 8 + rnd(6));
-  }
 }
 
 /* EntityRenderer.addRainParticles: drops splash on whatever the rain falls on
@@ -134,7 +111,7 @@ Entity *ent_new(int type, float x, float y, float z) {
   e->y = e->py = y;
   e->z = e->pz = z;
   e->gx = x, e->gz = z;
-  if (is_mob(type)) e->tx = (int16_t)floorf(x), e->tz = (int16_t)floorf(z);   /* (going nowhere yet) */
+  if (IS_MOB(type)) e->tx = (int16_t)floorf(x), e->tz = (int16_t)floorf(z);   /* (going nowhere yet) */
   return e;
 }
 
@@ -302,7 +279,7 @@ static void bobber_tick(Entity *e) {
   if (!e->on_ground)
     for (int i = 0; i < N_ENT; i++) {
       Entity *c = &ents[i];
-      if (!is_mob(c->type) || c->state == 255) continue;
+      if (NOT_MOB(c->type) || c->state == 255) continue;
       float w = mob_width(c->type) / 2 + 0.125f;
       if (fabsf(c->x - e->x) < w && fabsf(c->z - e->z) < w && e->y + 0.25f > c->y && e->y < c->y + mob_height(c->type)) {
         mob_hooked(c);
@@ -388,22 +365,21 @@ void ents_tick(void) {
     e->px = e->x, e->py = e->y, e->pz = e->z;
     e->age++;
     /* far outside the loaded blocks: gone */
-    if (!world_loaded((int)floorf(e->x), vc_y0, (int)floorf(e->z)) && e->type != E_DRAGON && e->type != E_CRYSTAL) {
+#if NB_DIMS
+    if (e->type != E_DRAGON)   /* (the dragon flies far) */
+#endif
+    if (!world_loaded((int)floorf(e->x), vc_y0, (int)floorf(e->z))) {
       e->type = E_NONE;
       continue;
     }
     if (e->type == E_ITEM) item_tick(e);
     else if (e->type == E_BOBBER) bobber_tick(e);
     else mob_tick(e);
-    if (e->y < (float)VOID_Y) e->type = E_NONE;   /* fell into the void */
+    if (e->y < -64) e->type = E_NONE;
   }
   static int spawn_wait;
   if (++spawn_wait >= 20) {
     spawn_wait = 0;
-    /* the nether has its own spawn pass now (mobs_spawn learns dimensions); spawners work
-     * in both (a spawner set to a nether mob makes it in the nether, an animal's grass
-     * and light rules keep overworld animals out of it). */
     if (rule(GR_MOB_SPAWNING)) mobs_spawn();
-    spawners_spawn();
   }
 }

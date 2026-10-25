@@ -8,13 +8,13 @@
  * In a container a cursor jumps between slots with the arrows: OK is the
  * left click, EXE the right click, shift + OK the shift click, a digit swaps
  * with that hotbar slot; var or Back closes. */
+#pragma GCC optimize ("O2")  /* (drawn every frame: fast, while the rest of the game is built small) */
 #include <math.h>
 #include <stdlib.h>
 #include "nb.h"
 #pragma GCC optimize("Os")   /* (not where the time goes: small) */
 
 int gui;
-float dbg_fps;   /* frames a second, EMA of the frame time (main.c) */
 static int clip_y0, clip_y1;   /* the strip: screen rows [clip_y0, clip_y1) */
 static uint16_t *clip_buf;
 static uint32_t frame_no;
@@ -32,46 +32,13 @@ static void sprite_part(int id, int x, int y, int sx, int sy, int w, int h) {
   for (int r = r0; r < r1; r++) {
     uint16_t *d = row_at(y + r);
     const uint8_t *s = px + (sy + r) * stride;
-    /* two screen pixels a source byte: the byte's low nibble is the even column, its high
-     * nibble the odd one, so a pair is one load and two palette reads instead of two loads */
-    int c = c0;
-    if ((sx + c) & 1) {
-      int i = s[(sx + c) >> 1] >> 4;
-      if (i) d[x + c] = pal[i];
-      c++;
-    }
-    for (; c + 1 < c1; c += 2) {
-      uint8_t b = s[(sx + c) >> 1];
-      int i0 = b & 15, i1 = b >> 4;
-      if (i0) d[x + c] = pal[i0];
-      if (i1) d[x + c + 1] = pal[i1];
-    }
-    if (c < c1) {
-      int i = s[(sx + c) >> 1] & 15;
+    for (int c = c0; c < c1; c++) {
+      int u = sx + c, i = (u & 1) ? s[u >> 1] >> 4 : s[u >> 1] & 15;
       if (i) d[x + c] = pal[i];
     }
   }
 }
 static void sprite(int id, int x, int y) { sprite_part(id, x, y, 0, 0, spr_w[id], spr_h[id]); }
-
-/* a sprite drawn smaller (nearest neighbour): Steve at 3/4 in the preview box, every frame (tiny) */
-static void sprite_scale(int id, int x, int y, int w, int h) {
-  int sw = spr_w[id], sh = spr_h[id], stride = (sw + 1) / 2;
-  const uint8_t *px = spr_px + spr_off[id];
-  const uint16_t *pal = spr_pal[id];
-  for (int r = 0; r < h; r++) {
-    int ty = y + r;
-    if (ty < clip_y0 || ty >= clip_y1) continue;
-    uint16_t *d = row_at(ty);
-    const uint8_t *s = px + (r * sh / h) * stride;
-    for (int c = 0; c < w; c++) {
-      int dx = x + c;
-      if ((unsigned)dx >= SCREEN_W) continue;
-      int u = c * sw / w, i = (u & 1) ? s[u >> 1] >> 4 : s[u >> 1] & 15;
-      if (i) d[dx] = pal[i];
-    }
-  }
-}
 
 /* a picture kept as runs (data.h: img_*) */
 static void image(int id, int x, int y) {
@@ -118,37 +85,6 @@ static void tint_rect(int x, int y, int w, int h, uint16_t k, int a) {
   }
 }
 
-/* GuiIngame.renderPortal: standing in a portal covers the screen with the
- * portal's own swirl, thicker until you go through (not a flat purple wash:
- * the nether portal texture, tiled large, scrolling and wobbling as it does
- * in Minecraft, blended over the world by the wait's progress). The blend
- * never goes fully opaque: even at the end, just before travelling, the
- * world shows through (28/32, almost opaque). */
-static void portal_overlay(int y0, int rows, int anim) {
-  int tex = blk_tex[B_PORTAL_NS][0];
-  const uint8_t *px = tex_px[tex];
-  const uint16_t *pal = tex_pal[tex];
-  int a = anim * 28 / 24;
-  if (a > 28) a = 28;
-  if (a <= 0) return;
-  int t = (int)(frame_no >> 1);
-  for (int r = 0; r < rows; r++) {
-    int y = y0 + r;
-    if (y < clip_y0 || y >= clip_y1) continue;
-    uint16_t *d = row_at(y);
-    /* one row's wobble (the swirl): a few texels sideways, moving with time */
-    int wob = (int)(sinf(y * 0.15f + t * 0.15f) * 3.0f);
-    int v = ((y >> 2) + (t >> 1)) & 15;
-    const uint8_t *s = px + v * 8;
-    int base = (t >> 2) + wob;
-    for (int x = 0; x < SCREEN_W; x++) {
-      int u = ((x >> 2) + base) & 15;
-      uint8_t p = s[u >> 1];
-      d[x] = blend(d[x], pal[(u & 1) ? p >> 4 : p & 15], a);
-    }
-  }
-}
-
 /* GuiScreen.drawDefaultBackground: the world behind, darkened (0xC0101010 to 0xD0101010) */
 static void dark_background(void) {
   for (int y = clip_y0; y < clip_y1; y++) {
@@ -169,6 +105,57 @@ static const uint8_t sym_bits[5][8] = {{0x00, 0x3F, 0x12, 0x12, 0x12, 0x12, 0x21
                                        {0x00, 0x04, 0x00, 0x1F, 0x00, 0x04, 0x00, 0x00}};
 static const uint8_t sym_w[5] = {7, 8, 9, 6, 6};
 static int char_w(int c) { return c >= 1 && c <= 5 ? sym_w[c - 1] : c >= 32 && c < 127 ? font_w[c - 32] : 0; }
+#if NP_TEXT_EXTRA
+/* Other languages: an accented letter is the font's own with np_accent() in the two rows over lowercase letters
+ * (a capital under it as a small capital: its rows 0, 1, 2, 4 and 6), a cedilla under it; an accented i three
+ * columns wide, as Minecraft's are; œ and æ two letters sharing a column. Chinese comes from the 12-pixel font
+ * (11 pixels tall), its line's top 2 pixels over the text's; a Chinese build's lines are further apart (TALL). */
+#define TALL ((uint8_t)T("Done")[0] >= 0xE0)
+static uint16_t pen;
+static void pen_px(int x, int y, void *ctx) {
+  if (y >= clip_y0 && y < clip_y1 && (unsigned)x < SCREEN_W) row_at(y)[x] = pen;
+}
+static void glyph(int c, int x, int y, int scale, bool small, int from) {
+  static const int8_t small_rows[8] = {-1, -1, 0, 1, 2, 4, 6, 7};
+  const uint8_t *g = c < 32 ? sym_bits[c - 1] : font_bits + (c - 32) * 8;
+  for (int j = 0; j < 8; j++) {
+    int r = small ? small_rows[j] : j;
+    if (r < from) continue;
+    for (int k = 0; k < 8; k++)
+      if (g[r] >> k & 1)
+        for (int a = 0; a < scale * scale; a++) pen_px(x + k * scale + a % scale, y + j * scale + a / scale, 0);
+  }
+}
+/* draws (if draw) the next letter of *s at (x, y) in pen, each font pixel scale x scale; returns its advance */
+static int letter(const char **s, int x, int y, int scale, bool draw) {
+  uint32_t cp = np_utf8(s);
+  char b = (char)cp, b2 = 0;
+  int acc = 0;
+  if (cp >= 0x80 && (acc = np_latin(cp, &b, &b2), !b)) {
+    if (draw) np_xdraw(cp, x, y - 2 * scale, scale, pen_px, 0);
+    return np_xadvance(cp, scale);
+  }
+  if (!char_w((uint8_t)b)) return 0;
+  bool over = acc && acc != NP_ACC_CEDIL, thin = acc && (b == 'i' || b == 'I');
+  int w = b == 'i' && acc ? 4 : char_w((uint8_t)b), lig = (b2 | 32) == 'e' ? 2 : 0;
+  if (draw) {
+    glyph(b, b == 'i' && acc ? x + scale : x, y, scale, over && b >= 'A' && b <= 'Z', b == 'i' && acc);
+    np_accent(acc, thin ? x - scale : x, acc == NP_ACC_CEDIL ? y + 7 * scale : y, scale, pen_px, 0);
+    if (b2) glyph(b2, x + (w - lig) * scale, y, scale, false, 0);
+  }
+  return (w + (b2 ? char_w((uint8_t)b2) - lig : 0)) * scale;
+}
+int text_width(const char *s) {
+  int w = 0;
+  while (*s) w += letter(&s, 0, 0, 1, false);
+  return w;
+}
+static void glyphs(const char *s, int x, int y, uint16_t col, int scale) {
+  pen = col;
+  while (*s) x += letter(&s, x, y, scale, true);
+}
+#else
+#define TALL 0
 int text_width(const char *s) {
   int w = 0;
   for (; *s; s++) w += char_w((unsigned char)*s);
@@ -191,16 +178,17 @@ static void glyphs(const char *s, int x, int y, uint16_t col, int scale) {
     x += char_w(c) * scale;
   }
 }
+#endif
 /* drawStringWithShadow: the shadow is the colour at a quarter, one pixel down and right */
 static void text(const char *s, int x, int y, uint16_t col, bool shadow) {
-  if (y + 9 <= clip_y0 || y >= clip_y1) return;
+  if (y + (NP_TEXT_EXTRA ? 11 : 9) <= clip_y0 || y - (NP_TEXT_EXTRA ? 2 : 0) >= clip_y1) return;
   if (shadow) glyphs(s, x + 1, y + 1, (uint16_t)((col >> 2) & 0x39E7), 1);
   glyphs(s, x, y, col, 1);
 }
 static void text_center(const char *s, int cx, int y, uint16_t col) { text(s, cx - text_width(s) / 2, y, col, true); }
 static void text_big(const char *s, int cx, int y, uint16_t col, int scale) {
   int w = text_width(s) * scale;
-  if (y + 9 * scale <= clip_y0 || y >= clip_y1) return;
+  if (y + (NP_TEXT_EXTRA ? 11 : 9) * scale <= clip_y0 || y - (NP_TEXT_EXTRA ? 2 * scale : 0) >= clip_y1) return;
   glyphs(s, cx - w / 2 + scale, y + scale, (uint16_t)((col >> 2) & 0x39E7), scale);
   glyphs(s, cx - w / 2, y, col, scale);
 }
@@ -213,167 +201,6 @@ static void number(int n, char *buf) {
   while (n);
   while (k) *buf++ = t[--k];
   *buf = 0;
-}
-
-/* ---------------------------------------------------------------- F3 debug overlay (GuiDebug) */
-/* the biome's name is the generator's own table (gen.c), which /locate biome reads too */
-/* floored chunk coordinate (like b >> 4 with floor for negatives) */
-static int chunk_of(int b) { return b >= 0 ? b >> 4 : -((-b + 15) >> 4); }
-/* a float with 3 decimals (XYZ) or 1 decimal (yaw/pitch), no sprintf */
-static void fmt3(float v, char *out) {
-  bool neg = v < 0;
-  float a = neg ? -v : v;
-  int ip = (int)a;
-  int fp = (int)((a - (float)ip) * 1000 + 0.5f);
-  if (fp >= 1000) ip++, fp -= 1000;
-  char *p = out;
-  if (neg) *p++ = '-';
-  number(ip, p);
-  while (*p) p++;
-  *p++ = '.';
-  p[0] = (char)('0' + fp / 100);
-  p[1] = (char)('0' + fp / 10 % 10);
-  p[2] = (char)('0' + fp % 10);
-  p[3] = 0;
-}
-static void fmt1(float v, char *out) {
-  bool neg = v < 0;
-  float a = neg ? -v : v;
-  int ip = (int)a;
-  int fp = (int)((a - (float)ip) * 10 + 0.5f);
-  if (fp >= 10) ip++, fp -= 10;
-  char *p = out;
-  if (neg) *p++ = '-';
-  number(ip, p);
-  while (*p) p++;
-  *p++ = '.';
-  *p++ = (char)('0' + fp);
-  *p = 0;
-}
-/* Minecraft 1.8 F3, top-left white text with shadow: version, XYZ feet, velocity, block + chunk,
- * facing cardinal + yaw/pitch, biome, light, FPS + time. 8 short lines for 320x240. */
-static void debug_overlay(void) {
-  /* over the world: the game mode switcher (sin + cos) keeps it, as Minecraft's does */
-  if (!opt.debug || (gui != GUI_NONE && gui != GUI_MODE)) return;
-  /* built once a frame (hud runs once a strip, ~30 times): the player and the
-   * time stay put mid-frame, so every strip draws the same strings */
-  static uint32_t built_for = (uint32_t)-1;
-  static char lxyz[64], lblock[64], lface[64], lbio[48], llight[48], lfps[48], ldim[48];
-  if (built_for != frame_no) {
-    built_for = frame_no;
-    extern uint32_t game_time;
-    int bx = (int)floorf(pl.x), by = (int)floorf(pl.y), bz = (int)floorf(pl.z);
-    int cx = chunk_of(bx), cy = chunk_of(by), cz = chunk_of(bz);
-    /* the biome of the column the player is in, as the renderer has it (the same answer
-     * gen_biome gives for a column of the cache, without calling the generator) */
-    int bio = world_loaded(bx, by, bz) ? vbiome[(bz - vc_z0) * VCX + bx - vc_x0] : -1;
-    int sky = 0, blk = 0;
-    if (world_loaded(bx, by, bz)) {
-      int i = VC_I(bx - vc_x0, by - vc_y0, bz - vc_z0);
-      sky = (vl[i] & 15) - sky_sub();
-      if (sky < 0) sky = 0;
-      blk = vl[i] >> 4;
-    }
-    const char *face, *towards;
-    float yaw = pl.yaw;
-    if (yaw >= -45 && yaw < 45) face = "South", towards = "positive Z";
-    else if (yaw >= 45 && yaw < 135) face = "West", towards = "negative X";
-    else if (yaw >= 135 || yaw < -135) face = "North", towards = "negative Z";
-    else face = "East", towards = "positive X";
-    char xs[16], ys[16], zs[16], yaws[16], pitchs[16];
-    fmt3(pl.x, xs);
-    fmt3(pl.y, ys);
-    fmt3(pl.z, zs);
-    fmt1(yaw, yaws);
-    fmt1(pl.pitch, pitchs);
-    char *p = ldim;   /* the dimension, under the world's type: the nether is one */
-    memcpy(p, "Dimension: ", 11), p += 11;
-    strcpy(p, world_dim == DIM_NETHER ? "Nether" : world_dim == DIM_END ? "The End" : "Overworld");
-    p = lxyz;
-    memcpy(p, "XYZ: ", 5), p += 5;
-    strcpy(p, xs), p += strlen(xs);
-    memcpy(p, " / ", 3), p += 3;
-    strcpy(p, ys), p += strlen(ys);
-    memcpy(p, " / ", 3), p += 3;
-    strcpy(p, zs);
-    p = lblock;
-    memcpy(p, "Block: ", 7), p += 7;
-    number(bx, p), p += strlen(p);
-    *p++ = ' ';
-    number(by, p), p += strlen(p);
-    *p++ = ' ';
-    number(bz, p), p += strlen(p);
-    memcpy(p, "  Chunk: ", 9), p += 9;
-    number(cx, p), p += strlen(p);
-    *p++ = ' ';
-    number(cy, p), p += strlen(p);
-    *p++ = ' ';
-    number(cz, p);
-    p = lface;
-    memcpy(p, "Facing: ", 8), p += 8;
-    strcpy(p, face), p += strlen(face);
-    memcpy(p, " (Towards ", 10), p += 10;
-    strcpy(p, towards), p += strlen(towards);
-    *p++ = ')';
-    memcpy(p, " (", 2), p += 2;
-    strcpy(p, yaws), p += strlen(yaws);
-    memcpy(p, " / ", 3), p += 3;
-    strcpy(p, pitchs), p += strlen(pitchs);
-    *p++ = ')', *p = 0;
-    p = lbio;
-    memcpy(p, "Biome: ", 7), p += 7;
-    strcpy(p, gen_biome_name(bio));
-    p = llight;
-    memcpy(p, "Light: ", 7), p += 7;
-    number(sky, p), p += strlen(p);
-    memcpy(p, " sky, ", 6), p += 6;
-    number(blk, p), p += strlen(p);
-    memcpy(p, " block", 6), p += 6;
-    *p = 0;
-    p = lfps;
-    memcpy(p, "FPS: ", 5), p += 5;
-    number((int)(dbg_fps + 0.5f), p), p += strlen(p);
-    memcpy(p, "  Time: ", 8), p += 8;
-    number((int)(game_time % 24000), p);
-  }
-  int y = 2;
-  text("Numblock custom " NB_VERSION " (minecraft.1.8.8)", 2, y, 0xFFFF, true);
-  y += 9;
-  text(lxyz, 2, y, 0xFFFF, true);
-  y += 9;
-  /* the velocity: blocks a second, the whole of it and the three axes. Put together where it is
-   * drawn - three or so strips a frame show the overlay, and the player does not move between
-   * them, so every strip says the same thing */
-  {
-    char vel[48], vs[16], vxs[16], vys[16], vzs[16], *q = vel;
-    float vx = pl.vx * 20, vy = pl.vy * 20, vz = pl.vz * 20;   /* (the state is a tick's move) */
-    fmt3(sqrtf(vx * vx + vy * vy + vz * vz), vs);
-    fmt3(vx, vxs);
-    fmt3(vy, vys);
-    fmt3(vz, vzs);
-    memcpy(q, "Vel: ", 5), q += 5;
-    strcpy(q, vs), q += strlen(vs);
-    memcpy(q, " (", 2), q += 2;
-    strcpy(q, vxs), q += strlen(vxs);
-    memcpy(q, " / ", 3), q += 3;
-    strcpy(q, vys), q += strlen(vys);
-    memcpy(q, " / ", 3), q += 3;
-    strcpy(q, vzs), q += strlen(vzs);
-    *q++ = ')', *q = 0;
-    text(vel, 2, y, 0xFFFF, true);
-    y += 9;
-  }
-  text(lblock, 2, y, 0xFFFF, true);
-  y += 9;
-  text(lface, 2, y, 0xFFFF, true);
-  y += 9;
-  text(lbio, 2, y, 0xFFFF, true);
-  y += 9;
-  text(llight, 2, y, 0xFFFF, true);
-  y += 9;
-  text(ldim, 2, y, 0xFFFF, true);
-  y += 9;
-  text(lfps, 2, y, 0xFFFF, true);
 }
 
 /* ---------------------------------------------------------------- items (RenderItem.renderItemOverlays) */
@@ -431,19 +258,23 @@ void chat_add(const char *s, int color) {
   chat_used += n + 4;
 }
 void gui_message(const char *s) { chat_add(s, CHAT_WHITE); }
-/* the last line in the chat, walked from its start (the tests read what a command said) */
-const char *chat_last_line(void) {
-  int at = 0, last = 0;
-  while (at < chat_used) {
-    last = at + 3;
-    at = last + (int)strlen(chat + last) + 1;
-  }
-  return chat + last;
-}
 static int chat_age(int i) { return (uint16_t)(chat_clock - ((uint8_t)chat[i + 1] | (uint8_t)chat[i + 2] << 8)); }
 
 /* how much of s fits on a line w pixels wide: up to a space if it can (FontRenderer.sizeStringToWidth) */
 static int wrap_len(const char *s, int w) {
+#if NP_TEXT_EXTRA /* (by letter; a line may end after a Chinese one too) */
+  int x = 0, sp = -1;
+  const char *p = s;
+  while (*p) {
+    int i = (int)(p - s);
+    bool wide = (uint8_t)*p >= 0xE0;
+    if (*p == ' ') sp = i;
+    x += letter(&p, 0, 0, 1, false);
+    if (x > w) return sp > 0 ? sp : i > 0 ? i : (int)(p - s);
+    if (wide) sp = (int)(p - s);
+  }
+  return (int)(p - s);
+#else
   int x = 0, i = 0, sp = -1;
   for (; s[i]; i++) {
     if (s[i] == ' ') sp = i;
@@ -451,16 +282,18 @@ static int wrap_len(const char *s, int w) {
     if (x > w) return sp > 0 ? sp : i > 0 ? i : 1;
   }
   return i;
+#endif
 }
 
 /* GuiNewChat.drawChat: the newest at the bottom, 9 pixels a line on a dark band; each fades out after
  * 10 seconds (10 lines at most), or with the chat open all of them (20 lines) */
+#define CHAT_H (TALL ? 12 : 9)   /* a line's height */
 static void chat_lines(void) {
   bool open = gui == GUI_CHAT;
-  if (SCREEN_H - 28 - (open ? 20 : 10) * 9 >= clip_y1 || SCREEN_H - 28 <= clip_y0) return;
+  if (SCREEN_H - 28 - (open ? 20 : 10) * CHAT_H >= clip_y1 || SCREEN_H - 28 <= clip_y0) return;
   int at[64], n = 0;
   for (int i = 0; i < chat_used && n < 64; i += chat_size(i)) at[n++] = i;
-  int line = 0, most = open ? 20 : 10;
+  int line = 0, most = open ? (TALL ? 15 : 20) : 10;
   for (int m = n - 1; m >= 0 && line < most; m--) {
     int age = chat_age(at[m]), a = 32;
     if (!open) {
@@ -478,129 +311,213 @@ static void chat_lines(void) {
       if (*s == ' ') s++;
     }
     for (int j = k - 1; j >= 0 && line < most; j--, line++) {
-      int y = SCREEN_H - 28 - line * 9;
-      if (y <= clip_y0 || y - 9 >= clip_y1) continue;
-      tint_rect(2, y - 9, SCREEN_W - 2, 9, 0, a / 2);
+      int y = SCREEN_H - 28 - line * CHAT_H;
+      if (y <= clip_y0 || y - CHAT_H >= clip_y1) continue;
+      tint_rect(2, y - CHAT_H, SCREEN_W - 2, CHAT_H, 0, a / 2);
       if (a > 3) {
-        char t[64];
-        int l = ll[j] < 63 ? ll[j] : 63;
+        char t[NP_TEXT_EXTRA ? 96 : 64];
+        int l = ll[j] < (int)sizeof t - 1 ? ll[j] : (int)sizeof t - 1;
         memcpy(t, ls[j], (size_t)l), t[l] = 0;
-        text(t, 2, y - 8, chat_col[(int)chat[at[m]]], true);
+        text(t, 2, y - 8 - (TALL ? 1 : 0), chat_col[(int)chat[at[m]]], true);
       }
     }
   }
 }
 
-/* ---------------------------------------------------------------- the game mode switcher (GuiGameModeSwitcher) */
-/* Minecraft 1.16+ picks a game mode with F3 + F4: the modes in a row, each with
- * its icon inside the switcher's own panel, the one picked in its outline, and the
- * key that goes to the next one under them. On the calculator sin is F3 (the debug
- * overlay) and cos, the key beside it, is F4, so the pair is sin + cos. The panel,
- * the slot and the outline are the modern client's gui/container/gamemode_switcher
- * and gui/sprites/gamemode_switcher. Only with cheats on, as the switcher is the
- * /gamemode command and gives the message it gives without them. */
-#define N_MODES 3
-#define MODE_W 125
-#define MODE_H 75
-#define SLOT_DY 26       /* the slots' row, from the panel's top */
-#define SLOT_DX 30       /* a slot and the empty space after it */
-static const int mode_of[N_MODES] = {1, 0, 2};   /* the mode of each slot: Creative, Survival, Spectator */
-static const char *const mode_name[N_MODES] = {"Creative", "Survival", "Spectator"};
-static uint8_t mode_sel;                      /* the slot outlined */
-
-/* Minecraft's switcher opens on the mode after the one you are in, so F3 + F4 and OK walks
- * the cycle round: Creative, Survival, Spectator, back to Creative */
-static int slot_of(int m) { return m == 1 ? 0 : m == 2 ? 2 : 1; }   /* the slot of a game mode */
-
-void mode_open(void) {
-  if (gui != GUI_NONE) return;   /* (over the world, as in Minecraft) */
-  if (!cheats_on()) {
-    /* what /gamemode says without cheats: the switcher is that command */
-    chat_add("You do not have permission to use this command", CHAT_RED);
+#if NB_DIMS
+/* ---------------------------------------------------------------- the End poem and the credits (GuiWinGame) */
+/* end_text (data_dims.c) a row a line, wrapped to 274 as FontRenderer.listFormattedStringToWidth does, the
+ * colours carried to the lines a row wraps onto; rising half a pixel a tick from below the screen, the
+ * logo first; Back or OK, or their end, and the player is back in the Overworld */
+static void logo(int y);
+static uint32_t cred_ms;   /* when they began */
+static int cred_n;         /* their lines */
+static const uint16_t cred_col[16] = {
+    RGB(0, 0, 0),          RGB(0, 0, 0xAA),       RGB(0, 0xAA, 0),       RGB(0, 0xAA, 0xAA),
+    RGB(0xAA, 0, 0),       RGB(0xAA, 0, 0xAA),    RGB(0xFF, 0xAA, 0),    RGB(0xAA, 0xAA, 0xAA),
+    RGB(0x55, 0x55, 0x55), RGB(0x55, 0x55, 0xFF), RGB(0x55, 0xFF, 0x55), RGB(0x55, 0xFF, 0xFF),
+    RGB(0xFF, 0x55, 0x55), RGB(0xFF, 0x55, 0xFF), RGB(0xFF, 0xFF, 0x55), RGB(0xFF, 0xFF, 0xFF)};
+typedef struct {
+  const char *p;   /* the line's first character */
+  uint8_t col, obf;   /* the colour (an index of cred_col) and the hidden letters (k) it starts with */
+} CredLine;
+static void cred_code(CredLine *l, int c) {
+  int k = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+  if (k >= 0) l->col = (uint8_t)k, l->obf = 0;
+  else if (c == 'k') l->obf = 1;
+  else if (c == 'r') l->col = 15, l->obf = 0;
+}
+/* sizeStringToWidth: where line l ends (its row's end, the space it breaks at, or the letter past 274) */
+static const char *cred_end(const CredLine *l) {
+  int w = 0;
+  const char *q = l->p, *sp = NULL;
+  for (; *q && *q != '\n'; q++) {
+    if (*q == '\033') {
+      if (q[1] && q[1] != '\n') q++;
+      continue;
+    }
+    if (*q == ' ') sp = q;
+    w += char_w((unsigned char)*q);
+    if (w > 274) return sp ? sp : q;
+  }
+  return q;
+}
+/* the next line after l (its colours carried, past the space it broke at); false at the end */
+static bool cred_next(CredLine *l) {
+  const char *e = cred_end(l);
+  for (const char *q = l->p; q < e; q++)
+    if (*q == '\033' && q + 1 < e) cred_code(l, *++q);
+  if (!*e) return false;
+  if (*e == '\n') l->col = 15, l->obf = 0;
+  l->p = *e == '\n' || *e == ' ' ? e + 1 : e;
+  return *l->p != 0;
+}
+void credits_open(void) {
+  CredLine l = {end_text, 15, 0};
+  cred_n = 1;
+  while (cred_next(&l)) cred_n++;
+  cred_ms = plat_millis();
+  gui_menu(GUI_CREDITS);
+}
+static void cred_draw(const CredLine *l, int x, int y, uint32_t seed) {
+  CredLine c = *l;
+  const char *e = cred_end(l), *s = c.p;
+  if (s[0] == '[' && s[1] == 'C' && s[2] == ']') {
+    /* centred: the line's width without its codes */
+    s += 3;
+    int w = 0;
+    for (const char *q = s; q < e; q++)
+      if (*q == '\033') q++;
+      else w += char_w((unsigned char)*q);
+    x += (274 - w) / 2;
+  }
+  char t[64];
+  while (s < e) {
+    if (*s == '\033') {
+      if (s + 1 < e) cred_code(&c, s[1]);
+      s += 2;
+      continue;
+    }
+    int n = 0;
+    while (s + n < e && s[n] != '\033' && n < 63) n++;
+    for (int i = 0; i < n; i++) {
+      int ch = (unsigned char)s[i];
+      if (c.obf && ch != ' ') {
+        /* (fontRandom: a letter as wide, a new one every 4 ticks) */
+        int w = char_w(ch);
+        for (int k = 0; k < 16; k++) {
+          seed = seed * 1103515245u + 12345u;
+          int o = 33 + (int)((seed >> 16) % 94);
+          if (char_w(o) == w) {
+            ch = o;
+            break;
+          }
+        }
+      }
+      t[i] = (char)ch;
+    }
+    t[n] = 0;
+    text(t, x, y, cred_col[c.col], true);
+    x += text_width(t);
+    s += n;
+  }
+}
+static void credits_screen(void) {
+  uint32_t ms = plat_millis() - cred_ms;
+  float tk = ms / 50.0f, off = -tk * 0.5f;
+  int h = SCREEN_H, w = SCREEN_W, total = cred_n * 12;
+  if (tk > (total + h + h + 24) / 0.5f) {
+    gui = GUI_NONE;
     return;
   }
-  mode_sel = (uint8_t)((slot_of(pl.mode) + 1) % N_MODES);   /* the next one round */
-  gui = GUI_MODE;
-}
-
-void mode_next(void) { mode_sel = (mode_sel + 1) % N_MODES; }
-
-void mode_use(void) {
-  player_set_mode(mode_of[mode_sel]);
-  gui = GUI_NONE;
-}
-
-void mode_cancel(void) { gui = GUI_NONE; }
-
-static const char *key_name(int k);
-
-/* the panel: Minecraft's, bar and frame opaque and its body on the world through
- * it, so the world behind is tinted and only the frame is drawn over */
-static void mode_panel(int x, int y) {
-  tint_rect(x + 1, y + 22, MODE_W - 2, 50, RGB(0x21, 0x21, 0x21), 13);   /* 40%, as alpha 102 */
-  sprite_part(SP_GM_BG, x, y, 0, 0, MODE_W, 22);                         /* the bar and its frame */
-  sprite_part(SP_GM_BG, x, y + 72, 0, 72, MODE_W, 3);                     /* the bottom frame */
-  sprite_part(SP_GM_BG, x, y + 22, 0, 22, 1, 50);                         /* the sides */
-  sprite_part(SP_GM_BG, x + MODE_W - 1, y + 22, MODE_W - 1, 22, 1, 50);
-}
-
-static void mode_screen(void) {
-  int x0 = (SCREEN_W - MODE_W) / 2, y0 = (SCREEN_H - MODE_H) / 2;
-  mode_panel(x0, y0);
-  /* the bar: the mode the outline is on, as Minecraft names it */
-  char t[24];
-  strcpy(t, mode_name[mode_sel]);
-  strcat(t, " Mode");
-  text_center(t, x0 + MODE_W / 2, y0 + 8, 0xFFFF);
-  /* the modes, in the middle of the panel, the one picked inside its outline */
-  int row = N_MODES * 26 + (N_MODES - 1) * (SLOT_DX - 26);
-  int sx = x0 + (MODE_W - row) / 2, sy = y0 + SLOT_DY;
-  for (int i = 0; i < N_MODES; i++) {
-    int x = sx + i * SLOT_DX;
-    sprite(i == mode_sel ? SP_GM_SEL : SP_GM_SLOT, x, sy);
-    int ic = mode_of[i] == 1 ? blk_icon[B_GRASS] : mode_of[i] == 2 ? SP_EYE_ENDER : item_icon(I_IRON_SWORD);
-    if (ic >= 0) sprite(ic, x + 5, sy + 5);
+  /* the options background, rising slowly, lit up to 96 / 255 as it begins and ends */
+  float f3 = tk * 0.02f, f5 = ((total + h + h + 24) / 0.5f - 20 - tk) * 0.005f;
+  if (f5 < f3) f3 = f5;
+  if (f3 > 1) f3 = 1;
+  int lum = (int)(f3 * f3 * 96 / 64 * 256);   /* (the tiles' palette has 64 / 255) */
+  const uint8_t *px = spr_px + spr_off[SP_DIRT_BG];
+  const uint16_t *pal = spr_pal[SP_DIRT_BG];
+  int scroll = (int)(tk * 0.25f);
+  for (int y = clip_y0; y < clip_y1; y++) {
+    uint16_t *d = row_at(y);
+    const uint8_t *s = px + ((((h - y) - scroll) >> 2) & 15) * 8;
+    for (int x = 0; x < w; x++) {
+      int u = (x >> 2) & 15;
+      uint16_t c = pal[(u & 1) ? s[u >> 1] >> 4 : s[u >> 1] & 15];
+      int r = ((c >> 11) * lum) >> 8, g = (((c >> 5) & 63) * lum) >> 8, b = ((c & 31) * lum) >> 8;
+      d[x] = (uint16_t)((r > 31 ? 31 : r) << 11 | (g > 63 ? 63 : g) << 5 | (b > 31 ? 31 : b));
+    }
   }
-  /* under them: the key that goes to the next one, as Minecraft's "[F4] Next" */
-  char k[16];
-  strcpy(k, "[");
-  strcat(k, key_name(opt.keys[A_DEBUG] < 64 ? opt.keys[A_DEBUG] + 1 : 25));
-  strcat(k, "] Next");
-  text_center(k, x0 + MODE_W / 2, y0 + 57, 0xFFFF);
+  int j = w / 2 - 137, k = h + 50, top = (int)(k + off);
+  logo(top);
+  CredLine l = {end_text, 15, 0};
+  int y = k + 200;
+  for (int i = 0; i < cred_n; i++, y += 12) {
+    float ly = y + off;
+    if (i == cred_n - 1 && ly < h / 2 - 6) ly = h / 2 - 6;   /* (the last line stays in the middle) */
+    if (ly + 20 > clip_y0 && ly < clip_y1 && ly + 20 > 0 && ly < h)
+      cred_draw(&l, j, (int)ly, (uint32_t)i * 4238972211u + (uint32_t)(tk / 4));
+    if (ly > h) break;
+    if (!cred_next(&l)) break;
+  }
 }
+#endif
 
 /* ---------------------------------------------------------------- the HUD (GuiIngame) */
 static int name_timer, last_slot = -1, last_id;
 
+#if NB_DIMS
+/* GuiIngame.renderPortal: the portal's swirl over the picture as the player stands in one */
+static void hud_portal(void) {
+  if (portal_time <= 0) return;
+  float f = portal_time;
+  if (f < 1) f *= f, f *= f, f = f * 0.8f + 0.2f;
+  extern uint32_t game_time;
+  static const uint16_t fr[4] = {TX_PORTAL, TX_PORTAL_4, TX_PORTAL_8, TX_PORTAL_12};
+  int t = fr[(game_time >> 3) & 3], a = (int)(f * 32);
+  for (int y = clip_y0; y < clip_y1; y++) {
+    uint16_t *d = row_at(y);
+    const uint8_t *row = tex_px[t] + (y * 16 / SCREEN_H) * 8;
+    for (int x = 0; x < SCREEN_W; x++) {
+      int u = x * 16 / SCREEN_W, i = (u & 1) ? row[u >> 1] >> 4 : row[u >> 1] & 15;
+      if (i) d[x] = blend(d[x], tex_pal[t][i], a);
+    }
+  }
+}
+/* GuiIngame.renderBossHealth: the dragon's bar and name at the top */
+static void hud_boss(void) {
+  float hp = dragon_bar();
+  if (hp < 0 || clip_y0 >= 20) return;
+  int x = SCREEN_W / 2 - 91, w = (int)(hp * 183);
+  sprite(SP_BOSS_BG, x, 12);
+  if (w > 0) sprite_part(SP_BOSS, x, 12, 0, 0, w > 182 ? 182 : w, 5);
+  static const char name[] = "Ender Dragon";
+  text(name, (SCREEN_W - text_width(name)) / 2, 2, 0xFFFF, true);
+}
+#endif
+
 static void hud(void) {
-  debug_overlay();
   int hx = (SCREEN_W - 182) / 2, hy = SCREEN_H - 22;
+#if NB_DIMS
+  if (gui == GUI_NONE || gui == GUI_CHAT) hud_portal();
+#endif
   if (gui == GUI_NONE || gui == GUI_CHAT) {
-    /* Minecraft draws its crosshair inverting what is behind it. A spectator's
-     * whole HUD is that crosshair, and it only shows while it is on a mob: the
-     * one OK would take the eyes of */
-    if (pl.mode != 2 || spec_target >= 0)
-      for (int k = -4; k <= 4; k++) {
-        int pts[2][2] = {{SCREEN_W / 2 + k, SCREEN_H / 2}, {SCREEN_W / 2, SCREEN_H / 2 + k}};
-        for (int p = 0; p < 2; p++) {
-          if (p == 1 && k == 0) continue;
-          int x = pts[p][0], y = pts[p][1];
-          if (y < clip_y0 || y >= clip_y1) continue;
-          uint16_t *d = row_at(y) + x;
-          *d = (uint16_t)~*d;
-        }
+    /* Minecraft draws its crosshair inverting what is behind it */
+    for (int k = -4; k <= 4; k++) {
+      int pts[2][2] = {{SCREEN_W / 2 + k, SCREEN_H / 2}, {SCREEN_W / 2, SCREEN_H / 2 + k}};
+      for (int p = 0; p < 2; p++) {
+        if (p == 1 && k == 0) continue;
+        int x = pts[p][0], y = pts[p][1];
+        if (y < clip_y0 || y >= clip_y1) continue;
+        uint16_t *d = row_at(y) + x;
+        *d = (uint16_t)~*d;
       }
+    }
   }
-  /* the Ender Dragon's boss bar (BossStatus): its health, across the top */
-  float dbar = dragon_bar();
-  if (dbar >= 0 && gui == GUI_NONE) {
-    int bw = 182, bx = (SCREEN_W - bw) / 2, by = 16;
-    tint_rect(bx, by, bw, 7, RGB(0x10, 0, 0x18), 28);
-    tint_rect(bx, by, (int)(bw * dbar + 0.5f), 7, RGB(0xE0, 0x30, 0xFF), 28);
-    text_center("Ender Dragon", SCREEN_W / 2, by - 10, RGB(0xFF, 0xA0, 0xFF));
-  }
+#if NB_DIMS
+  hud_boss();
+#endif
   if (clip_y1 <= SCREEN_H - 60) return;
-  if (pl.mode == 2) return;   /* a spectator holds nothing: no hotbar, and nothing to eat, live or level */
   sprite(SP_HOTBAR, hx, hy);
   sprite(SP_HOTBAR_SEL, hx - 1 + pl.slot * 20, hy - 1);
   for (int i = 0; i < 9; i++) draw_stack(&pl.inv[i], hx + 3 + i * 20, hy + 3);
@@ -639,7 +556,7 @@ static void hud(void) {
     /* armour, over the hearts */
     int ap = 0;
     for (int i = 0; i < 4; i++)
-      if (is_item_id(pl.armor[i].id)) ap += it_a[pl.armor[i].id - 256];
+      if (pl.armor[i].id >= 256) ap += it_a[pl.armor[i].id - 256];
     if (ap > 0)
       for (int i = 0; i < 10; i++) {
         int x = left + i * 8;
@@ -685,27 +602,45 @@ void *tiles_data(uint32_t *len) {
 }
 static Chest *chest;
 static Furnace *furnace;
+#if NB_DIMS
+/* NumBlocks.nwa: a chest's or furnace's used is 1 + its dimension (NumPlay's NumBlocks only gets the
+ * Overworld's: save.c) */
+#define USED(t) ((t).used == 1 + dim)
+#define USE_TAG ((uint8_t)(1 + dim))
+#include "edits.h"
+static void chest_loot(Chest *c, int kind);
+#else
+#define USED(t) ((t).used)
+#define USE_TAG 1
+#endif
 
 static Chest *chest_at(int x, int y, int z, bool make) {
   for (int i = 0; i < N_CHESTS; i++)
-    if (chests[i].used && chests[i].x == x && chests[i].y == y && chests[i].z == z) return &chests[i];
+    if (USED(chests[i]) && chests[i].x == x && chests[i].y == y && chests[i].z == z) return &chests[i];
   if (!make) return NULL;
   for (int i = 0; i < N_CHESTS; i++)
     if (!chests[i].used) {
       memset(&chests[i], 0, sizeof chests[i]);
-      chests[i].used = 1, chests[i].x = (int16_t)x, chests[i].y = (uint8_t)y, chests[i].z = (int16_t)z;
+      chests[i].used = USE_TAG, chests[i].x = (int16_t)x, chests[i].y = (uint8_t)y, chests[i].z = (int16_t)z;
+#if NB_DIMS
+      if (dim == DIM_NETHER && !edits_changed(x, y, z)) chest_loot(&chests[i], 0);
+      else if (dim == DIM_OVERWORLD && !edits_changed(x, y, z)) {
+        int k = gen_stronghold_chest(x, y, z);   /* (a stronghold's: 1-3; none: 0) */
+        if (k) chest_loot(&chests[i], k);
+      }
+#endif
       return &chests[i];
     }
   return NULL;
 }
 static Furnace *furnace_at(int x, int y, int z, bool make) {
   for (int i = 0; i < N_FURNACES; i++)
-    if (furnaces[i].used && furnaces[i].x == x && furnaces[i].y == y && furnaces[i].z == z) return &furnaces[i];
+    if (USED(furnaces[i]) && furnaces[i].x == x && furnaces[i].y == y && furnaces[i].z == z) return &furnaces[i];
   if (!make) return NULL;
   for (int i = 0; i < N_FURNACES; i++)
     if (!furnaces[i].used) {
       memset(&furnaces[i], 0, sizeof furnaces[i]);
-      furnaces[i].used = 1, furnaces[i].x = (int16_t)x, furnaces[i].y = (uint8_t)y, furnaces[i].z = (int16_t)z;
+      furnaces[i].used = USE_TAG, furnaces[i].x = (int16_t)x, furnaces[i].y = (uint8_t)y, furnaces[i].z = (int16_t)z;
       return &furnaces[i];
     }
   return NULL;
@@ -722,92 +657,74 @@ void tiles_removed(int x, int y, int z) {
     if (s[i].id) ent_drop(s[i].id, item_count(&s[i]), s[i].aux, x + 0.5f, y + 0.5f, z + 0.5f, false);
 }
 
+#if NB_DIMS
+/* the tiles as NumPlay's NumBlocks gets them (in t, a copy): the Overworld's, without what it does not know */
+static void stack_known(Stack *s, int n) {
+  for (int i = 0; i < n; i++)
+    if (s[i].id >= I_END) s[i].id = 0, s[i].aux = 0;
+}
+void tiles_for_numplay(void *t) {
+  Chest *c = (Chest *)t;
+  Furnace *f = (Furnace *)(c + N_CHESTS);
+  for (int i = 0; i < N_CHESTS; i++)
+    if (c[i].used != 1) memset(&c[i], 0, sizeof c[i]);
+    else stack_known(c[i].s, 27);
+  for (int i = 0; i < N_FURNACES; i++)
+    if (f[i].used != 1) memset(&f[i], 0, sizeof f[i]);
+    else stack_known(f[i].s, 3);
+}
+/* the tiles of the Nether and the End (in t, a copy of all) back into free places of these */
+void tiles_merge(const void *t) {
+  const Chest *c = (const Chest *)t;
+  const Furnace *f = (const Furnace *)(c + N_CHESTS);
+  for (int i = 0, j = 0; i < N_CHESTS; i++) {
+    if (c[i].used <= 1) continue;
+    while (j < N_CHESTS && chests[j].used) j++;
+    if (j < N_CHESTS) chests[j] = c[i];
+  }
+  for (int i = 0, j = 0; i < N_FURNACES; i++) {
+    if (f[i].used <= 1) continue;
+    while (j < N_FURNACES && furnaces[j].used) j++;
+    if (j < N_FURNACES) furnaces[j] = f[i];
+  }
+}
+/* a chest the world made: its loot, when first opened. kind 0 a fortress's (StructureNetherBridgePieces's list),
+ * 1 a stronghold's corridor, 2 its room, 3 its library (StructureStrongholdPieces's); horse armour, saddles,
+ * maps and enchanted books are not in NumBlocks: those draws leave nothing */
+typedef struct { uint16_t id; uint8_t lo, hi, w; } Loot;
+static void chest_loot(Chest *c, int kind) {
+  static const Loot fort[] = {
+      {I_DIAMOND, 1, 3, 5}, {I_IRON_INGOT, 1, 5, 5}, {I_GOLD_INGOT, 1, 3, 15}, {I_GOLDEN_SWORD, 1, 1, 5},
+      {I_GOLDEN_CHESTPLATE, 1, 1, 5}, {I_FLINT_AND_STEEL, 1, 1, 5}, {I_NETHER_WART, 3, 7, 5}, {0, 1, 1, 10},
+      {0, 1, 1, 8}, {0, 1, 1, 5}, {0, 1, 1, 3}, {B_OBSIDIAN, 2, 4, 2}};
+  static const Loot corridor[] = {
+      {I_ENDER_PEARL, 1, 1, 10}, {I_DIAMOND, 1, 3, 3}, {I_IRON_INGOT, 1, 5, 10}, {I_GOLD_INGOT, 1, 3, 5},
+      {I_REDSTONE, 4, 9, 5}, {I_BREAD, 1, 3, 15}, {I_APPLE, 1, 3, 15}, {I_IRON_PICKAXE, 1, 1, 5},
+      {I_IRON_SWORD, 1, 1, 5}, {I_IRON_CHESTPLATE, 1, 1, 5}, {I_IRON_HELMET, 1, 1, 5}, {I_IRON_LEGGINGS, 1, 1, 5},
+      {I_IRON_BOOTS, 1, 1, 5}, {I_GOLDEN_APPLE, 1, 1, 1}, {0, 1, 1, 5}};
+  static const Loot room[] = {
+      {I_IRON_INGOT, 1, 5, 10}, {I_GOLD_INGOT, 1, 3, 5}, {I_REDSTONE, 4, 9, 5}, {I_COAL, 3, 8, 10},
+      {I_BREAD, 1, 3, 15}, {I_APPLE, 1, 3, 15}, {I_IRON_PICKAXE, 1, 1, 1}, {0, 1, 1, 1}};
+  static const Loot library[] = {{I_BOOK, 1, 3, 20}, {I_PAPER, 2, 7, 20}, {0, 1, 1, 1}, {I_COMPASS, 1, 1, 1}, {0, 1, 5, 2}};
+  static const struct { const Loot *l; uint8_t total, n0, n1; } T[4] = {
+      {fort, 75, 2, 4}, {corridor, 99, 2, 2}, {room, 62, 1, 4}, {library, 44, 1, 4}};
+  if (kind < 0 || kind > 3) return;
+  const Loot *L = T[kind].l;
+  int n = T[kind].n0 + rnd(T[kind].n1);
+  for (int k = 0; k < n; k++) {
+    int w = rnd(T[kind].total), i = 0;
+    while (w >= L[i].w) w -= L[i++].w;
+    int count = L[i].lo + rnd(L[i].hi - L[i].lo + 1), slot = rnd(27);
+    if (L[i].id) c->s[slot] = (Stack){L[i].id, (uint16_t)(item_dur(L[i].id) ? 0 : count)};
+  }
+}
+#endif
+
 void tiles_forget(int x, int y, int z) {
   Chest *c = chest_at(x, y, z, false);
   if (c) c->used = 0;
   Furnace *f = furnace_at(x, y, z, false);
   if (f) f->used = 0;
-}
-
-/* a chest the world was made with - the test world's showcase puts a row of them down,
- * one stack of each of the game's items - so that it opens on them. A tile is made if
- * there is one free (N_CHESTS); the block itself is the generator's to place. */
-void tiles_chest(int x, int y, int z, const Stack *items, int n) {
-  Chest *c = chest_at(x, y, z, true);
-  if (!c) return;
-  for (int i = 0; i < n && i < 27; i++) c->s[i] = items[i];
-}
-
-/* The desert pyramid's chests: is (x, y, z) one of the four the piece holds? The
- * placement grid (gen.c) says which chunks are a temple's; the chamber's own blocks
- * about the chest say the chest is the piece's and not one put there later. The loot
- * is drawn from the world seed and the place on the first open (temple_fill), so
- * nothing new is stored. */
-static int temple_chest_at(int x, int y, int z) {
-  static const int8_t ch[4][2] = {{10, 8}, {12, 10}, {10, 12}, {8, 10}};
-  for (int k = 0; k < 4; k++) {
-    if (((x - ch[k][0]) & 15) != 0 || ((z - ch[k][1]) & 15) != 0) continue;   /* (the chests sit on the chunk's corner) */
-    if (!temple_cell(x - ch[k][0], z - ch[k][1])) continue;
-    /* the chamber about it: the piece's floor under the chest (cut sandstone; the
-     * chiselled and plain rows tolerated, a floor that has been dug at) and the air
-     * its niche was carved into */
-    int below = world_get(x, y - 1, z);
-    if (below != B_SANDSTONE_SMOOTH && below != B_SANDSTONE_CHISELED && below != B_SANDSTONE) continue;
-    if (world_get(x, y + 1, z) != B_AIR) continue;
-    return 1;
-  }
-  return 0;
-}
-
-/* The desert pyramid's four chests: modern's desert_pyramid.json loot, drawn on
- * first open from the world seed and the chest's own place (no storage, same world
- * same loot). Main pool 2-4 rolls, bone pool 4 rolls; the trim pool (dune trim, empty)
- * gives nothing here. No item for horse armours, enchanted golden apple or trim:
- * dropped (plain book for the enchanted book). Empty entries give nothing. */
-static void temple_fill(Chest *c, int x, int y, int z) {
-  uint32_t old = rnd_seed(0);
-  /* seed from world seed and place (deterministic, same world same loot) */
-  uint64_t h = (uint64_t)world_seed + (uint64_t)(x + 1) * 374761393ULL + (uint64_t)(y + 1) * 668265263ULL +
-               (uint64_t)(z + 1) * 1274126177ULL;
-  h = (h ^ (h >> 30)) * 0xBF58476D1CE4E5B9ULL;
-  h ^= h >> 27;
-  rnd_seed((uint32_t)(h ? h : 0x2545F491));
-  /* main pool (weight total 247) */
-  static const struct { uint16_t id; uint8_t w, lo, hi; } main[] = {
-    {I_DIAMOND, 5, 1, 3}, {I_IRON_INGOT, 15, 1, 5}, {I_GOLD_INGOT, 15, 2, 7}, {I_EMERALD, 15, 1, 3},
-    {I_BONE, 25, 4, 6}, {I_SPIDER_EYE, 25, 1, 3}, {I_ROTTEN_FLESH, 25, 3, 7}, {I_LEATHER, 20, 1, 5},
-    {0, 15, 0, 0}, {0, 15, 0, 0}, {0, 10, 0, 0}, {0, 5, 0, 0},   /* horse armours: none */
-    {I_BOOK, 20, 1, 1}, {I_GOLDEN_APPLE, 20, 1, 1}, {0, 2, 0, 0},   /* enchanted apple: none */
-    {0, 15, 0, 0},   /* empty */
-  };
-  int rolls = 2 + rnd(3);
-  for (int r = 0; r < rolls; r++) {
-    int pick = rnd(247), k = 0;
-    while (k < 15 && (pick -= main[k].w) >= 0) k++;
-    if (k >= 16 || !main[k].id) continue;
-    int n = main[k].lo + rnd(main[k].hi - main[k].lo + 1);
-    /* random empty slot */
-    int empty[27], ne = 0;
-    for (int i = 0; i < 27; i++) if (!c->s[i].id) empty[ne++] = i;
-    if (!ne) break;
-    int s = empty[rnd(ne)];
-    c->s[s].id = main[k].id;
-    c->s[s].aux = (uint16_t)n;
-  }
-  /* bone pool: 4 rolls, 5 entries weight 10 each, counts 1-8 */
-  static const uint16_t bone[] = {I_BONE, I_GUNPOWDER, I_ROTTEN_FLESH, I_STRING, B_SAND};
-  for (int r = 0; r < 4; r++) {
-    int k = rnd(5);
-    int n = 1 + rnd(8);
-    int empty[27], ne = 0;
-    for (int i = 0; i < 27; i++) if (!c->s[i].id) empty[ne++] = i;
-    if (!ne) break;
-    int s = empty[rnd(ne)];
-    c->s[s].id = bone[k];
-    c->s[s].aux = (uint16_t)n;
-  }
-  /* (trim pool: dune trim or empty - no item here, nothing) */
-  rnd_seed(old);
 }
 
 /* TileEntityFurnace.update */
@@ -826,7 +743,7 @@ void gui_tick(void) {
       if (chat_age(i) > 1000) chat[i + 1] = (char)((chat_clock - 1000) & 255), chat[i + 2] = (char)((chat_clock - 1000) >> 8);
   for (int i = 0; i < N_FURNACES; i++) {
     Furnace *f = &furnaces[i];
-    if (!f->used) continue;
+    if (!USED(*f)) continue;
     bool was = f->burn > 0;
     if (f->burn > 0) f->burn--;
     if ((f->burn > 0 || f->s[1].id) && f->s[0].id) {
@@ -855,19 +772,14 @@ void gui_tick(void) {
 }
 
 /* ---------------------------------------------------------------- container screens */
-enum { SL_NORMAL, SL_RESULT, SL_OUTPUT, SL_ARMOR, SL_FUEL, SL_CREATIVE, SL_TAB, SL_TRASH };
+enum { SL_NORMAL, SL_RESULT, SL_OUTPUT, SL_ARMOR, SL_FUEL, SL_CREATIVE, SL_TAB };
 typedef struct { int16_t x, y; uint8_t kind, k; Stack *s; } Slot;
-#define N_SLOTS 72
-/* the open screen's slots, in the buffer of whoever is using them (layout_slots fills it,
- * as the screen is laid out again for whoever reads them): nobody keeps them from one use to
- * the next. What carries over between two uses is the drag, in `dragged` below. */
-static Slot *slots;
+static Slot slots[72];
 static int drag;                      /* spreading a stack (below): 0, 1 even shares (OK), 2 one each (EXE) */
 static uint8_t dragged[72], ndragged;
 static int nslots, cur, panel_x, panel_y, panel_h, grid_w;
 static Stack result;           /* what the crafting grid makes */
 static Stack table_grid[9];    /* the crafting table's grid */
-static Stack trash;            /* the creative survival inventory's destroy slot: what it holds is gone */
 static Stack *grid;
 
 static void add_slot(int x, int y, int kind, int k, Stack *s) {
@@ -889,41 +801,39 @@ static void update_result(void) {
 
 /* the creative inventory: the tab shown, how far down, what its 45 slots show */
 static int ctab = 0, cscroll;
-static bool csurv;   /* the Survival Inventory tab: the survival inventory, tabs still there */
-static Stack cshown[45], ctabs[14];
-static const uint16_t tab_icon[14] = {B_GRASS, B_BRICKS, B_PEONY_LOWER, B_CRAFTING_TABLE, I_LAVA_BUCKET,
-                                      I_COMPASS, I_APPLE, I_IRON_AXE, I_GOLDEN_SWORD, 0, I_IRON_INGOT,
-                                      I_CREEPER_SPAWN_EGG, B_BARRIER, B_CHEST};
+static Stack cshown[45], ctabs[12];
+static const uint16_t tab_icon[12] = {B_BRICKS, B_PEONY_LOWER, I_REDSTONE, B_RAIL, I_LAVA_BUCKET, I_COMPASS,
+                                      I_APPLE, I_IRON_AXE, I_GOLDEN_SWORD, 0, I_STICK, B_CHEST};
 #define TAB_SEARCH 5
-#define TAB_BREW 9     /* NumBlocks brews nothing: the tab is left out (tab_icon 0) */
-#define TAB_MOBS 11    /* the spawn eggs, on the bottom row right of Materials */
-#define TAB_OP 12      /* the operator items (the barrier): Minecraft's Operator Utilities, one tab
-                        * left of the Survival Inventory tab, and with cheats on only */
-#define TAB_SURV 13    /* Survival Inventory: a way out of the creative inventory */
-#define SEARCH_RIGHT 167  /* the Search Items tab: on its own at the right end of the top row */
-#define TAB_RIGHT 167     /* the Survival Inventory tab: on its own at the right end of the bottom row */
-/* Which tabs there are: every one but Brewing, which NumBlocks has nothing to put in
-   (its tab_icon is 0), and the operator items tab - Minecraft's stands only while
-   cheats are on, and the world's own Allow Cheats (or Open to LAN with them) is what
-   says so here. GuiContainerCreative draws the tab row without it otherwise. */
-static bool tab_shown(int t) {
-  return t != TAB_BREW && (t != TAB_OP || cheats_on());
-}
-/* A tab's sprite x: the tabs of a row packed to the left (Brewing is left out, and the search and
-   the survival tabs stand alone at their row's right end, as in Minecraft) */
-static int tab_x(int t) {
-  if (t == TAB_SEARCH) return SEARCH_RIGHT;
-  if (t == TAB_SURV) return TAB_RIGHT;
-  int col = 0;
-  for (int i = 0; i < t; i++)
-    if (i != TAB_BREW && i != TAB_SEARCH && i != TAB_SURV && tab_shown(i) && (i < 6) == (t < 6)) col++;
-  return col * 28;
-}
-/* the operator items: in the creative inventory with cheats on only, as Minecraft's are (its
-   search tab leaves them out without them too) */
-static bool op_only(int id) { return id == B_BARRIER; }
 static char csearch[16];   /* Search Items: what is typed (GuiContainerCreative.searchField) */
 /* an item whose name has what is typed in it (updateCreativeSearch) */
+#if NP_TEXT_EXTRA
+/* (other languages: accented letters found by their plain letter; and by Minecraft's name, typed with spaces for
+ * its _, as letters typed can't be Chinese ones) */
+static bool has(const char *n) {
+  for (; *n; n++) {
+    const char *p = n;
+    int k = 0;
+    for (; csearch[k] && *p; k++) {
+      uint32_t c = np_utf8(&p);
+      char b = (char)c, b2;
+      if (c >= 0x80 && (np_latin(c, &b, &b2), !b)) b = 1;   /* (a Chinese letter: none typed) */
+      if (((b == '_' ? ' ' : b) | 32) != csearch[k]) break;
+    }
+    if (!csearch[k]) return true;
+  }
+  return false;
+}
+static bool found(int id) {
+  if (!csearch[0] || has(item_label(id))) return true;
+  for (int g = 0; g < n_give; g++)
+    if (give_id[g] == id) {
+      int k = give_key[g] >> 4;
+      return has(k < 256 ? mc_block_name[k] : mc_item_name[k - 256]);
+    }
+  return false;
+}
+#else
 static bool found(int id) {
   const char *n = item_label(id);
   for (; *n; n++) {
@@ -933,15 +843,12 @@ static bool found(int id) {
   }
   return !csearch[0];
 }
+#endif
 static int tab_count(void) {
   int n = tab_start[ctab + 1] - tab_start[ctab];
   if (ctab != TAB_SEARCH || !csearch[0]) return n;
   int c = 0;
-  for (int i = 0; i < n; i++) {
-    int id = tab_items[tab_start[ctab] + i];
-    if (op_only(id) && !cheats_on()) continue;   /* as creative_refresh leaves them out */
-    c += found(id);
-  }
+  for (int i = 0; i < n; i++) c += found(tab_items[tab_start[ctab] + i]);
   return c;
 }
 static int tab_rows(void) { return (tab_count() + 8) / 9; }
@@ -950,32 +857,35 @@ static void creative_refresh(void) {
   for (int i = 0; i < n && k < 45; i++) {
     int id = tab_items[tab_start[ctab] + i];
     if (ctab == TAB_SEARCH && !found(id)) continue;
-    if (op_only(id) && !cheats_on()) continue;   /* the operator items: cheats on only */
     if (skip) skip--;
-    /* a stack of one; a tool starts undamaged, and an undamaged tool has no durability bar to draw */
-    else cshown[k].id = (uint16_t)id, cshown[k++].aux = item_dur(id) ? 0 : 1;
+    else cshown[k].id = (uint16_t)id, cshown[k++].aux = 1;
   }
   for (; k < 45; k++) cshown[k].id = 0;
-  for (int t = 0; t < 14; t++) ctabs[t].id = tab_icon[t], ctabs[t].aux = item_dur(tab_icon[t]) ? 0 : 1;
+  for (int t = 0; t < 12; t++) ctabs[t].id = tab_icon[t], ctabs[t].aux = 1;
 }
 
 static int origin_x, origin_y, origin_z;
-/* the open screen's state that outlives this opening: which chest or furnace it shows, where
- * the cursor parks, what its crafting grid is. Its slots are laid out for use, not kept:
- * layout_slots below, for whoever reads them. */
 void gui_open(int screen, int x, int y, int z) {
   gui = screen;
+  nslots = 0;
   cur = 0, drag = 0, ndragged = 0;
   grid = NULL;
   origin_x = x, origin_y = y, origin_z = z;
   panel_h = 166;
   switch (screen) {
     case GUI_INVENTORY:
+      add_slot(144, 36, SL_RESULT, 0, &result);
+      for (int i = 0; i < 4; i++) add_slot(88 + (i & 1) * 18, 26 + (i >> 1) * 18, SL_NORMAL, 0, &pl.craft[i]);
+      for (int i = 0; i < 4; i++) add_slot(8, 8 + i * 18, SL_ARMOR, (uint8_t)(3 - i), &pl.armor[3 - i]);
+      add_player_slots(84, 142);
       grid = pl.craft, grid_w = 2;
       cur = 5 + 4 + 27;   /* the first hotbar slot */
       break;
     case GUI_CRAFTING:
+      add_slot(124, 35, SL_RESULT, 0, &result);
       memset(table_grid, 0, sizeof table_grid);
+      for (int i = 0; i < 9; i++) add_slot(30 + (i % 3) * 18, 17 + (i / 3) * 18, SL_NORMAL, 0, &table_grid[i]);
+      add_player_slots(84, 142);
       grid = table_grid, grid_w = 3;
       cur = 10 + 27;
       break;
@@ -985,90 +895,37 @@ void gui_open(int screen, int x, int y, int z) {
         gui = GUI_NONE;
         return;
       }
+      add_slot(56, 17, SL_NORMAL, 0, &furnace->s[0]);
+      add_slot(56, 53, SL_FUEL, 0, &furnace->s[1]);
+      add_slot(116, 35, SL_OUTPUT, 0, &furnace->s[2]);
+      add_player_slots(84, 142);
       cur = 3 + 27;
       break;
     case GUI_CREATIVE:
-      if (csurv) {
-        /* the Survival Inventory tab: Minecraft's creative survival inventory (IMG_TAB_INVENTORY):
-           the player in the middle, two armour slots on each side, the main inventory, the hotbar
-           and the destroy slot. No crafting: this is creative mode. The offhand slot on the left
-           has no slot: NumBlocks has no offhand to put in it. */
-        panel_h = 136;
-        cur = 4 + 27;   /* the first hotbar slot */
-      } else {
-        cscroll = 0;
-        if (!tab_shown(ctab)) ctab = 0;   /* (the operator items tab, with cheats gone) */
-        creative_refresh();
-        panel_h = 136;
-        cur = 45;
-      }
+      for (int i = 0; i < 45; i++) add_slot(9 + (i % 9) * 18, 18 + (i / 9) * 18, SL_CREATIVE, (uint8_t)i, &cshown[i]);
+      for (int c = 0; c < 9; c++) add_slot(9 + c * 18, 112, SL_NORMAL, 0, &pl.inv[c]);
+      for (int t = 0; t < 12; t++)
+        if (t != 9) add_slot(28 * (t % 6) + 6, t < 6 ? -28 + 9 : 136 + 6, SL_TAB, (uint8_t)t, &ctabs[t]);
+      cscroll = 0;
+      creative_refresh();
+      panel_h = 136;
+      cur = 45;
       break;
-    case GUI_CHEST: {
-      bool fresh = !chest_at(x, y, z, false);
+    case GUI_CHEST:
       chest = chest_at(x, y, z, true);
       if (!chest) {
         gui = GUI_NONE;
         return;
       }
-      if (fresh && temple_chest_at(x, y, z)) temple_fill(chest, x, y, z);
+      for (int i = 0; i < 27; i++) add_slot(8 + (i % 9) * 18, 18 + (i / 9) * 18, SL_NORMAL, 0, &chest->s[i]);
+      add_player_slots(85, 143);
       panel_h = 167;
       cur = 27 + 27;
       break;
-    }
   }
   panel_x = (SCREEN_W - (screen == GUI_CREATIVE ? 195 : 176)) / 2;
   panel_y = (SCREEN_H - panel_h) / 2;
   update_result();
-}
-
-/* the open screen's slots, in a buffer of the caller's (N_SLOTS of them at most), laid out for
- * whoever reads them: the input handler and the drawing, one after the other. The same slots in
- * the same order gui_open used to build once, so the cursor's index means the same slot. */
-static void layout_slots(Slot *buf) {
-  slots = buf;
-  nslots = 0;
-  switch (gui) {
-    case GUI_INVENTORY:
-      add_slot(144, 36, SL_RESULT, 0, &result);
-      for (int i = 0; i < 4; i++) add_slot(88 + (i & 1) * 18, 26 + (i >> 1) * 18, SL_NORMAL, 0, &pl.craft[i]);
-      for (int i = 0; i < 4; i++) add_slot(8, 8 + i * 18, SL_ARMOR, (uint8_t)(3 - i), &pl.armor[3 - i]);
-      add_player_slots(84, 142);
-      break;
-    case GUI_CRAFTING:
-      add_slot(124, 35, SL_RESULT, 0, &result);
-      for (int i = 0; i < 9; i++) add_slot(30 + (i % 3) * 18, 17 + (i / 3) * 18, SL_NORMAL, 0, &table_grid[i]);
-      add_player_slots(84, 142);
-      break;
-    case GUI_FURNACE:
-      add_slot(56, 17, SL_NORMAL, 0, &furnace->s[0]);
-      add_slot(56, 53, SL_FUEL, 0, &furnace->s[1]);
-      add_slot(116, 35, SL_OUTPUT, 0, &furnace->s[2]);
-      add_player_slots(84, 142);
-      break;
-    case GUI_CREATIVE:
-      if (csurv) {
-        /* the Survival Inventory tab: Minecraft's creative survival inventory (IMG_TAB_INVENTORY):
-           the player in the middle, two armour slots on each side, the main inventory, the hotbar
-           and the destroy slot. No crafting: this is creative mode. The offhand slot on the left
-           has no slot: NumBlocks has no offhand to put in it. */
-        add_slot(53, 5, SL_ARMOR, 3, &pl.armor[3]);    /* the helmet, left of the player */
-        add_slot(53, 32, SL_ARMOR, 2, &pl.armor[2]);   /* the chestplate, below it */
-        add_slot(107, 5, SL_ARMOR, 1, &pl.armor[1]);   /* the leggings, right of the player */
-        add_slot(107, 32, SL_ARMOR, 0, &pl.armor[0]);  /* the boots, below them */
-        add_player_slots(52, 111);
-        add_slot(170, 111, SL_TRASH, 0, &trash);   /* Minecraft's destroy slot, at the far right */
-      } else {
-        for (int i = 0; i < 45; i++) add_slot(9 + (i % 9) * 18, 18 + (i / 9) * 18, SL_CREATIVE, (uint8_t)i, &cshown[i]);
-        for (int c = 0; c < 9; c++) add_slot(9 + c * 18, 112, SL_NORMAL, 0, &pl.inv[c]);
-      }
-      for (int t = 0; t < 14; t++)
-        if (tab_shown(t)) add_slot(tab_x(t) + 6, t < 6 ? -28 + 9 : panel_h + 2, SL_TAB, (uint8_t)t, &ctabs[t]);
-      break;
-    case GUI_CHEST:
-      for (int i = 0; i < 27; i++) add_slot(8 + (i % 9) * 18, 18 + (i / 9) * 18, SL_NORMAL, 0, &chest->s[i]);
-      add_player_slots(85, 143);
-      break;
-  }
 }
 
 void gui_close(void) {
@@ -1127,25 +984,14 @@ static void furnace_xp(int id, int n) {
 /* Container.slotClick: button 0 left, 1 right */
 static void click(Slot *sl, int button) {
   Stack *s = sl->s, *c = &pl.cursor;
-  if (sl->kind == SL_TRASH) {
-    /* the creative inventory's destroy slot: what is held is gone (GuiContainerCreative) */
-    c->id = 0, c->aux = 0;
-    return;
-  }
   if (sl->kind == SL_TAB) {
-    /* the Survival Inventory tab shows the survival inventory, with the creative tabs still there;
-       any other tab goes back to them (GuiContainerCreative: the tabs stay put) */
-    int t = sl->k;
-    if (t == TAB_SURV) csurv = 1;
-    else csurv = 0, ctab = t, cscroll = 0, csearch[0] = 0;
-    gui_open(GUI_CREATIVE, 0, 0, 0);
-    layout_slots(slots);   /* the tabs' slots changed with the tab */
-    /* stay on the picked tab, so the tabs can be browsed (gui_open parks on the hotbar) */
-    for (int i = 0; i < nslots; i++)
-      if (slots[i].kind == SL_TAB && slots[i].k == t) {
-        cur = i;
-        break;
-      }
+    if (sl->k == 11) {
+      gui_close();
+      gui_open(GUI_INVENTORY, 0, 0, 0);
+      return;
+    }
+    ctab = sl->k, cscroll = 0, csearch[0] = 0;
+    creative_refresh();
     return;
   }
   if (sl->kind == SL_CREATIVE) {
@@ -1342,35 +1188,26 @@ static void move_cursor(int dx, int dy) {
     int ex = slots[i].x - cx, ey = slots[i].y - cy;
     int along = dx ? ex * dx : ey * dy, across = dx ? ey : ex;
     if (along <= 0) continue;
-    /* 4, not 2.5: a jump along a row (the tabs at the ends of theirs) beats a small step out of it */
-    float d = along + abs(across) * 4.0f;
+    float d = along + abs(across) * 2.5f;
     if (d < bd) bd = d, best = i;
   }
   if (best >= 0) cur = best;
 }
 
 /* ---------------------------------------------------------------- menus
- * GuiMainMenu, GuiSelectWorld, GuiCreateWorld, GuiCreateFlatWorld/GuiFlatPresets,
- * GuiYesNo, GuiOptions, GuiIngameMenu, GuiGameOver: their buttons where 1.8 puts them. */
-typedef struct { int16_t x, y, w; uint8_t on, id; char label[FLAT_MAX + 1]; } Button;
-#define N_BUTTONS 12
-/* the screen's buttons, in the buffer of whoever is using them (menu, below, fills it):
- * nobody keeps them from one use to the next */
-static Button *buttons;
+ * GuiMainMenu, GuiSelectWorld, GuiCreateWorld, GuiYesNo, GuiOptions,
+ * GuiIngameMenu, GuiGameOver: their buttons where 1.8 puts them. */
+typedef struct { int16_t x, y, w; uint8_t on, id; char label[NP_TEXT_EXTRA ? 48 : 32]; } Button;
+static Button buttons[12];
 static int nbuttons, bcur;
 enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCEL, B_MODE, B_SEED, B_DOCREATE,
        B_DODELETE, B_DIFF, B_GFX, B_LOOK, B_CLOUDS, B_BOB, B_DONE, B_BACK_GAME, B_SAVEQUIT, B_RESPAWN, B_TITLE,
        B_CONTROLS, B_CONTROLS_DONE, B_NAME, B_RENAME, B_DORENAME, B_RECREATE, B_CHEATS, B_LAN, B_LAN_MODE,
-       B_LAN_CHEATS, B_LAN_START, B_TYPE, B_CUSTOMIZE, B_FLAT_FIELD, B_FLAT_USE, B_FLAT_DONE, B_FLAT_RESET,
-       B_FLAT_CANCEL, B_DIST, B_VIDEO, B_VIDEO_DONE, B_CTRL_SHEET, B_CTRL_SPRINT, B_CTRL_KEYS, B_CTRL_DONE,
-       B_BRIGHT, B_MODS, B_FULLBRIGHT, B_MODS_DONE, B_PERSONAL, B_CONTRAST, B_PANORAMA, B_PERSONAL_DONE };
+       B_LAN_CHEATS, B_LAN_START, B_TYPE };
 int menu_choice;            /* an action for main.c (ACT_*) */
 int create_mode;            /* the new world's game mode */
 bool create_cheats;         /* and whether it allows cheats */
 int create_type;            /* and its type (WT_*) */
-char create_preset[FLAT_MAX + 1] = FLAT_DEFAULT;   /* and its superflat preset */
-static char flat_text[FLAT_MAX + 1];   /* Customize superflat: the preset as typed */
-static char flat_err[48];              /* and why it is wrong (red, shown under the field) */
 static bool cheats_set;     /* (chosen, not following the game mode) */
 static bool lan_mode, lan_allow;   /* Open to LAN's settings: the game mode for others, cheats */
 char seed_text[21];         /* the new world's seed, as typed */
@@ -1400,17 +1237,14 @@ static void list_worlds(void) {
 }
 
 /* Typing in a field: the calculator's keys as its own keyboard has them, letters (its alpha
- * letters: e^x is a, + is z, - a space) or digits (alpha switches between them); every field
- * starts in abc mode. Shift makes the next letter a capital (twice: all of them), backspace
- * deletes, OK or Back is done. Left and right move the cursor (f_cur); up and down only unselect.
- * The comma key types ',' in 123 mode ('e' in abc); var types ':' for the superflat block:meta. */
-enum { F_NONE, F_NAME, F_SEED, F_FLAT };
+ * letters: e^x is a, + is z, - a space) or digits; alpha switches between them, shift makes the
+ * next letter a capital (twice: all of them), backspace deletes, OK or Back is done */
+enum { F_NONE, F_NAME, F_SEED };
 static int field;               /* the field being typed in */
 static uint8_t f_digits, f_caps;   /* (f_caps: 1 the next letter, 2 all of them) */
 static bool f_sel;              /* the text is selected: the first key typed replaces it (an arrow keeps it) */
-static int f_cur;               /* the cursor: where the next letter goes, what backspace takes */
 static uint64_t raw_held;
-static void press(Button *buttons, int id);
+static void press(int id);
 static char key_char(int k) {
   static const char letters[53] = {[18] = 'a', [19] = 'b', [20] = 'c', [21] = 'd', [22] = 'e', [23] = 'f', [24] = 'g',
                                    [25] = 'h', [26] = 'i', [27] = 'j', [28] = 'k', [29] = 'l', [30] = 'm', [31] = 'n',
@@ -1419,9 +1253,8 @@ static char key_char(int k) {
                                    [49] = '!'};
   static const char digits[53] = {[42] = '1', [43] = '2', [44] = '3', [36] = '4', [37] = '5', [38] = '6', [30] = '7',
                                   [31] = '8', [32] = '9', [48] = '0', [49] = '.', [46] = '-', [45] = '+', [33] = '(',
-                                  [34] = ')', [39] = '*', [40] = '/', [22] = ','};
+                                  [34] = ')', [39] = '*', [40] = '/'};
   if (k < 0 || k > 52) return 0;
-  if (field == F_FLAT && k == 15) return ':';   /* var (for block:meta) */
   char c = f_digits ? digits[k] : letters[k];
   if (c >= 'a' && c <= 'z' && f_caps) {
     c = (char)(c - 'a' + 'A');
@@ -1431,58 +1264,38 @@ static char key_char(int k) {
 }
 static void field_open(int f) {
   field = f;
-  f_digits = 0, f_caps = 0;   /* every field starts in abc (letters) mode */
-  const char *t = f == F_NAME ? name_text : f == F_FLAT ? flat_text : seed_text;
-  f_sel = t[0] != 0;
-  f_cur = (int)strlen(t);
+  f_digits = f == F_SEED, f_caps = 0;
+  f_sel = (f == F_NAME ? name_text : seed_text)[0] != 0;
   raw_held = ~(uint64_t)0;   /* (the key that opened it is not typed) */
 }
-static void field_input(Button *buttons) {
+static void field_input(void) {
   uint64_t raw = plat_scan(), down = raw & ~raw_held;
   raw_held = raw;
-  char *t = field == F_NAME ? name_text : field == F_FLAT ? flat_text : seed_text;
-  int max = field == F_NAME ? WORLD_NAME : field == F_FLAT ? FLAT_MAX : 20, n = (int)strlen(t);
-  if (f_cur < 0) f_cur = 0;
-  if (f_cur > n) f_cur = n;
+  char *t = field == F_NAME ? name_text : seed_text;
+  int max = field == F_NAME ? WORLD_NAME : 20, n = (int)strlen(t);
   for (int k = 0; k < 64; k++) {
     if (!(down >> k & 1)) continue;
     if (k == RK_ALPHA) f_digits = !f_digits;
     else if (k == RK_SHIFT) f_caps = (uint8_t)((f_caps + 1) % 3);
-    else if (k <= 3) {
-      /* the arrows: left and right move the cursor (from an end when selected) */
-      if (f_sel) f_cur = k == 0 ? 0 : n, f_sel = false;
-      else if (k == 0 && f_cur > 0) f_cur--;
-      else if (k == 3 && f_cur < n) f_cur++;
-    } else if (k == RK_BACKSPACE) {
-      if (f_sel) t[n = 0] = 0, f_sel = false, f_cur = 0;
-      else if (f_cur > 0) {
-        memmove(t + f_cur - 1, t + f_cur, (size_t)(n - f_cur + 1));
-        f_cur--, n--;
+    else if (k <= 3) f_sel = false;   /* (the arrows) */
+    else if (k == RK_BACKSPACE) {
+      if (f_sel) t[n = 0] = 0, f_sel = false;
+      else if (n > 0) {
+        while (NP_TEXT_EXTRA && n > 1 && (t[n - 1] & 0xC0) == 0x80) n--;   /* (a whole letter) */
+        t[--n] = 0;
       }
     } else if (k == RK_OK || k == RK_EXE || k == RK_BACK) {
       if (gui == GUI_RENAME && k != RK_BACK && name_text[0]) {
         /* (OK in the rename screen's field: rename, as Enter does) */
         field = F_NONE;
-        press(buttons, B_DORENAME);
-        return;
-      }
-      if (gui == GUI_FLAT && k != RK_BACK) {
-        /* (OK in the preset field: use it, as Enter does) */
-        field = F_NONE;
-        press(buttons, B_FLAT_USE);
+        press(B_DORENAME);
         return;
       }
       field = F_NONE;
     } else {
       char c = key_char(k);
-      if (c && f_sel) t[n = 0] = 0, f_sel = false, f_cur = 0;
-      if (c && n < max) {
-        if (field == F_FLAT && c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');   /* presets are lowercase */
-        if (f_cur < 0) f_cur = 0;
-        if (f_cur > n) f_cur = n;
-        memmove(t + f_cur + 1, t + f_cur, (size_t)(n - f_cur + 1));   /* (with the 0) */
-        t[f_cur++] = c, n++;
-      }
+      if (c && f_sel) t[n = 0] = 0, f_sel = false;
+      if (c && n < max) t[n++] = c, t[n] = 0;
     }
   }
 }
@@ -1612,8 +1425,8 @@ static void chat_input(void) {
 static void chat_screen(void) {
   if (clip_y0 < 22) {
     tint_rect(0, 0, SCREEN_W, 22, 0, 16);
-    text_center("alpha: abc/123   shift: Abc   toolbox: finish the word", SCREEN_W / 2, 2, RGB(0xA0, 0xA0, 0xA0));
-    text_center("x,n,t  :     var  _     x10^x  ~     ans  space     0  @", SCREEN_W / 2, 12, RGB(0xA0, 0xA0, 0xA0));
+    text_center(T("alpha: abc/123   shift: Abc   toolbox: finish the word"), SCREEN_W / 2, 2, RGB(0xA0, 0xA0, 0xA0));
+    text_center(T("x,n,t  :     var  _     x10^x  ~     ans  space     0  @"), SCREEN_W / 2, 12, RGB(0xA0, 0xA0, 0xA0));
   }
   if (clip_y1 <= SCREEN_H - 14) return;
   tint_rect(2, SCREEN_H - 14, SCREEN_W - 4, 12, 0, 16);
@@ -1629,7 +1442,7 @@ static void add_button(int x, int y, int w, int on, int id, const char *label) {
   Button *b = &buttons[nbuttons++];
   *b = (Button){(int16_t)x, (int16_t)y, (int16_t)w, (uint8_t)on, (uint8_t)id, {0}};
   int i = 0;
-  for (; label[i] && i < FLAT_MAX; i++) b->label[i] = label[i];
+  for (; label[i] && i < (int)sizeof b->label - 1; i++) b->label[i] = label[i];
   b->label[i] = 0;
 }
 static void cat(char *d, const char *a, const char *b) {
@@ -1638,184 +1451,95 @@ static void cat(char *d, const char *a, const char *b) {
   *d = 0;
 }
 
-/* Brightness (Video Settings), 0 Moody to 15 Bright: the stop the slider is on */
-static int brightness_stop(void) { return opt.brightness > 15 ? 0 : opt.brightness; }
-/* its label: the word at either end, as Minecraft writes it, the number between them */
-static void cat_brightness(char *t) {
-  if (brightness_stop() == 0) cat(t, "Brightness: ", "Moody");
-  else if (brightness_stop() >= 15) cat(t, "Brightness: ", "Bright");
-  else {
-    char n[8];
-    number(brightness_stop(), n);
-    cat(t, "Brightness: ", n);
-  }
-}
-
-/* Personalisation: the Panorama row's picks (opt.panorama), as the row writes them */
-static const char *pan_name(uint8_t p) {
-  switch (p) {
-    case PAN_WORLD: return "World";
-    case PAN_OVER: return "Overworld";
-    case PAN_NETHER: return "Nether";
-    default: return "Random";
-  }
-}
-
-/* the screen's buttons, in a buffer of the caller's (N_BUTTONS of them at most); the labels
- * follow the screen, so they are filled before each use */
-static void menu(Button *buf, int screen) {
-  buttons = buf;
+static void menu(int screen) {
   nbuttons = 0;
   int w = SCREEN_W, h = SCREEN_H;
-  char t[80];
+  char t[NP_TEXT_EXTRA ? 64 : 40];
   switch (screen) {
     case GUI_TITLE: {
       int j = h / 4 + 48;
-      add_button(w / 2 - 100, j, 200, 1, B_SINGLE, "Singleplayer");
-      add_button(w / 2 - 100, j + 24, 200, 0, B_NO, "Multiplayer");
-      add_button(w / 2 - 100, j + 72 + 12 - 24, 98, 1, B_OPTIONS, "Options...");
-      add_button(w / 2 + 2, j + 72 + 12 - 24, 98, 1, B_QUITAPP, "Quit Game");
+      add_button(w / 2 - 100, j, 200, 1, B_SINGLE, T("Singleplayer"));
+      add_button(w / 2 - 100, j + 24, 200, 0, B_NO, T("Multiplayer"));
+      add_button(w / 2 - 100, j + 72 + 12 - 24, 98, 1, B_OPTIONS, T("Options..."));
+      add_button(w / 2 + 2, j + 72 + 12 - 24, 98, 1, B_QUITAPP, T("Quit Game"));
       break;
     }
     case GUI_WORLDS: {
       bool any = nworlds > 0;
-      add_button(w / 2 - 154, h - 52, 150, any, B_PLAY, "Play Selected World");
-      add_button(w / 2 + 4, h - 52, 150, world_free_slot() != 0, B_CREATE, "Create New World");
-      add_button(w / 2 - 154, h - 28, 72, any, B_RENAME, "Rename");
-      add_button(w / 2 - 76, h - 28, 72, any, B_DELETE, "Delete");
-      add_button(w / 2 + 4, h - 28, 72, any && world_free_slot() != 0, B_RECREATE, "Re-Create");
-      add_button(w / 2 + 82, h - 28, 72, 1, B_CANCEL, "Cancel");
+      add_button(w / 2 - 154, h - 52, 150, any, B_PLAY, T("Play Selected World"));
+      add_button(w / 2 + 4, h - 52, 150, world_free_slot() != 0, B_CREATE, T("Create New World"));
+      add_button(w / 2 - 154, h - 28, 72, any, B_RENAME, T("Rename"));
+      add_button(w / 2 - 76, h - 28, 72, any, B_DELETE, T("Delete"));
+      add_button(w / 2 + 4, h - 28, 72, any && world_free_slot() != 0, B_RECREATE, T("Re-Create"));
+      add_button(w / 2 + 82, h - 28, 72, 1, B_CANCEL, T("Cancel"));
       break;
     }
     case GUI_CREATE:
       add_button(w / 2 - 100, 60, 200, 1, B_NAME, name_text);   /* (drawn as a field) */
-      cat(t, "Game Mode: ", create_mode ? "Creative" : "Survival");
+      cat(t, T("Game Mode: "), create_mode ? T("Creative") : T("Survival"));
       add_button(w / 2 - 155, 100, 150, 1, B_MODE, t);
-      cat(t, "Allow Cheats: ", create_cheats ? "ON" : "OFF");
+      cat(t, T("Allow Cheats: "), create_cheats ? T("ON") : T("OFF"));
       add_button(w / 2 + 5, 100, 150, 1, B_CHEATS, t);
-      cat(t, "Seed: ", seed_text[0] ? seed_text : (field == F_SEED ? "" : "(random)"));
+      cat(t, T("Seed: "), seed_text[0] ? seed_text : (field == F_SEED ? "" : T("(random)")));
       add_button(w / 2 - 100, 146, 200, 1, B_SEED, t);
-      cat(t, "World Type: ", create_type == WT_FLAT ? "Superflat" : create_type == WT_TEST ? "Test" : "Default");
-      add_button(w / 2 - 155, 182, 150, 1, B_TYPE, t);
-      add_button(w / 2 + 5, 182, 150, create_type == WT_FLAT, B_CUSTOMIZE, "Customize...");
-      add_button(w / 2 - 155, h - 28, 150, 1, B_DOCREATE, "Create New World");
-      add_button(w / 2 + 5, h - 28, 150, 1, B_CANCEL, "Cancel");
-      break;
-    case GUI_FLAT:
-      /* GuiFlatPresets: the preset string as a field, Use Preset/Done/Reset/Cancel below */
-      add_button(w / 2 - 140, 60, 280, 1, B_FLAT_FIELD, flat_text[0] ? flat_text : (field == F_FLAT ? "" : "(preset)"));
-      add_button(w / 2 - 155, 110, 150, 1, B_FLAT_USE, "Use Preset");
-      add_button(w / 2 + 5, 110, 150, 1, B_FLAT_RESET, "Reset");
-      add_button(w / 2 - 155, h - 28, 150, 1, B_FLAT_DONE, "Done");
-      add_button(w / 2 + 5, h - 28, 150, 1, B_FLAT_CANCEL, "Cancel");
+      cat(t, T("World Type: "), create_type == WT_FLAT ? T("Superflat") : T("Default"));
+      add_button(w / 2 - 100, 182, 200, 1, B_TYPE, t);
+      add_button(w / 2 - 155, h - 28, 150, 1, B_DOCREATE, T("Create New World"));
+      add_button(w / 2 + 5, h - 28, 150, 1, B_CANCEL, T("Cancel"));
       break;
     case GUI_RENAME:
       /* GuiRenameWorld */
       add_button(w / 2 - 100, 60, 200, 1, B_NAME, name_text);
-      add_button(w / 2 - 100, h / 4 + 96 + 12, 200, name_text[0] != 0, B_DORENAME, "Rename");
-      add_button(w / 2 - 100, h / 4 + 120 + 12, 200, 1, B_CANCEL, "Cancel");
+      add_button(w / 2 - 100, h / 4 + 96 + 12, 200, name_text[0] != 0, B_DORENAME, T("Rename"));
+      add_button(w / 2 - 100, h / 4 + 120 + 12, 200, 1, B_CANCEL, T("Cancel"));
       break;
     case GUI_CONFIRM:
-      add_button(w / 2 - 155, h / 6 + 96, 150, 1, B_DODELETE, "Delete");
-      add_button(w / 2 + 5, h / 6 + 96, 150, 1, B_CANCEL, "Cancel");
+      add_button(w / 2 - 155, h / 6 + 96, 150, 1, B_DODELETE, T("Delete"));
+      add_button(w / 2 + 5, h / 6 + 96, 150, 1, B_CANCEL, T("Cancel"));
       break;
     case GUI_OPTIONS: {
-      /* like Minecraft's Options: the look slider where FOV is, Difficulty where
-       * Online is, then a space, then Video Settings and Controls, then Done */
-      static const char *const diff[4] = {"Peaceful", "Easy", "Normal", "Hard"};
+      static const char *const diff[4] = {T("Peaceful"), T("Easy"), T("Normal"), T("Hard")};
+      cat(t, T("Difficulty: "), diff[opt.difficulty & 3]);
+      add_button(w / 2 - 155, h / 6 - 12, 150, 1, B_DIFF, t);
+      cat(t, T("Graphics: "), opt.fancy ? T("Fancy") : T("Fast"));
+      add_button(w / 2 + 5, h / 6 - 12, 150, 1, B_GFX, t);
       char n[8];
       number(opt.look, n);
-      cat(t, "Look Speed: ", n);
+      cat(t, T("Look Speed: "), n);
       int k = (int)strlen(t);
       t[k] = '%', t[k + 1] = 0;
-      add_button(w / 2 - 155, h / 6 - 12, 150, 1, B_LOOK, t);
-      cat(t, "Difficulty: ", diff[opt.difficulty & 3]);
-      add_button(w / 2 + 5, h / 6 - 12, 150, 1, B_DIFF, t);
-      add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_VIDEO, "Video Settings...");
-      add_button(w / 2 + 5, h / 6 + 36, 150, 1, B_CONTROLS, "Controls...");
-      add_button(w / 2 - 155, h / 6 + 60, 150, 1, B_MODS, "Mods and Cheats...");
-      add_button(w / 2 + 5, h / 6 + 60, 150, 1, B_PERSONAL, "Personalisation...");
-      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_DONE, "Done");
-      break;
-    }
-    case GUI_MODS: {
-      /* Mods and Cheats (a list screen, one switch for now): Fullbright. It opens only
-       * from a world's Options, with cheats on (press, B_MODS); the row is here so the
-       * next switch has somewhere to go */
-      cat(t, "Fullbright: ", opt.fullbright ? "ON" : "OFF");
-      add_button(w / 2 - 100, h / 6 - 12, 200, 1, B_FULLBRIGHT, t);
-      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_MODS_DONE, "Done");
-      break;
-    }
-    case GUI_PERSONAL: {
-      /* Personalisation: the block outlines and the title's backdrop. Two rows, each as
-       * wide as the screen likes, with Done under them; Panorama steps with left and
-       * right as well as OK (the sliders' way) */
-      cat(t, "High Contrast Block Outlines: ", opt.contrast ? "ON" : "OFF");
-      add_button(w / 2 - 155, h / 6 - 12, 310, 1, B_CONTRAST, t);
-      cat(t, "Panorama: ", pan_name(opt.panorama));
-      add_button(w / 2 - 155, h / 6 + 12, 310, 1, B_PANORAMA, t);
-      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_PERSONAL_DONE, "Done");
-      break;
-    }
-    case GUI_VIDEO: {
-      /* Minecraft's Video Settings: the graphics settings live here */
-      {
-        /* render distance slider, 1..2 chunks (2 is what the game had: ~19 blocks of rays) */
-        int d = opt.distance >= 1 && opt.distance <= 2 ? opt.distance : 2;
-        char n[8];
-        n[0] = (char)('0' + d), n[1] = 0;
-        cat(t, "Render Distance: ", n);
-        int k = (int)strlen(t);
-        t[k] = ' ', t[k + 1] = 'c', t[k + 2] = 'h', t[k + 3] = 'u', t[k + 4] = 'n', t[k + 5] = 'k', t[k + 6] = 's',
-        t[k + 7] = 0;
-        add_button(w / 2 - 155, h / 6 - 12, 150, 1, B_DIST, t);
-      }
-      cat(t, "Graphics: ", opt.fancy ? "Fancy" : "Fast");
-      add_button(w / 2 + 5, h / 6 - 12, 150, 1, B_GFX, t);
-      cat(t, "View Bobbing: ", opt.bobbing ? "ON" : "OFF");
-      add_button(w / 2 - 155, h / 6 + 12, 150, 1, B_BOB, t);
-      cat(t, "Clouds: ", opt.clouds ? "ON" : "OFF");
+      add_button(w / 2 - 155, h / 6 + 12, 150, 1, B_LOOK, t);
+      cat(t, T("Clouds: "), opt.clouds ? T("ON") : T("OFF"));
       add_button(w / 2 + 5, h / 6 + 12, 150, 1, B_CLOUDS, t);
-      /* the Brightness slider, 0 Moody to 15 Bright, alone under the pairs (the two
-       * ends write the word, the stops between them the number, as Minecraft's does) */
-      cat_brightness(t);
-      add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_BRIGHT, t);
-      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_VIDEO_DONE, "Done");
+      cat(t, T("View Bobbing: "), opt.bobbing ? T("ON") : T("OFF"));
+      add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_BOB, t);
+      add_button(w / 2 + 5, h / 6 + 36, 150, 1, B_CONTROLS, T("Controls..."));
+      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_DONE, T("Done"));
       break;
-    }
-    case GUI_CTRLMENU: {
-      /* GuiControls: the key sheet wide above, the sprint toggle and the key bindings under it */
-      add_button(w / 2 - 155, h / 6 - 12, 310, 1, B_CTRL_SHEET, "Key Sheet");   /* two options wide */
-      cat(t, "Sprint: ", opt.sprint_toggle ? "Toggle" : "Hold");
-      add_button(w / 2 - 155, h / 6 + 12, 150, 1, B_CTRL_SPRINT, t);
-      add_button(w / 2 + 5, h / 6 + 12, 150, 1, B_CTRL_KEYS, "Keybinds...");
-      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_CTRL_DONE, "Done");
-      break;
-    }
     case GUI_CONTROLS:
-      add_button(w / 2 - 100, h - 22, 200, 1, B_CONTROLS_DONE, "Done");
+      add_button(w / 2 - 100, h - 22, 200, 1, B_CONTROLS_DONE, T("Done"));
       break;
+    }
     case GUI_PAUSE:
-      add_button(w / 2 - 100, h / 4 + 24 - 16, 200, 1, B_BACK_GAME, "Back to Game");
-      add_button(w / 2 - 100, h / 4 + 48 - 16, 98, 0, B_NO, "Achievements");
-      add_button(w / 2 + 2, h / 4 + 48 - 16, 98, 0, B_NO, "Statistics");
-      add_button(w / 2 - 100, h / 4 + 96 - 16, 98, 1, B_OPTIONS, "Options...");
-      add_button(w / 2 + 2, h / 4 + 96 - 16, 98, !lan_open, B_LAN, "Open to LAN");
-      add_button(w / 2 - 100, h / 4 + 120 - 16, 200, 1, B_SAVEQUIT, "Save and Quit to Title");
+      add_button(w / 2 - 100, h / 4 + 24 - 16, 200, 1, B_BACK_GAME, T("Back to Game"));
+      add_button(w / 2 - 100, h / 4 + 48 - 16, 98, 0, B_NO, T("Achievements"));
+      add_button(w / 2 + 2, h / 4 + 48 - 16, 98, 0, B_NO, T("Statistics"));
+      add_button(w / 2 - 100, h / 4 + 96 - 16, 98, 1, B_OPTIONS, T("Options..."));
+      add_button(w / 2 + 2, h / 4 + 96 - 16, 98, !lan_open, B_LAN, T("Open to LAN"));
+      add_button(w / 2 - 100, h / 4 + 120 - 16, 200, 1, B_SAVEQUIT, T("Save and Quit to Title"));
       break;
     case GUI_LAN:
       /* GuiShareToLan */
-      cat(t, "Game Mode: ", lan_mode ? "Creative" : "Survival");
+      cat(t, T("Game Mode: "), lan_mode ? T("Creative") : T("Survival"));
       add_button(w / 2 - 155, 100, 150, 1, B_LAN_MODE, t);
-      cat(t, "Allow Cheats: ", lan_allow ? "ON" : "OFF");
+      cat(t, T("Allow Cheats: "), lan_allow ? T("ON") : T("OFF"));
       add_button(w / 2 + 5, 100, 150, 1, B_LAN_CHEATS, t);
-      add_button(w / 2 - 155, h - 28, 150, 1, B_LAN_START, "Start LAN World");
-      add_button(w / 2 + 5, h - 28, 150, 1, B_CANCEL, "Cancel");
+      add_button(w / 2 - 155, h - 28, 150, 1, B_LAN_START, T("Start LAN World"));
+      add_button(w / 2 + 5, h - 28, 150, 1, B_CANCEL, T("Cancel"));
       break;
     case GUI_DEATH:
-      add_button(w / 2 - 100, h / 4 + 72, 200, 1, B_RESPAWN, "Respawn");
-      add_button(w / 2 - 100, h / 4 + 96, 200, 1, B_TITLE, "Title screen");
+      add_button(w / 2 - 100, h / 4 + 72, 200, 1, B_RESPAWN, T("Respawn"));
+      add_button(w / 2 - 100, h / 4 + 96, 200, 1, B_TITLE, T("Title screen"));
       break;
   }
   if (bcur >= nbuttons || !buttons[bcur].on)
@@ -1823,7 +1547,6 @@ static void menu(Button *buf, int screen) {
 }
 
 void gui_menu(int screen) {
-  Button buttons[N_BUTTONS];
   if (screen == GUI_CONTROLS && gui != GUI_CONTROLS) controls_from = gui;   /* Options, or the title */
   gui = screen;
   bcur = 0;
@@ -1831,7 +1554,7 @@ void gui_menu(int screen) {
   if (screen == GUI_WORLDS) list_worlds();
   if (screen == GUI_KEYS && controls_from != GUI_KEYS) ksel = -1, kcol = 0, kscroll = 0;
   kwait = false;
-  menu(buttons, screen);
+  menu(screen);
 }
 
 /* the world selected in the list */
@@ -1839,43 +1562,14 @@ static int selected(WorldInfo *w) { return nworlds && world_info(wlist[wsel], w)
 
 static void button(const Button *b, bool hover) {
   int sp = !b->on ? SP_BUTTON_OFF : hover ? SP_BUTTON_HOVER : SP_BUTTON;
-  if (b->id == B_DIST || b->id == B_LOOK || b->id == B_BRIGHT) {
-    /* Minecraft's option slider (gui/sprites/widget/slider.png + slider_handle.png,
-     * 200x20 track, 8x20 thumb): the track is dark like a disabled button (43,43,43,
-     * the same grey), the thumb a mini-button riding it. The label goes over both,
-     * as Minecraft draws it. */
-    int stops = 0, nstop = 0;
-    if (b->id == B_DIST) {
-      int d = opt.distance >= 1 && opt.distance <= 2 ? opt.distance : 2;
-      stops = d - 1, nstop = 2;
-    } else if (b->id == B_LOOK) {
-      /* look speed, 50..200% in steps of 25 (where FOV's slider is) */
-      int v = opt.look < 50 || opt.look > 200 ? 100 : opt.look;
-      stops = (v - 50 + 12) / 25;
-      if (stops < 0) stops = 0;
-      if (stops > 6) stops = 6;
-      nstop = 7;
-    } else {
-      /* brightness, 0 Moody to 15 Bright */
-      stops = brightness_stop(), nstop = 16;
-    }
-    /* GuiButton.drawButton: the left half from the texture's left, the right half from its right */
-    sprite_part(SP_BUTTON_OFF, b->x, b->y, 0, 0, b->w / 2, 20);
-    sprite_part(SP_BUTTON_OFF, b->x + b->w / 2, b->y, 200 - b->w / 2, 0, b->w / 2, 20);
-    int hx = b->x + stops * (b->w - 8) / (nstop - 1);
-    int hsp = hover ? SP_BUTTON_HOVER : SP_BUTTON;
-    sprite_part(hsp, hx, b->y, 0, 0, 4, 20);
-    sprite_part(hsp, hx + 4, b->y, 200 - 4, 0, 4, 20);
-  } else {
-    /* GuiButton.drawButton: the left half from the texture's left, the right half from its right */
-    sprite_part(sp, b->x, b->y, 0, 0, b->w / 2, 20);
-    sprite_part(sp, b->x + b->w / 2, b->y, 200 - b->w / 2, 0, b->w / 2, 20);
-  }
+  /* GuiButton.drawButton: the left half from the texture's left, the right half from its right */
+  sprite_part(sp, b->x, b->y, 0, 0, b->w / 2, 20);
+  sprite_part(sp, b->x + b->w / 2, b->y, 200 - b->w / 2, 0, b->w / 2, 20);
   uint16_t col = !b->on ? RGB(0xA0, 0xA0, 0xA0) : hover ? RGB(0xFF, 0xFF, 0xA0) : RGB(0xE0, 0xE0, 0xE0);
   text_center(b->label, b->x + b->w / 2, b->y + (20 - 8) / 2, col);
 }
 
-static void press(Button *buttons, int id) {
+static void press(int id) {
   WorldInfo wi;
   switch (id) {
     case B_SINGLE: gui_menu(GUI_WORLDS); break;
@@ -1891,21 +1585,18 @@ static void press(Button *buttons, int id) {
       create_mode = 0, create_type = WT_DEFAULT;
       create_cheats = cheats_set = false;
       seed_text[0] = 0;
-      memcpy(create_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
-      world_unique_name("New World", name_text);
+      world_unique_name(T("New World"), name_text);
       gui_menu(GUI_CREATE);
       break;
     case B_RECREATE: {
       /* GuiCreateWorld.func_146318_a: a new world as the selected one began, "Copy of" its name */
       if (!selected(&wi)) break;
       char n[WORLD_NAME + 9];
-      cat(n, "Copy of ", wi.name);
+      cat(n, T("Copy of "), wi.name);
       n[WORLD_NAME] = 0;
       world_unique_name(n, name_text);
       create_mode = wi.mode;
       create_cheats = wi.cheats, cheats_set = false, create_type = wi.type;
-      { int q = 0; for (; wi.preset[q] && q < FLAT_MAX; q++) create_preset[q] = wi.preset[q]; create_preset[q] = 0; }
-      if (!create_preset[0]) memcpy(create_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
       /* (its seed, as it would be typed) */
       uint64_t v = wi.seed < 0 ? 0 - (uint64_t)wi.seed : (uint64_t)wi.seed;
       char d[21];
@@ -1941,61 +1632,7 @@ static void press(Button *buttons, int id) {
       if (!cheats_set) create_cheats = create_mode;
       break;
     case B_CHEATS: create_cheats = !create_cheats, cheats_set = true; break;
-    case B_TYPE: create_type = (create_type + 1) % 3; break;   /* Default, Superflat, Test */
-    case B_CUSTOMIZE:
-      if (create_type != WT_FLAT) break;
-      /* the preset as plain blocks (older version;layers;biome strings convert) */
-      if (!flat_simplify(create_preset, flat_text, sizeof flat_text)) {
-        int q = 0;
-        for (; create_preset[q] && q < FLAT_MAX; q++) flat_text[q] = create_preset[q];
-        flat_text[q] = 0;
-      }
-      flat_err[0] = 0;
-      gui_menu(GUI_FLAT);
-      field_open(F_FLAT);
-      break;
-    case B_FLAT_FIELD: field_open(F_FLAT); break;
-    case B_FLAT_USE: {
-      /* GuiFlatPresets Use Preset: keep typing on error (red message), never crash */
-      char e[48];
-      if (!flat_text[0]) { flat_err[0] = 0; break; }
-      if (!flat_validate(flat_text, e, sizeof e)) {
-        int q = 0; for (; e[q] && q < (int)sizeof flat_err - 1; q++) flat_err[q] = e[q]; flat_err[q] = 0;
-        break;
-      }
-      { int q = 0; for (; flat_text[q] && q < FLAT_MAX; q++) create_preset[q] = flat_text[q]; create_preset[q] = 0; }
-      flat_err[0] = 0;
-      break;
-    }
-    case B_FLAT_RESET:
-      if (!flat_simplify(FLAT_DEFAULT, flat_text, sizeof flat_text)) {
-        static const char dflt[] = "bedrock,dirt,dirt,grass";
-        int q = 0;
-        for (; dflt[q]; q++) flat_text[q] = dflt[q];
-        flat_text[q] = 0;
-      }
-      flat_err[0] = 0;
-      field = F_NONE;
-      break;
-    case B_FLAT_DONE: {
-      char e[48];
-      if (flat_text[0] && !flat_validate(flat_text, e, sizeof e)) {
-        int q = 0; for (; e[q] && q < (int)sizeof flat_err - 1; q++) flat_err[q] = e[q]; flat_err[q] = 0;
-        break;
-      }
-      if (flat_text[0]) {
-        int q = 0; for (; flat_text[q] && q < FLAT_MAX; q++) create_preset[q] = flat_text[q]; create_preset[q] = 0;
-      }
-      flat_err[0] = 0;
-      field = F_NONE;
-      gui_menu(GUI_CREATE);
-      break;
-    }
-    case B_FLAT_CANCEL:
-      flat_err[0] = 0;
-      field = F_NONE;
-      gui_menu(GUI_CREATE);
-      break;
+    case B_TYPE: create_type = create_type == WT_FLAT ? WT_DEFAULT : WT_FLAT; break;
     case B_LAN:
       lan_mode = lan_allow = false;
       gui_menu(GUI_LAN);
@@ -2015,60 +1652,11 @@ static void press(Button *buttons, int id) {
     case B_LOOK: opt.look = (uint8_t)(opt.look >= 200 ? 50 : opt.look + 25); break;
     case B_CLOUDS: opt.clouds = !opt.clouds; break;
     case B_BOB: opt.bobbing = !opt.bobbing; break;
-    case B_DIST: {
-      int d = opt.distance >= 1 && opt.distance <= 2 ? opt.distance : 2;
-      opt.distance = (uint8_t)(d >= 2 ? 1 : d + 1);
-      break;
-    }
-    case B_BRIGHT: {
-      /* one press of OK steps it one stop along, as the render distance's does */
-      int v = brightness_stop();
-      opt.brightness = (uint8_t)(v >= 15 ? 0 : v + 1);
-      break;
-    }
-    case B_VIDEO:
-      gui_menu(GUI_VIDEO);
-      break;
-    case B_VIDEO_DONE:
-      save_options();
-      gui_menu(GUI_OPTIONS);
-      break;
     case B_DONE:
       save_options();
       gui_menu(options_from);
       break;
-    case B_MODS:
-      /* The screen is the world's: cheats are the world's property. From the title's
-       * Options there is no world to be cheating in, so the press does nothing and
-       * nothing is said; in a world whose cheats are off the refusal is the game mode
-       * switcher's: a line in the chat (there once Options closes), and no screen opens. */
-      if (options_from != GUI_PAUSE) break;
-      if (!cheats_on()) {
-        chat_add("Mods and cheats are only available if you turned cheats on when creating a world", CHAT_RED);
-        break;
-      }
-      gui_menu(GUI_MODS);
-      break;
-    case B_FULLBRIGHT: opt.fullbright = !opt.fullbright; break;
-    case B_MODS_DONE:
-      save_options();
-      gui_menu(GUI_OPTIONS);
-      break;
-    case B_PERSONAL: gui_menu(GUI_PERSONAL); break;
-    case B_CONTRAST: opt.contrast = !opt.contrast; break;
-    case B_PANORAMA: opt.panorama = (uint8_t)(opt.panorama >= PAN_NETHER ? PAN_RANDOM : opt.panorama + 1); break;
-    case B_PERSONAL_DONE:
-      save_options();
-      gui_menu(GUI_OPTIONS);
-      break;
-    case B_CONTROLS: gui_menu(GUI_CTRLMENU); break;
-    case B_CTRL_SHEET: gui_menu(GUI_CONTROLS); break;
-    case B_CTRL_SPRINT: opt.sprint_toggle = !opt.sprint_toggle; break;
-    case B_CTRL_KEYS: gui_menu(GUI_KEYS); break;
-    case B_CTRL_DONE:
-      save_options();
-      gui_menu(GUI_OPTIONS);
-      break;
+    case B_CONTROLS: gui_menu(GUI_KEYS); break;
     case B_CONTROLS_DONE:
       if (opt.keys_seen != KEY_SHEET) opt.keys_seen = KEY_SHEET, save_options();
       gui_menu(controls_from);
@@ -2078,7 +1666,7 @@ static void press(Button *buttons, int id) {
     case B_RESPAWN: menu_choice = ACT_RESPAWN; break;
     case B_TITLE: menu_choice = ACT_TITLE; break;
   }
-  if (gui != GUI_NONE) menu(buttons, gui);
+  if (gui != GUI_NONE) menu(gui);
 }
 
 static void menu_input(uint32_t keys, uint32_t pressed) {
@@ -2086,11 +1674,10 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     keys_input(pressed);
     return;
   }
-  Button buttons[N_BUTTONS];
-  menu(buttons, gui);
+  if (!nbuttons) menu(gui);
   if (field) {
-    field_input(buttons);
-    if (gui != GUI_NONE) menu(buttons, gui);
+    field_input();
+    if (gui != GUI_NONE) menu(gui);
     return;
   }
   raw_held = plat_scan();
@@ -2099,62 +1686,20 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     wsel = (uint8_t)((wsel + ((pressed & K_DOWN) ? 1 : nworlds - 1)) % nworlds);
     pressed &= ~(uint32_t)(K_UP | K_DOWN);
   }
-  /* Minecraft's sliders: left/right on one slides it instead of moving selection */
-  if ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_PERSONAL) && nbuttons && buttons[bcur].on &&
-      (pressed & (K_LEFT | K_RIGHT))) {
-    if (buttons[bcur].id == B_DIST) {
-      int d = opt.distance >= 1 && opt.distance <= 2 ? opt.distance : 2;
-      if (pressed & K_RIGHT) d = d >= 2 ? 2 : d + 1;
-      else d = d <= 1 ? 1 : d - 1;
-      opt.distance = (uint8_t)d;
-      menu(buttons, gui);
-      return;
-    }
-    if (buttons[bcur].id == B_LOOK) {
-      int v = opt.look < 50 || opt.look > 200 ? 100 : opt.look;
-      v = (v + 12) / 25 * 25;   /* onto a 25% stop */
-      if (pressed & K_RIGHT) v = v >= 200 ? 200 : v + 25;
-      else v = v <= 50 ? 50 : v - 25;
-      opt.look = (uint8_t)v;
-      menu(buttons, gui);
-      return;
-    }
-    if (buttons[bcur].id == B_BRIGHT) {
-      /* Minecraft's slider: left and right move it a stop along */
-      int v = brightness_stop();
-      if (pressed & K_RIGHT) v = v >= 15 ? 15 : v + 1;
-      else v = v <= 0 ? 0 : v - 1;
-      opt.brightness = (uint8_t)v;
-      menu(buttons, gui);
-      return;
-    }
-    if (buttons[bcur].id == B_PANORAMA) {
-      /* the picks wrap: Random, World, 1.16, 1.20, 1.21, round again */
-      if (pressed & K_RIGHT) opt.panorama = (uint8_t)(opt.panorama >= PAN_NETHER ? PAN_RANDOM : opt.panorama + 1);
-      else opt.panorama = (uint8_t)(opt.panorama == PAN_RANDOM ? PAN_NETHER : opt.panorama - 1);
-      menu(buttons, gui);
-      return;
-    }
-  }
   int dir = (pressed & (K_DOWN | K_RIGHT)) ? 1 : (pressed & (K_UP | K_LEFT)) ? -1 : 0;
   if (dir)
     for (int k = 0; k < nbuttons; k++) {
       bcur = (bcur + dir + nbuttons) % nbuttons;
       if (buttons[bcur].on) break;
     }
-  if (pressed & (K_OK | K_EXE) && buttons[bcur].on) press(buttons, buttons[bcur].id);
+  if (pressed & (K_OK | K_EXE) && buttons[bcur].on) press(buttons[bcur].id);
   else if (pressed & K_BACK) {
     /* Back: the way out of each screen */
     if (gui == GUI_PAUSE) gui = GUI_NONE;
-    else if (gui == GUI_OPTIONS) press(buttons, B_DONE);
-    else if (gui == GUI_VIDEO) press(buttons, B_VIDEO_DONE);
-    else if (gui == GUI_MODS) press(buttons, B_MODS_DONE);
-    else if (gui == GUI_PERSONAL) press(buttons, B_PERSONAL_DONE);
-    else if (gui == GUI_CTRLMENU) press(buttons, B_CTRL_DONE);
-    else if (gui == GUI_CONTROLS) press(buttons, B_CONTROLS_DONE);
-    else if (gui == GUI_FLAT) press(buttons, B_FLAT_CANCEL);
+    else if (gui == GUI_OPTIONS) press(B_DONE);
+    else if (gui == GUI_CONTROLS) press(B_CONTROLS_DONE);
     else if (gui == GUI_WORLDS || gui == GUI_CREATE || gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LAN)
-      press(buttons, B_CANCEL);
+      press(B_CANCEL);
   }
 }
 
@@ -2212,33 +1757,27 @@ static void splash(const char *s, int cx, int cy, float scale) {
 }
 
 static void dirt_background(void) {
-  /* GuiScreen.drawBackground: the options background, 32 pixel tiles (16 x 16 sprite
-   * pixels at 2x), darkened. The tile is the same every frame, so unpack its 16 rows
-   * once into a strip-local table and paint each screen row from it: no divide and no
-   * palette read a pixel, which is what this cost when every menu redrew it. */
+  /* GuiScreen.drawBackground: the options background, 32 pixel tiles, darkened */
   int id = SP_DIRT_BG;
   const uint8_t *px = spr_px + spr_off[id];
   const uint16_t *pal = spr_pal[id];
-  uint16_t tile[16][32];
-  for (int r = 0; r < 16; r++) {
-    const uint8_t *s = px + r * 8;
-    uint16_t *t = tile[r];
-    for (int u = 0; u < 16; u++) {
-      uint8_t b = s[u >> 1];
-      uint16_t c = pal[(u & 1) ? b >> 4 : b & 15];
-      t[2 * u] = c, t[2 * u + 1] = c;
-    }
-  }
   for (int y = clip_y0; y < clip_y1; y++) {
-    const uint16_t *t = tile[(y / 2) & 15];
     uint16_t *d = row_at(y);
-    for (int x = 0; x < SCREEN_W; x++) d[x] = t[x & 31];
+    const uint8_t *s = px + ((y / 2) & 15) * 8;
+    for (int x = 0; x < SCREEN_W; x++) {
+      int u = (x / 2) & 15;
+      d[x] = pal[(u & 1) ? s[u >> 1] >> 4 : s[u >> 1] & 15];
+    }
   }
 }
 
 /* ---------------------------------------------------------------- the key sheet */
 /* a key's name, a character after ^ raised (x^y) */
 static void key_text(const char *s, int cx, int y, uint16_t col) {
+  if (NP_TEXT_EXTRA && !strchr(s, '^')) {
+    text(s, cx - text_width(s) / 2, y, col, true);
+    return;
+  }
   int w = 0;
   for (const char *c = s; *c; c++) w += *c == '^' ? 0 : char_w((unsigned char)*c);
   int x = cx - w / 2;
@@ -2280,27 +1819,26 @@ static void arrow_pad(int cx, int cy, int r) {
     fill(cx - r + 3 + i, cy - i, 1, 2 * i, 0xFFFF);
     fill(cx + r - 4 - i, cy - i, 1, 2 * i, 0xFFFF);
   }
-  text_center("Look", cx, cy - 4, RGB(0xFF, 0xFF, 0xA0));
+  text_center(T("Look"), cx, cy - 4, RGB(0xFF, 0xFF, 0xA0));
 }
 /* ---------------------------------------------------------------- the keys (KeyBinding) */
 typedef struct { uint32_t bit; uint8_t key; const char *name, *what; } Action;
 /* (what: the key sheet's word for it; key: where it starts) */
 static const Action actions[N_ACTIONS] = {
-    {K_ATTACK, 4, "Attack/Destroy", "Mine, attack"}, {0, 20, "Pick Block", "Pick block"},
-    {K_USE, 5, "Use Item/Place Block", "Place, use"}, {K_DROP, 14, "Drop Item", "Drop"},
-    {K_SLOT1, 42, "Hotbar Slot 1", "Slot 1"}, {K_SLOT1 << 1, 43, "Hotbar Slot 2", "Slot 2"},
-    {K_SLOT1 << 2, 44, "Hotbar Slot 3", "Slot 3"}, {K_SLOT1 << 3, 36, "Hotbar Slot 4", "Slot 4"},
-    {K_SLOT1 << 4, 37, "Hotbar Slot 5", "Slot 5"}, {K_SLOT1 << 5, 38, "Hotbar Slot 6", "Slot 6"},
-    {K_SLOT1 << 6, 30, "Hotbar Slot 7", "Slot 7"}, {K_SLOT1 << 7, 31, "Hotbar Slot 8", "Slot 8"},
-    {K_SLOT1 << 8, 32, "Hotbar Slot 9", "Slot 9"}, {K_INV, 15, "Inventory", "Inventory"},
-    {K_PAUSE, 51, "Pause", "Pause"}, {K_JUMP, 12, "Jump", "Jump"}, {K_SNEAK, 13, "Sneak", "Sneak"},
-    {K_SPRINT, 21, "Sprint", "Sprint"}, {K_STRAFE_L, 27, "Strafe Left", "Left"},
-    {K_STRAFE_R, 29, "Strafe Right", "Right"}, {K_BACKW, 28, "Walk Backwards", "Backward"},
-    {K_FWD, 22, "Walk Forwards", "Forward"}, {K_CHAT, 39, "Open Chat", "Chat"},
-    {K_COMMAND, 40, "Open Command", "Command"}, {0, 24, "Debug Overlay", "Debug"}};
-static const char *const categories[6] = {"Gameplay", "Inventory", "Miscellaneous", "Movement", "Multiplayer",
-                                          "Debug"};
-static const uint8_t category_at[6] = {A_ATTACK, A_DROP, A_PAUSE, A_JUMP, A_CHAT, A_DEBUG};
+    {K_ATTACK, 4, T("Attack/Destroy"), T("Mine, attack")}, {0, 20, T("Pick Block"), T("Pick block")},
+    {K_USE, 5, T("Use Item/Place Block"), T("Place, use")}, {K_DROP, 14, T("Drop Item"), T("Drop")},
+    {K_SLOT1, 42, T("Hotbar Slot 1"), T("Slot 1")}, {K_SLOT1 << 1, 43, T("Hotbar Slot 2"), T("Slot 2")},
+    {K_SLOT1 << 2, 44, T("Hotbar Slot 3"), T("Slot 3")}, {K_SLOT1 << 3, 36, T("Hotbar Slot 4"), T("Slot 4")},
+    {K_SLOT1 << 4, 37, T("Hotbar Slot 5"), T("Slot 5")}, {K_SLOT1 << 5, 38, T("Hotbar Slot 6"), T("Slot 6")},
+    {K_SLOT1 << 6, 30, T("Hotbar Slot 7"), T("Slot 7")}, {K_SLOT1 << 7, 31, T("Hotbar Slot 8"), T("Slot 8")},
+    {K_SLOT1 << 8, 32, T("Hotbar Slot 9"), T("Slot 9")}, {K_INV, 15, T("Inventory"), T("Inventory")},
+    {K_PAUSE, 51, T("Pause"), T("Pause")}, {K_JUMP, 12, T("Jump"), T("Jump")}, {K_SNEAK, 13, T("Sneak"), T("Sneak")},
+    {K_SPRINT, 17, T("Sprint"), T("Sprint")}, {K_STRAFE_L, 27, T("Strafe Left"), T("Left")},
+    {K_STRAFE_R, 29, T("Strafe Right"), T("Right")}, {K_BACKW, 28, T("Walk Backwards"), T("Backward")},
+    {K_FWD, 22, T("Walk Forwards"), T("Forward")}, {K_CHAT, 39, T("Open Chat"), T("Chat")},
+    {K_COMMAND, 40, T("Open Command"), T("Command")}};
+static const char *const categories[5] = {T("Gameplay"), T("Inventory"), T("Miscellaneous"), T("Movement"), T("Multiplayer")};
+static const uint8_t category_at[5] = {A_ATTACK, A_DROP, A_PAUSE, A_JUMP, A_CHAT};
 
 void keys_reset(void) {
   for (int a = 0; a < N_ACTIONS; a++) opt.keys[a] = actions[a].key;
@@ -2309,8 +1847,6 @@ void keys_reset(void) {
  * button and Back the right; keys someone set stay as they set them */
 void keys_update(int seen) {
   if (seen < 4 && opt.keys[A_ATTACK] == 5 && opt.keys[A_USE] == 4) opt.keys[A_ATTACK] = 4, opt.keys[A_USE] = 5;
-  /* the sprint key moved from backspace (also the key that deletes while typing) to i, next to forward */
-  if (seen < 6 && opt.keys[A_SPRINT] == 17) opt.keys[A_SPRINT] = 21;
 }
 /* the keys that can be set: not the arrows (they look), Home (it leaves), On/Off or EXE (it does what OK does) */
 static bool settable(int k) { return k == 4 || k == 5 || (k >= 12 && k <= 51 && k != 35 && k != 41 && k != 47); }
@@ -2329,12 +1865,12 @@ uint32_t keys_of(uint64_t raw) {
 /* the key's name, as the calculator writes it */
 static const char *key_name(int k) {
   static const char *const names[52] = {
-      [4] = "OK", [5] = "Back", [12] = "shift", [13] = "alpha", [14] = "x,n,t", [15] = "var", [16] = "toolbox",
+      [4] = "OK", [5] = T("Back"), [12] = "shift", [13] = "alpha", [14] = "x,n,t", [15] = "var", [16] = T("toolbox"),
       [17] = "\3", [18] = "e^x", [19] = "ln", [20] = "log", [21] = "i", [22] = ",", [23] = "x^y", [24] = "sin",
       [25] = "cos", [26] = "tan", [27] = "\1", [28] = "\2", [29] = "x^2", [30] = "7", [31] = "8", [32] = "9",
       [33] = "(", [34] = ")", [36] = "4", [37] = "5", [38] = "6", [39] = "\4", [40] = "\5", [42] = "1", [43] = "2",
       [44] = "3", [45] = "+", [46] = "-", [48] = "0", [49] = ".", [50] = "x10^x", [51] = "ans"};
-  return k < 52 && names[k] ? names[k] : "NONE";
+  return k < 52 && names[k] ? names[k] : T("NONE");
 }
 static const char *action_on(int k) {
   for (int a = 0; a < N_ACTIONS; a++)
@@ -2343,34 +1879,35 @@ static const char *action_on(int k) {
 }
 
 static void key_sheet(void) {
-  text_center("Controls", SCREEN_W / 2, 4, 0xFFFF);
+  text_center(T("Controls"), SCREEN_W / 2, 4, 0xFFFF);
   arrow_pad(40, 45, 27);
-  key(130, 30, 60, "Home", "Save, quit");
+  key(130, 30, 60, T("Home"), T("Save, quit"));
   key(236, 14, 80, "OK", action_on(4));
-  key(236, 46, 80, "Back", action_on(5));
+  key(236, 46, 80, T("Back"), action_on(5));
   /* the three rows under them, as on the calculator (the two left columns narrower) */
   for (int r = 0; r < 3; r++)
     for (int c = 0; c < 6; c++) {
       int k = 12 + r * 6 + c;
-      key(c < 2 ? 5 + c * 37 : 79 + (c - 2) * 60, 80 + r * 32, c < 2 ? 34 : 57, key_name(k), action_on(k));
+      key(c < 2 ? 5 + c * 37 : 79 + (c - 2) * 60, (TALL ? 76 : 80) + r * 32, c < 2 ? 34 : 57, key_name(k), action_on(k));
     }
   /* the keys set further down, in words */
-  char line[2][72];
+  char line[2][NP_TEXT_EXTRA ? 128 : 72];
   int n = 0, len = 0;
   line[0][0] = line[1][0] = 0;
   bool digits = true;
   for (int a = A_SLOT1; a < A_SLOT1 + 9; a++) digits &= opt.keys[a] == actions[a].key;
-  for (int a = -1; a < N_ACTIONS && n < 2; a++) {
-    char t[32];
+  for (int a = -1; a <= N_ACTIONS && n < 2; a++) {
+    char t[NP_TEXT_EXTRA ? 64 : 32];
     if (a == -1) {
       if (!digits) continue;
-      strcpy(t, "1 to 9: hotbar slot.");
-    } else {
+      strcpy(t, T("1 to 9: hotbar slot."));
+    } else if (a == N_ACTIONS) strcpy(t, T("EXE: as OK."));
+    else {
       int k = opt.keys[a];
       if ((digits && a >= A_SLOT1 && a < A_SLOT1 + 9) || k == 4 || k == 5 || (k >= 12 && k < 30) || k > 51) continue;
-      cat(t, key_name(k), ": ");
-      cat(t + strlen(t), actions[a].what, ".");
-      for (char *c = t + strlen(key_name(k)) + 2; *c; c++)
+      cat(t, key_name(k), T(": "));
+      cat(t + strlen(t), actions[a].what, T("."));
+      for (char *c = t + strlen(key_name(k)) + strlen(T(": ")); *c; c++)
         if (*c >= 'A' && *c <= 'Z') *c = (char)(*c - 'A' + 'a');
     }
     if (len && text_width(line[n]) + text_width(t) + 12 > SCREEN_W - 8) {
@@ -2381,14 +1918,13 @@ static void key_sheet(void) {
     strcat(line[n], t);
     len++;
   }
-  static const char *const notes[3] = {"Jump twice: fly (Creative).",
-                                       "sin + cos: the game mode switcher, with cheats.",
-                                       "Menus: OK takes or puts, EXE one, shift+OK moves."};
+  static const char *const notes[3] = {T("Forward twice: sprint.   Jump twice: fly (Creative)."),
+                                       T("Menus: OK takes or puts, EXE one, shift+OK moves."),
+                                       T("Hold OK and move over slots to spread a stack out.")};
   int rows = line[1][0] ? 2 : 1;
-  for (int i = 0; i < rows; i++) text_center(line[i], SCREEN_W / 2, 177 + i * 9, 0xFFFF);
-  /* the notes under them, 9 apart: five lines fit between the keys and Done (there are three
-   * of them, so the shorter list of two rows above leaves them all shown, never a fourth) */
-  for (int i = 0; i < 3 && i + rows < 5; i++) text_center(notes[i], SCREEN_W / 2, 177 + (i + rows) * 9, 0xFFFF);
+  int y0 = TALL ? 171 : 177, dy = TALL ? 12 : 10;   /* (Chinese letters 11 pixels tall: the keys a little higher) */
+  for (int i = 0; i < rows; i++) text_center(line[i], SCREEN_W / 2, y0 + i * dy, 0xFFFF);
+  for (int i = 0; i + rows < 4; i++) text_center(notes[i], SCREEN_W / 2, y0 + (i + rows) * dy, 0xFFFF);
 }
 
 /* GuiControls: the actions by category, each with its key and Reset; Done and Reset Keys under them */
@@ -2396,13 +1932,13 @@ static void key_sheet(void) {
 #define KLIST_ROWS 8
 static int krow_of(int a) {
   int r = a;
-  for (int c = 0; c < 6; c++) r += category_at[c] <= a;
+  for (int c = 0; c < 5; c++) r += category_at[c] <= a;
   return r;
 }
 static void keys_screen(void) {
   int w = SCREEN_W, h = SCREEN_H;
-  text_center("Controls", w / 2, 8, 0xFFFF);
-  Button b = {(int16_t)(w / 2 - 100), 18, 200, 1, 0, "Key Sheet..."};
+  text_center(T("Controls"), w / 2, 8, 0xFFFF);
+  Button b = {(int16_t)(w / 2 - 100), 18, 200, 1, 0, T("Key Sheet...")};
   button(&b, ksel == -1);
   /* the label column: as wide as the widest label */
   int lw = 0;
@@ -2412,7 +1948,7 @@ static void keys_screen(void) {
   for (int a = 0, c = 0, row = 0; a < N_ACTIONS; row++) {
     int y = KLIST_Y + (row - kscroll) * 20;
     bool shown = row >= kscroll && row < kscroll + KLIST_ROWS;
-    if (c < 6 && category_at[c] == a) {
+    if (c < 5 && category_at[c] == a) {
       if (shown) text_center(categories[c], w / 2, y + 20 - 9 - 1, 0xFFFF);
       c++;
       continue;
@@ -2433,15 +1969,15 @@ static void keys_screen(void) {
         text(">", x + 105 + 37 - nw - 6, y + 6, 0xFFFF, true);
         text("<", x + 105 + 37 + nw, y + 6, 0xFFFF, true);
       }
-      Button rb = {(int16_t)(x + 190), (int16_t)y, 50, opt.keys[a] != actions[a].key, 0, "Reset"};
+      Button rb = {(int16_t)(x + 190), (int16_t)y, 50, opt.keys[a] != actions[a].key, 0, T("Reset")};
       button(&rb, ksel == a && kcol == 1);
     }
     a++;
   }
-  Button done = {(int16_t)(w / 2 - 155), (int16_t)(h - 29), 150, 1, 0, "Done"};
+  Button done = {(int16_t)(w / 2 - 155), (int16_t)(h - 29), 150, 1, 0, T("Done")};
   bool any = false;
   for (int a = 0; a < N_ACTIONS; a++) any |= opt.keys[a] != actions[a].key;
-  Button all = {(int16_t)(w / 2 + 5), (int16_t)(h - 29), 150, any, 0, "Reset Keys"};
+  Button all = {(int16_t)(w / 2 + 5), (int16_t)(h - 29), 150, any, 0, T("Reset Keys")};
   button(&done, ksel == N_ACTIONS && kcol == 0);
   button(&all, ksel == N_ACTIONS && kcol == 1);
 }
@@ -2465,7 +2001,7 @@ static void keys_input(uint32_t pressed) {
   if (ksel >= 0 && ksel < N_ACTIONS) {
     int r = krow_of(ksel);
     if (ksel == category_at[0] || ksel == category_at[1] || ksel == category_at[2] || ksel == category_at[3] ||
-        ksel == category_at[4] || ksel == category_at[5])
+        ksel == category_at[4])
       r--;   /* (its category's name with it) */
     if (r < kscroll) kscroll = r;
     if (krow_of(ksel) >= kscroll + KLIST_ROWS) kscroll = krow_of(ksel) - KLIST_ROWS + 1;
@@ -2477,11 +2013,11 @@ static void keys_input(uint32_t pressed) {
     else if (kcol == 1) keys_reset();
     else {
       save_options();
-      gui_menu(GUI_CTRLMENU);   /* (the key bindings live under Controls) */
+      gui_menu(GUI_OPTIONS);
     }
   } else if (pressed & K_BACK) {
     save_options();
-    gui_menu(GUI_CTRLMENU);
+    gui_menu(GUI_OPTIONS);
   }
 }
 
@@ -2490,27 +2026,10 @@ static void keys_input(uint32_t pressed) {
 static void text_field(const Button *b, bool hover, bool typing) {
   fill(b->x - 1, b->y - 1, b->w + 2, 22, hover || typing ? 0xFFFF : RGB(0xA0, 0xA0, 0xA0));
   fill(b->x, b->y, b->w, 20, 0);
-  /* long text: show the end, but never past the cursor (as the chat line does) */
-  const char *full = b->label;
-  int n = (int)strlen(full), cur = typing ? f_cur : n;
-  if (cur < 0) cur = 0;
-  if (cur > n) cur = n;
-  int start = 0;
-  while (full[start] && text_width(full + start) > b->w - 10 && start < cur) start++;
-  const char *lab = full + start;
-  char pre[FLAT_MAX + 1];   /* what comes before the cursor, as shown */
-  int pl = cur - start;
-  if (pl < 0) pl = 0;
-  memcpy(pre, lab, (size_t)pl), pre[pl] = 0;
-  if (typing && f_sel) {
-    int sw = text_width(lab);
-    if (sw > b->w - 8) sw = b->w - 8;
-    fill(b->x + 3, b->y + 5, sw + 1, 10, RGB(0x00, 0x00, 0xA0));   /* (selected) */
-  }
-  text(lab, b->x + 4, b->y + 6, RGB(0xE0, 0xE0, 0xE0), true);
+  if (typing && f_sel) fill(b->x + 3, b->y + 5, text_width(b->label) + 1, 10, RGB(0x00, 0x00, 0xA0));   /* (selected) */
+  text(b->label, b->x + 4, b->y + 6, RGB(0xE0, 0xE0, 0xE0), true);
   if (typing) {
-    /* the cursor blinks slowly: frame_no ticks once a rendered frame (fast) */
-    if ((frame_no / 20) & 1) text("_", b->x + 4 + text_width(pre), b->y + 6, RGB(0xE0, 0xE0, 0xE0), true);
+    if ((frame_no / 6) & 1) text("_", b->x + 4 + text_width(b->label), b->y + 6, RGB(0xE0, 0xE0, 0xE0), true);
     const char *m = f_digits ? "123" : f_caps == 2 ? "ABC" : f_caps ? "Abc" : "abc";
     text(m, b->x + b->w - 4 - text_width(m), b->y + 6, RGB(0x80, 0x80, 0x80), true);
   }
@@ -2518,20 +2037,18 @@ static void text_field(const Button *b, bool hover, bool typing) {
 
 static void menu_screen(void) {
   int w = SCREEN_W, h = SCREEN_H;
-  Button buttons[N_BUTTONS];
-  menu(buttons, gui);
   switch (gui) {
     case GUI_TITLE:
       logo(30);
       splash("Also try Minecraft!", w / 2 + 72, 72, 1.25f + 0.08f * fabsf(sinf((frame_no % 60) * 0.1047f)));
-      text("Numblocks custom " NB_VERSION, 2, h - 10, 0xFFFF, true);
-      text("Not affiliated with Mojang",
-           w - text_width("Not affiliated with Mojang") - 2, h - 20, 0xFFFF, true);
-      text("Modified from numplay by N", w - text_width("Modified from numplay by N") - 2, h - 10,
+      text("NumBlocks 1.0", 2, h - 10, 0xFFFF, true);
+      text(T("Inspired by Minecraft, not affiliated with Mojang"),
+           w - text_width(T("Inspired by Minecraft, not affiliated with Mojang")) - 2, h - (TALL ? 24 : 20), 0xFFFF, true);
+      text(T("Made by Mason Chen as part of NumPlay"), w - text_width(T("Made by Mason Chen as part of NumPlay")) - 2, h - 10,
            0xFFFF, true);
       break;
     case GUI_WORLDS: {
-      text_center("Select World", w / 2, 20, 0xFFFF);
+      text_center(T("Select World"), w / 2, 20, 0xFFFF);
       /* GuiSlot: 36 pixels a world, the selected one framed */
       int first = wsel > 3 ? wsel - 3 : 0;
       for (int k = first; k < nworlds && k < first + 4; k++) {
@@ -2545,75 +2062,56 @@ static void menu_screen(void) {
         text(wi.name, x + 2, y + 1, 0xFFFF, true);
         char f[4] = {'n', 'b', (char)('0' + wlist[k]), 0};
         text(f, x + 2, y + 12, RGB(0x80, 0x80, 0x80), true);
-        char m[24];
-        cat(m, wi.mode == 1 ? "Creative Mode" : wi.mode == 2 ? "Spectator Mode" : "Survival Mode",
-        wi.cheats ? ", Cheats" : "");
+        char m[NP_TEXT_EXTRA ? 48 : 24];
+        cat(m, wi.mode == 1 ? T("Creative Mode") : T("Survival Mode"), wi.cheats ? T(", Cheats") : "");
         text(m, x + 2, y + 22, RGB(0x80, 0x80, 0x80), true);
       }
-      if (!nworlds) text_center("No worlds yet", w / 2, 60, RGB(0x80, 0x80, 0x80));
-      char t[40], n[12];
+      if (!nworlds) text_center(T("No worlds yet"), w / 2, 60, RGB(0x80, 0x80, 0x80));
+      char t[NP_TEXT_EXTRA ? 64 : 40], n[12];
       number((int)(plat_storage_free() / 1024), n);
-      cat(t, "Storage free: ", n);
-      cat(t + strlen(t), " KB", "");
+      cat(t, T("Storage free: "), n);
+      cat(t + strlen(t), T(" KB"), "");
       text_center(t, w / 2, h - 63, RGB(0x80, 0x80, 0x80));
       break;
     }
     case GUI_CREATE:
-      text_center("Create New World", w / 2, 20, 0xFFFF);
-      text("World Name", w / 2 - 100, 47, RGB(0xA0, 0xA0, 0xA0), true);
-      text_center(create_mode ? "Unlimited resources, free flying and" : "Search for resources, crafting, gain",
+      text_center(T("Create New World"), w / 2, 20, 0xFFFF);
+      text(T("World Name"), w / 2 - 100, 47, RGB(0xA0, 0xA0, 0xA0), true);
+      text_center(create_mode ? T("Unlimited resources, free flying and") : T("Search for resources, crafting, gain"),
                   w / 2, 122, RGB(0xA0, 0xA0, 0xA0));
-      text_center(create_mode ? "destroy blocks instantly" : "levels, health and hunger", w / 2, 134,
+      text_center(create_mode ? T("destroy blocks instantly") : T("levels, health and hunger"), w / 2, 134,
                   RGB(0xA0, 0xA0, 0xA0));
-      text_center(field ? "alpha: letters or digits, shift: capitals, OK: done" : "Leave blank for a random seed",
+      text_center(field ? T("alpha: letters or digits, shift: capitals, OK: done") : T("Leave blank for a random seed"),
                   w / 2, 169, RGB(0xA0, 0xA0, 0xA0));
       break;
-    case GUI_FLAT:
-      /* Superflat presets: plain blocks, one layer each, bottom to top */
-      text_center("Superflat Customization", w / 2, 20, 0xFFFF);
-      text("Preset", w / 2 - 140, 47, RGB(0xA0, 0xA0, 0xA0), true);
-      if (flat_err[0]) text_center(flat_err, w / 2, 84, RGB(0xFF, 0x55, 0x55));
-      else text_center(field == F_FLAT ? "alpha: abc/123  shift: Abc  OK: use" : "one block per layer, bottom to top",
-                       w / 2, 84, RGB(0xA0, 0xA0, 0xA0));
-      text_center("comma key: , or e   var: :   alpha: letters/digits", w / 2, 134, RGB(0xA0, 0xA0, 0xA0));
-      text_center("e.g. bedrock,dirt,dirt,grass", w / 2, 144, RGB(0xA0, 0xA0, 0xA0));
-      text_center("blocks: id or bedrock,dirt,grass,stone,sand,glass", w / 2, 154, RGB(0xA0, 0xA0, 0xA0));
-      text_center("max 16 layers", w / 2, 164, RGB(0xA0, 0xA0, 0xA0));
-      break;
     case GUI_RENAME:
-      text_center("Rename World", w / 2, 20, 0xFFFF);
-      text("Enter Name", w / 2 - 100, 47, RGB(0xA0, 0xA0, 0xA0), true);
-      if (field) text_center("alpha: letters or digits, shift: capitals, OK: done", w / 2, 90, RGB(0xA0, 0xA0, 0xA0));
+      text_center(T("Rename World"), w / 2, 20, 0xFFFF);
+      text(T("Enter Name"), w / 2 - 100, 47, RGB(0xA0, 0xA0, 0xA0), true);
+      if (field) text_center(T("alpha: letters or digits, shift: capitals, OK: done"), w / 2, 90, RGB(0xA0, 0xA0, 0xA0));
       break;
     case GUI_CONFIRM: {
       WorldInfo wi;
-      char t[64];
-      text_center("Are you sure you want to delete this world?", w / 2, 70, 0xFFFF);
-      cat(t, "'", nworlds && world_info(wlist[wsel], &wi) ? wi.name : "");
-      cat(t + strlen(t), "' will be lost forever! (A long time!)", "");
+      char t[NP_TEXT_EXTRA ? 96 : 64];
+      text_center(T("Are you sure you want to delete this world?"), w / 2, 70, 0xFFFF);
+      cat(t, T("'"), nworlds && world_info(wlist[wsel], &wi) ? wi.name : "");
+      cat(t + strlen(t), T("' will be lost forever! (A long time!)"), "");
       text_center(t, w / 2, 90, 0xFFFF);
       break;
     }
-    case GUI_OPTIONS: text_center("Options", w / 2, 15, 0xFFFF); break;
-    case GUI_MODS: text_center("Mods and Cheats", w / 2, 15, 0xFFFF); break;
-    case GUI_PERSONAL: text_center("Personalisation", w / 2, 15, 0xFFFF); break;
-    case GUI_CTRLMENU: text_center("Controls", w / 2, 15, 0xFFFF); break;
-    case GUI_VIDEO: text_center("Video Settings", w / 2, 15, 0xFFFF); break;
+    case GUI_OPTIONS: text_center(T("Options"), w / 2, 15, 0xFFFF); break;
     case GUI_CONTROLS: key_sheet(); break;
-    case GUI_MODE: mode_screen(); break;
-    case GUI_PAUSE: text_center("Game menu", w / 2, 40, 0xFFFF); break;
+    case GUI_PAUSE: text_center(T("Game menu"), w / 2, 40, 0xFFFF); break;
     case GUI_LAN:
-      text_center("LAN World", w / 2, 50, 0xFFFF);
-      text_center("Settings for Other Players", w / 2, 82, 0xFFFF);
+      text_center(T("LAN World"), w / 2, 50, 0xFFFF);
+      text_center(T("Settings for Other Players"), w / 2, 82, 0xFFFF);
       break;
     case GUI_LOADING:
-      text_center("Loading world", w / 2, h / 2 - 50, 0xFFFF);
-      text_center("Building terrain", w / 2, h / 2 - 20, 0xFFFF);
+      text_center(T("Loading world"), w / 2, h / 2 - 50, 0xFFFF);
+      text_center(T("Building terrain"), w / 2, h / 2 - 20, 0xFFFF);
       break;
   }
   for (int i = 0; i < nbuttons; i++)
     if (buttons[i].id == B_NAME) text_field(&buttons[i], i == bcur, field == F_NAME);
-    else if (buttons[i].id == B_FLAT_FIELD) text_field(&buttons[i], i == bcur, field == F_FLAT);
     else button(&buttons[i], i == bcur && !field);
   if (field == F_SEED && gui == GUI_CREATE) {
     /* the field being typed in: a white frame and a blinking cursor */
@@ -2623,7 +2121,7 @@ static void menu_screen(void) {
     fill(b->x, b->y + 19, b->w, 1, 0xFFFF);
     fill(b->x, b->y, 1, 20, 0xFFFF);
     fill(b->x + b->w - 1, b->y, 1, 20, 0xFFFF);
-    if ((frame_no / 20) & 1) {
+    if ((frame_no / 6) & 1) {
       int tx = b->x + b->w / 2 + text_width(b->label) / 2 + 1;
       fill(tx, b->y + 6, 5, 1, 0xFFFF);
       fill(tx, b->y + 13, 5, 1, 0xFFFF);
@@ -2633,14 +2131,12 @@ static void menu_screen(void) {
 
 /* ---------------------------------------------------------------- input */
 void gui_input(uint32_t keys, uint32_t pressed) {
-  if (gui == GUI_MODE) {
-    /* sin and cos are read from the scan in main.c; the arrows move the outline
-     * too, OK takes the mode outlined, Back leaves without changing it */
-    if (pressed & (K_LEFT | K_RIGHT | K_UP | K_DOWN)) mode_next();
-    else if (pressed & (K_OK | K_EXE)) mode_use();
-    else if (pressed & K_BACK) mode_cancel();
+#if NB_DIMS
+  if (gui == GUI_CREDITS) {   /* (GuiWinGame.keyTyped: Escape, here Back, or OK) */
+    if (pressed & (K_BACK | K_OK)) gui = GUI_NONE;
     return;
   }
+#endif
   if (gui >= GUI_PAUSE) {
     if (gui == GUI_PAUSE && (pressed & K_PAUSE)) {
       gui = GUI_NONE;
@@ -2655,10 +2151,7 @@ void gui_input(uint32_t keys, uint32_t pressed) {
   }
   if (gui == GUI_NONE) {
     nbuttons = 0;
-    if (pressed & K_INV && !pl.dead && pl.mode != 2) {   /* (a spectator's inventory: nothing it can do) */
-      csurv = 0;   /* the tabs, not the survival inventory */
-      gui_open(pl.mode == 1 ? GUI_CREATIVE : GUI_INVENTORY, 0, 0, 0);
-    }
+    if (pressed & K_INV && !pl.dead) gui_open(pl.mode == 1 ? GUI_CREATIVE : GUI_INVENTORY, 0, 0, 0);
     else if (pressed & K_PAUSE) gui_menu(GUI_PAUSE);
     else if (pressed & K_COMMAND && !pl.dead) chat_open("/");
     else if (pressed & K_CHAT && !pl.dead) chat_open("");
@@ -2667,8 +2160,6 @@ void gui_input(uint32_t keys, uint32_t pressed) {
     return;
   }
   /* a container */
-  Slot slots[N_SLOTS];
-  layout_slots(slots);
   if (pressed & (K_INV | K_BACK | K_PAUSE)) {
     gui_close();
     return;
@@ -2681,7 +2172,7 @@ void gui_input(uint32_t keys, uint32_t pressed) {
     creative_refresh();
     scrolled = true;
   }
-  if (gui == GUI_CREATIVE && ctab == TAB_SEARCH && !csurv) {
+  if (gui == GUI_CREATIVE && ctab == TAB_SEARCH) {
     /* Search Items: the keys type (their letters, as alpha gives them), backspace takes one back */
     uint64_t raw = plat_scan(), down = raw & ~raw_held;
     raw_held = raw;
@@ -2753,15 +2244,9 @@ void gui_input(uint32_t keys, uint32_t pressed) {
 }
 
 /* ---------------------------------------------------------------- drawing a screen */
-/* the slot under the cursor, lightened: the panel draws a 1-pixel border around a slot's hole,
-   so the hole (not the cell) is lit; a tab's icon sits at its slot's corner, so it is lit there */
-static void slot_light(int x, int y, int kind) {
-  int o = kind == SL_TAB ? 0 : 1;
-  tint_rect(x + o, y + o, 16, 16, 0xFFFF, 16);
-}
 static void tooltip(const char *s, int x, int y) {
   /* GuiScreen.drawHoveringText: dark violet box with a blue to purple frame */
-  int w = text_width(s), h = 8;
+  int w = text_width(s), h = TALL ? 11 : 8;
   x += 12, y -= 12;
   if (x + w + 4 > SCREEN_W) x = SCREEN_W - w - 4;
   if (y < 4) y = 4;
@@ -2774,69 +2259,47 @@ static void tooltip(const char *s, int x, int y) {
   fill(x + w + 2, y - 2, 1, h + 4, RGB(0x28, 0, 0x7F));
   fill(x - 3, y - 3, w + 6, 1, RGB(0x50, 0, 0xFF));
   fill(x - 3, y + h + 2, w + 6, 1, RGB(0x28, 0, 0x7F));
-  text(s, x, y, 0xFFFF, true);
+  text(s, x, y + (TALL ? 2 : 0), 0xFFFF, true);
 }
 
 static void container(void) {
-  Slot slots[N_SLOTS];
-  layout_slots(slots);
   int px = panel_x, py = panel_y;
   static const uint8_t img[] = {0, IMG_INVENTORY, IMG_CRAFTING_TABLE, IMG_FURNACE, IMG_CHEST, IMG_CREATIVE};
+  if (gui == GUI_CREATIVE)
+    for (int t = 0; t < 12; t++)
+      if (t != ctab && t != 9) sprite(t < 6 ? SP_TAB_TOP : SP_TAB_BOTTOM, px + 28 * (t % 6), t < 6 ? py - 28 : py + 136 - 4);
+  image(img[gui], px, py);
   if (gui == GUI_CREATIVE) {
-    /* the open tab: the Survival Inventory tab shows selected while its inventory is open */
-    int sel = csurv ? TAB_SURV : ctab;
-    for (int t = 0; t < 14; t++)
-      if (t != sel && tab_shown(t))
-        sprite(t < 6 ? SP_TAB_TOP : SP_TAB_BOTTOM, px + tab_x(t), t < 6 ? py - 28 : py + panel_h - 4);
-  }
-  if (gui == GUI_CREATIVE && csurv)
-    image(IMG_TAB_INVENTORY, px, py);   /* the survival tab's own panel, as wide as the tab row */
-  else
-    image(img[gui], px, py);
-  if (gui == GUI_CREATIVE) {
-    int t = csurv ? TAB_SURV : ctab;
-    sprite(t < 6 ? SP_TAB_TOP_SEL : SP_TAB_BOTTOM_SEL, px + tab_x(t), t < 6 ? py - 28 : py + panel_h - 4);
-    if (!csurv) {
-      text(tab_name[ctab], px + 8, py + 6, RGB(0x40, 0x40, 0x40), false);
-      if (ctab == TAB_SEARCH) {
-        /* the search box (tab_item_search.png), what is typed in it, and the cursor */
-        fill(px + 80, py + 4, 90, 12, RGB(0x55, 0x55, 0x55));
-        fill(px + 81, py + 5, 89, 11, 0xFFFF);
-        fill(px + 81, py + 5, 88, 10, RGB(0x8B, 0x8B, 0x8B));
-        text(csearch, px + 82, py + 6, 0xFFFF, false);
-        if ((frame_no / 20) & 1) text("_", px + 82 + text_width(csearch), py + 6, 0xFFFF, false);
-      }
-      int rows = tab_rows(), y = 18;
-      if (rows > 5) y += (112 - 17) * cscroll / (rows - 5);
-      sprite(SP_SCROLLER, px + 175, py + y);
+    int t = ctab;
+    sprite(t < 6 ? SP_TAB_TOP_SEL : SP_TAB_BOTTOM_SEL, px + 28 * (t % 6), t < 6 ? py - 28 : py + 136 - 4);
+    text(tab_name[ctab], px + 8, py + 6, RGB(0x40, 0x40, 0x40), false);
+    if (ctab == TAB_SEARCH) {
+      /* the search box (tab_item_search.png), what is typed in it, and the cursor */
+      fill(px + 80, py + 4, 90, 12, RGB(0x55, 0x55, 0x55));
+      fill(px + 81, py + 5, 89, 11, 0xFFFF);
+      fill(px + 81, py + 5, 88, 10, RGB(0x8B, 0x8B, 0x8B));
+      text(csearch, px + 82, py + 6, 0xFFFF, false);
+      if ((frame_no / 6) & 1) text("_", px + 82 + text_width(csearch), py + 6, 0xFFFF, false);
     }
+    int rows = tab_rows(), y = 18;
+    if (rows > 5) y += (112 - 17) * cscroll / (rows - 5);
+    sprite(SP_SCROLLER, px + 175, py + y);
   }
   uint16_t label = RGB(0x40, 0x40, 0x40);
   switch (gui) {
     case GUI_INVENTORY:
-    case GUI_CREATIVE:   /* the Survival Inventory tab: the survival inventory, with the tabs */
-      if (gui == GUI_CREATIVE && !csurv) break;
-      if (gui == GUI_CREATIVE) {
-        /* the player in the middle of the panel: the sprite is 27 x 54, the preview box 32 x 43,
-           so it is drawn at 3/4 (20 x 40), legs and all */
-        sprite_scale(SP_STEVE, px + 79, py + 7, 20, 40);
-        static const uint8_t cax[4] = {53, 53, 107, 107}, cay[4] = {5, 32, 5, 32};
-        for (int i = 0; i < 4; i++)
-          if (!pl.armor[3 - i].id) sprite(SP_SLOT_HELMET + i, px + cax[i], py + cay[i]);
-        break;
-      }
       sprite(SP_STEVE, px + 51 - 13, py + 75 - 54 + 2);
-      text("Crafting", px + 86, py + 16, label, false);
+      text(T("Crafting"), px + 86, py + 16, label, false);
       for (int i = 0; i < 4; i++)
         if (!pl.armor[3 - i].id) sprite(SP_SLOT_HELMET + i, px + 8, py + 8 + i * 18);
       break;
     case GUI_CRAFTING:
-      text("Crafting", px + 28, py + 6, label, false);
-      text("Inventory", px + 8, py + panel_h - 96 + 2, label, false);
+      text(T("Crafting"), px + 28, py + 6, label, false);
+      text(T("Inventory"), px + 8, py + panel_h - 96 + 2, label, false);
       break;
     case GUI_FURNACE: {
-      text("Furnace", px + 88 - text_width("Furnace") / 2, py + 6, label, false);
-      text("Inventory", px + 8, py + panel_h - 96 + 2, label, false);
+      text(T("Furnace"), px + 88 - text_width(T("Furnace")) / 2, py + 6, label, false);
+      text(T("Inventory"), px + 8, py + panel_h - 96 + 2, label, false);
       if (furnace->burn > 0) {
         int k = furnace->burn * 13 / (furnace->burn_max ? furnace->burn_max : 200);
         sprite_part(SP_FLAME, px + 56, py + 36 + 12 - k, 0, 12 - k, 14, k + 1);
@@ -2846,8 +2309,8 @@ static void container(void) {
       break;
     }
     case GUI_CHEST:
-      text("Chest", px + 8, py + 6, label, false);
-      text("Inventory", px + 8, py + panel_h - 96 + 2, label, false);
+      text(T("Chest"), px + 8, py + 6, label, false);
+      text(T("Inventory"), px + 8, py + panel_h - 96 + 2, label, false);
       break;
   }
   bool spread = drag && ndragged > 1;
@@ -2856,14 +2319,14 @@ static void container(void) {
     Stack t;
     if (spread && in_drag(i)) {
       /* a slot being spread over: lightened, holding its share already */
-      slot_light(px + slots[i].x, py + slots[i].y, slots[i].kind);
+      tint_rect(px + slots[i].x, py + slots[i].y, 16, 16, 0xFFFF, 16);
       drag_share(i, &t), st = &t;
     }
     draw_stack(st, px + slots[i].x, py + slots[i].y);
   }
   /* the slot under the cursor: lightened (drawGradientRect 0x80FFFFFF) */
   Slot *sl = &slots[cur];
-  slot_light(px + sl->x, py + sl->y, sl->kind);
+  tint_rect(px + sl->x, py + sl->y, 16, 16, 0xFFFF, 16);
   Stack held_now = pl.cursor;
   if (spread) {
     int left = drag_left();
@@ -2872,39 +2335,27 @@ static void container(void) {
   }
   if (held_now.id) draw_stack(&held_now, px + sl->x + 4, py + sl->y + 4);
   else if (sl->kind == SL_TAB) tooltip(tab_name[sl->k], px + sl->x + 8, py + sl->y + 8);
-  else if (sl->kind == SL_TRASH) tooltip("Destroy Item", px + sl->x + 8, py + sl->y + 8);
   else if (sl->s->id) tooltip(item_label(sl->s->id), px + sl->x + 8, py + sl->y + 8);
 }
 
-void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
+void hud_strip(uint16_t *buf, int y0, int rows) {
   clip_buf = buf;
   clip_y0 = y0;
   clip_y1 = y0 + rows;
-  if (y0 == 0) frame_no++;
-  hand_strip(buf, y0, rows, hand);
+  if (y0 == 0) frame_no++, hand_frame();
+  hand_strip(buf, y0, rows);
   if (pl.sleep_timer) {
     /* falling asleep: the screen darkens (GuiIngame.renderSleep) */
     int a = pl.sleep_timer * 32 / 100;
     tint_rect(0, y0, SCREEN_W, rows, 0x0841, a > 30 ? 30 : a);
   }
-  if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_DEATH || gui == GUI_LAN ||
-      ((gui == GUI_OPTIONS || gui == GUI_VIDEO || gui == GUI_CTRLMENU || gui == GUI_KEYS || gui == GUI_MODS ||
-        gui == GUI_PERSONAL) && options_from == GUI_PAUSE))
+  if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_DEATH || gui == GUI_LAN ||
+      ((gui == GUI_OPTIONS || gui == GUI_KEYS) && options_from == GUI_PAUSE))
     hud();
   if (gui == GUI_NONE || gui == GUI_CHAT) chat_lines();
   if (pl.hurt_time > 0 && gui == GUI_NONE) {
     /* (Minecraft tilts the camera; a red flash says the same here) */
     tint_rect(0, y0, SCREEN_W, rows, RGB(0xFF, 0, 0), pl.hurt_time * 2 / 3);
-  }
-  if (gui == GUI_NONE && render_under_lava()) {
-    /* the eye in lava: Java's lava overlay washes the whole picture orange, so a wall of
-     * blocks right in front reads as lava and not only the fog does. Half opaque, in the
-     * lava fog's own colour (render.c's LAVA_R/G/B) */
-    tint_rect(0, y0, SCREEN_W, rows, RGB(0x99, 0x19, 0x00), 16);
-  }
-  if (gui == GUI_NONE && portal_anim() > 0) {
-    /* standing in a portal: the portal's swirl over the world, worse until you go through */
-    portal_overlay(y0, rows, portal_anim());
   }
   switch (gui) {
     case GUI_INVENTORY: case GUI_CRAFTING: case GUI_FURNACE: case GUI_CHEST: case GUI_CREATIVE:
@@ -2915,12 +2366,8 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
       dark_background();
       menu_screen();
       break;
-    case GUI_MODE:
-      mode_screen();
-      break;
     case GUI_CHAT: chat_screen(); break;
-    case GUI_OPTIONS: case GUI_VIDEO: case GUI_CTRLMENU: case GUI_CONTROLS: case GUI_KEYS: case GUI_MODS:
-    case GUI_PERSONAL:
+    case GUI_OPTIONS: case GUI_CONTROLS: case GUI_KEYS:
       if (options_from == GUI_PAUSE) dark_background();
       else dirt_background();
       if (gui == GUI_KEYS) keys_screen();
@@ -2929,10 +2376,13 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
     case GUI_TITLE:
       menu_screen();
       break;
-    case GUI_WORLDS: case GUI_CREATE: case GUI_CONFIRM: case GUI_LOADING: case GUI_RENAME: case GUI_FLAT:
+    case GUI_WORLDS: case GUI_CREATE: case GUI_CONFIRM: case GUI_LOADING: case GUI_RENAME:
       dirt_background();
       menu_screen();
       break;
+#if NB_DIMS
+    case GUI_CREDITS: credits_screen(); break;
+#endif
     case GUI_DEATH: {
       /* GuiGameOver: red gradient 0x60500000 to 0xA0803030 */
       for (int y = y0; y < y0 + rows; y++) {
@@ -2941,13 +2391,17 @@ void hud_strip(uint16_t *buf, int y0, int rows, const HandFrame *hand) {
         uint16_t *d = row_at(y);
         for (int x = 0; x < SCREEN_W; x++) d[x] = blend(d[x], k, a);
       }
-      text_big("You died!", SCREEN_W / 2, 60 / 2 * 2, 0xFFFF, 2);
+      text_big(T("You died!"), SCREEN_W / 2, 60 / 2 * 2, 0xFFFF, 2);
+#if NP_TEXT_EXTRA
+      char b[40], n[12];
+      number(pl.xp_total, n);
+      cat(b, T("Score: "), n);
+#else
       char b[24] = "Score: ", n[12];
       number(pl.xp_total, n);
       memcpy(b + 7, n, strlen(n) + 1);
+#endif
       text_center(b, SCREEN_W / 2, 100, 0xFFFF);
-      Button buttons[N_BUTTONS];
-      menu(buttons, GUI_DEATH);
       for (int i = 0; i < nbuttons; i++) button(&buttons[i], i == bcur);
       break;
     }

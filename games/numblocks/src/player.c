@@ -7,19 +7,9 @@
  * air, a 0.6 x 1.8 box that steps up 0.6, eyes at 1.62. */
 #include <math.h>
 #include "nb.h"
-#include "mob.h"   /* mob_height: the eyes a spectator riding a mob has */
 #pragma GCC optimize("Os")   /* (not where the time goes: small) */
 
 Player pl;
-
-/* Spectator (mode 2, Minecraft's /gamemode spectator): the camera is either an
- * entity's - the player sees the world through its eyes, as the mouse left click
- * on one does in Minecraft - or flies free, through every block, with nothing
- * touched. pl.mode says which game mode it is; what is below is only spectator:
- * three small values (no place in Player, which is what the world saves). */
-int8_t spectate = -1;      /* the entity ridden (its index in ents, -1: flying free) */
-int8_t spec_target = -1;    /* the entity under the crosshair, as last drawn (-1: none) */
-float spec_eye;             /* the eyes above the ridden entity's feet (0: not riding) */
 
 #define W 0.3f   /* half width */
 #define H 1.8f
@@ -125,7 +115,7 @@ static bool in_liquid(void) {
 static float armor_points(void) {
   int n = 0;
   for (int i = 0; i < 4; i++)
-    if (is_item_id(pl.armor[i].id)) n += it_a[pl.armor[i].id - 256];
+    if (pl.armor[i].id >= 256) n += it_a[pl.armor[i].id - 256];
   return (float)n;
 }
 
@@ -153,12 +143,7 @@ static void exhaust(float f) { pl.exhaustion += f; }
  * grace after a hit (only more damage gets through), armour takes 4% a point */
 void player_hurt(float amount, int kind) {
   if (pl.dead || amount <= 0) return;
-  /* Player.isInvulnerableTo: the spectator is invulnerable (abilities.invulnerable), the
-   * creative only against everything but the void: fall out of the world and it takes you,
-   * as in Minecraft. /kill is its own kind: it goes through invulnerability, as its damage
-   * does there (DamageTypeTags.bypassesInvulnerability). */
-  if (pl.mode == 2 && kind != DMG_KILL) return;   /* spectator: nothing hurts it */
-  if (pl.mode == 1 && kind != DMG_VOID) return;   /* creative: nothing hurts but the void */
+  if (pl.mode == 1 && kind != DMG_VOID) return;
   if (pl.invuln > 10) {
     if (amount <= pl.last_damage) return;
     float a = amount;
@@ -231,18 +216,12 @@ static const int8_t NX[6] = {0, 0, 0, 0, -1, 1}, NY[6] = {-1, 1, 0, 0, 0, 0}, NZ
 
 static bool replaceable(int b) {
   return b == B_AIR || blk_model[b] == M_LIQUID || b == B_TALL_GRASS || b == B_FERN || b == B_DEAD_SHRUB ||
-         b == B_DEAD_BUSH || b == B_VINE || b == B_WEEPING_VINES || b == B_TWISTING_VINES || b == B_SNOW_LAYER ||
-         b == B_DOUBLE_GRASS_LOWER || b == B_LARGE_FERN_LOWER ||
-         is_fire(b);
+         b == B_DEAD_BUSH || b == B_VINE || b == B_SNOW_LAYER || b == B_DOUBLE_GRASS_LOWER || b == B_LARGE_FERN_LOWER ||
+         b == B_FIRE;
 }
-static bool solid_top(int b) {
-  return (blk_flags[b] & BF_OPAQUE) != 0 || b == B_GLASS || b == B_LEAVES_OAK || b == B_BARRIER;
-}
-static bool soil(int b) {
-  return b == B_GRASS || b == B_DIRT || b == B_PODZOL || b == B_COARSE_DIRT || b == B_FARMLAND ||
-         b == B_FARMLAND_WET || b == B_CRIMSON_NYLIUM || b == B_WARPED_NYLIUM || b == B_SOUL_SOIL;
-}
-static bool is_plant(int b) { return blk_model[b] == M_CROSS && b != B_COBWEB && !is_fire(b); }
+static bool solid_top(int b) { return (blk_flags[b] & BF_OPAQUE) != 0 || b == B_GLASS || b == B_LEAVES_OAK; }
+static bool soil(int b) { return b == B_GRASS || b == B_DIRT || b == B_PODZOL || b == B_COARSE_DIRT || b == B_FARMLAND || b == B_FARMLAND_WET; }
+static bool is_plant(int b) { return blk_model[b] == M_CROSS && b != B_COBWEB && b != B_FIRE; }
 static bool near_water(int x, int y, int z) {
   for (int f = 2; f < 6; f++) {
     int n = world_get(x + NX[f], y, z + NZ[f]);
@@ -255,6 +234,10 @@ static bool near_water(int x, int y, int z) {
 static bool can_stay(int b, int x, int y, int z) {
   int below = world_get(x, y - 1, z);
   int m = blk_model[b];
+#if NB_DIMS
+  int d = dims_can_stay(b, x, y, z);
+  if (d >= 0) return d;
+#endif
   if (b >= B_WHEAT_0 && b <= B_WHEAT_7) return below == B_FARMLAND || below == B_FARMLAND_WET;
   if ((b >= B_CARROTS_0 && b <= B_CARROTS_3) || (b >= B_POTATOES_0 && b <= B_POTATOES_3))
     return below == B_FARMLAND || below == B_FARMLAND_WET;
@@ -270,25 +253,16 @@ static bool can_stay(int b, int x, int y, int z) {
                                (below >= B_STAINED_CLAY_WHITE && below <= B_STAINED_CLAY_BLACK) || soil(below);
   if (b == B_BROWN_MUSHROOM || b == B_RED_MUSHROOM) return solid_top(below);
   if (b == B_LILY_PAD) return below == B_WATER;
-  if (b == B_CRIMSON_FUNGUS) return below == B_CRIMSON_NYLIUM;
-  if (b == B_WARPED_FUNGUS) return below == B_WARPED_NYLIUM;
-  if (b == B_NETHER_SPROUTS) return below == B_WARPED_NYLIUM;
-  if (b == B_CRIMSON_ROOTS || b == B_WARPED_ROOTS)
-    return below == B_CRIMSON_NYLIUM || below == B_WARPED_NYLIUM || below == B_SOUL_SOIL || below == B_NETHERRACK;
-  if (b == B_WEEPING_VINES) return world_get(x, y + 1, z) == B_NETHERRACK || world_get(x, y + 1, z) == B_WEEPING_VINES;
-  if (b == B_TWISTING_VINES) return below == B_WARPED_NYLIUM || world_get(x, y - 1, z) == B_TWISTING_VINES;
   if (b >= B_SUNFLOWER_LOWER && b <= B_PEONY_UPPER && ((b - B_SUNFLOWER_LOWER) & 1))
     return world_get(x, y - 1, z) == b - 1;
-  if (is_fire(b)) return fire_can_stay(x, y, z);
-  if (is_portal(b)) return true;   /* (the portal hangs in its frame: no ground under it) */
+  if (b == B_FIRE) return fire_can_stay(x, y, z);
   if (is_plant(b)) return soil(below);
   if (b == B_TORCH) return solid_top(below);
   if (b == B_TORCH_E) return blk_flags[world_get(x - 1, y, z)] & BF_OPAQUE;
   if (b == B_TORCH_W) return blk_flags[world_get(x + 1, y, z)] & BF_OPAQUE;
   if (b == B_TORCH_S) return blk_flags[world_get(x, y, z - 1)] & BF_OPAQUE;
   if (b == B_TORCH_N) return blk_flags[world_get(x, y, z + 1)] & BF_OPAQUE;
-  if (b == B_SNOW_LAYER || b == B_RAIL || b == B_STONE_PRESSURE_PLATE || b == B_STONE_PRESSURE_PLATE_DOWN)
-    return solid_top(below);
+  if (b == B_SNOW_LAYER || b == B_RAIL) return solid_top(below);
   if (b == B_DOOR_OAK_UPPER) return is_door_lower(world_get(x, y - 1, z));
   if (is_door_lower(b)) return solid_top(below) && world_get(x, y + 1, z) == B_DOOR_OAK_UPPER;
   if (b == B_BED_FOOT || b == B_BED_HEAD) {
@@ -304,97 +278,33 @@ static bool can_stay(int b, int x, int y, int z) {
 static void break_block(int x, int y, int z, bool drops);
 void break_block_at(int x, int y, int z, bool drops) { break_block(x, y, z, drops); }
 
-/* is any of the cell's six neighbours water, moving or still? (what the concrete
- * powder sets on - BlockConcretePowder's water check, which 1.12 does on a block
- * update: here every set, break and liquid move runs neighbours_changed) */
-static bool wet_at(int x, int y, int z) {
-  for (int f = 0; f < 6; f++)
-    if (is_water(world_get(x + NX[f], y + NY[f], z + NZ[f]))) return true;
-  return false;
-}
-
-/* a block that falls when nothing holds it up (BlockFalling: sand, gravel, concrete powder) */
-static bool falling(int b) {
-  return b == B_SAND || b == B_RED_SAND || b == B_GRAVEL || is_concrete_powder(b);
-}
-
-/* the drop itself: straight down, at once, to the first block that is not replaceable (the
- * world's floor, gen.h's WORLD_MIN_Y, is where it stops for good). The change runs its
- * neighbours after, so what stood on the dropped block falls with it */
-static void drop_fall(int x, int y, int z, int b) {
-  int yy = y;
-  while (yy > WORLD_MIN_Y && replaceable(world_get(x, yy - 1, z))) yy--;
-  world_set(x, y, z, B_AIR);
-  world_set(x, yy, z, b);
-  /* (into water or beside it: concrete where it lands) */
-  if (is_concrete_powder(b) && wet_at(x, yy, z)) world_set(x, yy, z, concrete_of(b));
-  neighbours_changed(x, y, z);
-}
-
-/* a falling block at (x, y, z) with nothing under it */
-static void fall_if_loose(int x, int y, int z, int b) {
-  if (!falling(b) || y <= WORLD_MIN_Y || !replaceable(world_get(x, y - 1, z))) return;
-  drop_fall(x, y, z, b);
-}
-
-/* a block changed at (x, y, z): what stood on it or hung on it may fall off - and the
- * change itself may be a block nothing holds up */
+/* a block changed at (x, y, z): what stood on it or hung on it may fall off */
 void neighbours_changed(int x, int y, int z) {
   fluid_schedule(x, y, z);
-  /* the change itself: powder placed beside water (or a wet change left in its place) sets,
-   * and a falling block placed with nothing under it drops here and now (the placement asks
-   * neighbours_changed of the cell it placed into; without this the sand set into the air
-   * hung there until some change beside it) */
-  int here = world_get(x, y, z);
-  if (is_concrete_powder(here) && wet_at(x, y, z)) world_set(x, y, z, concrete_of(here));
-  else fall_if_loose(x, y, z, here);
   for (int f = 0; f < 6; f++) {
     int nx = x + NX[f], ny = y + NY[f], nz = z + NZ[f];
     int b = world_get(nx, ny, nz);
     if (blk_model[b] == M_LIQUID) fluid_schedule(nx, ny, nz);
     if (b != B_AIR && blk_model[b] != M_LIQUID && !can_stay(b, nx, ny, nz)) break_block(nx, ny, nz, true);
-    /* a portal block by the change: without its whole frame it goes too */
-    if (is_portal(b)) portal_changed(nx, ny, nz);
-    /* concrete powder by water - a source or a flow, placed or arrived - becomes its
-     * concrete (and set, it stays where it is) */
-    if (is_concrete_powder(b) && wet_at(nx, ny, nz)) {
-      world_set(nx, ny, nz, concrete_of(b));
-      continue;
+    /* sand and gravel fall (straight down, at once) */
+    if ((b == B_SAND || b == B_RED_SAND || b == B_GRAVEL) && replaceable(world_get(nx, ny - 1, nz)) && ny > 0) {
+      int yy = ny;
+      while (yy > 0 && replaceable(world_get(nx, yy - 1, nz))) yy--;
+      world_set(nx, ny, nz, B_AIR);
+      world_set(nx, yy, nz, b);
+      neighbours_changed(nx, ny, nz);
     }
-    /* sand, gravel and concrete powder fall (straight down, at once) */
-    fall_if_loose(nx, ny, nz, b);
   }
-}
-
-/* The settle pass (world.c) asks here about a block generation left hanging in the air -
- * a sand or gravel shelf over the pocket a cave carved, which nothing ticks until a change
- * beside it runs neighbours_changed. The drop is that same straight one, but a block is
- * only dropped where the cache can see the ground it lands on: out of the cache is not air,
- * so one whose fall would leave the loaded world waits where it is, and the pass asks again
- * once the cache has moved and the ground below is there. */
-bool settle_fall(int x, int y, int z) {
-  int b = world_get(x, y, z);
-  if (b != B_SAND && b != B_RED_SAND && b != B_GRAVEL) return false;   /* (the generator makes no powder) */
-  if (y <= WORLD_MIN_Y || !world_loaded(x, y - 1, z) || !replaceable(world_get(x, y - 1, z))) return false;
-  int yy = y;
-  while (yy > WORLD_MIN_Y && world_loaded(x, yy - 1, z) && replaceable(world_get(x, yy - 1, z))) yy--;
-  /* the ground it lands on has to be in sight (or it is the world's own floor, WORLD_MIN_Y) */
-  if (vc_y0 != WORLD_MIN_Y && !world_loaded(x, yy - 1, z)) return false;
-  world_set(x, y, z, B_AIR);
-  world_set(x, yy, z, b);
-  neighbours_changed(x, y, z);
-  return true;
 }
 
 static int depth;
 static void break_block(int x, int y, int z, bool drops) {
   int b = world_get(x, y, z);
-  if (b == B_AIR || depth > 8 || world_pending_at(x, y, z)) return;
+  if (b == B_AIR || depth > 8) return;
   depth++;
   if (b == B_CHEST || b == B_FURNACE || b == B_FURNACE_LIT) tiles_removed(x, y, z);
   if (depth == 1 && blk_model[b] != M_LIQUID) particles_break(x, y, z, b);
   world_set(x, y, z, B_AIR);
-  if (is_portal(b)) portal_broken(x, y, z);   /* (the rest of its interior goes too) */
   if (drops && pl.mode == 0 && rule(GR_TILE_DROPS)) {
     Stack out[2];
     int n = block_drops(b, held()->id, out);
@@ -492,9 +402,7 @@ static void pick_block(void) {
   pl.hit_face = -1;
   while (t <= reach) {
     int b = world_get(x, y, z);
-    /* a chunk still to be made has no block to pick yet (its stone is only a stand-in:
-     * mining it would drop a block that then stayed, so the ray passes over it) */
-    if (!world_pending_at(x, y, z) && b != B_AIR && blk_model[b] != M_LIQUID && !is_fire(b)) {
+    if (b != B_AIR && blk_model[b] != M_LIQUID && b != B_FIRE) {
       float bt;
       int bf;
       if (ray_block(b, x, y, z, &bt, &bf)) {
@@ -521,14 +429,6 @@ void player_look(float ex, float ey, float ez, float yaw, float pitch) {
   float yr = yaw * 0.017453292f, pr = pitch * 0.017453292f;
   look_ray[0] = ex, look_ray[1] = ey, look_ray[2] = ez;
   look_ray[3] = -sinf(yr) * cosf(pr), look_ray[4] = -sinf(pr), look_ray[5] = cosf(yr) * cosf(pr);
-  if (pl.mode == 2) {
-    /* a spectator: no block is in reach (nothing is mined, none is outlined), so
-     * what the crosshair is on is the entity whose eyes the next OK would take */
-    pl.hit_face = -1;
-    Entity *e = entity_looked_at(5.0f, 1e9f);
-    spec_target = e ? (int8_t)(e - ents) : -1;
-    return;
-  }
   pick();
 }
 
@@ -565,9 +465,7 @@ static bool place(int b) {
   int at = world_get(x, y, z);
   if (!(replaceable(at) && at != B_AIR)) x += NX[f], y += NY[f], z += NZ[f];
   else f = 1;
-  if (y < dim_min_y() || y >= dim_height() || !world_loaded(x, y, z) || world_pending_at(x, y, z) ||
-      !replaceable(world_get(x, y, z)))
-    return false;
+  if (y < 0 || y >= WORLD_H || !world_loaded(x, y, z) || !replaceable(world_get(x, y, z))) return false;
   /* the variant: logs lie along the face's axis, torches lean on the block */
   if (b >= B_LOG_OAK && b <= B_LOG_JUNGLE_BARK && (b - B_LOG_OAK) % 4 == 0) b += (f >> 1) == 2 ? 1 : (f >> 1) == 1 ? 2 : 0;
   if (b >= B_LOG_ACACIA && b <= B_LOG_DARK_OAK_BARK && (b - B_LOG_ACACIA) % 4 == 0)
@@ -579,31 +477,22 @@ static bool place(int b) {
   }
   /* the way the player looks: 0 south, 1 west, 2 north, 3 east */
   int way = (int)floorf(pl.yaw / 90 + 0.5f) & 3;
-  if (b == B_OAK_STAIRS || b == B_COBBLESTONE_STAIRS || b == B_SANDSTONE_STAIRS) {
+  if (b == B_OAK_STAIRS || b == B_COBBLESTONE_STAIRS) {
     /* BlockStairs: rising the way the player looks */
     static const int8_t off[4] = {2, 1, 3, 0};   /* _S, _W, _N, (east) */
-    if (way != 3) {
-      /* (the oak and cobblestone states are laid out interleaved, two apart; the
-       * sandstone ones sit together) */
-      if (b == B_SANDSTONE_STAIRS) b = B_SANDSTONE_STAIRS + off[way];
-      else b = (b == B_OAK_STAIRS ? B_OAK_STAIRS_W : B_COBBLESTONE_STAIRS_W) + 2 * (off[way] - 1);
-    }
+    if (way != 3) b = (b == B_OAK_STAIRS ? B_OAK_STAIRS_W : B_COBBLESTONE_STAIRS_W) + 2 * (off[way] - 1);
   }
-  bool iron_door = b >= B_IRON_DOOR_LOWER_E && b <= B_IRON_DOOR_LOWER_N;
   if (b == B_DOOR_OAK_LOWER) {
     static const uint8_t door[4] = {B_DOOR_OAK_LOWER_S, B_DOOR_OAK_LOWER_W, B_DOOR_OAK_LOWER_N, B_DOOR_OAK_LOWER};
     b = door[way];
-  } else if (iron_door) {
-    static const uint16_t door[4] = {B_IRON_DOOR_LOWER_S, B_IRON_DOOR_LOWER_W, B_IRON_DOOR_LOWER_N, B_IRON_DOOR_LOWER_E};
-    b = door[way];
   }
-  bool door = is_door_lower(b) || iron_door;
+  bool door = is_door_lower(b);
   if (!can_stay(b, x, y, z) && !door && b != B_BED_FOOT) return false;
   if ((blk_flags[b] & BF_SOLID) && !box_free(x, y, z)) return false;
   if (door || (b >= B_SUNFLOWER_LOWER && b <= B_PEONY_UPPER)) {
     if (!replaceable(world_get(x, y + 1, z)) || !solid_top(world_get(x, y - 1, z))) return false;
     if (!box_free(x, y + 1, z) && door) return false;
-    world_set(x, y + 1, z, iron_door ? B_IRON_DOOR_UPPER : door ? B_DOOR_OAK_UPPER : b + 1);
+    world_set(x, y + 1, z, door ? B_DOOR_OAK_UPPER : b + 1);
   }
   if (b == B_BED_FOOT) {
     /* ItemBed: the head one block further, the way the player looks */
@@ -615,7 +504,6 @@ static bool place(int b) {
     world_set(hx, y, hz, B_BED_HEAD);
   }
   set_block(x, y, z, b);
-  if (b == B_MOB_SPAWNER) spawners_note(x, y, z);   /* (its egg shows at once) */
   return true;
 }
 
@@ -670,14 +558,14 @@ static void eat_done(void) {
 /* EntityPlayer.trySleep: at night (or in a storm), with no monster within 8 blocks; the bed is the new spawn point */
 static void sleep_in(int x, int y, int z) {
   if (sky_sub() < 4) {
-    gui_message("You can only sleep at night");
+    gui_message(T("You can only sleep at night"));
     return;
   }
   for (int i = 0; i < N_ENT; i++) {
     const Entity *e = &ents[i];
-    if (is_hostile_mob(e->type) && fabsf(e->x - x) < 8 && fabsf(e->y - y) < 5 &&
+    if (IS_MONSTER(e->type) && fabsf(e->x - x) < 8 && fabsf(e->y - y) < 5 &&
         fabsf(e->z - z) < 8) {
-      gui_message("You may not rest now, there are monsters nearby");
+      gui_message(T("You may not rest now, there are monsters nearby"));
       return;
     }
   }
@@ -686,6 +574,10 @@ static void sleep_in(int x, int y, int z) {
   pl.vx = pl.vy = pl.vz = 0;
   pl.sleep_timer = 1;
 }
+
+#if NB_DIMS
+#include "player_dims.h"
+#endif
 
 /* OK pressed: use the block looked at, else the held item */
 static void use(uint32_t pressed) {
@@ -696,21 +588,6 @@ static void use(uint32_t pressed) {
   int b = on_block ? world_get(x, y, z) : B_AIR;
   if (!(pressed & K_USE)) return;
   if (on_block && !pl.sneaking) {
-    /* ItemAxe strips crimson/warped stems on use (1.16); keep the axis and bark
-     * states, just as stripping an oak log does in modern Minecraft. */
-    if (k == IK_AXE) {
-      int stripped = -1;
-      if (b >= B_CRIMSON_STEM && b <= B_CRIMSON_STEM_BARK)
-        stripped = B_STRIPPED_CRIMSON_STEM + (b - B_CRIMSON_STEM);
-      else if (b >= B_WARPED_STEM && b <= B_WARPED_STEM_BARK)
-        stripped = B_STRIPPED_WARPED_STEM + (b - B_WARPED_STEM);
-      if (stripped >= 0) {
-        set_block(x, y, z, stripped);
-        if (pl.mode == 0) stack_wear(h, 1);
-        player_swing();
-        return;
-      }
-    }
     if (b == B_CRAFTING_TABLE) {
       gui_open(GUI_CRAFTING, x, y, z);
       return;
@@ -723,15 +600,9 @@ static void use(uint32_t pressed) {
       gui_open(GUI_CHEST, x, y, z);
       return;
     }
-    if (is_door_lower(b) || b == B_DOOR_OAK_UPPER || is_iron_door_lower(b) || is_iron_door_upper(b)) {
+    if (is_door_lower(b) || b == B_DOOR_OAK_UPPER) {
       /* BlockDoor.onBlockActivated: open or close (the lower half keeps it) */
-      int ly = (b == B_DOOR_OAK_UPPER || is_iron_door_upper(b)) ? y - 1 : y, lb = world_get(x, ly, z);
-      if (is_iron_door_lower(lb)) {
-        int open = (lb - B_IRON_DOOR_LOWER_E) >= 4;
-        set_block(x, ly, z, open ? lb - 4 : lb + 4);
-        player_swing();
-        return;
-      }
+      int ly = b == B_DOOR_OAK_UPPER ? y - 1 : y, lb = world_get(x, ly, z);
       if (!is_door_lower(lb)) return;
       int st = lb == B_DOOR_OAK_LOWER ? 0 : lb - B_DOOR_OAK_LOWER_S + 1;   /* 0-3 closed, 4-7 open */
       st ^= 4;
@@ -743,16 +614,10 @@ static void use(uint32_t pressed) {
       sleep_in(x, y, z);
       return;
     }
-    if (k == IK_SPAWN_EGG && b == B_MOB_SPAWNER) {
-      /* ItemMonsterPlacer.onItemUse on a monster spawner: it is set to that mob (MobSpawner),
-       * and keeps it from now on */
-      int mob = mob_of_egg(h->id);
-      spawners_set(x, y, z, mob);
-      if (pl.mode == 0) use_up();
-      player_swing();
-      return;
-    }
   }
+#if NB_DIMS
+  if (dims_use(k, on_block, x, y, z, b)) return;
+#endif
   switch (k) {
     case IK_BLOCK:
       if (on_block && place(h->id)) use_up(), player_swing();
@@ -819,17 +684,8 @@ static void use(uint32_t pressed) {
       if (on_block) {
         int f = pl.hit_face, px = x + NX[f], py = y + NY[f], pz = z + NZ[f];
         if (replaceable(world_get(px, py, pz))) {
-          if (k == IK_WATER_BUCKET && world_dim == DIM_NETHER) {
-            /* the nether is ultra-warm: a water bucket places nothing - the water
-             * evaporates on the spot (a puff of smoke) and the bucket comes back
-             * empty, as Java's BucketItem does. neighbours_changed does not run:
-             * there is no placed block whose neighbours would wake. */
-            particles_evaporate(px, py, pz);
-            if (pl.mode == 0) h->id = I_BUCKET, h->aux = 1;
-          } else {
-            set_block(px, py, pz, k == IK_WATER_BUCKET ? B_WATER : B_LAVA);
-            if (pl.mode == 0) h->id = I_BUCKET, h->aux = 1;
-          }
+          set_block(px, py, pz, k == IK_WATER_BUCKET ? B_WATER : B_LAVA);
+          if (pl.mode == 0) h->id = I_BUCKET, h->aux = 1;
         }
       }
       return;
@@ -843,22 +699,6 @@ static void use(uint32_t pressed) {
       throw_item(h->id, 1.5f, true);
       use_up();
       player_swing();
-      return;
-    case IK_SPAWN_EGG:
-      /* ItemMonsterPlacer.onItemUse: the mob against the face looked at, at (x + 0.5,
-       * y + d0, z + 0.5) where d0 is 0.5 on top of a fence (1.5 high) and 0 elsewhere.
-       * Minecraft checks nothing else: on any block, on any face, even in mid-air so
-       * the mob falls, and even inside the player. */
-      if (on_block) {
-        int f = pl.hit_face, sx = x + NX[f], sy = y + NY[f], sz = z + NZ[f];
-        int t = mob_of_egg(h->id);
-        if (sy >= dim_min_y() && sy < dim_height()) {
-          float dy = (f == 1 && blk_model[b] == M_FENCE) ? 0.5f : 0.0f;
-          mob_summon(t, sx + 0.5f, (float)sy + dy, sz + 0.5f);
-          use_up();
-          player_swing();
-        }
-      }
       return;
     case IK_FISHING_ROD: {
       /* ItemFishingRod.onItemRightClick: cast, or reel in (which wears it: 1 for a catch,
@@ -879,18 +719,11 @@ static void use(uint32_t pressed) {
         world_set(x, y, z, B_AIR);
         neighbours_changed(x, y, z);
         tnt_light(x, y, z, 80);
-      } else if (b == B_OBSIDIAN) {
-        /* ItemFlintAndSteel.onItemUse on obsidian: the nether portal's frame
-         * lights (the cell the obsidian faces is the frame's air) */
-        int f = pl.hit_face, fx = x + NX[f], fy = y + NY[f], fz = z + NZ[f];
-        if (!portal_light_here(fx, fy, fz) && world_get(fx, fy, fz) == B_AIR && fy >= dim_min_y() && fy < dim_height() &&
-            fire_can_stay(fx, fy, fz))
-          fire_set(fx, fy, fz, 0);
       } else {
         /* ItemFlintAndSteel.onItemUse: fire in the air against the face (BlockFire.onBlockAdded: out at once
          * where it cannot stay) */
         int f = pl.hit_face, fx = x + NX[f], fy = y + NY[f], fz = z + NZ[f];
-        if (world_get(fx, fy, fz) == B_AIR && fy >= dim_min_y() && fy < dim_height()) {
+        if (world_get(fx, fy, fz) == B_AIR && fy >= 0 && fy < WORLD_H) {
           if (fire_can_stay(fx, fy, fz)) fire_set(fx, fy, fz, 0);
         }
       }
@@ -921,23 +754,9 @@ void player_pick_block(void) {
   pl.inv[pl.slot] = (Stack){(uint16_t)id, 1};
 }
 
-/* a game mode change, as /gamemode does it: the fall starts from here, and
- * survival no longer flies. What the mode rules over (health, hunger, drops,
- * the breaking speed, the inventory that opens) is read from pl.mode where it
- * is used, so one place changing it changes all of it. Kept in the world's save. */
-void player_set_mode(int m) {
-  pl.mode = (uint8_t)m;
-  pl.fall = 0;
-  if (m == 0) pl.flying = false;
-  /* spectator (2): always flying, and out of whatever entity's eyes it was in */
-  if (m != 2) spectate = -1, spec_eye = 0;
-  else pl.flying = true;
-  chat_add("Your game mode has been updated", CHAT_WHITE);
-}
-
 void player_spawn(void) {
   int x, y, z;
-  world_spawn(&x, &y, &z);
+  gen_spawn(&x, &y, &z);
   memset(&pl, 0, sizeof pl);
   pl.spawn_x = x, pl.spawn_y = y, pl.spawn_z = z;
   pl.x = x + 0.5f;
@@ -950,6 +769,9 @@ void player_spawn(void) {
 }
 
 void player_respawn(void) {
+#if NB_DIMS
+  dims_respawn();
+#endif
   pl.x = pl.spawn_x + 0.5f, pl.y = (float)pl.spawn_y, pl.z = pl.spawn_z + 0.5f;
   pl.vx = pl.vy = pl.vz = 0;
   pl.health = 20, pl.food = 20, pl.sat = 5, pl.exhaustion = 0, pl.air = 300, pl.fall = 0, pl.fire = 0;
@@ -958,7 +780,8 @@ void player_respawn(void) {
   pl.pitch = 0;
 }
 
-static int break_cooldown, jump_timer;
+static int break_cooldown, jump_timer, sprint_timer;
+static bool was_fwd;   /* forward was held last tick */
 static uint32_t prev_keys;
 
 /* the damage the world does: falls, drowning, lava, fire, cactus, suffocation, the void */
@@ -966,8 +789,7 @@ static void hazards(float fell_from) {
   int fx = ifloor(pl.x), fz = ifloor(pl.z);
   int feet = world_get(fx, ifloor(pl.y + 0.1f), fz), head = world_get(fx, ifloor(pl.y + 1.62f), fz);
   /* falling: the distance counts while going down, out of water */
-  if (pl.in_water || pl.flying || feet == B_LADDER || feet == B_VINE || feet == B_WEEPING_VINES ||
-      feet == B_TWISTING_VINES || feet == B_COBWEB) pl.fall = 0;
+  if (pl.in_water || pl.flying || feet == B_LADDER || feet == B_VINE || feet == B_COBWEB) pl.fall = 0;
   else if (pl.y < fell_from) pl.fall += fell_from - pl.y;
   if (pl.on_ground) {
     if (pl.fall > 3) player_hurt(ceilf(pl.fall - 3), DMG_FALL);
@@ -990,7 +812,7 @@ static void hazards(float fell_from) {
   bool fire = false;
   for (int y = ifloor(pl.y + 0.001f); y <= ifloor(pl.y + 1.799f) && !fire; y++)
     for (int z = ifloor(pl.z - 0.299f); z <= ifloor(pl.z + 0.299f) && !fire; z++)
-      for (int x = ifloor(pl.x - 0.299f); x <= ifloor(pl.x + 0.299f) && !fire; x++) fire = is_fire(world_get(x, y, z));
+      for (int x = ifloor(pl.x - 0.299f); x <= ifloor(pl.x + 0.299f) && !fire; x++) fire = world_get(x, y, z) == B_FIRE;
   if (fire) {
     player_hurt(1, DMG_FIRE);
     if (++in_fire >= 20 && pl.fire < 160) pl.fire = 160;
@@ -1008,169 +830,11 @@ static void hazards(float fell_from) {
   for (int f = 2; f < 6; f++)
     if (world_get(ifloor(pl.x + NX[f] * 0.31f), ifloor(pl.y + 0.5f), ifloor(pl.z + NZ[f] * 0.31f)) == B_CACTUS)
       player_hurt(1, DMG_CACTUS);
-  if (pl.y < (float)VOID_Y) player_hurt(4, DMG_VOID);   /* Entity.checkBelowWorld: under the world */
-}
-
-/* ---------------------------------------------------------------- spectator */
-/* Minecraft's spectator: no collision, no landing, nothing to touch, and the
- * camera through an entity's eyes until sneak brings it back to its own body.
- * It flies as in creative (0.05 a tick, twice that with the sprint key), but
- * through the blocks rather than against them, so a tick is only the speed and
- * the integration: nothing here looks at the world's shape. */
-static void spectate_tick(uint32_t keys, uint32_t pressed) {
-  if (pressed & K_SNEAK) spectate = -1;   /* alpha: out of the entity (Minecraft's dismount key) */
-  if (pressed & K_ATTACK && spec_target >= 0 && spec_target < N_ENT && ents[spec_target].type != E_NONE)
-    spectate = spec_target;   /* OK on a mob under the crosshair: through its eyes */
-  if (spectate >= 0 && spectate < N_ENT && ents[spectate].type != E_NONE) {
-    const Entity *e = &ents[spectate];
-    pl.x = e->x, pl.y = e->y, pl.z = e->z;
-    pl.vx = e->vx, pl.vy = e->vy, pl.vz = e->vz;
-    pl.yaw = e->yaw, pl.pitch = e->pitch;
-    pl.sprinting = false;
-    /* the eyes where a mob aims from (mob.c: 0.85 of its height); other entities
-     * are seen from where they are */
-    spec_eye = is_mob(e->type) ? mob_height(e->type) * 0.85f : 0.0f;
-    return;
-  }
-  spectate = -1, spec_eye = 0;
-  float fwd = (keys & K_FWD ? 1.0f : 0) - (keys & K_BACKW ? 1.0f : 0);
-  float strafe = (keys & K_STRAFE_L ? 1.0f : 0) - (keys & K_STRAFE_R ? 1.0f : 0);
-  pl.sneaking = false;
-  pl.sprinting = (keys & K_SPRINT) != 0;
-  fwd *= 0.98f, strafe *= 0.98f;
-  if (keys & K_JUMP) pl.vy += 0.15f;
-  if (keys & K_SNEAK) pl.vy -= 0.15f;
-  move_flying(strafe, fwd, pl.sprinting ? 0.1f : 0.05f);
-  pl.x += pl.vx, pl.y += pl.vy, pl.z += pl.vz;
-  /* (no floor to stop at: the spectator flies down into the void under the world) */
-  if (pl.y > (float)(dim_height() + 24)) pl.y = (float)(dim_height() + 24), pl.vy = 0;   /* above the clouds */
-  pl.vx *= 0.91f, pl.vy *= 0.6f, pl.vz *= 0.91f;
-  pl.on_ground = false;
-  pl.walked = pl.prev_walked = pl.bob = pl.prev_bob = 0;
-  pl.in_water = in_liquid();
-}
-
-/* Pressed plates we keep track of, so each one is released when nothing stands
- * on it any longer (the plate snaps back up and the doors it opened close). */
-static struct { int x, y, z; } pp_[256];
-static int npp_ = 0;
-
-static void pp_record(int x, int y, int z) {
-  for (int i = 0; i < npp_; i++)
-    if (pp_[i].x == x && pp_[i].y == y && pp_[i].z == z) return;
-  if (npp_ < 256) pp_[npp_].x = x, pp_[npp_].y = y, pp_[npp_].z = z, npp_++;
-}
-
-static bool pp_occupied(int x, int y, int z) {
-  /* the player */
-  int px = ifloor(pl.x), pz = ifloor(pl.z), py = ifloor(pl.y);
-  if (px == x && pz == z && (py == y || py == y - 1 || py == y + 1)) return true;
-  /* any living mob standing over the cell */
-  for (int i = 0; i < N_ENT; i++) {
-    if (!is_mob(ents[i].type)) continue;   /* items, arrows and XP are not living entities */
-    int mx = ifloor(ents[i].x), mz = ifloor(ents[i].z), my = ifloor(ents[i].y);
-    if (mx == x && mz == z && (my == y || my == y - 1 || my == y + 1)) return true;
-  }
-  return false;
-}
-
-void pressure_plates_update(void) {
-  int i = 0;
-  while (i < npp_) {
-    int x = pp_[i].x, y = pp_[i].y, z = pp_[i].z;
-    if (!world_loaded(x, y, z)) { i++; continue; }   /* the cache will ask again when it returns */
-    if (world_get(x, y, z) != B_STONE_PRESSURE_PLATE_DOWN) { pp_[i] = pp_[--npp_]; continue; }
-    if (pp_occupied(x, y, z)) { i++; continue; }
-    /* no one on it: snap back up */
-    world_set(x, y, z, B_STONE_PRESSURE_PLATE);
-    neighbours_changed(x, y, z);
-    /* close the doors it had opened, matching Minecraft's release */
-    for (int f = 0; f < 4; f++) {
-      static const int dx[4] = {1, -1, 0, 0}, dz[4] = {0, 0, 1, -1};
-      int nx = x + dx[f], nz = z + dz[f];
-      int nb = world_get(nx, y, nz);
-      int ly = y;
-      if (nb == B_DOOR_OAK_UPPER) { ly = y - 1; nb = world_get(nx, ly, nz); }
-      if (is_door_lower(nb)) {
-        int st = nb == B_DOOR_OAK_LOWER ? 0 : nb - B_DOOR_OAK_LOWER_S + 1;
-        if (st >= 4) {
-          int op = st;
-          st = op ^ 4;
-          int blk = st == 0 ? B_DOOR_OAK_LOWER : B_DOOR_OAK_LOWER_S + st - 1;
-          world_set(nx, ly, nz, blk);
-          neighbours_changed(nx, ly, nz);
-        }
-      }
-    }
-    pp_[i] = pp_[--npp_];
-  }
-}
-
-/* A pressure plate releasing power into whatever stands on or beside it.
- * The plate is powered, and so is the block it sits on; the nine TNT of a
- * desert pyramid's burial chamber sit two below it, and any TNT or door beside
- * it (or under it) needs the same power. Pressed while anything stands on
- * it, it snaps back when it is empty (pressure_plates_update). */
-void pressure_plate_tick(float x, float y, float z) {
-  pressure_plates_update();
-  int bx = ifloor(x), bz = ifloor(z), by = ifloor(y + 0.1f);
-  /* An entity's feet sit on top of a plate in the block below its floored Y.
-   * Keep the direct cell too for callers/tests which pass a block position. */
-  if (world_get(bx, by, bz) != B_STONE_PRESSURE_PLATE &&
-      world_get(bx, by, bz) != B_STONE_PRESSURE_PLATE_DOWN &&
-      (world_get(bx, by - 1, bz) == B_STONE_PRESSURE_PLATE ||
-       world_get(bx, by - 1, bz) == B_STONE_PRESSURE_PLATE_DOWN)) by--;
-  if (world_get(bx, by, bz) != B_STONE_PRESSURE_PLATE && world_get(bx, by, bz) != B_STONE_PRESSURE_PLATE_DOWN)
-    return;
-  /* turn pressed, if it is not already */
-  if (world_get(bx, by, bz) == B_STONE_PRESSURE_PLATE) {
-    world_set(bx, by, bz, B_STONE_PRESSURE_PLATE_DOWN);
-    neighbours_changed(bx, by, bz);
-  }
-  pp_record(bx, by, bz);
-
-  /* the desert pyramid's burial chamber: the 3 x 3 TNT two blocks under the plate */
-  for (int dx = -1; dx <= 1; dx++)
-    for (int dz = -1; dz <= 1; dz++) {
-      int tx = bx + dx, ty = by - 2, tz = bz + dz;
-      if (world_get(tx, ty, tz) == B_TNT) {
-        world_set(tx, ty, tz, B_AIR);
-        neighbours_changed(tx, ty, tz);
-        tnt_light(tx, ty, tz, 80);
-      }
-    }
-  /* TNT and doors that stand beside (or under) the plate, just like a redstone
-   * source powering what is next to it. */
-  static const int dx6[6] = {1, -1, 0, 0, 0, 0};
-  static const int dy6[6] = {0, 0, 1, -1, 0, 0};
-  static const int dz6[6] = {0, 0, 0, 0, 1, -1};
-  for (int d = 0; d < 6; d++) {
-    int tx = bx + dx6[d], ty = by + dy6[d], tz = bz + dz6[d];
-    if (world_get(tx, ty, tz) == B_TNT) {
-      world_set(tx, ty, tz, B_AIR);
-      neighbours_changed(tx, ty, tz);
-      tnt_light(tx, ty, tz, 80);
-    }
-    /* doors: open them the way a player's right click does */
-    int nb = world_get(tx, ty, tz);
-    int ly = ty;
-    if (nb == B_DOOR_OAK_UPPER) { ly = ty - 1; nb = world_get(tx, ly, tz); }
-    if (is_door_lower(nb)) {
-      int st = nb == B_DOOR_OAK_LOWER ? 0 : nb - B_DOOR_OAK_LOWER_S + 1;
-      if (st < 4) {
-        world_set(tx, ly, tz, B_DOOR_OAK_LOWER_S + st + 3);   /* open: +4 - 1 */
-        neighbours_changed(tx, ly, tz);
-      }
-    }
-  }
+  if (pl.y < -64) player_hurt(4, DMG_VOID);
 }
 
 void player_tick(uint32_t keys, uint32_t pressed) {
   if (pl.dead) return;
-  if (pl.mode == 2) {
-    spectate_tick(keys, pressed);
-    return;
-  }
   if (pl.sleep_timer) {
     /* asleep: after 100 ticks the night is over (WorldServer.wakeAllPlayers); a key gets you up */
     if (++pl.sleep_timer >= 100) {
@@ -1189,22 +853,18 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   fwd *= 0.98f;
   strafe *= 0.98f;
   if (pl.sneaking) fwd *= 0.3f, strafe *= 0.3f;
-  if (pl.using_ticks) fwd *= 0.2f, strafe *= 0.2f;   /* eating slows you down */
-  /* EntityPlayerSP.onLivingUpdate: the sprint key sprints until forward is let go, you walk into
-   * a wall, sneak or get hungry. With Sprint: Toggle (Options, Controls) a tap of the key switches
-   * it on and off instead: the key need not be held while walking, but letting go of forward ends
-   * it either way. Forward pressed twice does nothing: only the key sprints */
+  if (pl.using_ticks) fwd *= 0.2f, strafe *= 0.2f, sprint_timer = 0;   /* eating slows you down */
+  /* EntityPlayerSP.onLivingUpdate: forward pressed twice within 7 ticks on the ground, or with the
+   * sprint key, sprints until forward is let go, you walk into a wall, sneak or get hungry */
   bool fed = pl.food > 6 || pl.mode == 1, went = fwd >= 0.8f * 0.98f;
-  bool key_down = (keys & K_SPRINT) != 0, key_tap = (pressed & K_SPRINT) != 0;
-  if (opt.sprint_toggle) {
-    if (key_tap) pl.sprinting = !pl.sprinting && fed && !pl.using_ticks;
-  } else if (key_down && went && fed && !pl.using_ticks) {
-    /* Hold: the sprint key held while walking; it runs only while the key is held */
-    pl.sprinting = true;
+  if (sprint_timer) sprint_timer--;
+  if (pl.on_ground && !was_fwd && went && !pl.sprinting && fed && !pl.using_ticks) {
+    if (!sprint_timer && !(keys & K_SPRINT)) sprint_timer = 7;
+    else pl.sprinting = true;
   }
-  if (pl.sprinting && (hit_wall || !went || pl.sneaking || !fed || pl.using_ticks ||
-                       (!opt.sprint_toggle && !key_down)))
-    pl.sprinting = false;
+  if (!pl.sprinting && went && fed && !pl.using_ticks && (keys & K_SPRINT)) pl.sprinting = true;
+  if (pl.sprinting && (!went || hit_wall || !fed)) pl.sprinting = false;
+  was_fwd = went;
   pl.in_water = in_liquid();
   /* creative: jump twice quickly to fly or land */
   if (jump_timer) jump_timer--;
@@ -1257,7 +917,7 @@ void player_tick(uint32_t keys, uint32_t pressed) {
       float f = pl.on_ground ? speed * (0.16277136f / (fr * fr * fr)) : (pl.sprinting ? 0.026f : 0.02f);
       move_flying(strafe, fwd, f);
       /* ladders and vines: slow falls, climb when pushing into them */
-      bool ladder = at == B_LADDER || at == B_VINE || at == B_WEEPING_VINES || at == B_TWISTING_VINES;
+      bool ladder = at == B_LADDER || at == B_VINE;
       if (ladder) {
         if (pl.vx < -0.15f) pl.vx = -0.15f;
         if (pl.vx > 0.15f) pl.vx = 0.15f;
@@ -1269,6 +929,12 @@ void player_tick(uint32_t keys, uint32_t pressed) {
       if (at == B_COBWEB) pl.vx *= 0.25f, pl.vy *= 0.05f, pl.vz *= 0.25f;
       float bvx = pl.vx, bvz = pl.vz;
       move(pl.vx, pl.vy, pl.vz);
+#if NB_DIMS
+      /* BlockSoulSand.onEntityCollidedWithBlock: in it, slow */
+      for (int sx = ifloor(pl.x - 0.299f); sx <= ifloor(pl.x + 0.299f); sx++)
+        for (int sz = ifloor(pl.z - 0.299f); sz <= ifloor(pl.z + 0.299f); sz++)
+          if (world_get(sx, ifloor(pl.y + 0.001f), sz) == B_SOUL_SAND) pl.vx *= 0.4f, pl.vz *= 0.4f, sx = sz = 1 << 20;
+#endif
       if (ladder && (bvx != pl.vx || bvz != pl.vz)) pl.vy = 0.2f;
       pl.vy -= 0.08f;
       pl.vy *= 0.98f;
@@ -1284,13 +950,17 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   pl.bob += (want - pl.bob) * 0.4f;
   if (pl.mode == 0) exhaust(moved * (pl.in_water ? 0.015f : pl.sprinting ? 0.1f : 0.0f));
   hazards(y0);
-  pressure_plates_update();
-  pressure_plate_tick(pl.x, pl.y, pl.z);
-  portal_tick();
+#if NB_DIMS
+  dims_player_tick();
+  buttons_tick();
+#endif
   effects_tick();
   if (pl.mode == 0) food_tick();
   if (pl.dead) return;
   pick();
+#if NB_DIMS
+  if ((pressed & K_ATTACK) && dims_punch()) player_swing(), pressed &= ~K_ATTACK, keys &= ~K_ATTACK;
+#endif
   /* a mob under the crosshair, nearer than the block: attacking hits it, using uses on it */
   Entity *target = entity_looked_at(pl.mode ? 5.0f : 3.0f, pl.hit_face >= 0 ? hit_t : 1e9f);
   if (target) {
@@ -1304,7 +974,7 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   if ((pressed & K_ATTACK) && pl.hit_face < 0 && !target) player_swing();
   if ((pressed & K_ATTACK) && pl.hit_face >= 0 && !target) {
     int f = pl.hit_face, fx = pl.hit_x + NX[f], fy = pl.hit_y + NY[f], fz = pl.hit_z + NZ[f];
-    if (is_fire(world_get(fx, fy, fz))) {
+    if (world_get(fx, fy, fz) == B_FIRE) {
       world_set(fx, fy, fz, B_AIR);
       player_swing();
       keys &= ~K_ATTACK;
@@ -1314,6 +984,13 @@ void player_tick(uint32_t keys, uint32_t pressed) {
   /* PlayerControllerMP.onPlayerDamageBlock: looking at another block starts over */
   static int bx_ = -1, by_, bz_;
   if (pl.hit_x != bx_ || pl.hit_y != by_ || pl.hit_z != bz_) pl.breaking = 0, bx_ = pl.hit_x, by_ = pl.hit_y, bz_ = pl.hit_z;
+#if NB_DIMS
+  /* BlockDragonEgg.onBlockClicked: it goes elsewhere */
+  if ((pressed & K_ATTACK) && pl.hit_face >= 0 && pl.mode == 0 && world_get(pl.hit_x, pl.hit_y, pl.hit_z) == B_DRAGON_EGG) {
+    egg_teleport(pl.hit_x, pl.hit_y, pl.hit_z);
+    keys &= ~K_ATTACK;
+  }
+#endif
   if ((keys & K_ATTACK) && pl.hit_face >= 0 && !break_cooldown) {
     player_swing();
     int b = world_get(pl.hit_x, pl.hit_y, pl.hit_z);
@@ -1335,12 +1012,10 @@ void player_tick(uint32_t keys, uint32_t pressed) {
         break_block(pl.hit_x, pl.hit_y, pl.hit_z, true);
         exhaust(0.025f);
         /* experience from ores (Block.dropXpOnBlockBreak) */
-        if (b == B_COAL_ORE || b == B_DEEPSLATE_COAL_ORE) player_add_xp(rnd(3));
-        else if (b == B_DIAMOND_ORE || b == B_EMERALD_ORE || b == B_DEEPSLATE_DIAMOND_ORE ||
-                 b == B_DEEPSLATE_EMERALD_ORE) player_add_xp(3 + rnd(5));
-        else if (b == B_LAPIS_ORE || b == B_DEEPSLATE_LAPIS_ORE) player_add_xp(2 + rnd(4));
-        else if (b == B_NETHER_QUARTZ_ORE) player_add_xp(rnd(2));
-        else if (b == B_REDSTONE_ORE || b == B_DEEPSLATE_REDSTONE_ORE) player_add_xp(1 + rnd(5));
+        if (b == B_COAL_ORE) player_add_xp(rnd(3));
+        else if (b == B_DIAMOND_ORE || b == B_EMERALD_ORE) player_add_xp(3 + rnd(5));
+        else if (b == B_LAPIS_ORE) player_add_xp(2 + rnd(4));
+        else if (b == B_REDSTONE_ORE) player_add_xp(1 + rnd(5));
         /* tools wear: 1 a block (swords 2), not for blocks that break at once */
         int k = item_kind(h);
         if (hard && k >= IK_PICKAXE && k <= IK_SHEARS && k != IK_HOE) stack_wear(held(), k == IK_SWORD ? 2 : 1);
@@ -1404,3 +1079,10 @@ void player_tick(uint32_t keys, uint32_t pressed) {
     if (pressed & (K_SLOT1 << n)) pl.slot = n;
   prev_keys = keys;
 }
+#if NB_DIMS
+/* (tests) the held item used on the block at (x, y, z), its face f, as OK would */
+void player_use_on(int x, int y, int z, int f) {
+  pl.hit_x = x, pl.hit_y = y, pl.hit_z = z, pl.hit_face = f;
+  use(K_USE);
+}
+#endif

@@ -1,4 +1,6 @@
 # NumBlocks: a game like Minecraft 1.8.8 for the NumWorks calculator (part of NumPlay).
+# NumBlocks.nwa, on its own, also has the Nether and the End (NB_DIMS: src/dims*.c, src/data_dims.c);
+# NumPlay's (the module) has no room for them and is built without.
 #   make            output/numblocks.nwa
 #   make check      link it like the calculator does (output/numblocks.bin)
 #   make host       build/play: the game on a computer, for tests and screenshots
@@ -10,31 +12,30 @@ BUILD_DIR = output
 STRIP ?= arm-none-eabi-strip --strip-unneeded
 CLIENT_JAR ?= client.jar
 GEN ?= src/gen.c
-GAME = src/main.c src/world.c src/edits.c src/portal.c src/render.c src/player.c src/phys.c src/inv.c src/entity.c src/mob.c src/tick.c src/gui.c src/hand.c src/save.c src/end.c src/data.c src/names.c src/command.c src/test_data.c $(GEN)
-HEADERS = $(wildcard src/*.h) ../common/epsilon_app.h ../common/epsilon_files.h Makefile
+GAME = src/main.c src/world.c src/edits.c src/render.c src/player.c src/phys.c src/inv.c src/entity.c src/mob.c src/tick.c src/gui.c src/hand.c src/save.c src/data.c src/names.c src/command.c $(GEN)
+HEADERS = $(wildcard src/*.h) ../common/epsilon_app.h ../common/epsilon_files.h ../common/np_text.h Makefile
+# NumBlocks.nwa's sources: the game's, its tables with the Nether and the End, and theirs
+DIMS_SRC = src/dims.c src/end.c
+GAME_DIMS = $(filter-out src/data.c,$(GAME)) src/data_dims.c $(DIMS_SRC)
 
 CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device)
-CFLAGS += -O2 -Wall -Wextra -Wno-unused-parameter -fno-math-errno -fsingle-precision-constant -ffast-math
+CFLAGS += -Oz -Wall -Wextra -Wno-unused-parameter -fno-math-errno -fsingle-precision-constant -ffast-math
 CFLAGS += -fno-tree-loop-distribute-patterns -flto -fno-fat-lto-objects -fwhole-program -fvisibility=internal
-# One LTO partition and no per-function/per-data sections: the relocatable .nwa then carries few
-# relocations, so the file the owner downloads drops ~155 KB (the calculator's .bin by ~2 KB too);
-# the frames are byte-identical. -flto-partition=one is where most of it comes from, -fdata-sections
-# the rest. (LTO's own dead-code pass removes what --gc-sections would have without the sections.)
-CFLAGS += -flto-partition=one $(EXTRA)
+CFLAGS += -ffunction-sections -fdata-sections $(EXTRA)
 LDFLAGS = -Wl,--relocatable -nostartfiles --specs=nano.specs
 LDFLAGS += -Wl,-e,main -Wl,-u,eadk_app_name -Wl,-u,eadk_app_icon -Wl,-u,eadk_api_level
 LDFLAGS += -Wl,--gc-sections -flinker-output=nolto-rel
 
-.PHONY: build check clean host data bake-test
+.PHONY: build check clean host data
 build: $(BUILD_DIR)/numblocks.nwa
 
 check: $(BUILD_DIR)/numblocks.nwa
 	$(Q) $(NWLINK) nwa-bin --ram-length 153676 $< $(BUILD_DIR)/numblocks.bin
 	@echo "BIN     $(BUILD_DIR)/numblocks.bin: $$(wc -c < $(BUILD_DIR)/numblocks.bin) bytes"
 
-$(BUILD_DIR)/numblocks.nwa: $(GAME) src/plat_eadk.c $(HEADERS) $(BUILD_DIR)/icon.o
+$(BUILD_DIR)/numblocks.nwa: $(GAME_DIMS) src/plat_eadk.c $(HEADERS) $(BUILD_DIR)/icon.o
 	@echo "LD      $@"
-	$(Q) $(CC) $(CFLAGS) $(LDFLAGS) $(GAME) src/plat_eadk.c $(BUILD_DIR)/icon.o -lm -o $@
+	$(Q) $(CC) $(CFLAGS) -DNB_DIMS=1 $(LDFLAGS) $(GAME_DIMS) src/plat_eadk.c $(BUILD_DIR)/icon.o -lm -o $@
 	$(Q) $(STRIP) $@
 	$(Q) arm-none-eabi-size $@
 
@@ -44,58 +45,43 @@ $(BUILD_DIR)/icon.o: src/icon.png | $(BUILD_DIR)
 $(BUILD_DIR):
 	$(Q) mkdir -p $@
 
+# on a computer: NumBlocks.nwa's game (with the Nether and the End); unit_np is NumPlay's
 HOST_FLAGS = -std=gnu11 -O2 -g -Wall -Wextra -Wno-unused-parameter -Isrc -DHOST
 host: build/play build/play_ref
-build/play: $(GAME) src/plat_host.c tests/play.c $(HEADERS)
+build/play: $(GAME_DIMS) src/plat_host.c tests/play.c $(HEADERS)
 	$(Q) mkdir -p build
-	$(Q) cc $(HOST_FLAGS) $(GAME) src/plat_host.c tests/play.c -lm -o $@
+	$(Q) cc $(HOST_FLAGS) -DNB_DIMS=1 $(GAME_DIMS) src/plat_host.c tests/play.c -lm -o $@
 	@echo "HOST    $@"
-build/unit: $(GAME) src/plat_host.c tests/unit.c $(HEADERS)
+build/unit: $(GAME_DIMS) src/plat_host.c tests/unit.c $(HEADERS)
+	$(Q) mkdir -p build
+	$(Q) cc $(HOST_FLAGS) -DNB_DIMS=1 $(filter-out src/main.c,$(GAME_DIMS)) src/plat_host.c tests/unit.c tests/stubs.c -lm \
+	  -o $@
+build/unit_np: $(GAME) src/plat_host.c tests/unit.c $(HEADERS)
 	$(Q) mkdir -p build
 	$(Q) cc $(HOST_FLAGS) $(filter-out src/main.c,$(GAME)) src/plat_host.c tests/unit.c tests/stubs.c -lm -o $@
-test: build/unit
-	@# a clean save dir: records from a build with an older entry shape would be
-	@# read as the current one (the world's head is what converts a real world)
-	@rm -rf build/unit-saves && mkdir -p build/unit-saves
+# the Nether and the End played through (dims.c), then that world, saved in the Nether, in NumPlay's (np_load.c)
+build/dims_test: $(GAME_DIMS) src/plat_host.c tests/dims.c $(HEADERS)
+	$(Q) mkdir -p build
+	$(Q) cc $(HOST_FLAGS) -DNB_DIMS=1 $(GAME_DIMS) src/plat_host.c tests/dims.c -lm -o $@
+build/np_load: $(GAME) src/plat_host.c tests/np_load.c $(HEADERS)
+	$(Q) mkdir -p build
+	$(Q) cc $(HOST_FLAGS) $(GAME) src/plat_host.c tests/np_load.c -lm -o $@
+test: build/unit build/unit_np build/dims_test build/np_load
+	@mkdir -p build/unit-saves
 	./build/unit
-# the test world's structures, baked as the generator makes them (tests/bake.c writes
-# src/test_data.c, which the game stamps instead of generating: see its header)
-.PHONY: bake-test
-bake-test: build/bake
-build/bake: $(filter-out src/main.c,$(GAME)) src/plat_host.c tests/bake.c tests/stubs.c $(HEADERS)
-	$(Q) mkdir -p build
-	$(Q) cc $(HOST_FLAGS) $(filter-out src/main.c,$(GAME)) src/plat_host.c tests/bake.c tests/stubs.c -lm -o $@
-	@echo "HOST    $@"
+	./build/unit_np
+	./build/dims_test
+	./build/np_load
 # every pixel traced: the reference the adaptive picture is checked against
-build/play_ref: $(GAME) src/plat_host.c tests/play.c $(HEADERS)
+build/play_ref: $(GAME_DIMS) src/plat_host.c tests/play.c $(HEADERS)
 	$(Q) mkdir -p build
-	$(Q) cc $(HOST_FLAGS) -DFULL_TRACE $(GAME) src/plat_host.c tests/play.c -lm -o $@
-	@echo "HOST    $@"
-# interactive desktop player (X11): ./build/desktop (saves in build/desktop-saves/)
-desktop: build/desktop
-build/desktop: $(GAME) src/plat_host.c tests/desktop.c $(HEADERS)
-	$(Q) mkdir -p build
-	$(Q) cc $(HOST_FLAGS) $(GAME) src/plat_host.c tests/desktop.c -lm -lX11 -o $@
+	$(Q) cc $(HOST_FLAGS) -DNB_DIMS=1 -DFULL_TRACE $(GAME_DIMS) src/plat_host.c tests/play.c -lm -o $@
 	@echo "HOST    $@"
 
 data:
 	python3 tools/blocks.py --header > src/blocks.h
 	python3 tools/items.py --header > src/items.h
 	python3 tools/pack.py $(CLIENT_JAR)
-
-# block/item/entity/font/environment pictures from an extracted modern client
-# (minecraft-textures/), falling back to 1.8.8's client.jar for the GUI/HUD
-MODERN_TEX ?= ../../minecraft-textures
-SPAWN_EGG_TEX ?= ../../minecraft-spawneggs/item
-data-modern:
-	python3 tools/blocks.py --header > src/blocks.h
-	python3 tools/items.py --header > src/items.h
-	python3 tools/pack.py --modern $(MODERN_TEX) $(CLIENT_JAR) --eggs $(SPAWN_EGG_TEX)
-
-# the four moving-fluid pictures packed again in place (no full pack without the
-# 1.8.8 jar: the bed and the GUI have no modern file to come from)
-data-fluids:
-	python3 tools/data_add.py --replace water_still,water_flow,lava_still,lava_flow $(MODERN_TEX)
 
 clean:
 	$(Q) rm -rf $(BUILD_DIR) build

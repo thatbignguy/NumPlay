@@ -4,14 +4,12 @@
 #include "ref_terrain.h"
 #include "t_init.h"
 int main(int argc, char **argv) {
-    static uint8_t gs[GEN_SCRATCH];
-    gen_scratch(gs);   /* the generator's scratch (gen.c): chunk_terrain needs it live */
     i64 seed = argc > 1 ? strtoll(argv[1], 0, 10) : 12345;
     int n = argc > 2 ? atoi(argv[2]) : 50;
     int X0 = argc > 3 ? atoi(argv[3]) : 0, Z0 = argc > 4 ? atoi(argv[4]) : 0;
     test_init(seed);
     ref_init(seed);
-    static uint8_t ref[65536], mine[256 * 288];   /* the slab is 9 bits a cell: 288 bytes a row */
+    static uint8_t ref[65536], mine[256 * 256];
     long diff = 0, tot = 0, cdiff = 0;
     JRand pick; jr_seed(&pick, 99);
     for (int c = 0; c < n; c++) {
@@ -28,15 +26,12 @@ int main(int argc, char **argv) {
         ref_chunk(cx, cz, ref);
         chunk_terrain(cx, cz, mine, 0, 256, 0);
         int d = 0;
-        /* y 0..4 is the deepslate layer now (deepslate where 1.8 had its bedrock floor),
-         * so the reference describes y >= 5 only (the reference's own terrain above it) */
-        for (int y = 5; y < 256; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
-            int a = ref[(y * 16 + z) * 16 + x], b = b9_get(mine, y * 256 + z * 16 + x);
+        for (int y = 0; y < 256; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            int a = ref[(y * 16 + z) * 16 + x], b = mine[y * 256 + z * 16 + x];
             if (a != b) { if (d < 5) printf("  chunk %d,%d (%d,%d,%d): ref %d mine %d\n", cx, cz, x, y, z, a, b); d++; }
         }
-        diff += d; tot += 16 * 16 * (256 - 5); if (d) cdiff++;
+        diff += d; tot += 65536; if (d) cdiff++;
     }
-    printf("seed %lld: %ld / %ld blocks differ in %ld of %d chunks (compared from y=5 up; y 0..4 is the deepslate layer)\n",
-           (long long)seed, diff, tot, cdiff, n);
+    printf("seed %lld: %ld / %ld blocks differ in %ld of %d chunks\n", (long long)seed, diff, tot, cdiff, n);
     return 0;
 }

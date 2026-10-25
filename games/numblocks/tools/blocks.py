@@ -16,21 +16,15 @@ Each state is a Minecraft 1.8.8 block id and metadata. Fields:
   hard      hardness (seconds-ish, as Block.c(...) in the game; -1 unbreakable)
   tool      the tool that mines it fastest: pickaxe, axe, shovel, shears, sword, None
   level     the pickaxe level needed to get a drop (0 wood, 1 stone, 2 iron, 3 diamond)
-
-The states are packed 9 bits each (see nb.h): B_COUNT of them are defined, and NSTATES
-is the number of ids the packing and the tables are sized for.
 """
 import sys
-
-# the block-state ids the game's packing uses: 9 bits each (vc, the edit records)
-NSTATES = 512
 
 S = []
 
 
-def b(name, id, meta=0, model='cube', tex=None, tint=None, light=0, hard=1.0, tool=None, level=0, box=None):
+def b(name, id, meta=0, model='cube', tex=None, tint=None, light=0, hard=1.0, tool=None, level=0):
     S.append(dict(name=name, id=id, meta=meta, model=model, tex=tex, tint=tint, light=light, hard=hard, tool=tool,
-                  level=level, box=box))
+                  level=level))
 
 
 def tsb(top, side, bottom=None):
@@ -239,179 +233,11 @@ for v, d in [(1, 'S'), (2, 'W'), (3, 'N'), (4, 'E_OPEN'), (5, 'S_OPEN'), (6, 'W_
     b(f'DOOR_OAK_LOWER_{d}', 64, v, model='door', tex='door_wood_lower', hard=3.0, tool='axe')
 # (new blocks go last: worlds keep blocks by their place in this list)
 b('FIRE', 51, 0, model='cross', tex='fire_layer_0', light=15, hard=0)
-# --- the nether's blocks (modern Nether Wastes): the terrain block, the slow sand, the
-# quartz pair and the portal. The portal is not solid (you walk through it, as in
-# Minecraft), lights what is about it, and stops no light. It is a thin plane like
-# Minecraft's, in two states for its two axes (BlockPortal's axis): NS faces
-# north/south (the plane runs east-west, thin in Z) and EW faces east/west (the
-# plane runs north-south, thin in X). The boxes are in tools/pack.py's boxes_of.
-b('NETHERRACK', 87, 0, tex='netherrack', hard=0.4, tool='pickaxe')
-b('SOUL_SAND', 88, 0, tex='soul_sand', hard=0.5, tool='shovel')
-b('NETHER_QUARTZ_ORE', 153, 0, tex='nether_quartz_ore', hard=3.0, tool='pickaxe')
-b('QUARTZ_BLOCK', 155, 0, tex=tsb('quartz_block_top', 'quartz_block_side', 'quartz_block_bottom'), hard=0.8,
-  tool='pickaxe')
-b('PORTAL_NS', 90, 1, model='portal', tex='nether_portal', light=11, hard=-1)
-b('PORTAL_EW', 90, 2, model='portal', tex='nether_portal', light=11, hard=-1)
-# --- reserved states (never placed, never items): the item ids live at 256..395, so the
-# blocks after the portal start past them at 396. Worlds keep blocks by their place in
-# this list, so nothing here may move again.
-for _u in range(258, 396):
-    b('UNUSED_%03d' % _u, 0, model='none')
-# --- the quartz family's cut blocks (modern): chiseled and pillar are 1.8's 155:1-4,
-# smooth (smelted) and bricks are modern-only, so they take 155:5-6. The X/Z pillar
-# states stand for the Y one in the inventory, like the logs' (items.py's ITEM_OF)
-b('CHISELED_QUARTZ_BLOCK', 155, 1, tex=tsb('chiseled_quartz_block_top', 'chiseled_quartz_block'), hard=0.8,
-  tool='pickaxe')
-b('QUARTZ_PILLAR', 155, 2, tex=tsb('quartz_pillar_top', 'quartz_pillar'), hard=0.8, tool='pickaxe')
-b('QUARTZ_PILLAR_X', 155, 3, tex={'top': 'quartz_pillar', 'side': 'quartz_pillar', 'bottom': 'quartz_pillar',
-                                  'x': 'quartz_pillar_top'}, hard=0.8, tool='pickaxe')
-b('QUARTZ_PILLAR_Z', 155, 4, tex={'top': 'quartz_pillar', 'side': 'quartz_pillar', 'bottom': 'quartz_pillar',
-                                  'z': 'quartz_pillar_top'}, hard=0.8, tool='pickaxe')
-b('SMOOTH_QUARTZ', 155, 5, tex='quartz_block_bottom', hard=0.8, tool='pickaxe')
-b('QUARTZ_BRICKS', 155, 6, tex='quartz_bricks', hard=0.8, tool='pickaxe')
-# --- concrete (1.12): the sixteen powders first, the concretes they set into after, both in the
-# same colour order so the match is powder + (B_CONCRETE_WHITE - B_CONCRETE_POWDER_WHITE). Modern
-# only - 1.8 has no id for either - so 1.12's own numeric ids (251 concrete, 252 concrete powder)
-# stand in, and the states sit past the items' (the 9-bit packing is what saves them).
-CCOLORS = ['WHITE', 'ORANGE', 'MAGENTA', 'LIGHT_BLUE', 'YELLOW', 'LIME', 'PINK', 'GRAY', 'SILVER', 'CYAN',
-           'PURPLE', 'BLUE', 'BROWN', 'GREEN', 'RED', 'BLACK']
-CTEX = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan',
-        'purple', 'blue', 'brown', 'green', 'red', 'black']
-for v, (c, t) in enumerate(zip(CCOLORS, CTEX)):
-    b(f'CONCRETE_POWDER_{c}', 252, v, tex=f'{t}_concrete_powder', hard=0.5, tool='shovel')
-for v, (c, t) in enumerate(zip(CCOLORS, CTEX)):
-    b(f'CONCRETE_{c}', 251, v, tex=f'{t}_concrete', hard=1.8, tool='pickaxe')
-# --- deepslate (1.17) and its ores (the deep layer below y=0). Modern only - 1.8 has no
-# id for any of them - so 1.12's next free numeric id (253) stands in for the whole family,
-# told apart by the data value, and the states sit past the concrete (the 9-bit packing is
-# what saves them). Deepslate drops itself (the cobbled family is out of scope); each ore
-# drops what the stone ore drops (tools/items.py, inv.c's block_drops).
-b('DEEPSLATE', 253, 0, tex=tsb('deepslate_top', 'deepslate', 'deepslate'), hard=3.0, tool='pickaxe')
-b('DEEPSLATE_COAL_ORE', 253, 1, tex='deepslate_coal_ore', hard=3.0, tool='pickaxe')
-b('DEEPSLATE_IRON_ORE', 253, 2, tex='deepslate_iron_ore', hard=3.0, tool='pickaxe', level=1)
-b('DEEPSLATE_GOLD_ORE', 253, 3, tex='deepslate_gold_ore', hard=3.0, tool='pickaxe', level=2)
-b('DEEPSLATE_REDSTONE_ORE', 253, 4, tex='deepslate_redstone_ore', hard=3.0, tool='pickaxe', level=2)
-b('DEEPSLATE_DIAMOND_ORE', 253, 5, tex='deepslate_diamond_ore', hard=3.0, tool='pickaxe', level=2)
-b('DEEPSLATE_LAPIS_ORE', 253, 6, tex='deepslate_lapis_ore', hard=3.0, tool='pickaxe', level=1)
-b('DEEPSLATE_EMERALD_ORE', 253, 7, tex='deepslate_emerald_ore', hard=3.0, tool='pickaxe', level=2)
-# --- the desert pyramid's blocks (1.8 ids 70 and 128, the pyramid is the first
-# structure). The stone pressure plate is 1.8's id 70: a thin plate (the flat
-# model, one texel high), stone's picture (modern has no plate picture of its
-# own - its model textures the plate with stone). The sandstone stairs are 1.8's
-# id 128, with their four facings as the oak stairs have them (BlockStairs: 0
-# east, 1 west, 2 south, 3 north). CUT_SANDSTONE needs no state of its own: the
-# 24:0-24:2 trio maps to modern sandstone, chiselled sandstone and cut sandstone
-# (tools/modern_map.py: sandstone_smooth -> cut_sandstone), so the pyramid's cut
-# sandstone is the existing SANDSTONE_SMOOTH state; the orange and blue
-# terracotta are the existing STAINED_CLAY_ORANGE/BLUE, the slab, TNT and the
-# chest are in already.
-b('STONE_PRESSURE_PLATE', 70, 0, model='plate', tex='stone', hard=0.5, tool='pickaxe')
-_SANDSTAIRS_TEX = tsb('sandstone_top', 'sandstone_normal', 'sandstone_bottom')
-b('SANDSTONE_STAIRS', 128, 0, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
-b('SANDSTONE_STAIRS_W', 128, 1, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
-b('SANDSTONE_STAIRS_S', 128, 2, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
-b('SANDSTONE_STAIRS_N', 128, 3, model='stairs', tex=_SANDSTAIRS_TEX, hard=0.8, tool='pickaxe')
-# 447 and 448 are the piglin spawn-egg item ids. Keep them reserved in the block
-# table too: state ids and item ids share a number space, so new states must not
-# alias those eggs. (No existing saved block-state id moves.)
-for _u in range(447, 449):
-    b('UNUSED_%03d' % _u, 0, model='none')
-# The pressed-plate state and the Nether additions follow all existing states and
-# the egg ids; saved blocks, the egg stacks and the recipes keep their old ids.
-b('STONE_PRESSURE_PLATE_DOWN', 70, 1, model='plate_down', tex='stone', hard=0.5, tool='pickaxe')
-# --- the nether's biomes (1.16): the crimson and warped forests and the soul
-# sand valley. Modern only - 1.8 has no id for any of them - so four free
-# numeric ids stand in for the families, told apart by the data value (the
-# states sit past the items' ids, as the concrete's and deepslate's do):
-#   250 nylium (0 crimson, 1 warped) and the bone block (5-7, the axes; the cut
-#              family's own numbers 2-4 are left unused so the bone does not burn)
-#   249 stems (0-3 crimson stem/x/z/bark, 4-7 the stripped ones,
-#              8-11 warped, 12-15 stripped warped)
-#   248 the cut family (0-1 planks, 2-3 wart blocks, 4 shroomlight)
-#   247 the growth and the soul blocks (0-1 fungi, 2-3 roots, 4 sprouts,
-#              5-6 vines, 7 soul soil, 8 soul fire)
-b('CRIMSON_NYLIUM', 250, 0, tex=tsb('crimson_nylium', 'crimson_nylium_side'), hard=0.4, tool='pickaxe')
-b('WARPED_NYLIUM', 250, 1, tex=tsb('warped_nylium', 'warped_nylium_side'), hard=0.4, tool='pickaxe')
-for _m, (_n, _t) in enumerate([('CRIMSON', 'crimson'), ('WARPED', 'warped')]):
-    _base = _m * 8
-    b(f'{_n}_STEM', 249, _base + 0, tex=tsb(f'{_t}_stem_top', f'{_t}_stem'), hard=2.0, tool='axe')
-    b(f'{_n}_STEM_X', 249, _base + 1, tex={'top': f'{_t}_stem', 'side': f'{_t}_stem', 'bottom': f'{_t}_stem',
-                                           'x': f'{_t}_stem_top'}, hard=2.0, tool='axe')
-    b(f'{_n}_STEM_Z', 249, _base + 2, tex={'top': f'{_t}_stem', 'side': f'{_t}_stem', 'bottom': f'{_t}_stem',
-                                           'z': f'{_t}_stem_top'}, hard=2.0, tool='axe')
-    b(f'{_n}_STEM_BARK', 249, _base + 3, tex=f'{_t}_stem', hard=2.0, tool='axe')
-    b(f'STRIPPED_{_n}_STEM', 249, _base + 4, tex=tsb(f'stripped_{_t}_stem_top', f'stripped_{_t}_stem'),
-      hard=2.0, tool='axe')
-    b(f'STRIPPED_{_n}_STEM_X', 249, _base + 5, tex={'top': f'stripped_{_t}_stem', 'side': f'stripped_{_t}_stem',
-                                                    'bottom': f'stripped_{_t}_stem', 'x': f'stripped_{_t}_stem_top'},
-      hard=2.0, tool='axe')
-    b(f'STRIPPED_{_n}_STEM_Z', 249, _base + 6, tex={'top': f'stripped_{_t}_stem', 'side': f'stripped_{_t}_stem',
-                                                    'bottom': f'stripped_{_t}_stem', 'z': f'stripped_{_t}_stem_top'},
-      hard=2.0, tool='axe')
-    b(f'STRIPPED_{_n}_STEM_BARK', 249, _base + 7, tex=f'stripped_{_t}_stem', hard=2.0, tool='axe')
-b('CRIMSON_PLANKS', 248, 0, tex='crimson_planks', hard=2.0, tool='axe')
-b('WARPED_PLANKS', 248, 1, tex='warped_planks', hard=2.0, tool='axe')
-b('NETHER_WART_BLOCK', 248, 2, tex='nether_wart_block', hard=1.0, tool='axe')
-b('WARPED_WART_BLOCK', 248, 3, tex='warped_wart_block', hard=1.0, tool='axe')
-b('SHROOMLIGHT', 248, 4, tex='shroomlight', light=15, hard=1.0, tool='axe')
-b('BONE_BLOCK', 250, 5, tex=tsb('bone_block_top', 'bone_block_side'), hard=2.0, tool='pickaxe')
-b('BONE_BLOCK_X', 250, 6, tex={'top': 'bone_block_side', 'side': 'bone_block_side', 'bottom': 'bone_block_side',
-                               'x': 'bone_block_top'}, hard=2.0, tool='pickaxe')
-b('BONE_BLOCK_Z', 250, 7, tex={'top': 'bone_block_side', 'side': 'bone_block_side', 'bottom': 'bone_block_side',
-                               'z': 'bone_block_top'}, hard=2.0, tool='pickaxe')
-b('CRIMSON_FUNGUS', 247, 0, model='cross', tex='crimson_fungus', hard=0)
-b('WARPED_FUNGUS', 247, 1, model='cross', tex='warped_fungus', hard=0)
-b('CRIMSON_ROOTS', 247, 2, model='cross', tex='crimson_roots', hard=0)
-b('WARPED_ROOTS', 247, 3, model='cross', tex='warped_roots', hard=0)
-b('NETHER_SPROUTS', 247, 4, model='cross', tex='nether_sprouts', hard=0)
-b('WEEPING_VINES', 247, 5, model='cross', tex='weeping_vines_plant', hard=0.2, tool='shears')
-b('TWISTING_VINES', 247, 6, model='cross', tex='twisting_vines_plant', hard=0.2, tool='shears')
-b('SOUL_SOIL', 247, 7, tex='soul_soil', hard=0.5, tool='shovel')
-b('SOUL_FIRE', 247, 8, model='cross', tex='soul_fire_0', light=10, hard=0)
-# --- Minecraft's barrier (1.8's id 166): nothing to see unless one is held. A whole
-# block that stands in everything's way, gives no light, and breaks like bedrock does
-# (hard -1: unbreakable in survival, gone at once in creative, and nothing dropped).
-# What it shows you see only holding one in your hand, as Minecraft's does - the world
-# reads it as air (render.c's seen) - and it lives in the operator items tab
-# (tools/items.py's T_OP), which the creative inventory shows only with cheats on.
-# The model is glass's: the light of both kinds goes through it, as the modern
-# BarrierBlock's does (propagatesSkylightAbove, no occlusion), while the cube still
-# stands in the way of anything that moves.
-b('BARRIER', 166, model='glass', tex='barrier', hard=-1)
 
-# --- the Nether and the End structures (the 1.17 merge): the blocks the fortresses,
-# strongholds, End portals and the dragon leave. The rest of the Nether's and the End's
-# blocks already live above (netherrack, soul sand, quartz, the nyliums...); these are
-# the ones only a structure or the End needed. They fill the nine-bit state space exactly.
-b('NETHER_BRICK', 112, tex='nether_brick', hard=2.0, tool='pickaxe')
-b('NETHER_BRICK_FENCE', 113, model='fence', tex='nether_brick', hard=2.0, tool='pickaxe')
-for v, d in [(0, 'E'), (1, 'W'), (2, 'S'), (3, 'N')]:
-    b(f'NETHER_BRICK_STAIRS_{d}', 114, v, model='stairs', tex='nether_brick', hard=2.0, tool='pickaxe')
-b('END_PORTAL', 119, model='endportal', tex='@end_portal', light=15, hard=-1)
-FRAME = {'top': 'endframe_top', 'side': 'endframe_side', 'bottom': 'end_stone'}
-b('END_PORTAL_FRAME', 120, model='frame', tex=FRAME, light=1, hard=-1, box=[(0, 0, 0, 16, 13, 16)])
-b('END_PORTAL_FRAME_EYE', 120, 4, model='frame', tex=dict(FRAME, eye='endframe_eye'), light=1, hard=-1,
-  box=[(0, 0, 0, 16, 13, 16), (4, 13, 4, 12, 16, 12)])
-b('END_STONE', 121, tex='end_stone', hard=3.0, tool='pickaxe')
-b('DRAGON_EGG', 122, model='egg', tex='dragon_egg', light=1, hard=3.0, box=[(1, 0, 1, 15, 16, 15)])
-b('IRON_BARS', 101, model='pane', tex='iron_bars', hard=5.0, tool='pickaxe')
-for v, d in [(0, 'E'), (1, 'W'), (2, 'S'), (3, 'N')]:
-    b(f'STONE_BRICK_STAIRS_{d}', 109, v, model='stairs', tex='stonebrick', hard=1.5, tool='pickaxe')
-# BlockDoor (iron): the lower half's four facing states, the four open ones, then the upper half
-for v, d in [(0, 'E'), (1, 'S'), (2, 'W'), (3, 'N')]:
-    b(f'IRON_DOOR_LOWER_{d}', 71, v, model='door', tex='door_iron_lower', hard=5.0, tool='pickaxe')
-for v, d in [(0, 'E'), (1, 'S'), (2, 'W'), (3, 'N')]:
-    b(f'IRON_DOOR_LOWER_{d}_OPEN', 71, v + 4, model='door', tex='door_iron_lower', hard=5.0, tool='pickaxe')
-b('IRON_DOOR_UPPER', 71, 8, model='door', tex='door_iron_upper', hard=5.0, tool='pickaxe')
-# BlockButton on a wall: one state, its face is the wall it is put on (the model's box is the
-# east face; the renderer/phys reads the state the way it reads a torch's)
-b('STONE_BUTTON', 77, 1, model='button', tex='stone', hard=0.5, box=[(0, 6, 5, 2, 10, 11)])
-
-assert len(S) <= NSTATES, len(S)
+assert len(S) <= 255, len(S)
 
 MODELS = ['none', 'cube', 'cross', 'liquid', 'torch', 'slab', 'layer', 'cactus', 'leaves', 'glass', 'flat', 'vine',
-          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed', 'portal', 'plate', 'plate_down',
-          'frame', 'endportal', 'egg', 'button']
+          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed']
 TOOLS = [None, 'pickaxe', 'axe', 'shovel', 'shears', 'sword']
 
 # --- the Nether and the End: only in NumBlocks.nwa (built with NB_DIMS; NumPlay's NumBlocks has no room).
@@ -488,11 +314,7 @@ def header():
            'enum {']
     for i, s in enumerate(S):
         out.append(f'  B_{s["name"]} = {i},   /* {s["id"]}:{s["meta"]} */')
-    out += [f'  B_COUNT = {len(S)}', '};', '',
-            "/* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the",
-            ' * slab buffers, the edit records), so B_COUNT states are defined and NSTATES is',
-            ' * what the per-state tables are sized for */',
-            f'#define NSTATES {NSTATES}', '']
+    out += [f'  B_COUNT = {len(S)}', '};', '']
     out.append('enum { ' + ', '.join(f'M_{m.upper()}' for m in MODELS) + ' };')
     out.append('enum { T_NONE, ' + ', '.join(f'T_{t.upper()}' for t in TOOLS[1:]) + ' };')
     out += ['', '/* the Nether and the End (NumBlocks.nwa only) */', '#if NB_DIMS', 'enum {']

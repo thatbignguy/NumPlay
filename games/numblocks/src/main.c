@@ -23,74 +23,23 @@ static uint32_t last, acc, keys_held, autosave;
 static float px, py, pz;
 static bool in_world;      /* playing; else the title screens, the world turning behind */
 static float title_yaw;
-/* The title's backdrop comes from Personalisation's Panorama pick (opt.panorama). This
- * is the whole state of it, packed into one byte: the pick showing (PAN_WORLD..
- * PAN_NETHER) and the setting it was picked for (Random re-picks each entry). */
-static struct {
-  uint8_t show : 3, pick : 3;
-} title_pan;
-/* The fixed backdrop world: one seed, its overworld and its nether, the camera always
- * at the same spot (the feet; the same block the pick was noted in). */
-#define TITLE_SEED 123
-static const float title_spot[2][3] = {
-  {138.5f, 63.0f, 548.5f},   /* (PAN_OVER) the overworld */
-  {4.5f, 33.0f, 106.5f},     /* (PAN_NETHER) the same world's nether */
-};
 
 void camera_reset(void) {
   px = pl.x, py = pl.y, pz = pl.z;
   player_look(pl.x, pl.y + 1.62f, pl.z, pl.yaw, pl.pitch);
 }
 
-/* The title's backdrop (Personalisation's Panorama): a fixed pick keeps itself every
- * visit; Random rolls one of the three. The roll mixes the clock - never the world's
- * rnd() stream, which the tests replay - with plat_entropy(), which says where this
- * run began, so even a run's first pick is a roll rather than always the same one.
- * It happens on every entry, so Random shows a different one on different visits. */
-static void title_pick(void) {
-  uint8_t p = opt.panorama <= PAN_NETHER ? opt.panorama : PAN_RANDOM;
-  if (p == PAN_RANDOM) {
-    uint64_t r = (uint64_t)(plat_millis() ^ plat_entropy() * 2654435761u) * 0x9E3779B97F4A7C15ull + perf_frames;
-    r ^= r >> 30;
-    r *= 0xBF58476D1CE4E5B9ull;
-    r ^= r >> 31;
-    title_pan.show = (uint8_t)(PAN_WORLD + r % 3);
-  } else title_pan.show = p;
-  title_pan.pick = p;
-}
-
-/* the backdrop world of the pick: the world played last (the player where they left
- * off), else a world of seed 0; or the fixed world - TITLE_SEED, the overworld or its
- * nether - with the camera at the spot above, so a fresh install has a world to show
- * without one being played, and the nether can be seen without walking to a portal */
-static void title_backdrop(void) {
-  if (title_pan.show == PAN_WORLD) {
-    if (!opt.last_world || !load_world(opt.last_world)) {
-      world_type = WT_DEFAULT;
-      memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
-      world_new(0, "nbt");
-      player_spawn();
-    }
-  } else {
-    /* (the fixed world: never flat, whichever world was played last) */
-    world_type = WT_DEFAULT;
-    memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
-    world_new(TITLE_SEED, "nbt");
-    if (title_pan.show == PAN_NETHER) world_switch_dim(DIM_NETHER);
-    const float *s = title_spot[title_pan.show - PAN_OVER];
-    pl.x = s[0], pl.y = s[1], pl.z = s[2];
-    pl.vx = pl.vy = pl.vz = 0;
-  }
-  world_follow(pl.x, pl.y, pl.z);
-  camera_reset();
-}
-
-/* the title's backdrop pick, and the world behind it */
+/* the title's backdrop: the saved world where the player is, else a world of seed 0 */
 static void title(void) {
   in_world = false;
-  title_pick();
-  title_backdrop();
+  if (!opt.last_world || !load_world(opt.last_world)) {
+    world_type = WT_DEFAULT;
+    world_new(0, "nbt");
+    player_spawn();
+  }
   gui_menu(GUI_TITLE);
+  world_follow(pl.x, pl.y, pl.z);
+  camera_reset();
 }
 
 /* the loading screen, drawn once before the world is built */
@@ -98,17 +47,13 @@ static void loading(void) {
   gui = GUI_LOADING;
   render_frame(NULL, game_time);
   world_follow(pl.x, pl.y, pl.z);
-  /* the camera starts free of any entity's eyes: what it rode was not saved */
-  spectate = -1, spec_eye = 0;
-  /* standing inside blocks (the world changed under a saved player): up to the first free space
-   * (a spectator goes through them: it stays where it was saved) */
-  if (pl.mode != 2)
-    for (int k = 0; k < dim_height() - dim_min_y(); k++) {
-      int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
-      if (!(blk_flags[world_get(x, y, z)] & BF_SOLID) && !(blk_flags[world_get(x, y + 1, z)] & BF_SOLID)) break;
-      pl.y = (float)(y + 1);
-      world_follow(pl.x, pl.y, pl.z);
-    }
+  /* standing inside blocks (the world changed under a saved player): up to the first free space */
+  for (int k = 0; k < WORLD_H; k++) {
+    int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
+    if (!(blk_flags[world_get(x, y, z)] & BF_SOLID) && !(blk_flags[world_get(x, y + 1, z)] & BF_SOLID)) break;
+    pl.y = (float)(y + 1);
+    world_follow(pl.x, pl.y, pl.z);
+  }
   camera_reset();
   gui = GUI_NONE;
   in_world = true;
@@ -154,12 +99,15 @@ void game_init(void) {
 #endif
   last = plat_millis();
   if (start_in_world) {
-    new_world(1, start_seed, 0, false, start_type, "New World", start_type == WT_FLAT ? FLAT_DEFAULT : FLAT_DEFAULT);
-    game_time = start_type == WT_TEST ? 6000 : 1000;
+    new_world(1, start_seed, 0, false, start_type, T("New World"));
+    game_time = 1000;
 #ifdef BENCH_FALL
     pl.mode = 1, pl.y += BENCH_FALL;   /* (timing a fall from that high, in Creative: no harm) */
 #endif
     loading();
+#if defined(BENCH_DIM) && NB_DIMS
+    dims_go(BENCH_DIM);   /* (timing the Nether or the End: through a portal at once) */
+#endif
     return;
   }
   title();
@@ -173,42 +121,13 @@ bool game_frame(void) {
   last = now;
   if (in_world && gui == GUI_NONE && dt > perf_max) perf_max = dt;
   if (dt > 250) dt = 250;
-  if (dt > 0) {
-    float inst = 1000.0f / (float)dt;
-    if (dbg_fps <= 0) dbg_fps = inst;
-    else dbg_fps += (inst - dbg_fps) * 0.05f;
-  }
   uint32_t k = plat_keys();
   uint32_t pressed = k & ~keys_held;
   keys_held = k;
-  static bool pick_held, debug_held, pair_held, pair_used;
-  /* one scan a frame for both (each scan is a call into the calculator) */
-  uint64_t raw = plat_scan();
-  bool pick = opt.keys[A_PICK] < 64 && (raw >> opt.keys[A_PICK] & 1);
+  static bool pick_held;
+  bool pick = opt.keys[A_PICK] < 64 && (plat_scan() >> opt.keys[A_PICK] & 1);
   if (pick && !pick_held && in_world && gui == GUI_NONE && !pl.dead) player_pick_block();
   pick_held = pick;
-  /* sin + cos: the game mode switcher, as Minecraft's F3 + F4. The pair wins over the
-   * debug overlay sin alone gives, so sin's own toggle waits until it is let go, and is
-   * dropped if cos was pressed while it was held. */
-  uint32_t dbg_key = opt.keys[A_DEBUG] < 64 ? opt.keys[A_DEBUG] : 64;
-  bool sin = opt.keys[A_DEBUG] < 64 && (raw >> opt.keys[A_DEBUG] & 1);
-  bool cos = dbg_key + 1 < 64 && (raw >> (dbg_key + 1) & 1);
-  if (sin && cos && !pair_held) {
-    /* the pair's first frame: cos pressed with sin held (or the other way round) */
-    if (gui == GUI_MODE) mode_next();
-    else if (in_world && gui == GUI_NONE) mode_open();
-    pair_used = true;
-  }
-  pair_held = sin && cos;
-  if (debug_held && !sin) {
-    if (gui == GUI_MODE) mode_use();   /* sin let go: the mode outlined */
-    else if (in_world && gui == GUI_NONE && !pair_used) {
-      opt.debug = (uint8_t)!opt.debug;
-      save_options();
-    }
-    pair_used = false;
-  }
-  debug_held = sin;
   if (k & K_HOME) {
     /* Home: save and quit, from anywhere */
     if (in_world) {
@@ -236,8 +155,8 @@ bool game_frame(void) {
         while (b > a && name_text[b - 1] == ' ') b--;
         name_text[b] = 0;
         world_unique_name(name_text + a, name);
-        new_world(slot, parse_seed(), create_mode, create_cheats, create_type, name, create_preset);
-        game_time = create_type == WT_TEST ? 6000 : 0;   /* the showcase stands in the noon sun */
+        new_world(slot, parse_seed(), create_mode, create_cheats, create_type, name);
+        game_time = 0;
         loading();
         save_world();
         break;
@@ -257,12 +176,7 @@ bool game_frame(void) {
     }
   }
   if (!in_world) {
-    /* the title: its backdrop turns slowly (a world, played or fixed), nothing moves */
-    if (opt.panorama != title_pan.pick) {
-      /* the setting changed under the title (Options, Personalisation): pick again */
-      title_pick();
-      title_backdrop();
-    }
+    /* the title: the world turns slowly, nothing moves */
     title_yaw += dt * 0.006f;
     Camera c = {pl.x, pl.y + 1.62f, pl.z, title_yaw, 8};
     render_frame(gui == GUI_TITLE ? &c : NULL, game_time);
@@ -288,7 +202,10 @@ bool game_frame(void) {
     if (pl.pitch > 90) pl.pitch = 90;
     if (pl.pitch < -90) pl.pitch = -90;
   }
-  bool paused = gui == GUI_PAUSE || gui == GUI_MODE || gui == GUI_OPTIONS || gui == GUI_CTRLMENU || gui == GUI_VIDEO || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS || gui == GUI_MODS || gui == GUI_PERSONAL;
+  bool paused = gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS;
+#if NB_DIMS
+  paused = paused || gui == GUI_CREDITS;   /* (the player is in no world while they roll) */
+#endif
   if (!paused) acc += dt;
   /* a key pressed on a frame between ticks waits for the next tick (else that press is lost) */
   static uint32_t game_pressed;
@@ -300,7 +217,6 @@ bool game_frame(void) {
     game_pressed = 0;
     ents_tick();
     world_tick();
-    end_tick();
     gui_tick();
     hand_tick();
     ticks_run++;
@@ -319,10 +235,8 @@ bool game_frame(void) {
   world_follow(pl.x, pl.y, pl.z);
   float t = acc / 50.0f;
   tick_frac = t;
-  /* the eyes: a spectator riding an entity has that entity's height, its own 1.62
-   * otherwise (1.54 sneaking, as Minecraft's) */
-  float eye = spec_eye ? spec_eye : pl.sneaking ? 1.54f : 1.62f;
-  Camera c = {px + (pl.x - px) * t, py + (pl.y - py) * t + eye, pz + (pl.z - pz) * t, pl.yaw, pl.pitch};
+  Camera c = {px + (pl.x - px) * t, py + (pl.y - py) * t + (pl.sneaking ? 1.54f : 1.62f), pz + (pl.z - pz) * t, pl.yaw,
+              pl.pitch};
   if (opt.bobbing && !pl.flying) {
     /* EntityRenderer.setupViewBobbing: the eyes sway side to side and dip with each step */
     float w = (pl.prev_walked + (pl.walked - pl.prev_walked) * t) * 3.14159265f;
@@ -336,6 +250,13 @@ bool game_frame(void) {
   if (!pl.dead) player_look(c.x, c.y, c.z, c.yaw, c.pitch);
   if (pl.dead) c.y = pl.y + 0.3f;
   if (pl.sleep_timer) c.y = pl.y + 0.3f;
+#if NB_DIMS
+  if (gui == GUI_CREDITS) {
+    render_frame(NULL, game_time);
+    perf_frames++;
+    return true;
+  }
+#endif
   render_frame(&c, game_time);
   perf_frames++;
   return true;
