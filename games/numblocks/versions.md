@@ -1,3 +1,16 @@
+## 1.5.61
+**The 1.17 scaffolding that this fork replaced is gone**
+
+The merge brought upstream's separate `NB_DIMS` implementation (its own `dims.c`, tables,
+generators and tests) beside the fork's. Nothing compiles it now: this fork's modern Nether,
+`gen_end.h`, `gen_fortress.h`, `gen_stronghold.h`, `end.c` and `mob_end.h` are the live ones.
+The superseded files are removed so there is one implementation to read and no stale
+`build/apps`/`NB_DIMS` assumptions left in the tree.
+
+`make test`, `make host`, `make build`, `make check`,
+`make -C games/numblocks-interest build check`, `test_games --game numblocks` and
+`test_numblocks_progress` pass; the app still fits CUSTOM_RAM (133652 B).
+
 ## 1.5.60
 **The strongholds are laid out ahead, and the remaining gaps are written down**
 

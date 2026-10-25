@@ -15,6 +15,7 @@ NB_GAME = $(NB)/src/main.c $(NB)/src/world.c $(NB)/src/edits.c $(NB)/src/portal.
   $(NB)/src/tick.c $(NB)/src/gui.c $(NB)/src/hand.c $(NB)/src/save.c $(NB)/src/end.c $(NB)/src/data.c \
   $(NB)/src/names.c $(NB)/src/command.c $(NB)/src/gen.c $(NB)/src/test_data.c
 NB_PLAT = $(NB)/src/plat_eadk.c
+NB_HEADERS = $(wildcard $(NB)/src/*.h) $(NB)/../common/epsilon_app.h $(NB)/../common/epsilon_files.h
 FIN_SRC = ../finance/src/main.c
 
 CFLAGS = -std=gnu11 $(shell $(NWLINK) eadk-cflags-device)
@@ -35,7 +36,7 @@ $(BUILD_DIR)/fin.o: $(FIN_SRC) ../common/epsilon_app.h | $(BUILD_DIR)
 
 # NumBlocks with main renamed; its app-name sections are stripped so only
 # Interest's name survives the final link
-$(BUILD_DIR)/nb.o: $(NB_GAME) $(NB_PLAT) | $(BUILD_DIR)
+$(BUILD_DIR)/nb.o: $(NB_GAME) $(NB_PLAT) $(NB_HEADERS) | $(BUILD_DIR)
 	@echo "CC      numblocks (as numblocks_main)"
 	$(Q) $(CC) $(CFLAGS) -Dmain=numblocks_main -Wl,--relocatable -nostartfiles -nostdlib \
 	  -Wl,-e,numblocks_main -flinker-output=nolto-rel $(NB_GAME) $(NB_PLAT) -o $@
