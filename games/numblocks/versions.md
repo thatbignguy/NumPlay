@@ -1,3 +1,31 @@
+## 1.5.63
+**The version lives in the source again, and Fullbright comes back**
+- `NB_VERSION` is back (1.5.63), and the title screen reads "Numblocks custom
+  1.5.63" instead of upstream's hardcoded "NumBlocks 1.0". Upstream has no F3
+  overlay, so the version shows on the title screen only for now.
+- Options gains "Mods and Cheats..." below Controls, opening a list screen with
+  Fullbright: ON/OFF. It is the world's screen: it opens only from a world's
+  Options with cheats on, and says so in the chat otherwise. Fullbright wraps
+  every light the picture is drawn with (faces, shaped blocks, plants, water,
+  the hand, entities, particles, rain and snow) without touching the light
+  engine: the sky, fog and light tables stay as they are. The setting sits in
+  the Options byte that used to be padding, so `numblocks.cfg` stays 36 bytes
+  and older records read it as off.
+- `--cheats` added to `build/play`, so the screen can be reached without a
+  world created through the title.
+
+## 1.5.62
+**Rebuilt on upstream 1.17.0's NumBlocks**
+
+The fork's Nether, End, structures, mobs and textures are removed in favour of the
+official 1.17.0 code, block for block: the 1.8-style Nether with its fortresses and
+biomes, the End with its island, pillars, crystals and dragon, and the strongholds are
+now upstream's. The fork's own additions are being re-applied on top.
+
+`make -C games/numblocks host test build check`, `build/unit`, `build/unit_np`,
+`build/dims_test`, `build/np_load`, `build/play`, `output/numblocks.nwa` and
+`output/numblocks.bin` pass.
+
 ## 1.5.61
 **The 1.17 scaffolding that this fork replaced is gone**
 

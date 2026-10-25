@@ -19,6 +19,12 @@
  * game uses a few), not in the RAM that calculator software since 23.2 gives apps (148928 bytes) */
 static uint16_t *strip;
 
+/* Mods and Cheats, Fullbright: the light the picture is drawn with. While it is on and the
+ * world allows cheats, every face answers sky 15 and block 15, as if a level-15 light stood
+ * next to every block. vl[] itself is untouched: the light engine, mob spawning, burning and
+ * the rest of the game still read the real light; so do the sky, the fog and the light tables. */
+static inline int draw_light(int lb) { return opt.fullbright && cheats_on() ? 0xFF : lb; }
+
 /* per frame */
 static float ox, oy, oz;           /* camera, cache coordinates */
 static float fwx, fwy, fwz, rgx, rgz, upx, upy, upz;
@@ -444,7 +450,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
     if (tc >= 0) {
       tc = cracked(tc, i, u, v);
       last_t = t;
-      int lt = vl[came_from(i, face, x, y, z)];
+      int lt = draw_light(vl[came_from(i, face, x, y, z)]);
       uint16_t c = lit565((uint16_t)tc, f, lt, t * R->len);
       if (R->wa) {
         c = pack((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
@@ -460,7 +466,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
     if (hit_cross(blk_tex[b][3], lx, ly, lz, R->dx, R->dy, R->dz, 0, t1, &h)) {
       int tc = texel565(b, blk_tex[b][3], h.u, h.v, col);   /* (hit_cross met a texel that is there) */
       last_t = t + h.t;
-      uint16_t c = lit565((uint16_t)tc, 1, vl[i], (t + h.t) * R->len);
+      uint16_t c = lit565((uint16_t)tc, 1, draw_light(vl[i]), (t + h.t) * R->len);
       if (R->wa) c = pack((r5(c) * (256 - R->wa) + R->wr * R->wa) >> 8, (g6(c) * (256 - R->wa) + R->wg * R->wa) >> 8,
                        (b5(c) * (256 - R->wa) + R->wb * R->wa) >> 8);
       else hit_kind = 3, hit_i = i;
@@ -498,7 +504,7 @@ static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y
       int tc = texel565(b, tex, h.u, h.v, col);
       if (tc >= 0) {
         /* (a face R->inside the cell is lit by the cell's light, one on its side by the cell in front) */
-        int lt = vl[m == M_LIQUID || m == M_TORCH || h.t > 0 ? i : came_from(i, face, x, y, z)];
+        int lt = draw_light(vl[m == M_LIQUID || m == M_TORCH || h.t > 0 ? i : came_from(i, face, x, y, z)]);
         uint16_t c = lit565((uint16_t)tc, h.face, lt, (t + h.t) * R->len);
         if (!R->wa && one_box(b) && i != cam_i) {
           /* a face of a block of one box (slab, snow layer...): the pixels between can find it too */
@@ -717,14 +723,14 @@ static int face_pixel(float dx, float dy, float dz, int plane, int f, bool wet) 
     /* on the cell's side: lit by the cell in front, which must be clear */
     static const int8_t nx[6] = {0, 0, 0, 0, -1, 1}, ny[6] = {-1, 1, 0, 0, 0, 0}, nz[6] = {0, 0, -1, 1, 0, 0};
     int px = x + nx[f], py = y + ny[f], pz = z + nz[f];
-    light = 15;
+    light = draw_light(15);
     if ((unsigned)px < VCX && (unsigned)py < VCY && (unsigned)pz < VCZ) {
       int fi = VC_I(px, py, pz);
       /* hidden, or something stands in front: trace (wet: water in front is clear) */
       if (vc[fi] != B_AIR && !(wet && is_water(VB(fi)))) return -1;
-      light = vl[fi];
+      light = draw_light(vl[fi]);
     }
-  } else light = vl[i];
+  } else light = draw_light(vl[i]);
   int u, v;
   switch (f) {
     case 0: case 1: u = (int)(lx * 16); v = (int)(lz * 16); break;
@@ -936,18 +942,18 @@ static __attribute__((unused)) void plane_fill(uint16_t (*cb)[RW], float (*zb)[R
         if (cube) ok = !(edge & 15);
         else ok = one_box(bk) && blk_box[bk][0][ka + ((f & 1) ? 3 : 0)] == edge, q = blk_box[bk][0];
         if (!ok) goto miss;
-        int light = vl[i];
+        int light = draw_light(vl[i]);
         if (!(edge & 15)) {
           /* on the cell's side: lit by the cell in front, which must be clear */
           int px = c[0] + nx[f], py = c[1] + ny[f], pz = c[2] + nz[f];
-          light = 15;
+          light = draw_light(15);
           if ((unsigned)px < VCX && (unsigned)py < VCY && (unsigned)pz < VCZ) {
             int fi = VC_I(px, py, pz);
             if (vc[fi] != B_AIR && !(wet && is_water(VB(fi)))) {
               ok = 0;
               goto miss;
             }
-            light = vl[fi];
+            light = draw_light(vl[fi]);
           }
         }
         tex = blk_front[bk] ? face_tex(bk, f, c[0], c[1], c[2]) : blk_tex[bk][f];
@@ -1002,7 +1008,7 @@ static int water_pixel(float dx, float dy, float dz, int wplane, int plane, int 
   int u = (int)((hx - x) * 16), v = (int)((hz - z) * 16), r, g, bb;
   u = u < 0 ? 0 : u > 15 ? 15 : u, v = v < 0 ? 0 : v > 15 ? 15 : v;
   if (texel_rgb(b, face_tex(b, 1, x, y, z), u, v, z * VCX + x, &r, &g, &bb) < 0) return -1;
-  uint16_t w = lit(r, g, bb, 1, vl[i], t * sqrtf(dx * dx + dy * dy + dz * dz));
+  uint16_t w = lit(r, g, bb, 1, draw_light(vl[i]), t * sqrtf(dx * dx + dy * dy + dz * dz));
   int c = face_pixel(dx, dy, dz, plane, f, true);
   if (c < 0) return -1;
   return pack((r5((uint16_t)c) * 106 + r5(w) * 150) >> 8, (g6((uint16_t)c) * 106 + g6(w) * 150) >> 8,
@@ -1072,7 +1078,7 @@ static uint16_t agreed(float dx, float dy, float dz, const Sample *a, bool one) 
       last_t = h.t;
       int tc = texel565(b, blk_tex[b][3], h.u, h.v, z * VCX + x);
       float d2 = h.t * h.t * (dx * dx + dy * dy + dz * dz);
-      return lit565((uint16_t)tc, 1, vl[i], d2 > fog0 * fog0 ? sqrtf(d2) : 0);
+      return lit565((uint16_t)tc, 1, draw_light(vl[i]), d2 > fog0 * fog0 ? sqrtf(d2) : 0);
     }
   }
   last_t = 1e9f;
@@ -1185,7 +1191,7 @@ int held_texel(int b, int face, int u, int v) {
 }
 
 /* how lit the player's hand is (0..32): the light where the eyes are */
-int view_light(void) { return light_shade(0, cam_i >= 0 ? vl[cam_i] : 15); }
+int view_light(void) { return light_shade(0, draw_light(cam_i >= 0 ? vl[cam_i] : 15)); }
 
 static void ents_frame(void) {
   ndraws = 0;
@@ -1222,7 +1228,7 @@ static void ents_frame(void) {
     d->x0 = r[0], d->y0 = r[1], d->x1 = r[2], d->y1 = r[3];
     d->e = e, d->ex = ex, d->ey = ey, d->ez = ez, d->dist = dist;
     int cx = (int)floorf(ex), cy = (int)floorf(ey + 0.2f), cz = (int)floorf(ez);
-    d->light = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz < VCZ ? vl[VC_I(cx, cy, cz)] : 15;
+    d->light = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz < VCZ ? draw_light(vl[VC_I(cx, cy, cz)]) : draw_light(15);
     ndraws++;
   }
 }
@@ -1512,7 +1518,7 @@ static void particles_strip(int py0, int rows, uint16_t (*cb)[RW], float (*zb)[R
     int half = p->life & (RAIN_DROP | P_FLOAT) ? 1 : (int)(0.05f / t / TAN_V * RH / 2 + 0.5f);   /* (drops: a texel or two) */
     if (half < 1) half = 1;
     int cx = (int)floorf(x), cy = (int)floorf(y), cz = (int)floorf(z);
-    int lb = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz < VCZ ? vl[VC_I(cx, cy, cz)] : 15;
+    int lb = (unsigned)cx < VCX && (unsigned)cy < VCY && (unsigned)cz < VCZ ? draw_light(vl[VC_I(cx, cy, cz)]) : draw_light(15);
     uint16_t c = shade565(p->c, light_shade(0, lb));
     for (int yy = (int)sy - half + 1; yy <= (int)sy + half - 1 + (half == 1); yy++) {
       if (yy < py0 || yy >= py0 + rows || yy < 0) continue;
@@ -1600,8 +1606,8 @@ static void rain_frame(void) {
         uint32_t h = col_hash(wx, wz);
         float rnd1 = (h & 0xFFFF) / 65536.0f, rnd2 = (h >> 16) / 65536.0f;
         /* the light where the sheet meets the player's height, or the ground */
-        int ly = (top > l ? top : l) - vc_y0, lb = 15;
-        if ((unsigned)ly < VCY) lb = vl[VC_I(lx, ly, lz)];
+        int ly = (top > l ? top : l) - vc_y0, lb = draw_light(15);
+        if ((unsigned)ly < VCY) lb = draw_light(vl[VC_I(lx, ly, lz)]);
         s->snow = temp_at(wx, y0, wz) < 0.15f;
         if (!s->snow) {
           /* rows scroll down 3 to 4 blocks a second... (d5 in renderRainSnow) */
@@ -2015,7 +2021,8 @@ static uint32_t strip_hash(void) {
 }
 static bool still_screen(void) {
   return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_WORLDS || gui == GUI_CREATE ||
-         gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS;
+         gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS ||
+         gui == GUI_MODS;
 }
 static void send_strip(int py, bool still) {
   if (still) {

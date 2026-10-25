@@ -10,7 +10,7 @@
 
 #define OPTIONS_REC "numblocks.cfg"
 
-Options opt = {2, 0, 100, 1, 1, 0, 0, 0, {0}};
+Options opt = {2, 0, 100, 1, 1, 0, 0, 0, 0, {0}};
 int64_t world_seed;
 uint8_t world_type;
 

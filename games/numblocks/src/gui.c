@@ -1203,7 +1203,7 @@ static int nbuttons, bcur;
 enum { B_NO, B_SINGLE, B_OPTIONS, B_QUITAPP, B_PLAY, B_CREATE, B_DELETE, B_CANCEL, B_MODE, B_SEED, B_DOCREATE,
        B_DODELETE, B_DIFF, B_GFX, B_LOOK, B_CLOUDS, B_BOB, B_DONE, B_BACK_GAME, B_SAVEQUIT, B_RESPAWN, B_TITLE,
        B_CONTROLS, B_CONTROLS_DONE, B_NAME, B_RENAME, B_DORENAME, B_RECREATE, B_CHEATS, B_LAN, B_LAN_MODE,
-       B_LAN_CHEATS, B_LAN_START, B_TYPE };
+       B_LAN_CHEATS, B_LAN_START, B_TYPE, B_MODS, B_FULLBRIGHT, B_MODS_DONE };
 int menu_choice;            /* an action for main.c (ACT_*) */
 int create_mode;            /* the new world's game mode */
 bool create_cheats;         /* and whether it allows cheats */
@@ -1514,7 +1514,16 @@ static void menu(int screen) {
       cat(t, T("View Bobbing: "), opt.bobbing ? T("ON") : T("OFF"));
       add_button(w / 2 - 155, h / 6 + 36, 150, 1, B_BOB, t);
       add_button(w / 2 + 5, h / 6 + 36, 150, 1, B_CONTROLS, T("Controls..."));
+      add_button(w / 2 - 100, h / 6 + 60, 200, 1, B_MODS, T("Mods and Cheats..."));
       add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_DONE, T("Done"));
+      break;
+    case GUI_MODS:
+      /* Mods and Cheats: a list screen, one switch for now. It opens only from a world's
+       * Options, with cheats on (press, B_MODS); the row is here so the next switch has
+       * somewhere to go */
+      cat(t, T("Fullbright: "), opt.fullbright ? T("ON") : T("OFF"));
+      add_button(w / 2 - 100, h / 6 - 12, 200, 1, B_FULLBRIGHT, t);
+      add_button(w / 2 - 100, h / 6 + 168, 200, 1, B_MODS_DONE, T("Done"));
       break;
     case GUI_CONTROLS:
       add_button(w / 2 - 100, h - 22, 200, 1, B_CONTROLS_DONE, T("Done"));
@@ -1656,6 +1665,22 @@ static void press(int id) {
       save_options();
       gui_menu(options_from);
       break;
+    case B_MODS:
+      /* The screen is the world's: cheats are the world's property, so from the title's
+       * Options (options_from is GUI_TITLE) there is no world to be cheating in and the
+       * answer is no even when the world the title shows behind was played with cheats.
+       * The refusal is the game mode switcher's: a line in the chat, and no screen opens. */
+      if (options_from != GUI_PAUSE || !cheats_on()) {
+        chat_add(T("Mods and cheats are only available if you turned cheats on when creating a world"), CHAT_RED);
+        break;
+      }
+      gui_menu(GUI_MODS);
+      break;
+    case B_FULLBRIGHT: opt.fullbright = !opt.fullbright; break;
+    case B_MODS_DONE:
+      save_options();
+      gui_menu(GUI_OPTIONS);
+      break;
     case B_CONTROLS: gui_menu(GUI_KEYS); break;
     case B_CONTROLS_DONE:
       if (opt.keys_seen != KEY_SHEET) opt.keys_seen = KEY_SHEET, save_options();
@@ -1697,6 +1722,7 @@ static void menu_input(uint32_t keys, uint32_t pressed) {
     /* Back: the way out of each screen */
     if (gui == GUI_PAUSE) gui = GUI_NONE;
     else if (gui == GUI_OPTIONS) press(B_DONE);
+    else if (gui == GUI_MODS) press(B_MODS_DONE);
     else if (gui == GUI_CONTROLS) press(B_CONTROLS_DONE);
     else if (gui == GUI_WORLDS || gui == GUI_CREATE || gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LAN)
       press(B_CANCEL);
@@ -2041,7 +2067,7 @@ static void menu_screen(void) {
     case GUI_TITLE:
       logo(30);
       splash("Also try Minecraft!", w / 2 + 72, 72, 1.25f + 0.08f * fabsf(sinf((frame_no % 60) * 0.1047f)));
-      text("NumBlocks 1.0", 2, h - 10, 0xFFFF, true);
+      text("Numblocks custom " NB_VERSION, 2, h - 10, 0xFFFF, true);
       text(T("Inspired by Minecraft, not affiliated with Mojang"),
            w - text_width(T("Inspired by Minecraft, not affiliated with Mojang")) - 2, h - (TALL ? 24 : 20), 0xFFFF, true);
       text(T("Made by Mason Chen as part of NumPlay"), w - text_width(T("Made by Mason Chen as part of NumPlay")) - 2, h - 10,
@@ -2099,6 +2125,7 @@ static void menu_screen(void) {
       break;
     }
     case GUI_OPTIONS: text_center(T("Options"), w / 2, 15, 0xFFFF); break;
+    case GUI_MODS: text_center(T("Mods and Cheats"), w / 2, 15, 0xFFFF); break;
     case GUI_CONTROLS: key_sheet(); break;
     case GUI_PAUSE: text_center(T("Game menu"), w / 2, 40, 0xFFFF); break;
     case GUI_LAN:
@@ -2350,7 +2377,7 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
     tint_rect(0, y0, SCREEN_W, rows, 0x0841, a > 30 ? 30 : a);
   }
   if (gui < GUI_PAUSE || gui == GUI_PAUSE || gui == GUI_DEATH || gui == GUI_LAN ||
-      ((gui == GUI_OPTIONS || gui == GUI_KEYS) && options_from == GUI_PAUSE))
+      ((gui == GUI_OPTIONS || gui == GUI_KEYS || gui == GUI_MODS) && options_from == GUI_PAUSE))
     hud();
   if (gui == GUI_NONE || gui == GUI_CHAT) chat_lines();
   if (pl.hurt_time > 0 && gui == GUI_NONE) {
@@ -2367,7 +2394,7 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
       menu_screen();
       break;
     case GUI_CHAT: chat_screen(); break;
-    case GUI_OPTIONS: case GUI_CONTROLS: case GUI_KEYS:
+    case GUI_OPTIONS: case GUI_CONTROLS: case GUI_KEYS: case GUI_MODS:
       if (options_from == GUI_PAUSE) dark_background();
       else dirt_background();
       if (gui == GUI_KEYS) keys_screen();

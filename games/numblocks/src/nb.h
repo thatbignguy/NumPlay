@@ -16,6 +16,10 @@
 #include "data.h"
 #include "../../common/np_text.h"
 
+/* the game's version (1.A.B); versions.md's first line says the same, and is bumped
+ * with every change: what the title screen shows */
+#define NB_VERSION "1.5.63"
+
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
   K_LEFT = 1 << 0, K_RIGHT = 1 << 1, K_UP = 1 << 2, K_DOWN = 1 << 3,      /* arrows: look */
@@ -301,7 +305,7 @@ void break_block_at(int x, int y, int z, bool drops);
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_MODS
 #if NB_DIMS
        , GUI_CREDITS   /* the End poem and the credits (gui.c) */
 #endif
@@ -331,6 +335,7 @@ typedef struct {
   uint8_t clouds, bobbing;
   uint8_t keys_seen;    /* the key sheet's version last shown (it opens when the keys change) */
   uint8_t last_world;   /* the world played last (its slot, 0: none): the title's backdrop */
+  uint8_t fullbright;   /* Mods and Cheats: see in the dark (only with cheats on) */
   uint32_t plays;       /* worlds opened so far: each world keeps the count when it was last played */
   uint8_t keys[24];     /* the key of each action (A_*): the calculator's number for it, 255 none */
 } Options;

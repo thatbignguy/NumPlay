@@ -659,6 +659,22 @@ int main(void) {
     CHECK(opt.keys[A_ATTACK] == 5 && opt.keys[A_USE] == 4);
     keys_reset();
   }
+  {
+    /* Fullbright fills the Options byte that used to be padding: the record stays 36 bytes,
+       byte 7, and a record written before it reads it as off */
+    CHECK(sizeof(Options) == 36);
+    CHECK((uint8_t *)&opt.fullbright - (uint8_t *)&opt == 7);
+    opt.fullbright = 1;
+    save_options();
+    uint32_t len;
+    const uint8_t *d = plat_load("numblocks.cfg", &len);
+    CHECK(d && len == sizeof opt && d[7] == 1);
+    opt.fullbright = 0;
+    load_options();
+    CHECK(opt.fullbright == 1);
+    opt.fullbright = 0;
+    save_options();
+  }
   printf("%s (%d recipes)\n", fails ? "FAILED" : "all good", N_RECIPES);
   return fails != 0;
 }
