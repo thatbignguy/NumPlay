@@ -27,7 +27,7 @@ static Journal jn[J_MAX];
 static int nj;
 static char prefix[8] = "nb1";
 static bool full;   /* a record could not grow: storage is full */
-static char edit_dim = 'r';   /* whose records these are: 'r' overworld, 'n' nether */
+static char edit_dim = 'r';   /* whose records these are: 'r' overworld, 'n' nether, 'e' the End */
 
 /* The merge: a record's entries and the journal's, in order, on their way into the
  * record. It has to hold the whole of a region's record, so it is sized for one:
@@ -58,7 +58,7 @@ bool edits_full(void) { return full; }
  * to its records), so they never travel to the other one's */
 void edits_set_dim(int dim) {
   if (nj) edits_flush();
-  edit_dim = dim ? 'n' : 'r';
+  edit_dim = dim == DIM_OVER ? 'r' : dim == DIM_NETHER ? 'n' : 'e';
   cache_ok = false;
 }
 

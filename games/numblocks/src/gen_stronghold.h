@@ -1,16 +1,7 @@
-/* NumBlocks.nwa only (NB_DIMS), included by gen_dims.h: strongholds (MapGenStronghold,
- * StructureStrongholdPieces). The three of a world are placed as 1.8.8 places them (a ring around the
- * world's middle, moved into a biome above the sea), laid out piece by piece from the same random, and
- * built into each chunk they cross after its populations, by the population boxes that hold them.
- *
- * What 1.8.8 draws from the population's random as it builds (which stone bricks are mossy or cracked,
- * the cobwebs, the torches, the eyes already in the portal's frames) is drawn here from the block's place,
- * so each block comes out the same whichever rows of its chunk are made. The liquid test that makes 1.8.8
- * leave a piece out looks at the terrain as made (the sea), from the chunk summaries. Silverfish are not
- * in NumBlocks: their stone bricks are stone bricks.
- *
- * The layout is made again in the scratch union U for each chunk inside a stronghold's box (a few hundred
- * pieces' tries); where the three are, their boxes and their stairs down are kept (ring). */
+/* Strongholds (MapGenStronghold, StructureStrongholdPieces), adapted to this fork:
+ * the 1.8.8 pieces, written straight into the 9-bit slab. Included by gen.c. */
+#ifndef NB_GEN_STRONGHOLD_H
+#define NB_GEN_STRONGHOLD_H
 
 enum { SP_STRAIGHT, SP_PRISON, SP_LEFT, SP_RIGHT, SP_ROOM, SP_STAIRS_STRAIGHT, SP_STAIRS, SP_CROSSING, SP_CHEST,
        SP_LIBRARY, SP_PORTAL, SP_N, SP_CORRIDOR = SP_N, SP_START };
@@ -42,8 +33,8 @@ typedef struct {
     SPiece p[SMAX];
     uint16_t pend[SMAX];
 } Hold;
-#define SH ((Hold *)(void *)&U)
-_Static_assert(sizeof(Hold) <= sizeof U, "a stronghold's layout fits the scratch union");
+#define SH ((Hold *)(void *)U)
+_Static_assert(sizeof(Hold) <= GEN_SCRATCH, "a stronghold's layout fits the scratch union");
 /* piece i as an FPiece (gen_fortress.h's boxes and turns) */
 static FPiece sp_at(int i) {
     const SPiece *s = &SH->p[i];
@@ -64,7 +55,6 @@ static struct {
     int16_t cx[3], cz[3], bb[3][6], mid[3][3];
 } ring;
 
-uint8_t *gen_hi;   /* (world.c) the ninth bits of the slab gen_slab fills, a bit a cell (none: NULL) */
 
 static double jr_double(JRand *r) { return (double)jr_double_bits(r) * (1.0 / 9007199254740992.0); }
 
@@ -287,14 +277,14 @@ static void sh_layout(int s) {
  * biome within range, at random (as gen_spawn) */
 static int sh_biome(int x, int z, int range, JRand *r, int *ox, int *oz) {
     int i0 = (x - range) >> 2, j0 = (z - range) >> 2, w = ((x + range) >> 2) - i0 + 1, hh = ((z + range) >> 2) - j0 + 1;
-    uint8_t *rows = (uint8_t *)U.lay + sizeof(i32) * LAY_INTS; /* 8 rows, after the layer scratch */
+    uint8_t *rows = (uint8_t *)U->lay + sizeof(i32) * LAY_INTS; /* 8 rows, after the layer scratch */
     int found = 0, k1 = 0;
     for (int tz = 0; tz < hh; tz += 8) {
         int th = hh - tz < 8 ? hh - tz : 8;
         for (int tx = 0; tx < w; tx += 43) {
             int tw = w - tx < 43 ? w - tx : 43;
-            i32 *rm = U.lay;
-            lay_mem = U.lay + 43 * 8;
+            i32 *rm = U->lay;
+            lay_mem = U->lay + 43 * 8;
             lay_cap = LAY_INTS - 43 * 8;
             lay_top = 0;
             layers_rivermix(i0 + tx, j0 + tz, tw, th, rm);
@@ -344,7 +334,7 @@ static void sh_ring(void) {
  * chunks out, less 115 blocks for the biome, and its pieces end within 128 of it */
 static int sh_far(int cx, int cz) {
     i64 x = cx * 16 + 8, z = cz * 16 + 8;
-    return !g_flat && !gd_dim && x * x + z * z > 240 * 240;
+    return !g_flat && !g_dim && x * x + z * z > 240 * 240;
 }
 
 /* ---- building a piece into the slab of chunk C: its blocks, 9 bits (gen_hi), where 1.8.8's population
@@ -361,17 +351,8 @@ static int sb_cell(const SB *b, int x, int y, int z) {
     if (wx < b->x0 || wx > b->x1 || wz < b->z0 || wz > b->z1 || wy < 1 || ly < 0 || ly >= b->h) return -1;
     return (ly * 16 + (wz & 15)) * 16 + (wx & 15);
 }
-static int sb_get(const SB *b, int c) { return b->out[c] | (gen_hi ? (gen_hi[c >> 3] >> (c & 7) & 1) << 8 : 0); }
-static void sb_put(const SB *b, int c, int v) {
-    if (!gen_hi) {
-        if (v <= 255) b->out[c] = (uint8_t)v;
-        return;
-    }
-    b->out[c] = (uint8_t)v;
-    uint8_t m = (uint8_t)(1 << (c & 7));
-    if (v > 255) gen_hi[c >> 3] |= m;
-    else gen_hi[c >> 3] &= (uint8_t)~m;
-}
+static int sb_get(const SB *b, int c) { return b9_get(b->out, c); }
+static void sb_put(const SB *b, int c, int v) { b9_set(b->out, c, v); }
 static void sb_set(const SB *b, int x, int y, int z, int v) {
     int c = sb_cell(b, x, y, z);
     if (c >= 0) sb_put(b, c, v);
@@ -427,8 +408,8 @@ static int sb_stairs(int face, int m) {
 }
 static int sb_button(int face, int m) {
     static const uint8_t rot[4][5] = {{0, 1, 2, 3, 4}, {0, 4, 3, 2, 1}, {0, 1, 2, 4, 3}, {0, 4, 3, 1, 2}};
-    static const uint16_t blk[5] = {B_STONE_BUTTON_N, B_STONE_BUTTON_E, B_STONE_BUTTON_W, B_STONE_BUTTON_S,
-                                    B_STONE_BUTTON_N};
+    static const uint16_t blk[5] = {B_STONE_BUTTON, B_STONE_BUTTON, B_STONE_BUTTON, B_STONE_BUTTON,
+                                    B_STONE_BUTTON};
     return blk[rot[face][m]];
 }
 /* Stronghold.placeDoor (the doors are set as they are, unturned: 1.8.8 does not turn them) */
@@ -652,8 +633,9 @@ static void sp_parts(const SB *b) {
         int s = B_STONE_BRICK_STAIRS_E + sb_stairs(f, 3);
         for (int k = 4; k <= 6; k++) sb_set(b, k, 1, 4, s), sb_set(b, k, 2, 5, s), sb_set(b, k, 3, 6, s);
         for (int i = 0; i < 12; i++)
-            sb_set(b, fr[i][0], 3, fr[i][1],
-                   sb_rnd(b, fr[i][0], 3, fr[i][1], 4) > 0.9f ? B_END_PORTAL_FRAME_EYE : B_END_PORTAL_FRAME);
+            sb_set(b, fr[i][0], 3, fr[i][1], B_END_PORTAL_FRAME_EYE);   /* (the portal is awake: all twelve eyes) */
+        for (int x = 4; x <= 6; x++)
+            for (int z = 9; z <= 11; z++) sb_set(b, x, 3, z, B_END_PORTAL);
         sb_set(b, 5, 4, 6, B_MOB_SPAWNER);
         break;
     }
@@ -726,7 +708,7 @@ static int stronghold_prepare(int cx, int cz) { return sh_far(cx, cz) && sh_ring
 /* MapGenStructure.getClosestStrongholdPos: the nearest of the strongholds made (their first piece's middle),
  * else of all three (their start chunk's middle, at y 64) */
 bool gen_stronghold_near(int x, int z, int *out) {
-    if (g_flat || gd_dim) return false;
+    if (g_flat || g_dim) return false;
     sh_ring();
     for (int pass = 0; pass < 2; pass++) {
         int best = -1;
@@ -749,7 +731,7 @@ bool gen_stronghold_near(int x, int z, int *out) {
 
 /* the stronghold chest there, as made: 1 a corridor's, 2 a room's, 3 a library's (their lists); 0 none */
 int gen_stronghold_chest(int x, int y, int z) {
-    if (g_flat || gd_dim || !sh_far(x >> 4, z >> 4)) return 0;
+    if (g_flat || g_dim || !sh_far(x >> 4, z >> 4)) return 0;
     sh_ring();
     for (int s = 0; s < 3; s++) {
         const int16_t *bb = ring.bb[s];
@@ -771,7 +753,7 @@ int gen_stronghold_chest(int x, int y, int z) {
 
 /* (tests) stronghold s: out the start chunk's middle, the portal's middle (the frame's level), the pieces */
 int gen_stronghold_find(int s, int *out) {
-    if (g_flat || gd_dim || s < 0 || s > 2) return 0;
+    if (g_flat || g_dim || s < 0 || s > 2) return 0;
     sh_ring();
     sh_layout(s);
     out[0] = ring.cx[s] * 16 + 8, out[1] = ring.cz[s] * 16 + 8, out[5] = SH->n;
@@ -781,3 +763,6 @@ int gen_stronghold_find(int s, int *out) {
     }
     return 1;
 }
+
+
+#endif

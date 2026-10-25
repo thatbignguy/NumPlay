@@ -234,8 +234,16 @@ static inline uint16_t lava_tint(int r, int g, int b) {
   return pack((r + LAVA_R) / 2, (g + LAVA_G) / 2, b / 4);
 }
 static bool dim_nether(void) { return world_dim == DIM_NETHER; }
+static bool dim_end(void) { return world_dim == DIM_END; }
 
 static __attribute__((noinline)) uint16_t sky(float dx, float dy, float dz, float len) {
+  if (dim_end()) {
+    /* the End: a dark violet sky with no sun or moon; the fog is the same colour, so the
+     * island and its pillars stand in it. (The stars and the dragon's sky come with the
+     * End's own pass; this keeps the dimension readable now.) */
+    if (under_liq) return lava_tint(fog_r, fog_g, fog_b);
+    return pack(fog_r, fog_g, fog_b);
+  }
   if (dim_nether()) {
     /* the nether's sky is the fog's colour, which is the biome's under the camera
      * (render_frame set it): wastes #330808, crimson #330303, warped #1a051a,
@@ -337,6 +345,7 @@ static inline __attribute__((always_inline)) int floor_i(float x) {
 static inline __attribute__((always_inline)) int floor_i(float x) { return (int)floorf(x); }
 #endif
 static inline __attribute__((always_inline)) uint16_t sky_px(const SkyRow *k, float su, float dz) {
+  if (dim_end()) return pack(fog_r, fog_g, fog_b);
   /* (what depends on the ray's length compared squared: its root only where it is needed) */
   float l2 = k->len2 + su * su, len = 0, dy = k->dy;
   int gi = 128;
@@ -380,6 +389,7 @@ static inline __attribute__((always_inline)) uint16_t sky_px(const SkyRow *k, fl
  * sky_px's celestial work is dead here; what is left is its gradient and its cloud blend,
  * with the same arithmetic (identical pixels). */
 static __attribute__((noinline)) uint16_t sky_px_plain(const SkyRow *k, float su) {
+  if (dim_end()) return pack(fog_r, fog_g, fog_b);
   float l2 = k->len2 + su * su, len = 0, dy = k->dy;
   int gi = 128;
   if (dy * dy < 0.16f * l2) len = sqrtf(l2), gi = (int)(dy / len * 320);
@@ -2454,6 +2464,22 @@ void render_frame(const Camera *c, uint32_t tod) {
   float day = cosf(ang * 6.2831853f) * 2 + 0.5f;
   if (day < 0) day = 0;
   if (day > 1) day = 1;
+  if (dim_end()) {
+    /* the End: no time of day, no weather, no sun, moon or clouds. Its sky and fog are
+     * a dark violet; the island's blocks are lit by the light the game keeps (there is
+     * no sky light there). */
+    setup_light(1.0f);
+    sky_r = fog_r = 10, sky_g = fog_g = 5, sky_b = fog_b = 19;
+    ss_a = 0;
+    star_k = 0;
+    sun_a = 0;
+    cloud_r = sky_r, cloud_g = sky_g, cloud_b = sky_b;
+    cur_max_t = view_dist();
+    fog1 = fminf(cur_max_t, view_reach());
+    cur_max_t = fog1;
+    fog0 = 0;
+    goto nether_sky_done;
+  }
   if (dim_nether()) {
     /* the nether: no time of day, no weather, no celestial bodies. The sky and the
      * fog are the same red, and the fog closes from 10 blocks out (modern Nether

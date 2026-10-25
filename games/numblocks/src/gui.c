@@ -288,7 +288,7 @@ static void debug_overlay(void) {
     fmt1(pl.pitch, pitchs);
     char *p = ldim;   /* the dimension, under the world's type: the nether is one */
     memcpy(p, "Dimension: ", 11), p += 11;
-    strcpy(p, world_dim == DIM_NETHER ? "Nether" : "Overworld");
+    strcpy(p, world_dim == DIM_NETHER ? "Nether" : world_dim == DIM_END ? "The End" : "Overworld");
     p = lxyz;
     memcpy(p, "XYZ: ", 5), p += 5;
     strcpy(p, xs), p += strlen(xs);

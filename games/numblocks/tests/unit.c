@@ -2334,6 +2334,49 @@ int main(void) {
       }
       gen_scratch(NULL);
     }
+    /* ---- the End: its island, its own records and no block it did not make ----------- */
+    {
+      world_switch_dim(DIM_END);
+      CHECK(world_dim == DIM_END);
+      world_follow(0, 64, 0);
+      while (world_pending()) world_follow(0, 64, 0);
+      int end = 0, air = 0, other = 0;
+      for (int z = 0; z < VCZ; z++)
+        for (int x = 0; x < VCX; x++)
+          for (int y = vc_y0; y < vc_y0 + VCY; y++) {
+            int b = world_get(vc_x0 + x, y, vc_z0 + z);
+            if (b == B_END_STONE) end++;
+            else if (b == B_AIR) air++;
+            else if (b != B_OBSIDIAN && b != B_BEDROCK) other++;
+          }
+      CHECK(end > 1000 && air > 1000 && other == 0);   /* (the island, not a solid block) */
+      CHECK(gen_biome(0, 0) == BI_END);
+      world_switch_dim(DIM_OVER);
+      CHECK(world_dim == DIM_OVER);
+    }
+    /* ---- a stronghold: its portal room and its awake End portal ----------------------- */
+    {
+      world_new(7, "uth");
+      int s[6] = {0};
+      uint8_t gs[GEN_SCRATCH];
+      memset(gs, 0, sizeof gs);
+      gen_scratch(gs);
+      CHECK(gen_stronghold_find(0, s));
+      gen_scratch(NULL);
+      CHECK(s[2] != 0 || s[4] != 0);   /* (the portal's middle) */
+      world_follow((float)s[2], (float)s[3], (float)s[4]);
+      while (world_pending()) world_follow((float)s[2], (float)s[3], (float)s[4]);
+      int portal = 0, frame = 0;
+      for (int z = 0; z < VCZ; z++)
+        for (int x = 0; x < VCX; x++)
+          for (int y = vc_y0; y < vc_y0 + VCY; y++) {
+            int b = world_get(vc_x0 + x, y, vc_z0 + z);
+            portal += b == B_END_PORTAL;
+            frame += b == B_END_PORTAL_FRAME_EYE || b == B_END_PORTAL_FRAME;
+          }
+      CHECK(portal >= 9 && frame >= 12);   /* the 3 x 3 portal and its twelve frames */
+      world_switch_dim(DIM_OVER);
+    }
     /* and back: the overworld's own terrain again (the same seed, the same world) */
     world_switch_dim(DIM_OVER);
     world_follow(8, 70, 8);

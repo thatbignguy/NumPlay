@@ -4,10 +4,14 @@
  * See the comment at the top of gen.c for what differs from Minecraft. */
 #ifndef NB_GEN_H
 #define NB_GEN_H
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Starts a world: seed as a Java long (what /seed prints). Call before anything else. */
 void gen_init(int64_t seed);
+/* The dimensions (nb.h's world_dim). */
+enum { DIM_OVER, DIM_NETHER, DIM_END };
+
 /* The dimension the generator makes: 0 the overworld, 1 the nether (nb.h's DIM_*).
  * The octaves are reseeded (from a derived seed in the nether), and what the other
  * dimension cached is dropped, so the two never mix. */
@@ -128,6 +132,7 @@ void gen_set_flat_preset(const char *preset);
 #define BI_WARPED_FOREST 50
 #define BI_SOUL_SAND_VALLEY 51
 #define BI_NETHER_WASTES 8   /* 1.8's Hell (gen.c's BI_HELL): the ground the others sit in */
+#define BI_END 9             /* 1.8's The End */
 
 /* Blocks of chunk (cx, cz) for y in [y0, y0 + h), after terrain, caves, ravines
  * and the decoration (population) that Minecraft would put in this chunk:
@@ -168,6 +173,20 @@ float gen_temp_noise(int x, int z);
  * then the random walk until the top block is grass); y is the first air block above it.
  * About 0.4 s on the calculator. */
 void gen_spawn(int *x, int *y, int *z);
+
+/* The End (gen_end.h): its pillars and the block its terrain makes, for the dragon,
+ * the exit portal and the tests. */
+typedef struct { int16_t x, z; uint8_t y, h, r, pad; } EndSpike;
+const EndSpike *gen_spikes(int *n);
+int gen_end_block(int x, int y, int z);
+
+/* Strongholds (gen_stronghold.h): the nearest one for an eye of ender, a chest in one,
+ * and (tests) where one's start, portal and pieces are. */
+bool gen_stronghold_near(int x, int z, int *out);
+int gen_stronghold_chest(int x, int y, int z);
+int gen_stronghold_find(int s, int *out);
+int gen_fortress_at(int x, int y, int z);
+int gen_fortress_find(int x, int z, int *out);
 
 /* Statistics for tests: bytes of static RAM the generator uses (27108 on the M7). */
 unsigned gen_ram_bytes(void);

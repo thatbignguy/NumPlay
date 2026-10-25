@@ -279,8 +279,9 @@ int egg_of_mob(int mob) {
 }
 
 /* the mobs' names, for /summon and what the spawner says when it is set */
-const char *const mob_name[10] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig", "Cow", "Sheep", "Chicken",
-                                  "Piglin", "ZombifiedPiglin"};
+const char *const mob_name[N_MOB_NAMES] = {"Zombie", "Skeleton", "Creeper", "Spider", "Pig", "Cow", "Sheep",
+                                          "Chicken", "Piglin", "ZombifiedPiglin", "Ghast", "Blaze", "MagmaCube",
+                                          "WitherSkeleton", "Enderman", "EnderCrystal", "EnderDragon"};
 
 /* ---------------------------------------------------------------- monster spawners (MobSpawner) */
 /* Which mob a monster spawner makes: a spawn egg used on one sets it (ItemMonsterPlacer.onItemUse),

@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.55"
+#define NB_VERSION "1.5.56"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -250,16 +250,22 @@ void mode_cancel(void);            /* Back: the way out, nothing changed */
 
 /* ---------------------------------------------------------------- entities (entity.c) */
 enum { E_NONE, E_ITEM, E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN, E_PIGLIN, E_ZPIGLIN,
-       E_ARROW, E_TNT, E_BOBBER };
+       E_ARROW, E_TNT, E_BOBBER,
+       /* the End and the Nether's fortresses (1.8.8): the dragon and its crystals count as
+        * mobs (they are hit), the fireball and the eye of ender as what flies */
+       E_GHAST, E_BLAZE, E_MAGMA, E_WSKELETON, E_ENDERMAN, E_CRYSTAL, E_DRAGON, E_FIREBALL, E_EYE };
 /* The mobs are E_ZOMBIE .. E_ZPIGLIN (2 .. 11), contiguous: appending after E_CHICKEN keeps
  * old spawner records (2 .. 9) readable. The eggs are not contiguous (QUARTZ sits between
  * the overworld eggs and the nether's), so mob_of_egg is a lookup, not arithmetic. */
-static inline bool is_mob(int t) { return t >= E_ZOMBIE && t <= E_ZPIGLIN; }
+static inline bool is_mob(int t) {
+  return (t >= E_ZOMBIE && t <= E_ZPIGLIN) || (t >= E_GHAST && t <= E_DRAGON);
+}
 /* Hostiles are the overworld's four plus the nether's two (the passives sit between them,
  * so this is not a range). The zombified piglin counts as hostile for the cap, the despawn
  * and the chase once hit; its neutral wander is the AI's, not this bit's. */
 static inline bool is_hostile_mob(int t) {
-  return (t >= E_ZOMBIE && t <= E_SPIDER) || t == E_PIGLIN || t == E_ZPIGLIN;
+  return (t >= E_ZOMBIE && t <= E_SPIDER) || t == E_PIGLIN || t == E_ZPIGLIN ||
+         (t >= E_GHAST && t <= E_ENDERMAN) || t == E_CRYSTAL || t == E_DRAGON;
 }
 typedef struct {
   uint8_t type, on_ground, hurt, state;   /* hurt: ticks of red; state 255: dying (timer counts) */
@@ -307,7 +313,8 @@ void mobs_spawn(void);
 int mob_of_egg(int id);                /* the mob a spawn egg makes (0: not one) */
 int egg_of_mob(int mob);               /* the spawn egg that makes a mob (0: none) */
 bool mob_can_stand(int x, int y, int z);   /* room for a mob to stand there */
-extern const char *const mob_name[10];   /* the mobs' names (Zombie .. ZombifiedPiglin) */
+enum { N_MOB_NAMES = 17 };
+extern const char *const mob_name[N_MOB_NAMES];   /* the mobs' names (Zombie .. Ender Dragon) */
 void spawners_set(int x, int y, int z, int mob);   /* a spawn egg used on a monster spawner */
 void spawners_made(int x, int y, int z, int mob);  /* world generation placed one (a dungeon's) */
 void spawners_note(int x, int y, int z);           /* one fresh from the inventory (unset) */
@@ -433,7 +440,6 @@ extern int64_t world_seed;
 enum { WT_DEFAULT, WT_FLAT, WT_TEST };
 extern uint8_t world_type;   /* the world type (WT_*): Default, Superflat, or Test */
 /* the dimension the world is in (save.c): the overworld, or the nether */
-enum { DIM_OVER, DIM_NETHER };
 extern uint8_t world_dim;
 /* How tall the dimension's world is (the y limit of world_set and the commands):
  * the overworld's 128, or the nether's 200 - its ceiling at 123..127 included, and
@@ -442,7 +448,7 @@ extern uint8_t world_dim;
 static inline int dim_height(void) { return world_dim == DIM_NETHER ? NETHER_H : WORLD_H; }
 /* The dimension's lowest y: the overworld's deepslate floor (gen.h's WORLD_MIN_Y), or the
  * nether's 0 (it has no deep layer). Every "y < 0" guard is this instead. */
-static inline int dim_min_y(void) { return world_dim == DIM_NETHER ? 0 : WORLD_MIN_Y; }
+static inline int dim_min_y(void) { return world_dim == DIM_OVER ? WORLD_MIN_Y : 0; }
 /* where the nether's portal leads back to (the overworld), saved with the world */
 extern int32_t nb_ret_x, nb_ret_y, nb_ret_z;
 extern bool nb_ret_ok;

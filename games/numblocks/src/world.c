@@ -61,10 +61,14 @@ static void light_box(int x0, int y0, int z0, int x1, int y1, int z1) {
        * the dark reads darker than the overworld's night, so everything glows
        * eight levels brighter (lava still stops at 15): the lava sea then reaches
        * and the wastes stay readable far from any glow. */
-      if (world_dim == DIM_NETHER) {
+      if (world_dim == DIM_NETHER || world_dim == DIM_END) {
+        /* neither has a sky: the light is the blocks' alone. The nether's glow runs eight
+         * levels brighter (lava still stops at 15), the End's four, so its island is
+         * readable without a sun. */
+        int add = 8;   /* (both are sky-less: the nether's lava glow, the End's ambient) */
         for (int y = VCY - 1; y >= y0; y--) {
           int i = VC_I(x, y, z), b = vc_get(i);
-          int lb = blk_light[b] + 8;
+          int lb = blk_light[b] + add;
           if (lb > 15) lb = 15;
           if (y < y1) vl[i] = (uint8_t)(lb << 4);
         }

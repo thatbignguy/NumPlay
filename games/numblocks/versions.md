@@ -1,3 +1,35 @@
+## 1.5.56
+**The End: its island, its pillars, its strongholds and its portal - in this fork's own Nether**
+
+NumPlay 1.17's End, brought onto this fork's 9-bit world and its own modern Nether. The
+End is a dimension of its own beside the Overworld and the Nether: the same seed makes the
+same island, its ten obsidian pillars and their crystals' footing, and the three strongholds
+of the Overworld hold the way in.
+
+- **The island.** `gen_end.h` is ChunkProviderEnd's density (the 3 x 33 x 3 noise grid, the
+  island's falloff, the same 0.25/0.125 interpolation), with the pillars seeded by their own
+  chunk (6..37 high, 1..4 across, bedrock on top) so they are the same on every visit.
+  The End has its own octave states in the summary cache, its own seed mix, and its own
+  records (`nbe`), so nothing of the Overworld's terrain or edits leaks in.
+- **The sky and the light.** The End's sky and fog are its dark violet; there is no sun,
+  moon, weather or cloud there. Its light is the blocks' alone, eight levels of ambient
+  like the Nether's, so End stone reads without a sun and End portals/crystals glow.
+- **Strongholds.** `gen_stronghold.h` lays out 1.8.8's three strongholds (ring, biome
+  search, pieces, portal room) and writes them after the populations, straight into the
+  nine-bit slab. The portal room has all twelve eyes and an awake 3 x 3 End portal, so the
+  way in is found, not assembled.
+- **The way in and back.** Standing in an End portal takes the player to the obsidian ledge
+  at (100, 49, 0) and builds a safe arrival; standing in the portal again brings them back
+  to the Overworld's spawn. The portal block is its own state, and the frame and eye states
+  are in the inventory and `/give`.
+- **The test world** keeps its 23 x 23 grid of every state; the stronghold and End tests
+  are in `make test`, and `./build/play --end` opens the End at the arrival ledge.
+
+`make test` passes, `make host`, `make build`, `make check` and
+`make -C games/numblocks-interest build check` pass; the app still fits CUSTOM_RAM
+(133652 B). The dragon, its crystals, the End's mobs and the Nether fortresses are the
+next entries.
+
 ## 1.5.55
 **The 1.17 merge's foundation: the Nether's structures' and the End's blocks, in the nine-bit state space**
 

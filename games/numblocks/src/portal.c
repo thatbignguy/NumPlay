@@ -318,13 +318,43 @@ static void portal_travel(void) {
   portal_time = 0;
 }
 
+/* The End's portal: to the obsidian ledge at (100, 49, 0), as vanilla's
+ * WorldProviderEnd.getSpawnCoordinate and Teleporter.placeInPortal put it; and back to
+ * the Overworld's spawn. The End has no nether portal frame of its own. */
+static void end_travel(void) {
+  if (world_dim == DIM_END) {
+    world_switch_dim(DIM_OVER);
+    player_respawn();
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    gui_message("You came back from the End");
+  } else {
+    world_switch_dim(DIM_END);
+    pl.x = 100.5f, pl.y = 49.0f, pl.z = 0.5f;
+    pl.vx = pl.vy = pl.vz = 0, pl.fall = 0;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    for (int dz = -2; dz <= 2; dz++)
+      for (int dx = -2; dx <= 2; dx++) {
+        world_set(100 + dx, 48, dz, B_OBSIDIAN);
+        for (int y = 49; y <= 51; y++) world_set(100 + dx, y, dz, B_AIR);
+      }
+    pl.yaw = 90, pl.pitch = 0;
+    gui_message("You entered the End");
+  }
+  portal_cool = PORTAL_COOL;
+  portal_time = 0;
+}
+
 /* Every tick: standing in a portal waits a few seconds, then travels
  * (creative goes at once, as in Minecraft) */
 void portal_tick(void) {
   if (portal_cool > 0) portal_cool--;
   if (pl.mode == 2) return;   /* a spectator goes through the blocks, not the portal */
   int x = (int)floorf(pl.x), y = (int)floorf(pl.y), z = (int)floorf(pl.z);
-  if (portal_cool == 0 && is_portal(world_get(x, y, z))) {
+  if (portal_cool == 0 && world_get(x, y, z) == B_END_PORTAL) {
+    if (++portal_time >= (pl.mode == 1 ? 1 : PORTAL_WAIT / 2)) end_travel();
+  } else if (portal_cool == 0 && is_portal(world_get(x, y, z))) {
     if (++portal_time >= (pl.mode == 1 ? 1 : PORTAL_WAIT)) portal_travel();
   } else if (portal_time)
     portal_time--;

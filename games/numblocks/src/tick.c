@@ -531,7 +531,7 @@ float celestial(uint32_t t) {
 
 /* World.calculateSkylightSubtracted: 0 by day, 11 at night, more in rain and storms */
 int sky_sub(void) {
-  if (world_dim == DIM_NETHER) return 0;   /* no day, no night, no rain dimming it */
+  if (world_dim != DIM_OVER) return 0;   /* no day, no night, no rain dimming it */
   float f = 1 - (cosf(celestial(game_time) * 6.2831853f) * 2 + 0.5f);
   f = f < 0 ? 0 : f > 1 ? 1 : f;
   f = (1 - f) * (1 - rain_str * 5 / 16) * (1 - thunder_str * rain_str * 5 / 16);
@@ -674,7 +674,7 @@ void world_tick(void) {
    * showcase's water and lava stand where they are put (the settle pass does not
    * wake them either, world.c), like the blocks they were placed beside */
   if (world_type != WT_TEST) {
-    if (world_dim != DIM_NETHER) {   /* the nether has no weather at all */
+    if (world_dim == DIM_OVER) {   /* the nether and the End have no weather at all */
       weather_tick();
       bolt_tick();
       freeze_tick();

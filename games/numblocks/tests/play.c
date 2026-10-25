@@ -135,6 +135,7 @@ int main(int argc, char **argv) {
   int distance = -1;
   int spectator = 0, ride = -1, flat = 0, tree = 0, cave = 0, cave_by = 0, bright = -1, trace = 0, void_world = 0;
   int nether = 0, portal = 0, roof = 0, concrete = 0, settle = 0, drain = 0, placing = 0, xray = 0, lava = 0, deep = 0, caves = 0;
+  int end = 0;
   int temple = 0, templetrap = 0, biome_at = -1;
   int world_test = 0;
   float fly[5] = {0, 0, 0, 0, 0};
@@ -167,6 +168,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--void")) void_world = 1;
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
     else if (!strcmp(argv[i], "--nether")) nether = 1;
+    else if (!strcmp(argv[i], "--end")) end = 1;
     else if (!strcmp(argv[i], "--biome") && i + 1 < argc) {
       biome_at = gen_biome_id(argv[++i]);
       if (biome_at < 0) fprintf(stderr, "biome: no such biome\n"), exit(2);
@@ -446,6 +448,21 @@ int main(int argc, char **argv) {
       pl.mode = 1;
       opt.difficulty = 0;
     }
+  }
+  if (end) {
+    /* the End: the obsidian ledge vanilla puts an arrival on, at (100, 49, 0) */
+    world_switch_dim(DIM_END);
+    pl.x = 100.5f, pl.y = 70.0f, pl.z = 0.5f;
+    pl.vx = pl.vy = pl.vz = 0, pl.fall = 0;
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    for (int dz = -2; dz <= 2; dz++)
+      for (int dx = -2; dx <= 2; dx++) {
+        world_set(100 + dx, 69, dz, B_OBSIDIAN);
+        for (int y = 70; y <= 72; y++) world_set(100 + dx, y, dz, B_AIR);
+      }
+    pl.pitch = 22, pl.yaw = 90;
+    camera_reset();
   }
   if (nether) {
     /* the nether: the player stands where there is room (the lava and the glowstone

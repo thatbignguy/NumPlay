@@ -539,7 +539,7 @@ enum {
     BI_DEEP_OCEAN = 24, BI_STONE_BEACH = 25, BI_COLD_BEACH = 26, BI_BIRCH = 27, BI_BIRCH_HILLS = 28,
     BI_ROOFED = 29, BI_COLD_TAIGA = 30, BI_COLD_TAIGA_HILLS = 31, BI_MEGA_TAIGA = 32, BI_MEGA_TAIGA_HILLS = 33,
     BI_EH_PLUS = 34, BI_SAVANNA = 35, BI_SAVANNA_PLATEAU = 36, BI_MESA = 37, BI_MESA_PLATEAU_F = 38,
-    BI_MESA_PLATEAU = 39, BI_HELL = 8   /* 1.8's Hell: the nether's */
+    BI_MESA_PLATEAU = 39, BI_HELL = 8    /* 1.8's Hell: the nether's; BI_END is gen.h's 9 */
 };
 
 /* Biome class (getClass(), with BiomeBaseSub reporting its parent's class) */
@@ -3339,6 +3339,9 @@ static SumEntry *sumc = sumc_mem;
 static SumEntry *sumc;   /* on main's stack (gen_set_cache): calculator software gives apps 32 KB of it apart */
 void gen_set_cache(void *mem) { sumc = mem; }
 #endif
+
+#include "gen_end.h"   /* the End's terrain (gen_end.h) */
+
 static uint32_t sum_clock;
 
 static SumEntry *sum_find(int cx, int cz) {
@@ -5972,10 +5975,20 @@ static int last_cx = 0x7fffffff, last_cz; /* chunk of the last gen_slab: c_top, 
  * a constant (a documented deviation from vanilla's own chain), so the second
  * dimension costs no RAM of its own. */
 
-/* the dimension: 0 overworld, 1 nether (nb.h's DIM_*) */
+/* the dimension: 0 overworld, 1 nether, 2 End (nb.h's DIM_*) */
 static int g_dim;
 
 /* the nether's seed: the world seed mixed, so its terrain is not the overworld's */
+static i64 end_seed(i64 s) {
+    u64 v = (u64)s;
+    v ^= v >> 33;
+    v *= 0xFF51AFD7ED558CCDULL;
+    v ^= v >> 33;
+    v *= 0xC4B31B2F4B5CB593ULL;
+    v ^= v >> 33;
+    return (i64)(v ^ 0x656E6421ULL);   /* "end!" */
+}
+
 static i64 nether_seed(i64 s) {
     u64 v = (u64)s;
     v ^= v >> 33;
@@ -6000,8 +6013,9 @@ static void octaves_seed(i64 seed) {
 }
 
 void gen_set_dim(int dim) {
-    g_dim = dim ? 1 : 0;
-    octaves_seed(g_dim ? nether_seed(g_seed) : g_seed);
+    g_dim = dim;
+    octaves_seed(dim == DIM_NETHER ? nether_seed(g_seed) : dim == DIM_END ? end_seed(g_seed) : g_seed);
+    if (dim == DIM_END) end_init();
     /* nothing cached is this dimension's: the other one's columns would do */
     last_cx = bc_cx = 0x7fffffff;
     bg_ok = 0;
@@ -7305,6 +7319,7 @@ static int test_top(int X, int Z) {
 }
 
 int gen_prepare(int cx, int cz) {
+    if (g_dim == DIM_END) return 0;
     if (g_dim || g_flat || g_test) return 0;
     for (int dz = -1; dz <= 1; dz++)
         for (int dx = -1; dx <= 1; dx++)
@@ -7543,13 +7558,22 @@ static void deep_ores(int cx, int cz, int y0, int h, uint8_t *out) {
         }
 }
 
+#include "gen_struct.h" /* the fortresses' and strongholds' pieces */
+#include "gen_stronghold.h"   /* overworld strongholds (1.8.8) */
+
 void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     /* the nether is NETHER_H tall: its terrain still ends at its ceiling (127), and the
      * rows above it are the open air the player builds in (nb.h's dim_height). The
      * overworld's top is WORLD_TOP; its floor is the deep layer below y = 0. */
-    int Htop = g_dim ? NETHER_H : WORLD_TOP;
+    int Htop = g_dim == DIM_NETHER ? NETHER_H : WORLD_TOP;
     if (y0 + h > Htop) h = Htop - y0;
     if (h <= 0) return;
+    if (g_dim == DIM_END) {
+        /* the End's island: 0..127, its density and pillars (gen_end.h) */
+        c_out = out, c_y0 = y0, c_h = h, c_cx = cx, c_cz = cz;
+        end_slab(cx, cz, y0, h, out);
+        return;
+    }
     if (g_dim) {        if (y0 < 0) {   /* the nether has no deep layer: below 0 is air */
             h += y0;
             y0 = 0;
@@ -7673,12 +7697,15 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     populate(cx, cz - 1, pb[1]);
     populate(cx - 1, cz, pb[2]);
     populate(cx, cz, pb[3]);
+    /* the strongholds' pieces, after the populations (they replace what they cross) */
+    stronghold_slab(cx, cz, ty0, th, tout);
     memset(sum_pin, 0, sizeof sum_pin);
     last_cx = cx;
     last_cz = cz;
 }
 
 int gen_biome(int x, int z) {
+    if (g_dim == DIM_END) return BI_END;
     if (g_dim) return nether_biome_at(x, z);   /* the nether's four (1.16): the split of [22] */
     if (g_flat) return flat_biome;
     if (g_test) return BI_PLAINS;   /* the showcase's one biome: warm, so the weather is rain */
