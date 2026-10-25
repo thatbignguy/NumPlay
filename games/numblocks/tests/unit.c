@@ -602,6 +602,25 @@ int main(void) {
     memcpy(world_preset, FLAT_DEFAULT, sizeof FLAT_DEFAULT);
   }
   {
+    /* the test world: the same whatever the seed, the spawn platform, the grid and the cages */
+    new_world(2, 1, 0, false, WT_TEST, "Showcase", FLAT_DEFAULT);
+    world_follow(pl.x, pl.y, pl.z);
+    while (world_pending()) world_follow(pl.x, pl.y, pl.z);
+    CHECK(pl.x == 8.5f && pl.y == 41 && pl.z == -22.5f);
+    CHECK(world_get(8, 40, -23) == B_BEDROCK);
+    CHECK(world_get(TEST_GRID_X0, TEST_SECTION_Y, TEST_GRID_Z0) == B_BARRIER &&
+          world_get(TEST_GRID_X0, TEST_BLOCK_Y, TEST_GRID_Z0) != B_AIR);
+    int cagex, cagey, cagez, mobs = 0;
+    for (int i = 0; i < N_ENT; i++)
+      if (IS_MOB(ents[i].type)) mobs++;
+    CHECK(test_cage(0, &cagex, &cagey, &cagez));
+    world_follow((float)cagex, (float)cagey, (float)cagez);
+    while (world_pending()) world_follow((float)cagex, (float)cagey, (float)cagez);
+    CHECK(mobs >= 8 && world_get(cagex, TEST_SECTION_Y, cagez) == B_GRASS);
+    delete_world(2);
+    world_type = WT_DEFAULT;
+  }
+  {
     /* the copy in numblocks_saves.py: every save, and after an install (only scripts left) they come back */
     for (int s = 1; s <= MAX_WORLDS; s++) delete_world(s);
     new_world(3, 42, 0, false, WT_DEFAULT, "Kept", FLAT_DEFAULT);

@@ -14,7 +14,7 @@ import blocks  # noqa: E402
 
 KINDS = ['none', 'block', 'pickaxe', 'axe', 'shovel', 'hoe', 'sword', 'shears', 'helmet', 'chestplate', 'leggings',
          'boots', 'food', 'stew', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'placer', 'flint_and_steel',
-         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod']
+         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod', 'spawn_egg']
 # tool materials: harvest level, uses, efficiency, attack bonus (Item.EnumToolMaterial)
 TOOL_MAT = {'wood': (0, 59, 2, 0), 'stone': (1, 131, 4, 1), 'iron': (2, 250, 6, 2), 'diamond': (3, 1561, 8, 3),
             'gold': (0, 32, 12, 0)}
@@ -139,6 +139,14 @@ food('COOKED_SALMON', 'Cooked Salmon', 'fish_salmon_cooked', 6, 0.8)
 
 INAMES = [x['name'] for x in I]
 assert len(set(INAMES)) == len(INAMES)
+
+# --- spawn eggs (ItemMonsterPlacer): one item per mob, so a stack names its mob; the
+# 1.8 jar has one grey egg picture, shared by all of them here
+for n, lab in [('ZOMBIE', 'Zombie'), ('SKELETON', 'Skeleton'), ('CREEPER', 'Creeper'), ('SPIDER', 'Spider'),
+               ('PIG', 'Pig'), ('COW', 'Cow'), ('SHEEP', 'Sheep'), ('CHICKEN', 'Chicken'),
+               ('PIGMAN', 'Zombie Pigman'), ('GHAST', 'Ghast'), ('BLAZE', 'Blaze'), ('MAGMA', 'Magma Cube'),
+               ('WSKELETON', 'Wither Skeleton'), ('ENDERMAN', 'Enderman')]:
+    item(f'{n}_SPAWN_EGG', f'{lab} Spawn Egg', 'spawn_egg', 'spawn_egg')
 
 # --- the blocks you can hold: their names (en_US) and the item a block state counts as
 LABELS = {
@@ -438,6 +446,8 @@ def tab_of(iid):
     if k in ('pickaxe', 'axe', 'shovel', 'hoe', 'shears', 'flint_and_steel', 'fishing_rod') or \
             it['name'] in ('COMPASS', 'CLOCK'):
         return 7
+    if k == 'spawn_egg':
+        return 4
     if k in ('food', 'stew'):
         return 6
     if k in ('bucket', 'water_bucket', 'lava_bucket', 'milk_bucket') or it['name'] in ('PAPER', 'BOOK', 'SNOWBALL',

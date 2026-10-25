@@ -1,3 +1,22 @@
+## 1.5.67
+**The test world, spawn eggs and the barrier**
+- World Type gains Test: an empty world that is always the same, with the spawn on
+  a bedrock platform, every block state once in a floating grid (each on a
+  barrier; liquids held in on four sides), and every mob once in a 5 x 5 grass
+  cage with an invisible barrier ring. The sun stands still and natural spawning
+  is off; the cages are refilled when a save comes back without entities.
+- Spawn eggs: one item per mob (zombie, skeleton, creeper, spider, pig, cow,
+  sheep, chicken, and the Nether's pigman, ghast, blaze, magma cube, wither
+  skeleton and enderman). Using one puts its mob where it is aimed; they are in
+  the creative inventory's Miscellaneous tab.
+- Barrier (1.8's invisible block) is a quiet glass-model block with no texels,
+  unbreakable, for the showcase's floating grid and cages.
+- `tools/blocks.py`, `tools/items.py` and `tools/pack.py` carry them, and
+  `src/blocks.h`, `src/items.h`, `src/data.c` and `src/data_dims.c` were
+  regenerated from the 1.8.8 client jar (205 recipes, 253 block states, 143
+  items; 310 states and 172 items with the Nether and the End).
+- `--test` and `--egg` added to `build/play`.
+
 ## 1.5.66
 **Spectator mode and the game mode switcher**
 - `pl.mode` 2 is Minecraft's spectator: always flying, through every block, no

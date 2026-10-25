@@ -5,9 +5,9 @@
 #include "blocks.h"
 
 #if NB_DIMS
-#define NTEX 248
+#define NTEX 249
 #else
-#define NTEX 217
+#define NTEX 218
 #endif
 /* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */
 extern const uint8_t tex_px[NTEX][128];
@@ -248,6 +248,7 @@ extern const uint8_t rain_run[][4], snow_run[][4], rain_idx[257], snow_idx[257];
 #define TX_POTATOES_STAGE_2 214
 #define TX_POTATOES_STAGE_3 215
 #define TX_FIRE_LAYER_0 216
+#define TX_BARRIER 217
 
 extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];
 extern const uint16_t spr_off[];
@@ -282,27 +283,27 @@ extern const uint16_t blk_icon[B_N];   /* sprite of its icon */
 #define SP_MOON_5 26
 #define SP_MOON_6 27
 #define SP_MOON_7 28
-#define SP_FLAME 409
-#define SP_ARROW 410
-#define SP_ARMOR_FULL 411
-#define SP_ARMOR_HALF 412
-#define SP_BUBBLE_POP 413
-#define SP_HEART_HIT 414
-#define SP_TAB_TOP 415
-#define SP_TAB_TOP_SEL 416
-#define SP_TAB_BOTTOM 417
-#define SP_TAB_BOTTOM_SEL 418
-#define SP_SCROLLER 419
-#define SP_BUTTON 420
-#define SP_BUTTON_HOVER 421
-#define SP_BUTTON_OFF 422
-#define SP_SLOT_HELMET 423
-#define SP_SLOT_CHESTPLATE 424
-#define SP_SLOT_LEGGINGS 425
-#define SP_SLOT_BOOTS 426
-#define SP_STEVE 427
-#define SP_ARM 428
-#define SP_DIRT_BG 429
+#define SP_FLAME 424
+#define SP_ARROW 425
+#define SP_ARMOR_FULL 426
+#define SP_ARMOR_HALF 427
+#define SP_BUBBLE_POP 428
+#define SP_HEART_HIT 429
+#define SP_TAB_TOP 430
+#define SP_TAB_TOP_SEL 431
+#define SP_TAB_BOTTOM 432
+#define SP_TAB_BOTTOM_SEL 433
+#define SP_SCROLLER 434
+#define SP_BUTTON 435
+#define SP_BUTTON_HOVER 436
+#define SP_BUTTON_OFF 437
+#define SP_SLOT_HELMET 438
+#define SP_SLOT_CHESTPLATE 439
+#define SP_SLOT_LEGGINGS 440
+#define SP_SLOT_BOOTS 441
+#define SP_STEVE 442
+#define SP_ARM 443
+#define SP_DIRT_BG 444
 
 #include "items.h"
 extern const uint16_t blk_item[B_N];   /* the item a block state counts as (0xFFFF: none) */
@@ -351,39 +352,39 @@ extern const uint16_t img_row0[], img_pal[][16];
 
 /* the Nether and the End (NumBlocks.nwa only: data_dims.c) */
 #if NB_DIMS
-#define TX_NETHERRACK 217
-#define TX_SOUL_SAND 218
-#define TX_PORTAL 219
-#define TX_NETHER_BRICK 220
-#define TX_NETHER_WART_STAGE_0 221
-#define TX_NETHER_WART_STAGE_1 222
-#define TX_NETHER_WART_STAGE_2 223
-#define TX_END_STONE 224
-#define TX_ENDFRAME_TOP 225
-#define TX_ENDFRAME_SIDE 226
-#define TX_ENDFRAME_EYE 227
-#define TX_DRAGON_EGG 228
-#define TX_QUARTZ_ORE 229
-#define TX_QUARTZ_BLOCK_TOP 230
-#define TX_QUARTZ_BLOCK_SIDE 231
-#define TX_QUARTZ_BLOCK_BOTTOM 232
-#define TX_QUARTZ_BLOCK_CHISELED_TOP 233
-#define TX_QUARTZ_BLOCK_CHISELED 234
-#define TX_QUARTZ_BLOCK_LINES_TOP 235
-#define TX_QUARTZ_BLOCK_LINES 236
-#define TX_IRON_BARS 237
-#define TX_DOOR_IRON_LOWER 238
-#define TX_DOOR_IRON_UPPER 239
-#define TX_PORTAL_4 240
-#define TX_PORTAL_8 241
-#define TX_PORTAL_12 242
-#define TX_PORTAL_16 243
-#define TX_PORTAL_20 244
-#define TX_PORTAL_24 245
-#define TX_PORTAL_28 246
-#define TX_END_SKY 247
-#define SP_BOSS_BG 491
-#define SP_BOSS 492
+#define TX_NETHERRACK 218
+#define TX_SOUL_SAND 219
+#define TX_PORTAL 220
+#define TX_NETHER_BRICK 221
+#define TX_NETHER_WART_STAGE_0 222
+#define TX_NETHER_WART_STAGE_1 223
+#define TX_NETHER_WART_STAGE_2 224
+#define TX_END_STONE 225
+#define TX_ENDFRAME_TOP 226
+#define TX_ENDFRAME_SIDE 227
+#define TX_ENDFRAME_EYE 228
+#define TX_DRAGON_EGG 229
+#define TX_QUARTZ_ORE 230
+#define TX_QUARTZ_BLOCK_TOP 231
+#define TX_QUARTZ_BLOCK_SIDE 232
+#define TX_QUARTZ_BLOCK_BOTTOM 233
+#define TX_QUARTZ_BLOCK_CHISELED_TOP 234
+#define TX_QUARTZ_BLOCK_CHISELED 235
+#define TX_QUARTZ_BLOCK_LINES_TOP 236
+#define TX_QUARTZ_BLOCK_LINES 237
+#define TX_IRON_BARS 238
+#define TX_DOOR_IRON_LOWER 239
+#define TX_DOOR_IRON_UPPER 240
+#define TX_PORTAL_4 241
+#define TX_PORTAL_8 242
+#define TX_PORTAL_12 243
+#define TX_PORTAL_16 244
+#define TX_PORTAL_20 245
+#define TX_PORTAL_24 246
+#define TX_PORTAL_28 247
+#define TX_END_SKY 248
+#define SP_BOSS_BG 506
+#define SP_BOSS 507
 enum { SKIN_ZOMBIE_PIGMAN = 9, SKIN_GHAST = 10, SKIN_GHAST_SHOOTING = 11, SKIN_BLAZE = 12, SKIN_MAGMACUBE = 13, SKIN_ENDERMAN = 14, SKIN_WITHER_SKELETON = 15 };
 extern const char end_text[];   /* the End poem, then the credits */
 extern const uint8_t skin_crystal_px[];   /* endercrystal/endercrystal.png, 4 bits a texel */

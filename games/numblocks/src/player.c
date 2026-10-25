@@ -580,6 +580,23 @@ static void sleep_in(int x, int y, int z) {
 #include "player_dims.h"
 #endif
 
+/* the mob each spawn egg makes (ItemMonsterPlacer); the eggs are the items appended to
+ * tools/items.py, so a table, not arithmetic over the ids */
+static int egg_mob_of(int id) {
+  static const struct { uint16_t item; uint8_t mob; } eggs[] = {
+    {I_ZOMBIE_SPAWN_EGG, E_ZOMBIE}, {I_SKELETON_SPAWN_EGG, E_SKELETON}, {I_CREEPER_SPAWN_EGG, E_CREEPER},
+    {I_SPIDER_SPAWN_EGG, E_SPIDER}, {I_PIG_SPAWN_EGG, E_PIG}, {I_COW_SPAWN_EGG, E_COW},
+    {I_SHEEP_SPAWN_EGG, E_SHEEP}, {I_CHICKEN_SPAWN_EGG, E_CHICKEN},
+#if NB_DIMS
+    {I_PIGMAN_SPAWN_EGG, E_PIGMAN}, {I_GHAST_SPAWN_EGG, E_GHAST}, {I_BLAZE_SPAWN_EGG, E_BLAZE},
+    {I_MAGMA_SPAWN_EGG, E_MAGMA}, {I_WSKELETON_SPAWN_EGG, E_WSKELETON}, {I_ENDERMAN_SPAWN_EGG, E_ENDERMAN},
+#endif
+  };
+  for (unsigned i = 0; i < sizeof eggs / sizeof eggs[0]; i++)
+    if (eggs[i].item == id) return eggs[i].mob;
+  return 0;
+}
+
 /* OK pressed: use the block looked at, else the held item */
 static void use(uint32_t pressed) {
   Stack *h = held();
@@ -694,6 +711,19 @@ static void use(uint32_t pressed) {
       /* ItemArmor.onItemRightClick: worn at once if that slot is free */
       int slot = IK_BOOTS - k;
       if (!pl.armor[slot].id) pl.armor[slot] = *h, h->id = 0, h->aux = 0;
+      return;
+    }
+    case IK_SPAWN_EGG: {
+      int mob = egg_mob_of(h->id);
+      if (!mob) return;
+      float sx = pl.x, sy = pl.y, sz = pl.z;
+      if (on_block) sx = x + 0.5f, sy = (float)y + 1.0f, sz = z + 0.5f;
+      else {
+        float a = pl.yaw * 0.017453292f;
+        sx -= sinf(a) * 2, sz += cosf(a) * 2;
+      }
+      if (ent_new(mob, sx, sy, sz) && pl.mode == 0) use_up();
+      player_swing();
       return;
     }
     case IK_SNOWBALL: case IK_EGG:

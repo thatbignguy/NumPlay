@@ -240,11 +240,33 @@ static Entity *spawn(int type, float x, float y, float z) {
 }
 Entity *mob_summon(int type, float x, float y, float z) { return spawn(type, x, y, z); }
 
+/* the showcase's cages (WT_TEST): one of each mob, put back when a save brought the
+ * world without its entities */
+static void test_mobs(void) {
+  static const uint8_t mobs[] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN
+#if NB_DIMS
+                                 , E_PIGMAN, E_GHAST, E_BLAZE, E_MAGMA, E_WSKELETON, E_ENDERMAN
+#endif
+  };
+  for (unsigned k = 0; k < sizeof mobs / sizeof mobs[0]; k++) {
+    int x, y, z;
+    if (!test_cage((int)k, &x, &y, &z)) continue;
+    bool there = false;
+    for (int i = 0; i < N_ENT && !there; i++)
+      if (ents[i].type == mobs[k] && fabsf(ents[i].x - (x + 0.5f)) < 3 && fabsf(ents[i].z - (z + 0.5f)) < 3) there = true;
+    if (!there) spawn(mobs[k], x + 0.5f, (float)y, z + 0.5f);
+  }
+}
+
 /* SpawnerAnimals, made small: a try every second */
 #if NB_DIMS
 static bool dims_spawn(void);
 #endif
 void mobs_spawn(void) {
+  if (world_type == WT_TEST) {
+    test_mobs();
+    return;
+  }
 #if NB_DIMS
   if (dims_spawn()) return;
 #endif

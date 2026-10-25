@@ -19,7 +19,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen shows */
-#define NB_VERSION "1.5.66"
+#define NB_VERSION "1.5.67"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -366,7 +366,7 @@ void keys_update(int seen);       /* keys saved by an older version (seen: its k
 #define KEY_SHEET 4       /* (2: jump and sneak on shift and alpha; 3: chat and commands; 4: OK mines, Back places) */
 extern Options opt;
 extern int64_t world_seed;
-enum { WT_DEFAULT, WT_FLAT };
+enum { WT_DEFAULT, WT_FLAT, WT_TEST };
 extern uint8_t world_type;   /* the world type (WT_*): Default, or Superflat */
 extern char world_preset[FLAT_MAX + 1];   /* the world's flat preset (default when Default type) */
 /* Worlds: up to MAX_WORLDS, each in a slot (1..MAX_WORLDS) whose records start "nb<slot>" */

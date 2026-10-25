@@ -36,7 +36,7 @@ static uint32_t key_bit(const char *s) {
 
 int main(int argc, char **argv) {
   const char *out = "build/play", *shots = "";
-  int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, cheats = 0, create_screen = 0, panorama = -1, contrast = 0, mode_screen = 0, spectator = 0;
+  int give = 0, showcase = 0, title_screen = 0, mobs = 0, animals = 0, start_time = -1, torches = 0, water = 0, creative = 0, build = 0, rain = 0, cheats = 0, create_screen = 0, panorama = -1, contrast = 0, mode_screen = 0, spectator = 0, egg = 0;
   float hurt = 0;
   int frames = 60, mspf = 50, go_dim = 0, portal = 0, at = 0, fortress = 0, hold = -1, credits = 0;
   float at_v[5] = {0};
@@ -60,6 +60,11 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[i], "--contrast")) contrast = 1;
     else if (!strcmp(argv[i], "--mode")) mode_screen = 1;
     else if (!strcmp(argv[i], "--spectator")) spectator = 1;
+    else if (!strcmp(argv[i], "--egg")) egg = 1;
+    else if (!strcmp(argv[i], "--test")) {
+      extern int start_type;
+      start_type = WT_TEST;
+    }
     else if (!strcmp(argv[i], "--flat") && i + 1 < argc) {
       /* a flat world of this preset, straight in (the Customize screen's own result) */
       extern int start_type;
@@ -107,6 +112,7 @@ int main(int argc, char **argv) {
   game_init();
   if (panorama >= 0) opt.panorama = (uint8_t)panorama;   /* (the title re-picks on the next frame) */
   if (contrast) opt.contrast = 1;
+  if (egg) pl.inv[0] = (Stack){I_ZOMBIE_SPAWN_EGG, 1};
   if (cheats) world_cheats = true;   /* (as a world created with cheats on) */
   if (spectator) player_set_mode(2);
   if (mode_screen) mode_open();

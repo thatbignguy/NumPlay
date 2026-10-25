@@ -95,8 +95,14 @@ def custom_texture(jar, n):
     return out
 
 
-def tex_image(jar, n):
+def block_image(jar, n):
+    if n == 'barrier':
+        return Image.new('RGBA', (16, 16), (0, 0, 0, 0))   # 1.8's barrier picture is an item icon; the block is invisible
     return custom_texture(jar, n) if n.startswith('@') else first_frame(jar.image('blocks/' + n))
+
+
+def tex_image(jar, n):
+    return block_image(jar, n)
 
 
 def pack_textures(jar, states=None, extra=()):
@@ -125,7 +131,7 @@ def pack_textures(jar, states=None, extra=()):
     tinted.discard('grass_side_snowed')
     px, pals, flags = [], [], []
     for n in names:
-        im = custom_texture(jar, n) if n.startswith('@') else first_frame(jar.image('blocks/' + n))
+        im = block_image(jar, n)
         if n == 'grass_side':
             # the dirt side keeps its colours; the fringe (the overlay's texels)
             # becomes grey levels tinted by the biome: palette indices from 8

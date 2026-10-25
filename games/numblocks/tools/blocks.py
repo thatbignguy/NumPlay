@@ -236,6 +236,9 @@ b('FIRE', 51, 0, model='cross', tex='fire_layer_0', light=15, hard=0)
 
 assert len(S) <= 255, len(S)
 
+# --- barrier (1.8's invisible block; held, it is the item texture's red ring)
+b('BARRIER', 166, model='glass', tex='barrier', hard=-1)
+
 MODELS = ['none', 'cube', 'cross', 'liquid', 'torch', 'slab', 'layer', 'cactus', 'leaves', 'glass', 'flat', 'vine',
           'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed']
 TOOLS = [None, 'pickaxe', 'axe', 'shovel', 'shears', 'sword']

@@ -15,6 +15,23 @@ void gen_set_cache(void *mem);
 /* The world type: 0 Minecraft's default, 1 superflat (FlatGeneratorInfo's default preset
  * "2;7,2x3,2;1": bedrock, two dirt, grass, all plains, nothing else). Kept across gen_init. */
 void gen_set_flat(int flat);
+/* The Test world (WT_TEST): an empty world that is always the same, with every block,
+ * every item in the creative inventory and every mob once. Kept across gen_init. */
+void gen_set_test(int test);
+#define TEST_PLATFORM_Y 40
+#define TEST_SECTION_Y 43
+#define TEST_BLOCK_Y 44
+#define TEST_GRID_X0 (-7)
+#define TEST_GRID_Z0 (-46)
+#define TEST_GRID_COLS 18
+#define TEST_GRID_ROWS 18
+#define TEST_CAGE_X0 (-7)
+#define TEST_CAGE_Z0 18
+#define TEST_CAGE_COLS 5
+#define TEST_CAGE_ROWS 3
+#define TEST_CAGE_STEP 6
+#define TEST_CAGE_Y 44
+int test_cage(int k, int *x, int *y, int *z);   /* where mob k stands in the showcase */
 #define FLAT_DEFAULT "2;7,2x3,2;1"
 #define FLAT_MAX 63
 void gen_set_flat_preset(const char *preset);   /* superflat with this preset (NULL/empty: default) */

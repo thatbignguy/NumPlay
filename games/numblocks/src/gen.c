@@ -104,6 +104,7 @@
 extern const uint8_t blk_id[B_N], blk_meta[B_N];
 #if NB_DIMS
 #include "dims.h"
+extern uint8_t *gen_hi;   /* (gen_stronghold.h / world.c) the ninth bits of the test world's slab */
 static int dims_slab(int cx, int cz, int y0, int h, uint8_t *out);   /* (gen_dims.h: the Nether, the End) */
 static int gd_dim;
 static void stronghold_slab(int cx, int cz, int y0, int h, uint8_t *out);   /* (gen_stronghold.h) */
@@ -5992,8 +5993,113 @@ static int flat_block(int y) {
 }
 
 
+
+/* ---------------------------------------------------------------- the test world
+ * The Test world type (WT_TEST): an empty world that is always the same, whatever the
+ * seed, holding everything the game has once. Nothing here reads the seed or any noise,
+ * so a chunk comes out the same every time it is asked for. The sections:
+ *   - the spawn platform, a square of bedrock with the player in its middle;
+ *   - every block state floating in a grid, one air gap between each, on its own barrier;
+ *     the liquids get barriers on their four sides so a source does not spread;
+ *   - every mob in a cage of its own on a floating platform of grass, a ring of barriers
+ *     on its four sides and one over its head (mob.c's new_world hook puts them there).
+ * The structures a normal world makes are not baked here: they are generated normally
+ * outside it. */
+static int g_test;
+void gen_set_test(int test) { g_test = test ? 1 : 0; }
+
+/* the highest non-air row of a showcase column (0: all air) */
+static int test_top(int X, int Z) {
+  if (X >= 0 && X <= 15 && Z >= -31 && Z <= -15) return TEST_PLATFORM_Y;
+  if (X >= TEST_GRID_X0 && X <= TEST_GRID_X0 + (TEST_GRID_COLS - 1) * 2 && Z >= TEST_GRID_Z0 &&
+      Z <= TEST_GRID_Z0 + (TEST_GRID_ROWS - 1) * 2)
+    return TEST_BLOCK_Y;
+  if (X >= TEST_CAGE_X0 - 1 && X <= TEST_CAGE_X0 + (TEST_CAGE_COLS - 1) * TEST_CAGE_STEP + 5 &&
+      Z >= TEST_CAGE_Z0 - 1 && Z <= TEST_CAGE_Z0 + (TEST_CAGE_ROWS - 1) * TEST_CAGE_STEP + 5)
+    return TEST_CAGE_Y + 1;
+  return 0;
+}
+/* one cell of the showcase, 9 bits where NumBlocks.nwa has them */
+static void t_set(uint8_t *out, int cx, int cz, int y0, int h, int X, int Y, int Z, int b) {
+  int lx = X - cx * 16, lz = Z - cz * 16;
+  if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16 || Y < y0 || Y >= y0 + h) return;
+  int i = (Y - y0) * 256 + lz * 16 + lx;
+  out[i] = (uint8_t)b;
+#if NB_DIMS
+  if ((b >> 8) && gen_hi) gen_hi[i >> 3] |= (uint8_t)(1 << (i & 7));
+#endif
+}
+/* a block state of its own: the dimension blocks are past 255, the item ids in the
+ * same number space have no block (blk_id 0) and are left out */
+static bool t_block(int s) { return s > B_AIR && s < B_N && blk_id[s] != 0; }
+static int grid_state(int want) {
+  int s = 0;
+  for (int k = 0; k <= want; k++) {
+    do s++;
+    while (s < B_N && !t_block(s));
+    if (s >= B_N) return B_AIR;
+  }
+  return s;
+}
+static bool t_liquid(int b) {
+  return b == B_WATER || b == B_LAVA || b == B_FLOWING_WATER ||
+         (b >= B_FLOWING_WATER_2 && b <= B_FALLING_WATER) || b == B_FLOWING_LAVA ||
+#if NB_DIMS
+         (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA) || (b >= B_FLOWING_LAVA_1 && b <= B_FLOWING_LAVA_7);
+#else
+         (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA);
+#endif
+}
+static void test_slab(int cx, int cz, int y0, int h, uint8_t *out) {
+  int x0 = cx * 16, z0 = cz * 16;
+  memset(out, B_AIR, (size_t)h * 256);
+  /* the spawn platform */
+  if (x0 <= 15 && x0 + 15 >= 0 && z0 <= -15 && z0 + 15 >= -31)
+    for (int z = -31; z <= -15; z++)
+      for (int x = 0; x <= 15; x++) t_set(out, cx, cz, y0, h, x, TEST_PLATFORM_Y, z, B_BEDROCK);
+  /* the grid of blocks, each on a barrier, the liquids held in on four sides */
+  int gx1 = TEST_GRID_X0 + (TEST_GRID_COLS - 1) * 2, gz1 = TEST_GRID_Z0 + (TEST_GRID_ROWS - 1) * 2;
+  if (x0 <= gx1 && x0 + 15 >= TEST_GRID_X0 && z0 <= gz1 && z0 + 15 >= TEST_GRID_Z0)
+    for (int j = 0; j < TEST_GRID_ROWS; j++)
+      for (int i = 0; i < TEST_GRID_COLS; i++) {
+        int X = TEST_GRID_X0 + i * 2, Z = TEST_GRID_Z0 + j * 2, b = grid_state(j * TEST_GRID_COLS + i);
+        if (b == B_AIR) continue;
+        t_set(out, cx, cz, y0, h, X, TEST_SECTION_Y, Z, B_BARRIER);
+        t_set(out, cx, cz, y0, h, X, TEST_BLOCK_Y, Z, b);
+        if (t_liquid(b)) {
+          t_set(out, cx, cz, y0, h, X + 1, TEST_BLOCK_Y, Z, B_BARRIER);
+          t_set(out, cx, cz, y0, h, X - 1, TEST_BLOCK_Y, Z, B_BARRIER);
+          t_set(out, cx, cz, y0, h, X, TEST_BLOCK_Y, Z + 1, B_BARRIER);
+          t_set(out, cx, cz, y0, h, X, TEST_BLOCK_Y, Z - 1, B_BARRIER);
+        }
+      }
+  /* the mobs' cages: 5 x 5 of grass, a two-row ring of barriers and one over the head */
+  int cx1 = TEST_CAGE_X0 + (TEST_CAGE_COLS - 1) * TEST_CAGE_STEP + 4;
+  int cz1 = TEST_CAGE_Z0 + (TEST_CAGE_ROWS - 1) * TEST_CAGE_STEP + 4;
+  if (x0 <= cx1 && x0 + 15 >= TEST_CAGE_X0 && z0 <= cz1 && z0 + 15 >= TEST_CAGE_Z0) {
+    static const int8_t d[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    for (int j = 0; j < TEST_CAGE_ROWS; j++)
+      for (int i = 0; i < TEST_CAGE_COLS; i++) {
+        int X = TEST_CAGE_X0 + i * TEST_CAGE_STEP, Z = TEST_CAGE_Z0 + j * TEST_CAGE_STEP;
+        for (int z = 0; z < 5; z++)
+          for (int x = 0; x < 5; x++) t_set(out, cx, cz, y0, h, X + x, TEST_SECTION_Y, Z + z, B_GRASS);
+        for (int y = TEST_CAGE_Y; y <= TEST_CAGE_Y + 1; y++)
+          for (int q = 0; q < 4; q++) t_set(out, cx, cz, y0, h, X + 2 + d[q][0], y, Z + 2 + d[q][1], B_BARRIER);
+        t_set(out, cx, cz, y0, h, X + 2, TEST_CAGE_Y + 1, Z + 2, B_BARRIER);
+      }
+  }
+}
+
+int test_cage(int k, int *x, int *y, int *z) {
+  if (k < 0 || k >= TEST_CAGE_COLS * TEST_CAGE_ROWS) return 0;
+  *x = TEST_CAGE_X0 + (k % TEST_CAGE_COLS) * TEST_CAGE_STEP + 2;
+  *z = TEST_CAGE_Z0 + (k / TEST_CAGE_COLS) * TEST_CAGE_STEP + 2;
+  *y = TEST_CAGE_Y;
+  return 1;
+}
+
 int gen_prepare(int cx, int cz) {
-    if (g_flat) return 0;
+    if (g_flat || g_test) return 0;
 #if NB_DIMS
     if (gd_dim) return 0;
 #endif
@@ -6021,6 +6127,10 @@ void gen_slab(int cx, int cz, int y0, int h, uint8_t *out) {
 #endif
     if (g_flat) {
         for (int y = 0; y < h; y++) memset(out + y * 256, flat_block(y0 + y), 256);
+        return;
+    }
+    if (g_test) {
+        test_slab(cx, cz, y0, h, out);
         return;
     }
     c_out = out;
@@ -6072,6 +6182,7 @@ int gen_biome(int x, int z) {
 #if NB_DIMS
     if (gd_dim) return gd_dim == DIM_NETHER ? 8 : 9;   /* (BiomeGenHell, BiomeGenEnd) */
 #endif
+    if (g_test) return BI_PLAINS;
     if (g_flat) return flat_biome;
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx == last_cx && cz == last_cz) return c_b16[i];
@@ -6083,6 +6194,7 @@ int gen_top(int x, int z) {
 #if NB_DIMS
     if (gd_dim) return 127;
 #endif
+    if (g_test) return test_top(x, z);
     if (g_flat) return flat_top;
     int cx = x >> 4, cz = z >> 4, i = (x & 15) + (z & 15) * 16;
     if (cx != last_cx || cz != last_cz) gen_slab(cx, cz, 127, 1, col_tmp);
@@ -6103,6 +6215,10 @@ static int can_spawn(int x, int z) {
 void gen_spawn(int *px, int *py, int *pz) {
     JRand r;
     jr_seed(&r, g_seed);
+    if (g_test) {
+        *px = 8, *py = TEST_PLATFORM_Y + 1, *pz = -23;
+        return;
+    }
     if (g_flat) {
         /* WorldChunkManagerHell.findBiomePosition(0, 0, 256): anywhere within 256, all of it grass */
         *px = -256 + jr_int(&r, 513);

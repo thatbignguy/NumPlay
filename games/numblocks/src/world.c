@@ -176,7 +176,7 @@ static void fill_chunk(int cx, int cz, const uint8_t *keep, int oy, int ylo, int
     gen_hi = NULL;
     for (int c = 0; c < h * 256; c++) {
       unsigned k = (unsigned)(slab[c] - GEN_CODE(0));
-      if (k >= GC_N || (hb[c >> 3] >> (c & 7) & 1)) continue;
+      if (world_type == WT_TEST || k >= GC_N || (hb[c >> 3] >> (c & 7) & 1)) continue;
       int b = gen_code_block[k];
       slab[c] = (uint8_t)b;
       hb[c >> 3] |= (uint8_t)((b >> 8) << (c & 7));
@@ -383,6 +383,7 @@ static void recenter(int nx0, int ny0, int nz0, int px, int pz) {
 void world_new(int64_t seed, const char *name) {
   gen_set_flat(world_type == WT_FLAT);
   if (world_type == WT_FLAT) gen_set_flat_preset(world_preset);
+  gen_set_test(world_type == WT_TEST);
   gen_init(seed);
   edits_setup(name, slab32, sizeof slab32 / 4);
   edits_clear();

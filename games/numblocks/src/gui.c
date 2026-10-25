@@ -1573,7 +1573,7 @@ static void menu(int screen) {
       add_button(w / 2 + 5, 100, 150, 1, B_CHEATS, t);
       cat(t, T("Seed: "), seed_text[0] ? seed_text : (field == F_SEED ? "" : T("(random)")));
       add_button(w / 2 - 100, 146, 200, 1, B_SEED, t);
-      cat(t, T("World Type: "), create_type == WT_FLAT ? T("Superflat") : T("Default"));
+      cat(t, T("World Type: "), create_type == WT_FLAT ? T("Superflat") : create_type == WT_TEST ? T("Test") : T("Default"));
       add_button(w / 2 - 155, 182, 150, 1, B_TYPE, t);
       add_button(w / 2 + 5, 182, 150, create_type == WT_FLAT, B_CUSTOMIZE, T("Customize..."));
       add_button(w / 2 - 155, h - 28, 150, 1, B_DOCREATE, T("Create New World"));
@@ -1750,7 +1750,7 @@ static void press(int id) {
       if (!cheats_set) create_cheats = create_mode;
       break;
     case B_CHEATS: create_cheats = !create_cheats, cheats_set = true; break;
-    case B_TYPE: create_type = create_type == WT_FLAT ? WT_DEFAULT : WT_FLAT; break;
+    case B_TYPE: create_type = (int)((create_type + 1) % 3); break;   /* Default, Superflat, Test */
     case B_CUSTOMIZE:
       if (create_type != WT_FLAT) break;
       /* the preset as plain blocks (older version;layers;biome strings convert) */

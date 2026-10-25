@@ -315,6 +315,19 @@ void new_world(int s, int64_t seed, int mode, bool cheats, int type, const char 
   world_new(seed, pre);
   player_spawn();
   pl.mode = (uint8_t)mode;
+  if (type == WT_TEST) {
+    /* the showcase: the sun stands still, and every mob is in its cage */
+    game_rules = (uint8_t)(GR_DEFAULT & ~GR_DAYLIGHT_CYCLE);
+    static const uint8_t mobs[] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN
+#if NB_DIMS
+                                   , E_PIGMAN, E_GHAST, E_BLAZE, E_MAGMA, E_WSKELETON, E_ENDERMAN
+#endif
+    };
+    for (unsigned k = 0; k < sizeof mobs / sizeof mobs[0]; k++) {
+      int x, y, z;
+      if (test_cage((int)k, &x, &y, &z)) ent_new(mobs[k], x + 0.5f, (float)y, z + 0.5f);
+    }
+  }
   played(s);
 }
 
