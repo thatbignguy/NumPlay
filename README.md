@@ -9,8 +9,7 @@
 
 <p align="center">
   <b>28 free games for your NumWorks calculator, in one app.</b><br>
-  Plus 25 big games that install on their own, NumBlocks included: the Nether, the End and more. For the N0110, N0115 and N0120, in English, French and Chinese.
-</p>
+  Plus 26 big games that install on their own, NumBlocks included: the Nether, the End, fortresses and the dragon. For the N0110, N0115 and N0120, in English, French and Chinese.
 </p>
 
 <p align="center">
@@ -45,7 +44,7 @@
 
 All of these come in one app, **NumPlay.nwa**.
 
-**NumBlocks is not inside NumPlay in this fork:** it is too big to share the calculator with NumPlay, so it is a [big game of its own](#big-games-installed-on-their-own), with a [hidden Interest version](#on-a-real-calculator).
+**NumBlocks is not inside NumPlay in this fork:** it is too big to share the calculator with NumPlay, so it is a [big game of its own](#big-games-installed-on-their-own), with a [hidden Interest version](#how-to-install).
 
 <table>
   <tr>

@@ -181,7 +181,13 @@ item('FIRE_CHARGE', 'Fire Charge', 'fireball', 'fire_charge', iid=519)
 for m, lab, _mc_id in MOBS_NETHER:
     iid = 447 if m == 'piglin' else 448
     item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64, iid=iid)
-MOBS = MOBS + MOBS_NETHER
+MOBS_NETHER = tuple(MOBS_NETHER)
+# the End's and the fortresses' eggs: theirs are past 519, where the new items end
+MOBS_END = (('enderman', 'Enderman', 520), ('ghast', 'Ghast', 521), ('blaze', 'Blaze', 522),
+            ('magma_cube', 'Magma Cube', 523), ('wither_skeleton', 'Wither Skeleton', 524))
+for m, lab, iid in MOBS_END:
+    item(f'{m.upper()}_SPAWN_EGG', f'{lab} Spawn Egg', f'{m}_spawn_egg', 'spawn_egg', stack=64, iid=iid)
+MOBS = MOBS + MOBS_NETHER + tuple((m, lab, iid) for m, lab, iid in MOBS_END)
 
 INAMES = [x['name'] for x in I]
 assert len(set(INAMES)) == len(INAMES)

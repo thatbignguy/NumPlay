@@ -2,7 +2,7 @@
 
 NumPlay is one calculator app (`build/NumPlay.nwa` + disguised variants) containing 17 games, plus each game as its own `.nwa` in `build/apps/`. Target is NumWorks Epsilon (Cortex-M7, EADK via `nwlink`).
 
-**NumBlocks is *not* one of the launcher's games**: it is built only as its own app (`build/apps/NumBlocks.nwa`), and as `numblocks-interest.nwa` (the Interest finance calculator with a hidden NumBlocks). The Final Earth 2 (`games/finalearth2`) is likewise its own app, brought in from upstream.
+**NumBlocks is *not* one of the launcher's games**: `games.json` marks it `"xl": true` and `"default": false`, so it is built only as its own app (`build/data/apps/NumBlocks.nwa`, published as `build/compiled/games/NumBlocks.nwa`), and as `numblocks-interest.nwa` (the Interest finance calculator with a hidden NumBlocks). The Final Earth 2 (`games/finalearth2`) is likewise its own app, brought in from upstream.
 
 ## Source of truth
 
@@ -61,7 +61,7 @@ $PY tools/emu.py build/NumPlay.nwa --model n0110 --system upsilon --ms 4000 --ou
 $PY tests/test_games.py build/apps --game chess            # one game; omit --game for all 22 (slow)
 $PY tests/test_uninstall.py build/NumPlay.nwa --game numdrive
 $PY tests/test_progress.py build/NumPlay.nwa
-$PY tests/test_numblocks_progress.py build/apps/NumBlocks.nwa
+$PY tests/test_numblocks_progress.py build/compiled/games/NumBlocks.nwa
 $PY tests/test_upsilon.py build/NumPlay-Upsilon.nwa       # no system call Upsilon lacks
 $PY tests/test_small_ram.py build/NumPlay.nwa             # NumBlocks says it lacks RAM, NumDash still runs
 ```
@@ -99,6 +99,7 @@ The version is `1.A.B`; the **first line** of `versions.md` is the current versi
     make host && ./build/play --frames 120 --mobs --torches --rain \
       --keys "0-30:fwd,60-90:use,100-140:sprint" --shots 30,60,90,119 --out /tmp/new
     ./build/play --title --frames 60 --shots 59 --out /tmp/title   # the homescreen / title screen
+    ./build/play --end --frames 60 --shots 59 --out /tmp/end       # the End (island, dragon, boss bar)
     ```
     `--keys` takes `start-end:key[,key]` (a single frame as `frame:key`); keys: `left right up down fwd back sleft sright jump use attack inv sneak sprint pause ok exe shift esc drop 1..9`.
   - `tools/emu.py` at the repo root — headless Unicorn emulation of the real `.nwa`, keys held over millisecond ranges, for device-level checks (Home-quit, RAM cleared, records written):
@@ -112,7 +113,7 @@ The version is `1.A.B`; the **first line** of `versions.md` is the current versi
 
 ## NumBlocks on its own, and numblocks-interest
 
-- `games/numblocks/` is **not** in `games/games.json`, so it is never a module of NumPlay.nwa. It is built twice: `make -C games/numblocks build` → `build/apps/NumBlocks.nwa`, and `make -C games/numblocks-interest build` → `build/apps/numblocks-interest.nwa`.
+- `games/numblocks/` is in `games.json` with `"xl": true` and `"default": false`, so it is never a module of NumPlay.nwa. It is built twice: `make -C games/numblocks build` → `build/data/apps/NumBlocks.nwa` (or `build/compiled/games/NumBlocks.nwa` after `tools/build.py`), and `make -C games/numblocks-interest build DIST_DIR=../../build/data/apps` → `build/data/apps/numblocks-interest.nwa`.
 - `games/numblocks-interest/Makefile` links NumBlocks' sources (with `-Dmain=numblocks_main`) beside the Interest front (`games/finance/`), which provides `main`, the app name and the icon; the front calls `numblocks_main()`. **Anything you change in `games/numblocks/src/main.c` must still work when `main` is renamed** — it is entered from the front, not from the calculator's launcher.
 - Because it is out of `games.json`, NumBlocks is not part of `make lang`, and its texts stay English. `games/numblocks/lang/` exists upstream only — do not add it here.
 - `tools/agentctl/` drives isolated NumBlocks agents (spawn → merge → version bump). `games/numblocks-agents/` is its runtime state, excluded via `.git/info/exclude`. The merger commits only the files it wrote, so WIP stays WIP.

@@ -273,18 +273,20 @@ Entity *mob_summon(int type, float x, float y, float z) { return spawn(type, x, 
  * sits between the overworld's eight and the nether's two: 387..394, 395, 396,397),
  * so this is a lookup, not the id - I_ZOMBIE_SPAWN_EGG arithmetic it was: that ran to
  * egg_mob[8] for QUARTZ, hidden only because quartz is never asked as an egg. */
-static const uint8_t egg_mob[10] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN,
-                                    E_PIGLIN, E_ZPIGLIN};
-static const uint16_t egg_id[10] = {I_ZOMBIE_SPAWN_EGG, I_SKELETON_SPAWN_EGG, I_CREEPER_SPAWN_EGG, I_SPIDER_SPAWN_EGG,
+static const uint8_t egg_mob[15] = {E_ZOMBIE, E_SKELETON, E_CREEPER, E_SPIDER, E_PIG, E_COW, E_SHEEP, E_CHICKEN,
+                                    E_PIGLIN, E_ZPIGLIN, E_ENDERMAN, E_GHAST, E_BLAZE, E_MAGMA, E_WSKELETON};
+static const uint16_t egg_id[15] = {I_ZOMBIE_SPAWN_EGG, I_SKELETON_SPAWN_EGG, I_CREEPER_SPAWN_EGG, I_SPIDER_SPAWN_EGG,
                                     I_PIG_SPAWN_EGG, I_COW_SPAWN_EGG, I_SHEEP_SPAWN_EGG, I_CHICKEN_SPAWN_EGG,
-                                    I_PIGLIN_SPAWN_EGG, I_ZOMBIFIED_PIGLIN_SPAWN_EGG};
+                                    I_PIGLIN_SPAWN_EGG, I_ZOMBIFIED_PIGLIN_SPAWN_EGG, I_ENDERMAN_SPAWN_EGG,
+                                    I_GHAST_SPAWN_EGG, I_BLAZE_SPAWN_EGG, I_MAGMA_CUBE_SPAWN_EGG,
+                                    I_WITHER_SKELETON_SPAWN_EGG};
 int mob_of_egg(int id) {
-  for (int i = 0; i < 10; i++)
+  for (int i = 0; i < 15; i++)
     if (egg_id[i] == id) return egg_mob[i];
   return 0;
 }
 int egg_of_mob(int mob) {
-  for (int i = 0; i < 10; i++)
+  for (int i = 0; i < 15; i++)
     if (egg_mob[i] == mob) return egg_id[i];
   return 0;
 }

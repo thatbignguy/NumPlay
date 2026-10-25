@@ -1,6 +1,6 @@
 # NumBlocks
 
-Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it follows Minecraft 1.8.8 exactly, so a seed gives you the very same world that Minecraft 1.8.8 makes, block for block, with its blocks, items, recipes, mobs, textures, font and screens.
+Minecraft 1.8.8 on your NumWorks calculator, and this fork's own modern Nether on top. NumBlocks isn't a look-alike: it follows Minecraft 1.8.8 exactly for its Overworld and its End, so a seed gives you the very same world that Minecraft 1.8.8 makes, block for block, with its blocks, items, recipes, mobs, textures, font and screens.
 
 <img src="docs/shot.png" width="320" alt="NumBlocks: oak trees and lilacs, with a sheep, a cow, a pig, a chicken and a creeper">
 
@@ -11,7 +11,13 @@ Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it fo
   with its own ground, growth and fog. Crimson and warped fungi, stems, wart blocks, roots and
   vines grow above the lava sea; soul sand, soul soil and soul fire make the valley. Piglins
   hunt you in the wastes and crimson forest; zombified piglins stay neutral until attacked.
-- **Crafting:** 142 items and 214 recipes, a furnace, chests, tools that wear out, armor.
+- **The End:** the island of End stone, its ten obsidian pillars and the ender crystals, and
+  the Ender Dragon with its boss bar, wing buffets and bite. Kill it for the exit portal and
+  the dragon egg; the three strongholds hold the way in, with their portal rooms, libraries,
+  corridors and iron doors.
+- **Nether fortresses:** nether brick bridges, corridors, crossings, stairs, thrones and castle
+  rooms, with blazes, magma cubes and wither skeletons inside.
+- **Crafting:** 150 items and 226 recipes, a furnace, chests, tools that wear out, armor.
 - **Fishing:** cast, wait for the bite, reel in fish, junk or treasure.
 - **Building:** over 230 kinds of blocks, doors, beds to sleep through the night, stairs, torches that light up caves, flowing water and lava, farms that grow.
 - **Fire:** light it with flint and steel. It spreads and burns wood, leaves and wool, like in 1.8.
@@ -19,7 +25,7 @@ Minecraft 1.8.8 on your NumWorks calculator. NumBlocks isn't a look-alike: it fo
 - **Spectator mode:** fly through the blocks and see through them, nothing to touch, and OK on a mob sees the world through its eyes.
 - **Commands:** /gamemode, /give, /time, /weather, /tp and more, with cheats on (Allow Cheats, or Open to LAN).
 - **Your worlds:** keep several, give them names, and they save as you play and when you quit. A copy also goes into `numblocks_saves.py`, so installing the game again doesn't erase them.
-- **Not in yet:** the End, redstone circuits and pistons, villages and other structures, enchanting and brewing.
+- **Not in yet:** the End poem and credits, the ghast and blaze fireballs, redstone circuits and pistons, villages and other structures, enchanting and brewing.
 
 ## Controls
 

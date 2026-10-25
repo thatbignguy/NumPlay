@@ -1,3 +1,18 @@
+## 1.5.59
+**The End's and the fortresses' mobs get their eggs, and the docs catch up**
+
+- **Spawn eggs.** Endermen, ghasts, blazes, magma cubes and wither skeletons now have spawn
+  eggs (ids 520..524, past the 512..519 items) with the modern 1.21.5 pictures from
+  `minecraft-spawneggs/`; they place the mob, work in a monster spawner, and match
+  `mob_of_egg`/`egg_of_mob` (which now look up fifteen mobs rather than ten).
+- **The docs.** The NumBlocks README, the fork README and `agents.md` describe the End, the
+  fortresses, the dragon and the new build/output paths (`build/data`, `build/compiled`),
+  and the remaining gaps are named there rather than in the version log alone.
+
+`make test` passes; `make host`, `make build`, `make check` and
+`make -C games/numblocks-interest build check` pass, with the app still inside CUSTOM_RAM
+(133652 B).
+
 ## 1.5.58
 **Nether fortresses - and the mobs that live in them, with iron doors and buttons**
 
