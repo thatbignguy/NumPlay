@@ -463,6 +463,59 @@ static void credits_screen(void) {
 }
 #endif
 
+/* ---------------------------------------------------------------- the game mode switcher */
+/* Minecraft 1.16+ picks a game mode with F3 + F4: the modes in a row, the one picked
+ * outlined, and the key that goes to the next one under them. On the calculator sin is
+ * F3 and cos, the key beside it, is F4, so the pair is sin + cos. Only with cheats on,
+ * as the switcher is the /gamemode command. */
+#define N_MODES 3
+static const int mode_of[N_MODES] = {1, 0, 2};   /* Creative, Survival, Spectator */
+static const char *const mode_name[N_MODES] = {"Creative", "Survival", "Spectator"};
+static uint8_t mode_sel;                          /* the mode outlined */
+
+static int slot_of_mode(int m) { return m == 1 ? 0 : m == 2 ? 2 : 1; }
+
+void mode_open(void) {
+  if (gui != GUI_NONE) return;   /* (over the world, as in Minecraft) */
+  if (!cheats_on()) {
+    chat_add(T("You do not have permission to use this command"), CHAT_RED);
+    return;
+  }
+  mode_sel = (uint8_t)slot_of_mode(pl.mode == 1 ? 0 : 1);   /* the other mode */
+  gui = GUI_MODE;
+}
+
+void mode_next(void) { mode_sel = (uint8_t)((mode_sel + 1) % N_MODES); }
+
+void mode_use(void) {
+  player_set_mode(mode_of[mode_sel]);
+  gui = GUI_NONE;
+}
+
+void mode_cancel(void) { gui = GUI_NONE; }
+
+static void mode_screen(void) {
+  int x0 = (SCREEN_W - 160) / 2, y0 = (SCREEN_H - 92) / 2;
+  fill(x0, y0, 160, 92, RGB(0x21, 0x21, 0x21));
+  fill(x0, y0, 160, 1, RGB(0xA0, 0xA0, 0xA0));
+  fill(x0, y0 + 91, 160, 1, RGB(0xA0, 0xA0, 0xA0));
+  fill(x0, y0, 1, 92, RGB(0xA0, 0xA0, 0xA0));
+  fill(x0 + 159, y0, 1, 92, RGB(0xA0, 0xA0, 0xA0));
+  text_center(T("Game Mode"), x0 + 80, y0 + 6, 0xFFFF);
+  for (int i = 0; i < N_MODES; i++) {
+    int y = y0 + 22 + i * 16;
+    if (i == mode_sel) {
+      fill(x0 + 8, y - 2, 144, 12, RGB(0x3A, 0x50, 0x8A));
+      fill(x0 + 8, y - 2, 144, 1, 0xFFFF);
+      fill(x0 + 8, y + 9, 144, 1, 0xFFFF);
+    }
+    text_center(mode_name[i], x0 + 80, y, i == mode_sel ? 0xFFFF : RGB(0xB0, 0xB0, 0xB0));
+  }
+  text_center(T("cos: next   OK: take"), x0 + 80, y0 + 70, RGB(0x90, 0x90, 0x90));
+  text_center(T("Back: leave"), x0 + 80, y0 + 81, RGB(0x90, 0x90, 0x90));
+}
+
+
 /* ---------------------------------------------------------------- the HUD (GuiIngame) */
 static int name_timer, last_slot = -1, last_id;
 
@@ -518,6 +571,7 @@ static void hud(void) {
   hud_boss();
 #endif
   if (clip_y1 <= SCREEN_H - 60) return;
+  if (pl.mode == 2) return;   /* a spectator holds nothing: no hotbar, no hearts, no food */
   sprite(SP_HOTBAR, hx, hy);
   sprite(SP_HOTBAR_SEL, hx - 1 + pl.slot * 20, hy - 1);
   for (int i = 0; i < 9; i++) draw_stack(&pl.inv[i], hx + 3 + i * 20, hy + 3);
@@ -2301,6 +2355,11 @@ void gui_input(uint32_t keys, uint32_t pressed) {
     return;
   }
 #endif
+  if (gui == GUI_MODE) {
+    if (pressed & (K_OK | K_EXE)) mode_use();
+    else if (pressed & K_BACK) mode_cancel();
+    return;
+  }
   if (gui >= GUI_PAUSE) {
     if (gui == GUI_PAUSE && (pressed & K_PAUSE)) {
       gui = GUI_NONE;
@@ -2315,7 +2374,7 @@ void gui_input(uint32_t keys, uint32_t pressed) {
   }
   if (gui == GUI_NONE) {
     nbuttons = 0;
-    if (pressed & K_INV && !pl.dead) gui_open(pl.mode == 1 ? GUI_CREATIVE : GUI_INVENTORY, 0, 0, 0);
+    if (pressed & K_INV && !pl.dead && pl.mode != 2) gui_open(pl.mode == 1 ? GUI_CREATIVE : GUI_INVENTORY, 0, 0, 0);
     else if (pressed & K_PAUSE) gui_menu(GUI_PAUSE);
     else if (pressed & K_COMMAND && !pl.dead) chat_open("/");
     else if (pressed & K_CHAT && !pl.dead) chat_open("");
@@ -2529,6 +2588,10 @@ void hud_strip(uint16_t *buf, int y0, int rows) {
     case GUI_PAUSE: case GUI_LAN:
       dark_background();
       menu_screen();
+      break;
+    case GUI_MODE:
+      dark_background();
+      mode_screen();
       break;
     case GUI_CHAT: chat_screen(); break;
     case GUI_OPTIONS: case GUI_CONTROLS: case GUI_KEYS: case GUI_MODS: case GUI_PERSONAL:

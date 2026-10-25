@@ -224,12 +224,9 @@ static void cmd_gamemode(char **a, int n) {
   int m = choice(a[0], modes, 4, l);
   if (n > 1) player(a[1]);
   if (failed) return;
-  if (m > 1) return error(T("'%s' is not a valid number"), a[0], 0, 0);   /* (NumBlocks has no adventure or spectator) */
-  pl.mode = (uint8_t)m;
-  pl.fall = 0;
-  if (m == 0) pl.flying = false;
-  chat_add(T("Your game mode has been updated"), CHAT_WHITE);
-  ok(T("Set own game mode to %s"), mode_name[m], 0);
+  if (m == 2) return error(T("'%s' is not a valid number"), a[0], 0, 0);   /* (NumBlocks has no adventure) */
+  player_set_mode(m == 3 ? 2 : m);   /* spectator is Minecraft's third mode and NumBlocks' second */
+  ok(T("Set own game mode to %s"), modes[m], 0);
 }
 
 static void cmd_time(char **a, int n) {

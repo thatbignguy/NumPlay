@@ -103,7 +103,7 @@ static bool flat_item(int id) {
 
 void hand_frame(void) {
   kind = H_NONE;
-  if (pl.dead || pl.sleep_timer || gui > GUI_PAUSE) return;
+  if (pl.dead || pl.sleep_timer || pl.mode == 2 || gui > GUI_PAUSE) return;
   float t = tick_frac;
   float swing = swing_t < 0 ? 0 : (swing_t + t) / 6.0f;
   if (swing > 1) swing = 1;

@@ -181,10 +181,24 @@ bool game_frame(void) {
   uint32_t k = plat_keys();
   uint32_t pressed = k & ~keys_held;
   keys_held = k;
+  uint64_t raw = plat_scan();
   static bool pick_held;
-  bool pick = opt.keys[A_PICK] < 64 && (plat_scan() >> opt.keys[A_PICK] & 1);
+  bool pick = opt.keys[A_PICK] < 64 && (raw >> opt.keys[A_PICK] & 1);
   if (pick && !pick_held && in_world && gui == GUI_NONE && !pl.dead) player_pick_block();
   pick_held = pick;
+  /* sin + cos: the game mode switcher, as Minecraft's F3 + F4 (sin is F3, cos beside it is F4).
+   * Holding sin and tapping cos moves the outline; letting go of sin takes the mode. */
+  static bool pair_held, sin_held;
+  bool sin = (raw >> 24 & 1) != 0, cos = (raw >> 25 & 1) != 0;
+  if (sin && cos && !pair_held) {
+    if (gui == GUI_MODE) mode_next();
+    else if (in_world && gui == GUI_NONE) mode_open();
+  }
+  pair_held = sin && cos;
+  if (sin_held && !sin) {
+    if (gui == GUI_MODE) mode_use();
+  }
+  sin_held = sin;
   if (k & K_HOME) {
     /* Home: save and quit, from anywhere */
     if (in_world) {
@@ -266,7 +280,7 @@ bool game_frame(void) {
     if (pl.pitch < -90) pl.pitch = -90;
   }
   bool paused = gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_LAN || gui == GUI_KEYS ||
-                gui == GUI_MODS || gui == GUI_FLAT || gui == GUI_PERSONAL;
+                gui == GUI_MODS || gui == GUI_FLAT || gui == GUI_PERSONAL || gui == GUI_MODE;
 #if NB_DIMS
   paused = paused || gui == GUI_CREDITS;   /* (the player is in no world while they roll) */
 #endif

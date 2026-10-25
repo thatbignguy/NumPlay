@@ -279,6 +279,7 @@ void dims_player_tick(void) {
   }
   end_tick();
   dims_spawners_tick();
+  if (pl.mode == 2) return;   /* a spectator goes through the blocks, not the portals */
   bool nether = false, end = false;
   int px = 0, pz = 0, pax = 0;
   for (int y = ifl(pl.y + 0.001f); y <= ifl(pl.y + 1.799f); y++)

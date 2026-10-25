@@ -143,6 +143,7 @@ static void exhaust(float f) { pl.exhaustion += f; }
  * grace after a hit (only more damage gets through), armour takes 4% a point */
 void player_hurt(float amount, int kind) {
   if (pl.dead || amount <= 0) return;
+  if (pl.mode == 2) return;   /* a spectator is invulnerable (abilities.invulnerable) */
   if (pl.mode == 1 && kind != DMG_VOID) return;
   if (pl.invuln > 10) {
     if (amount <= pl.last_damage) return;
@@ -737,7 +738,7 @@ static void use(uint32_t pressed) {
 /* Minecraft.middleClickMouse: the block looked at in the hand, from the hotbar if it is there; in
  * Creative, else into the first empty hotbar slot, or the one held (InventoryPlayer.setCurrentItem) */
 void player_pick_block(void) {
-  if (pl.hit_face < 0) return;
+  if (pl.mode == 2 || pl.hit_face < 0) return;
   int id = blk_item[world_get(pl.hit_x, pl.hit_y, pl.hit_z)];
   if (id == 0xFFFF) return;
   for (int i = 0; i < 9; i++)
@@ -833,8 +834,51 @@ static void hazards(float fell_from) {
   if (pl.y < -64) player_hurt(4, DMG_VOID);
 }
 
+/* ---------------------------------------------------------------- spectator */
+/* Minecraft's spectator: no collision, no landing, nothing to touch. It flies as in
+ * creative (0.05 a tick, twice with the sprint key) but through the blocks rather
+ * than against them, so a tick is only the speed and the integration. */
+static void spectator_tick(uint32_t keys) {
+  float fwd = (keys & K_FWD ? 1.0f : 0) - (keys & K_BACKW ? 1.0f : 0);
+  float strafe = (keys & K_STRAFE_L ? 1.0f : 0) - (keys & K_STRAFE_R ? 1.0f : 0);
+  pl.sneaking = false;
+  pl.sprinting = (keys & K_SPRINT) != 0;
+  fwd *= 0.98f, strafe *= 0.98f;
+  if (keys & K_JUMP) pl.vy += 0.15f;
+  if (keys & K_SNEAK) pl.vy -= 0.15f;
+  move_flying(strafe, fwd, pl.sprinting ? 0.1f : 0.05f);
+  pl.x += pl.vx, pl.y += pl.vy, pl.z += pl.vz;
+  if (pl.y > (float)(WORLD_H + 24)) pl.y = (float)(WORLD_H + 24), pl.vy = 0;   /* above the clouds */
+  pl.vx *= 0.91f, pl.vy *= 0.6f, pl.vz *= 0.91f;
+  pl.on_ground = false;
+  pl.walked = pl.prev_walked = pl.bob = pl.prev_bob = 0;
+  pl.in_water = in_liquid();
+}
+
+/* a game mode change, as /gamemode does it: the fall starts from here, and survival no
+ * longer flies. What the mode rules over (health, hunger, drops, the breaking speed, the
+ * inventory that opens) is read from pl.mode where it is used. Kept in the world's save. */
+void player_set_mode(int m) {
+  pl.mode = (uint8_t)m;
+  pl.fall = 0;
+  pl.using_ticks = 0;
+  if (m == 0) pl.flying = false;
+  if (m == 2) pl.flying = true;
+  chat_add("Your game mode has been updated", CHAT_WHITE);
+}
+
 void player_tick(uint32_t keys, uint32_t pressed) {
   if (pl.dead) return;
+  if (pl.mode == 2) {   /* a spectator: nothing to touch, nothing hurts, nothing is mined */
+    if (pl.invuln > 0) pl.invuln--;
+    if (pl.hurt_time > 0) pl.hurt_time--;
+    spectator_tick(keys);
+#if NB_DIMS
+    dims_player_tick();   /* the End's dragon and the fortresses' spawners still run */
+    buttons_tick();
+#endif
+    return;
+  }
   if (pl.sleep_timer) {
     /* asleep: after 100 ticks the night is over (WorldServer.wakeAllPlayers); a key gets you up */
     if (++pl.sleep_timer >= 100) {

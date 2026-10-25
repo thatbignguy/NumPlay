@@ -48,6 +48,7 @@ static bool night;
 static int under_water;
 static int cam_x, cam_y, cam_z, cam_i, cam_b;   /* the camera's cell, its index (-1 outside the cache), its block */
 static int cam_mi, cam_liq;      /* its region, the liquid it is in (liquid[], 255: none) */
+static bool xray;                /* (a spectator's head inside solid rock: see through it) */
 static float cam_fr[3][2];       /* from the eye to its cell's sides: [axis][0 low side, 1 high] */
 
 static const float TAN_V = 0.70020754f;   /* 70 degree vertical field of view */
@@ -430,6 +431,9 @@ typedef struct {
  * registers it would take) */
 static __attribute__((noinline)) int cell_hit(Ray *R, int b, int i, int x, int y, int z, int face, float t, float tl) {
   int m = blk_model[b];
+  /* A spectator's head inside the rock sees out: an opaque face whose cell behind it is
+   * opaque too is skipped, so the rock around the eyes goes and the world beyond stays. */
+  if (xray && (blk_flags[b] & BF_OPAQUE) && (blk_flags[VB(came_from(i, face, x, y, z))] & BF_OPAQUE)) return -1;
   int col = z * VCX + x;
   float lx = ox + R->dx * t - x, ly = oy + R->dy * t - y, lz = oz + R->dz * t - z;
   if (m == M_CUBE || m == M_LEAVES || m == M_GLASS) {
@@ -2027,7 +2031,7 @@ static uint32_t strip_hash(void) {
 static bool still_screen(void) {
   return gui == GUI_PAUSE || gui == GUI_OPTIONS || gui == GUI_CONTROLS || gui == GUI_WORLDS || gui == GUI_CREATE ||
          gui == GUI_CONFIRM || gui == GUI_RENAME || gui == GUI_LOADING || gui == GUI_LAN || gui == GUI_KEYS ||
-         gui == GUI_MODS || gui == GUI_FLAT || gui == GUI_PERSONAL;
+         gui == GUI_MODS || gui == GUI_FLAT || gui == GUI_PERSONAL || gui == GUI_MODE;
 }
 static void send_strip(int py, bool still) {
   if (still) {
@@ -2208,6 +2212,7 @@ void render_frame(const Camera *c, uint32_t tod) {
   cam_x = (int)floorf(ox), cam_y = (int)floorf(oy), cam_z = (int)floorf(oz);
   cam_i = (unsigned)cam_x < VCX && (unsigned)cam_y < VCY && (unsigned)cam_z < VCZ ? VC_I(cam_x, cam_y, cam_z) : -1;
   cam_b = cam_i < 0 ? B_AIR : VB(cam_i);
+  xray = pl.mode == 2 && cam_b != B_AIR && (blk_flags[cam_b] & BF_OPAQUE) != 0;
   cam_mi = cam_i < 0 ? 0 : MC_I(cam_x, cam_y, cam_z);
   cam_fr[0][0] = cam_x - ox, cam_fr[0][1] = cam_x + 1 - ox;
   cam_fr[1][0] = cam_y - oy, cam_fr[1][1] = cam_y + 1 - oy;

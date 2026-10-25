@@ -1,3 +1,17 @@
+## 1.5.66
+**Spectator mode and the game mode switcher**
+- `pl.mode` 2 is Minecraft's spectator: always flying, through every block, no
+  collision, damage, hunger, mining, placing, eating or inventory; the HUD is
+  just the crosshair and the hand is gone, mobs do not attack, and the dragon
+  and fortress spawners keep running. A spectator's head inside rock sees out
+  of it (the rock around the eyes is skipped). `/gamemode spectator` (and
+  `sp`) works; `/gamemode adventure` is still refused.
+- sin + cos opens the game mode switcher, as Minecraft's F3 + F4: Creative,
+  Survival and Spectator in a panel, the chosen one outlined. Tapping cos while
+  sin is held moves the outline; letting go of sin (or OK) takes it, Back
+  leaves. It needs cheats, as `/gamemode` does.
+- `--mode` and `--spectator` added to `build/play`.
+
 ## 1.5.65
 **Personalisation: the title's panoramas, drawn from the game's own world, and high-contrast outlines**
 - Options gains "Personalisation..." beside "Mods and Cheats...", with High

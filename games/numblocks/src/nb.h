@@ -19,7 +19,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen shows */
-#define NB_VERSION "1.5.65"
+#define NB_VERSION "1.5.66"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -193,7 +193,7 @@ typedef struct {
   float walked, bob, prev_walked, prev_bob;   /* view bobbing (EntityPlayer.cameraYaw) */
   float xp;               /* 0..1 of the way to the next level */
   int spawn_x, spawn_y, spawn_z;
-  uint8_t mode;           /* 0 survival, 1 creative */
+  uint8_t mode;           /* 0 survival, 1 creative, 2 spectator */
   uint8_t eff_amp[3];     /* effects: their amplifiers (0: level I) */
   uint16_t eff[3];        /* effects: ticks left (poison, hunger, regeneration) */
 } Player;
@@ -278,6 +278,7 @@ Entity *entity_looked_at(float reach, float block_t);   /* the mob under the cro
 extern float tick_frac;
 
 void player_respawn(void);
+void player_set_mode(int m);   /* /gamemode, or the mode switcher: 0 survival, 1 creative, 2 spectator */
 
 /* ---------------------------------------------------------------- liquids and growing (tick.c) */
 void fluid_schedule(int x, int y, int z);   /* a liquid there may move */
@@ -310,7 +311,7 @@ void break_block_at(int x, int y, int z, bool drops);
 /* ---------------------------------------------------------------- screens (gui.c) */
 enum { GUI_NONE, GUI_INVENTORY, GUI_CRAFTING, GUI_FURNACE, GUI_CHEST, GUI_CREATIVE, GUI_CHAT,
        GUI_PAUSE, GUI_DEATH, GUI_OPTIONS, GUI_TITLE, GUI_WORLDS, GUI_CREATE, GUI_CONFIRM, GUI_LOADING, GUI_CONTROLS,
-       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_MODS, GUI_FLAT, GUI_PERSONAL
+       GUI_RENAME, GUI_LAN, GUI_KEYS, GUI_MODS, GUI_FLAT, GUI_PERSONAL, GUI_MODE
 #if NB_DIMS
        , GUI_CREDITS   /* the End poem and the credits (gui.c) */
 #endif
@@ -323,6 +324,11 @@ void gui_tick(void);       /* 20 a second: furnaces */
 void tiles_removed(int x, int y, int z);   /* a chest or furnace broken: its items fall out */
 void tiles_forget(int x, int y, int z);    /* (or replaced by a command: they are gone) */
 void gui_menu(int screen);  /* opens a menu screen */
+/* the game mode switcher (gui.c, main.c: sin + cos, as Minecraft's F3 + F4) */
+void mode_open(void);
+void mode_next(void);
+void mode_use(void);
+void mode_cancel(void);
 enum { ACT_NONE, ACT_PLAY, ACT_NEW, ACT_QUIT_APP, ACT_SAVE_QUIT, ACT_RESPAWN, ACT_TITLE };
 extern int menu_choice;    /* what a menu asks main.c to do (ACT_*), 0 if nothing */
 extern int play_slot;      /* (ACT_PLAY) the world chosen */
