@@ -113,6 +113,10 @@ def custom_texture(jar, n):
         modern = r > 100
     except Exception:
         modern = False
+    if n == '@end_portal':
+        return jar.image('entity/end_portal').convert('RGBA').crop((0, 0, 16, 16))
+    if n == '@end_sky':
+        return jar.image('environment/end_sky').convert('RGBA').crop((0, 0, 16, 16))
     if n == '@chest_top':
         box = (28, 0, 42, 14) if modern else (14, 0, 28, 14)
         top = ch.crop(box)
@@ -261,7 +265,9 @@ BOX = {'slab': [(0, 0, 0, 16, 8, 16)], 'layer': [(0, 0, 0, 16, 2, 16)], 'torch':
        'plate': [(1, 0, 1, 15, 1, 15)], 'plate_down': [(1, 0, 1, 15, 1, 15)],
        'fence': [(6, 0, 6, 10, 16, 10)],
        'pane': [(7, 0, 7, 9, 16, 9)], 'ladder': [(0, 0, 14, 16, 16, 16)], 'vine': [(0, 0, 15, 16, 16, 16)],
-       'bed': [(0, 0, 0, 16, 9, 16)], 'chest': [(1, 0, 1, 15, 14, 15)], 'liquid': [(0, 0, 0, 16, 14, 16)]}
+       'bed': [(0, 0, 0, 16, 9, 16)], 'chest': [(1, 0, 1, 15, 14, 15)], 'liquid': [(0, 0, 0, 16, 14, 16)],
+       'frame': [(0, 0, 0, 16, 13, 16)], 'endportal': [(0, 0, 0, 16, 12, 16)],
+       'egg': [(1, 0, 1, 15, 16, 15)], 'button': [(0, 6, 5, 2, 10, 11)]}
 STAIR_TOP = [(8, 8, 0, 16, 16, 16), (0, 8, 0, 8, 16, 16), (0, 8, 8, 16, 16, 16), (0, 8, 0, 16, 16, 8)]
 # BlockDoor's bounds: facing east, south, west, north; closed, then open
 DOOR = [(0, 0, 0, 3, 16, 16), (0, 0, 0, 16, 16, 3), (13, 0, 0, 16, 16, 16), (0, 0, 13, 16, 16, 16),
@@ -272,6 +278,8 @@ WALL_TORCH = {'TORCH_E': (1, 3, 7, 3, 14, 9), 'TORCH_W': (13, 3, 7, 15, 14, 9), 
 
 def boxes_of(s):
     m = s['model']
+    if m == 'frame' and s['name'].endswith('_EYE'):
+        return [(0, 0, 0, 16, 13, 16), (4, 13, 4, 12, 16, 16)]
     if m == 'portal':
         # the nether portal's thin plane: NS runs east-west (thin in Z), EW runs
         # north-south (thin in X), two texels thick in the middle like a pane
@@ -904,7 +912,7 @@ def main():
         if s['model'] in ('cube',):
             f |= BF_OPAQUE
         if s['model'] in ('cube', 'leaves', 'glass', 'slab', 'cactus', 'fence', 'pane', 'door', 'layer', 'stairs',
-                          'chest', 'bed'):
+                          'chest', 'bed', 'frame', 'egg'):
             f |= BF_SOLID
         fl.append(f)
     out.append('const uint8_t blk_flags[NSTATES] = {' + ','.join(pad([str(v) for v in fl])) + '};')

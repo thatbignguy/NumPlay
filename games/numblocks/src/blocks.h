@@ -490,7 +490,33 @@ enum {
   B_SOUL_SOIL = 483,   /* 247:7 */
   B_SOUL_FIRE = 484,   /* 247:8 */
   B_BARRIER = 485,   /* 166:0 */
-  B_COUNT = 486
+  B_NETHER_BRICK = 486,   /* 112:0 */
+  B_NETHER_BRICK_FENCE = 487,   /* 113:0 */
+  B_NETHER_BRICK_STAIRS_E = 488,   /* 114:0 */
+  B_NETHER_BRICK_STAIRS_W = 489,   /* 114:1 */
+  B_NETHER_BRICK_STAIRS_S = 490,   /* 114:2 */
+  B_NETHER_BRICK_STAIRS_N = 491,   /* 114:3 */
+  B_END_PORTAL = 492,   /* 119:0 */
+  B_END_PORTAL_FRAME = 493,   /* 120:0 */
+  B_END_PORTAL_FRAME_EYE = 494,   /* 120:4 */
+  B_END_STONE = 495,   /* 121:0 */
+  B_DRAGON_EGG = 496,   /* 122:0 */
+  B_IRON_BARS = 497,   /* 101:0 */
+  B_STONE_BRICK_STAIRS_E = 498,   /* 109:0 */
+  B_STONE_BRICK_STAIRS_W = 499,   /* 109:1 */
+  B_STONE_BRICK_STAIRS_S = 500,   /* 109:2 */
+  B_STONE_BRICK_STAIRS_N = 501,   /* 109:3 */
+  B_IRON_DOOR_LOWER_E = 502,   /* 71:0 */
+  B_IRON_DOOR_LOWER_S = 503,   /* 71:1 */
+  B_IRON_DOOR_LOWER_W = 504,   /* 71:2 */
+  B_IRON_DOOR_LOWER_N = 505,   /* 71:3 */
+  B_IRON_DOOR_LOWER_E_OPEN = 506,   /* 71:4 */
+  B_IRON_DOOR_LOWER_S_OPEN = 507,   /* 71:5 */
+  B_IRON_DOOR_LOWER_W_OPEN = 508,   /* 71:6 */
+  B_IRON_DOOR_LOWER_N_OPEN = 509,   /* 71:7 */
+  B_IRON_DOOR_UPPER = 510,   /* 71:8 */
+  B_STONE_BUTTON = 511,   /* 77:1 */
+  B_COUNT = 512
 };
 
 /* the block-state ids NumBlocks' packing uses: 9 bits each (the block cache, the
@@ -498,7 +524,7 @@ enum {
  * what the per-state tables are sized for */
 #define NSTATES 512
 
-enum { M_NONE, M_CUBE, M_CROSS, M_LIQUID, M_TORCH, M_SLAB, M_LAYER, M_CACTUS, M_LEAVES, M_GLASS, M_FLAT, M_VINE, M_PANE, M_FENCE, M_DOOR, M_LADDER, M_STAIRS, M_CHEST, M_BED, M_PORTAL, M_PLATE, M_PLATE_DOWN };
+enum { M_NONE, M_CUBE, M_CROSS, M_LIQUID, M_TORCH, M_SLAB, M_LAYER, M_CACTUS, M_LEAVES, M_GLASS, M_FLAT, M_VINE, M_PANE, M_FENCE, M_DOOR, M_LADDER, M_STAIRS, M_CHEST, M_BED, M_PORTAL, M_PLATE, M_PLATE_DOWN, M_FRAME, M_ENDPORTAL, M_EGG, M_BUTTON };
 enum { T_NONE, T_PICKAXE, T_AXE, T_SHOVEL, T_SHEARS, T_SWORD };
 
 /* the Nether and the End (NumBlocks.nwa only) */
@@ -559,7 +585,7 @@ enum {
   B_FLOWING_LAVA_7 = 309,   /* 10:7 */
   B_ALL = 310
 };
-enum { M_PORTAL = 19, M_FRAME = 20, M_ENDPORTAL = 21, M_EGG = 22, M_BUTTON = 23 };
+enum { M_PORTAL = 26, M_FRAME = 27, M_ENDPORTAL = 28, M_EGG = 29, M_BUTTON = 30 };
 #define B_N B_ALL
 #else
 #define B_N B_COUNT

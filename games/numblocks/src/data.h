@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "blocks.h"
 
-#define NTEX 299
+#define NTEX 309
 /* tex_flags: bits 0-4, the first palette index tinted by the biome (16: none); 0x20: has see-through texels */
 extern const uint8_t tex_px[NTEX][128];
 extern const uint16_t tex_pal[NTEX][16];
@@ -326,6 +326,16 @@ extern const uint8_t rain_run[][4], snow_run[][4], rain_idx[257], snow_idx[257];
 #define TX_SOUL_SOIL 296
 #define TX_SOUL_FIRE_0 297
 #define TX_BARRIER 298
+#define TX_NETHER_BRICK 299
+#define TX_END_PORTAL 300
+#define TX_ENDFRAME_TOP 301
+#define TX_ENDFRAME_SIDE 302
+#define TX_END_STONE 303
+#define TX_ENDFRAME_EYE 304
+#define TX_DRAGON_EGG 305
+#define TX_IRON_BARS 306
+#define TX_DOOR_IRON_LOWER 307
+#define TX_DOOR_IRON_UPPER 308
 
 extern const uint8_t spr_px[], spr_w[], spr_h[], spr_alpha[];
 extern const uint32_t spr_off[];
@@ -360,31 +370,31 @@ extern const uint16_t blk_icon[NSTATES];   /* sprite of its icon */
 #define SP_MOON_5 26
 #define SP_MOON_6 27
 #define SP_MOON_7 28
-#define SP_FLAME 516
-#define SP_ARROW 517
-#define SP_ARMOR_FULL 518
-#define SP_ARMOR_HALF 519
-#define SP_BUBBLE_POP 520
-#define SP_HEART_HIT 521
-#define SP_TAB_TOP 522
-#define SP_TAB_TOP_SEL 523
-#define SP_TAB_BOTTOM 524
-#define SP_TAB_BOTTOM_SEL 525
-#define SP_SCROLLER 526
-#define SP_BUTTON 527
-#define SP_BUTTON_HOVER 528
-#define SP_BUTTON_OFF 529
-#define SP_GM_BG 530
-#define SP_GM_SLOT 531
-#define SP_GM_SEL 532
-#define SP_SLOT_HELMET 533
-#define SP_SLOT_CHESTPLATE 534
-#define SP_SLOT_LEGGINGS 535
-#define SP_SLOT_BOOTS 536
-#define SP_STEVE 537
-#define SP_ARM 538
-#define SP_DIRT_BG 539
-#define SP_EYE_ENDER 540
+#define SP_FLAME 550
+#define SP_ARROW 551
+#define SP_ARMOR_FULL 552
+#define SP_ARMOR_HALF 553
+#define SP_BUBBLE_POP 554
+#define SP_HEART_HIT 555
+#define SP_TAB_TOP 556
+#define SP_TAB_TOP_SEL 557
+#define SP_TAB_BOTTOM 558
+#define SP_TAB_BOTTOM_SEL 559
+#define SP_SCROLLER 560
+#define SP_BUTTON 561
+#define SP_BUTTON_HOVER 562
+#define SP_BUTTON_OFF 563
+#define SP_GM_BG 564
+#define SP_GM_SLOT 565
+#define SP_GM_SEL 566
+#define SP_SLOT_HELMET 567
+#define SP_SLOT_CHESTPLATE 568
+#define SP_SLOT_LEGGINGS 569
+#define SP_SLOT_BOOTS 570
+#define SP_STEVE 571
+#define SP_ARM 572
+#define SP_DIRT_BG 573
+#define SP_EYE_ENDER 574
 
 #include "items.h"
 extern const uint16_t blk_item[NSTATES];   /* the item a block state counts as (0xFFFF: none) */
@@ -395,9 +405,9 @@ extern const uint16_t it_icon[ITEM_SLOTS], it_dur[ITEM_SLOTS], it_fuel[ITEM_SLOT
 extern const uint8_t it_kind[ITEM_SLOTS], it_stack[ITEM_SLOTS], it_tier[ITEM_SLOTS], it_a[ITEM_SLOTS], it_b[ITEM_SLOTS];
 extern const uint8_t it_place[ITEM_SLOTS];   /* the block it places (255: none) */
 typedef struct { uint16_t out; uint8_t n, w, h; uint16_t in[9]; } Recipe;   /* w 0: shapeless, h of them */
-#define N_RECIPES 214
+#define N_RECIPES 226
 extern const Recipe recipes[N_RECIPES];
-#define N_SMELTING 28
+#define N_SMELTING 29
 extern const uint16_t smelting[N_SMELTING][2];
 extern const uint16_t group_planks[];   /* ends with 0xFFFF */
 extern const uint16_t group_wool[];   /* ends with 0xFFFF */

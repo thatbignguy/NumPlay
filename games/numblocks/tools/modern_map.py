@@ -31,6 +31,9 @@ BLOCK_MAP = {
     'stone_andesite': 'andesite', 'stone_andesite_smooth': 'polished_andesite',
     'cobblestone_mossy': 'mossy_cobblestone',
     'stonebrick': 'stone_bricks', 'stonebrick_mossy': 'mossy_stone_bricks',
+    'nether_brick': 'nether_bricks', 'endframe_top': 'end_portal_frame_top',
+    'endframe_side': 'end_portal_frame_side', 'endframe_eye': 'end_portal_frame_eye',
+    'door_iron_lower': 'iron_door_bottom', 'door_iron_upper': 'iron_door_top',
     'stonebrick_cracked': 'cracked_stone_bricks', 'stonebrick_carved': 'chiseled_stone_bricks',
     'stone_slab_top': 'smooth_stone', 'stone_slab_side': 'smooth_stone',
     'sandstone_carved': 'chiseled_sandstone', 'sandstone_smooth': 'cut_sandstone',
@@ -117,6 +120,7 @@ ITEM_MAP = {
     'dye_powder_light_blue': 'light_blue_dye', 'dye_powder_magenta': 'magenta_dye',
     'dye_powder_orange': 'orange_dye', 'dye_powder_white': 'bone_meal',
     'clock': 'clock_00', 'compass': 'compass_00',
+    'netherbrick': 'nether_brick', 'fireball': 'fire_charge',
 }
 
 # --- anything else pack.py asks for: 1.8.8 path -> modern path (same unless listed)

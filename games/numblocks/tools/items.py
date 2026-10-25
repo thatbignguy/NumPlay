@@ -17,7 +17,8 @@ import blocks  # noqa: E402
 
 KINDS = ['none', 'block', 'pickaxe', 'axe', 'shovel', 'hoe', 'sword', 'shears', 'helmet', 'chestplate', 'leggings',
          'boots', 'food', 'stew', 'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'placer', 'flint_and_steel',
-         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod', 'spawn_egg']
+         'bow', 'bone_meal', 'snowball', 'egg', 'fishing_rod', 'spawn_egg', 'ender_pearl', 'ender_eye',
+         'fire_charge']
 # tool materials: harvest level, uses, efficiency, attack bonus (Item.EnumToolMaterial)
 TOOL_MAT = {'wood': (0, 59, 2, 0), 'stone': (1, 131, 4, 1), 'iron': (2, 250, 6, 2), 'diamond': (3, 1561, 8, 3),
             'gold': (0, 32, 12, 0)}
@@ -161,6 +162,16 @@ for m, lab, _mc_id in MOBS:
 
 # (new items go last: their ids are what the saves keep)
 item('QUARTZ', 'Nether Quartz', 'quartz')
+# The Nether and the End's own items. They sit past 511, where the 9-bit block states end,
+# so the block and item number spaces do not meet.
+item('NETHERBRICK', 'Nether Brick', 'netherbrick', iid=512)
+item('ENDER_PEARL', 'Ender Pearl', 'ender_pearl', 'ender_pearl', stack=16, iid=513)
+item('ENDER_EYE', 'Eye of Ender', 'ender_eye', 'ender_eye', iid=514)
+item('BLAZE_ROD', 'Blaze Rod', 'blaze_rod', fuel=2400, iid=515)
+item('BLAZE_POWDER', 'Blaze Powder', 'blaze_powder', iid=516)
+item('GHAST_TEAR', 'Ghast Tear', 'ghast_tear', iid=517)
+item('MAGMA_CREAM', 'Magma Cream', 'magma_cream', iid=518)
+item('FIRE_CHARGE', 'Fire Charge', 'fireball', 'fire_charge', iid=519)
 # The nether's two eggs: the items' own id range (256 onwards, one an item) ends at 395
 # because the block states past it are blocks of their own (396: chiseled quartz block,
 # 397: quartz pillar, and on) - a holdable block's stack id is its own state's, so the
@@ -241,6 +252,11 @@ LABELS = {
     'CRIMSON_ROOTS': 'Crimson Roots', 'WARPED_ROOTS': 'Warped Roots', 'NETHER_SPROUTS': 'Nether Sprouts',
     'WEEPING_VINES': 'Weeping Vines', 'TWISTING_VINES': 'Twisting Vines', 'SOUL_SOIL': 'Soul Soil',
     'SOUL_FIRE': 'Soul Fire', 'BARRIER': 'Barrier',
+    'NETHER_BRICK': 'Nether Brick', 'NETHER_BRICK_FENCE': 'Nether Brick Fence',
+    'NETHER_BRICK_STAIRS_E': 'Nether Brick Stairs',
+    'END_PORTAL_FRAME': 'End Portal Frame', 'END_STONE': 'End Stone', 'DRAGON_EGG': 'Dragon Egg',
+    'IRON_BARS': 'Iron Bars', 'STONE_BRICK_STAIRS_E': 'Stone Brick Stairs',
+    'IRON_DOOR_LOWER_E': 'Iron Door', 'STONE_BUTTON': 'Stone Button',
 }
 for n, t in [('OAK', 'Oak'), ('SPRUCE', 'Spruce'), ('BIRCH', 'Birch'), ('JUNGLE', 'Jungle'), ('ACACIA', 'Acacia'),
              ('DARK_OAK', 'Dark Oak')]:
@@ -299,6 +315,14 @@ for s in blocks.S:
     if s['name'].startswith(('FLOWING_WATER', 'FLOWING_LAVA', 'FALLING_')):
         ITEM_OF[s['name']] = None
 ITEM_OF['AIR'] = None
+for _d in 'WSN':
+    ITEM_OF[f'NETHER_BRICK_STAIRS_{_d}'] = 'NETHER_BRICK_STAIRS_E'
+    ITEM_OF[f'STONE_BRICK_STAIRS_{_d}'] = 'STONE_BRICK_STAIRS_E'
+    ITEM_OF[f'IRON_DOOR_LOWER_{_d}'] = 'IRON_DOOR_LOWER_E'
+    ITEM_OF[f'IRON_DOOR_LOWER_{_d}_OPEN'] = 'IRON_DOOR_LOWER_E'
+ITEM_OF['IRON_DOOR_UPPER'] = None
+ITEM_OF['END_PORTAL'] = None
+ITEM_OF['END_PORTAL_FRAME_EYE'] = 'END_PORTAL_FRAME'
 
 BNAMES = [s['name'] for s in blocks.S]
 
@@ -471,6 +495,18 @@ shaped('OAK_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'PLANKS_OAK'})
 shaped('COBBLESTONE_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'COBBLESTONE'})
 shaped('SANDSTONE_STAIRS', 4, ['#  ', '## ', '###'], {'#': 'SANDSTONE'})
 shaped('STONE_PRESSURE_PLATE', 1, ['##'], {'#': 'STONE'})
+shaped('NETHER_BRICK', 1, ['##', '##'], {'#': 'NETHERBRICK'})
+shaped('NETHER_BRICK_FENCE', 6, ['###', '###'], {'#': 'NETHER_BRICK'})
+shaped('NETHER_BRICK_STAIRS_E', 4, ['#  ', '## ', '###'], {'#': 'NETHER_BRICK'})
+shaped('IRON_BARS', 16, ['###', '###'], {'#': 'IRON_INGOT'})
+shaped('STONE_BRICK_STAIRS_E', 4, ['#  ', '## ', '###'], {'#': 'STONE_BRICKS'})
+shaped('STONE_BUTTON', 1, None, ['STONE'])
+shaped('IRON_DOOR_LOWER_E', 3, ['##', '##', '##'], {'#': 'IRON_INGOT'})
+shapeless('BLAZE_POWDER', 2, ['BLAZE_ROD'])
+shapeless('MAGMA_CREAM', 1, ['BLAZE_POWDER', 'SLIME_BALL'])
+shapeless('ENDER_EYE', 1, ['ENDER_PEARL', 'BLAZE_POWDER'])
+shapeless('FIRE_CHARGE', 3, ['GUNPOWDER', 'BLAZE_POWDER', 'COAL'])
+shapeless('FIRE_CHARGE', 3, ['GUNPOWDER', 'BLAZE_POWDER', 'CHARCOAL'])
 shaped('GOLDEN_APPLE', 1, ['###', '#X#', '###'], {'#': 'GOLD_INGOT', 'X': 'APPLE'})
 shaped('CLOCK', 1, [' # ', '#X#', ' # '], {'#': 'GOLD_INGOT', 'X': 'REDSTONE'})
 shaped('COMPASS', 1, [' # ', '#X#', ' # '], {'#': 'IRON_INGOT', 'X': 'REDSTONE'})
@@ -483,7 +519,7 @@ SMELT = [('RAW_IRON', 'IRON_INGOT'), ('RAW_GOLD', 'GOLD_INGOT'), ('DIAMOND_ORE',
          ('STONE_BRICKS', 'CRACKED_STONE_BRICKS'), ('CLAY_BALL', 'BRICK'), ('CLAY', 'HARDENED_CLAY'),
          ('CACTUS', 'DYE_GREEN'), ('EMERALD_ORE', 'EMERALD'), ('POTATO', 'BAKED_POTATO'), ('COAL_ORE', 'COAL'),
          ('REDSTONE_ORE', 'REDSTONE'), ('LAPIS_ORE', 'DYE_BLUE'), ('RAW_FISH', 'COOKED_FISH'),
-         ('RAW_SALMON', 'COOKED_SALMON'), ('QUARTZ_BLOCK', 'SMOOTH_QUARTZ')]
+         ('RAW_SALMON', 'COOKED_SALMON'), ('QUARTZ_BLOCK', 'SMOOTH_QUARTZ'), ('NETHERRACK', 'NETHERBRICK')]
 SMELT += [(n, 'CHARCOAL') for n in GROUP_OF['G_LOG']]
 
 

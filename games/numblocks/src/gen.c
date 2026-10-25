@@ -7144,6 +7144,7 @@ static int grid_state(int i, int j) {
   for (int k = 0; k <= want; k++) {
     do s++;
     while (s < NSTATES && !t_block(s));
+    if (s >= NSTATES) return B_AIR;   /* (the grid has a few cells past the last state) */
   }
   return s;
 }
@@ -7193,6 +7194,7 @@ static void test_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     for (int j = 0; j < TEST_GRID_ROWS; j++)
       for (int i = 0; i < TEST_GRID_COLS; i++) {
         int X = TEST_GRID_X0 + i * 2, Z = TEST_GRID_Z0 + j * 2, b = grid_state(i, j);
+        if (!b) continue;   /* (past the last block state: air, not a cell of the grid) */
         put(X, TEST_SECTION_Y, Z, B_BARRIER, R_ALWAYS);   /* what it floats on */
         put(X, TEST_BLOCK_Y, Z, b, R_ALWAYS);
         if (t_liquid(b))   /* held in by barriers on its four sides, so it goes nowhere */

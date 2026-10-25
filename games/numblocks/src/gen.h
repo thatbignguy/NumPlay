@@ -50,7 +50,7 @@ void gen_set_test(int test);
  * own), one air gap between each */
 #define TEST_GRID_X0 (-7)
 #define TEST_GRID_Z0 (-46)
-#define TEST_GRID_COLS 15
+#define TEST_GRID_COLS 23   /* 23 x 23 = 529 cells: one for every block state, then air */
 #define TEST_GRID_ROWS 23
 #define TEST_GRID_X1 (TEST_GRID_X0 + (TEST_GRID_COLS - 1) * 2)
 #define TEST_GRID_Z1 (TEST_GRID_Z0 + (TEST_GRID_ROWS - 1) * 2)
@@ -59,7 +59,7 @@ void gen_set_test(int test);
  * blocks, one stack of each of the 136 of them (27 a chest) */
 #define TEST_ITEM_X0 5
 #define TEST_ITEM_Z 8
-#define TEST_ITEM_CHESTS 6
+#define TEST_ITEM_CHESTS 6   /* 144 items with no block of their own, 27 to a chest */
 /* the cages: five along x, two along z, 5 x 5 of grass each with one block between
  * them. Each mob stands on the middle block of its own, with a barrier on each of its
  * four sides and one over it */

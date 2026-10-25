@@ -28,9 +28,9 @@ NSTATES = 512
 S = []
 
 
-def b(name, id, meta=0, model='cube', tex=None, tint=None, light=0, hard=1.0, tool=None, level=0):
+def b(name, id, meta=0, model='cube', tex=None, tint=None, light=0, hard=1.0, tool=None, level=0, box=None):
     S.append(dict(name=name, id=id, meta=meta, model=model, tex=tex, tint=tint, light=light, hard=hard, tool=tool,
-                  level=level))
+                  level=level, box=box))
 
 
 def tsb(top, side, bottom=None):
@@ -379,10 +379,39 @@ b('SOUL_FIRE', 247, 8, model='cross', tex='soul_fire_0', light=10, hard=0)
 # stands in the way of anything that moves.
 b('BARRIER', 166, model='glass', tex='barrier', hard=-1)
 
+# --- the Nether and the End structures (the 1.17 merge): the blocks the fortresses,
+# strongholds, End portals and the dragon leave. The rest of the Nether's and the End's
+# blocks already live above (netherrack, soul sand, quartz, the nyliums...); these are
+# the ones only a structure or the End needed. They fill the nine-bit state space exactly.
+b('NETHER_BRICK', 112, tex='nether_brick', hard=2.0, tool='pickaxe')
+b('NETHER_BRICK_FENCE', 113, model='fence', tex='nether_brick', hard=2.0, tool='pickaxe')
+for v, d in [(0, 'E'), (1, 'W'), (2, 'S'), (3, 'N')]:
+    b(f'NETHER_BRICK_STAIRS_{d}', 114, v, model='stairs', tex='nether_brick', hard=2.0, tool='pickaxe')
+b('END_PORTAL', 119, model='endportal', tex='@end_portal', light=15, hard=-1)
+FRAME = {'top': 'endframe_top', 'side': 'endframe_side', 'bottom': 'end_stone'}
+b('END_PORTAL_FRAME', 120, model='frame', tex=FRAME, light=1, hard=-1, box=[(0, 0, 0, 16, 13, 16)])
+b('END_PORTAL_FRAME_EYE', 120, 4, model='frame', tex=dict(FRAME, eye='endframe_eye'), light=1, hard=-1,
+  box=[(0, 0, 0, 16, 13, 16), (4, 13, 4, 12, 16, 12)])
+b('END_STONE', 121, tex='end_stone', hard=3.0, tool='pickaxe')
+b('DRAGON_EGG', 122, model='egg', tex='dragon_egg', light=1, hard=3.0, box=[(1, 0, 1, 15, 16, 15)])
+b('IRON_BARS', 101, model='pane', tex='iron_bars', hard=5.0, tool='pickaxe')
+for v, d in [(0, 'E'), (1, 'W'), (2, 'S'), (3, 'N')]:
+    b(f'STONE_BRICK_STAIRS_{d}', 109, v, model='stairs', tex='stonebrick', hard=1.5, tool='pickaxe')
+# BlockDoor (iron): the lower half's four facing states, the four open ones, then the upper half
+for v, d in [(0, 'E'), (1, 'S'), (2, 'W'), (3, 'N')]:
+    b(f'IRON_DOOR_LOWER_{d}', 71, v, model='door', tex='door_iron_lower', hard=5.0, tool='pickaxe')
+for v, d in [(0, 'E'), (1, 'S'), (2, 'W'), (3, 'N')]:
+    b(f'IRON_DOOR_LOWER_{d}_OPEN', 71, v + 4, model='door', tex='door_iron_lower', hard=5.0, tool='pickaxe')
+b('IRON_DOOR_UPPER', 71, 8, model='door', tex='door_iron_upper', hard=5.0, tool='pickaxe')
+# BlockButton on a wall: one state, its face is the wall it is put on (the model's box is the
+# east face; the renderer/phys reads the state the way it reads a torch's)
+b('STONE_BUTTON', 77, 1, model='button', tex='stone', hard=0.5, box=[(0, 6, 5, 2, 10, 11)])
+
 assert len(S) <= NSTATES, len(S)
 
 MODELS = ['none', 'cube', 'cross', 'liquid', 'torch', 'slab', 'layer', 'cactus', 'leaves', 'glass', 'flat', 'vine',
-          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed', 'portal', 'plate', 'plate_down']
+          'pane', 'fence', 'door', 'ladder', 'stairs', 'chest', 'bed', 'portal', 'plate', 'plate_down',
+          'frame', 'endportal', 'egg', 'button']
 TOOLS = [None, 'pickaxe', 'axe', 'shovel', 'shears', 'sword']
 
 # --- the Nether and the End: only in NumBlocks.nwa (built with NB_DIMS; NumPlay's NumBlocks has no room).

@@ -1400,6 +1400,7 @@ int main(void) {
             int x = TEST_GRID_X0 + i * 2, z = TEST_GRID_Z0 + j * 2;
             if (x >> 4 != cx || z >> 4 != cz) continue;
             int lx = x & 15, lz = z & 15, b = TEST_CELL(sb, TEST_BLOCK_Y, lx, lz);
+            if (!b) continue;   /* (the grid's few cells past the last block state) */
             seen[b]++, n++;
             CHECK(TEST_CELL(sb, TEST_BLOCK_Y - 1, lx, lz) == B_BARRIER);   /* what it floats on */
             CHECK(TEST_CELL(sb, TEST_BLOCK_Y + 1, lx, lz) == B_AIR);       /* air above it */

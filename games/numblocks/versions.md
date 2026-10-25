@@ -1,3 +1,32 @@
+## 1.5.55
+**The 1.17 merge's foundation: the Nether's structures' and the End's blocks, in the nine-bit state space**
+
+The first step of bringing NumPlay 1.17's NumBlocks into this fork: the block states and
+items its Nether fortresses, strongholds, End portals and dragon need, without changing
+any existing state's number. The fork's own Nether, deepslate, test world and modern
+blocks are untouched.
+
+- **26 new states, exactly filling the 9-bit space.** Nether brick, its fence and four
+  stairs; the End portal, its frame with and without an eye, End stone and the dragon egg;
+  iron bars, four stone brick stairs, the iron door's four closed and four open lower
+  halves plus its upper half, and a stone button. The last free ids are 486..511, so no
+  saved state moves. (Nether wart, quartz stairs/slabs and odd lava levels are left for a
+  later pass; the structures do not need them.)
+- **The pictures are the modern client's.** `tools/modern_map.py` gained the 1.17 names
+  (`nether_bricks`, `end_portal_frame_*`, `iron_door_*`), and `tools/pack.py` the End
+  portal and End sky pictures; the End portal is drawn from its own animated picture.
+- **Items and recipes.** Nether Brick, Ender Pearl, Eye of Ender, Blaze Rod and Powder,
+  Ghast Tear, Magma Cream and Fire Charge now have ids past the block states (512..519)
+  so the two spaces never meet, with the 1.8 recipes and the netherrack-to-nether-brick
+  smelt; the new blocks place and drop as themselves.
+- **The test world grows to fit them.** Its grid is 23 x 23 cells (the last few are air),
+  and the item chests still hold the 144 items that have no block of their own.
+
+`make test` passes (226 recipes), `make host`, `make build`, `make check` and
+`make -C games/numblocks-interest build check` pass; the app still fits CUSTOM_RAM
+(133652 B). No renderer case is added yet: the states are in the world and the
+inventory, and the next entries give them their End and structures.
+
 ## 1.5.54
 **Broken blocks stay broken - and a save the old bug bloated heals itself**
 
