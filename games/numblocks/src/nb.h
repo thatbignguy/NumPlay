@@ -20,7 +20,7 @@
 
 /* the game's version (1.A.B); versions.md's first line says the same, and is bumped
  * with every change: what the title screen and the F3 overlay show */
-#define NB_VERSION "1.5.57"
+#define NB_VERSION "1.5.58"
 
 /* ---------------------------------------------------------------- the platform (plat_eadk.c / plat_host.c) */
 enum {
@@ -72,6 +72,9 @@ static inline bool is_water(int b) {
 static inline bool is_door_lower(int b) {
   return b == B_DOOR_OAK_LOWER || (b >= B_DOOR_OAK_LOWER_S && b <= B_DOOR_OAK_LOWER_N_OPEN);
 }
+/* the iron door's lower half: four facing states, then the four open ones */
+static inline bool is_iron_door_lower(int b) { return b >= B_IRON_DOOR_LOWER_E && b <= B_IRON_DOOR_LOWER_N_OPEN; }
+static inline bool is_iron_door_upper(int b) { return b == B_IRON_DOOR_UPPER; }
 static inline bool is_lava(int b) { return b == B_LAVA || b == B_FLOWING_LAVA || (b >= B_FLOWING_LAVA_4 && b <= B_FALLING_LAVA); }
 /* fire's two states: ordinary and the blue soul fire (on soul sand or soul soil) */
 static inline bool is_fire(int b) { return b == B_FIRE || b == B_SOUL_FIRE; }

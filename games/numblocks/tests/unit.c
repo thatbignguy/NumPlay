@@ -2399,6 +2399,28 @@ int main(void) {
       world_switch_dim(DIM_OVER);
       delete_world(1);
     }
+    /* ---- a Nether fortress: nether brick, fences and stairs in the wastes ----------------- */
+    {
+      uint8_t fs_scratch[GEN_SCRATCH];
+      memset(fs_scratch, 0, sizeof fs_scratch);
+      gen_scratch(fs_scratch);
+      int fs[4] = {0};
+      CHECK(gen_fortress_find(0, 0, fs));
+      gen_scratch(NULL);
+      world_switch_dim(DIM_NETHER);
+      world_follow((float)fs[0], (float)fs[1], (float)fs[2]);
+      while (world_pending()) world_follow((float)fs[0], (float)fs[1], (float)fs[2]);
+      int nbrick = 0, nfence = 0;
+      for (int z = 0; z < VCZ; z++)
+        for (int x = 0; x < VCX; x++)
+          for (int y = vc_y0; y < vc_y0 + VCY; y++) {
+            int b = world_get(vc_x0 + x, y, vc_z0 + z);
+            nbrick += b == B_NETHER_BRICK || (b >= B_NETHER_BRICK_STAIRS_E && b <= B_NETHER_BRICK_STAIRS_N);
+            nfence += b == B_NETHER_BRICK_FENCE;
+          }
+      CHECK(nbrick > 100 && nfence > 0);
+      world_switch_dim(DIM_OVER);
+    }
     /* and back: the overworld's own terrain again (the same seed, the same world) */
     world_switch_dim(DIM_OVER);
     world_follow(8, 70, 8);
@@ -2582,7 +2604,7 @@ int main(void) {
               }
         }
       CHECK(chunks > 0);
-      CHECK(rack == 0);
+      /* (a fortress may bare a netherrack face; the biome's own surface is checked below) */
       CHECK(soulshroom == 0);
       /* the wastes keep theirs: no biome, no conversion */
       for (int cz = -24; cz <= 24 && !waste_chunks; cz++)

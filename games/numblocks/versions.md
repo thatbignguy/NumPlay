@@ -1,3 +1,32 @@
+## 1.5.58
+**Nether fortresses - and the mobs that live in them, with iron doors and buttons**
+
+The Nether has its fortresses: 1.8.8's MapGenNetherBridge, laid out from the same random
+and built chunk by chunk into this fork's modern Nether and its nine-bit slab. The
+bridges, corridors, crossings, stairs, thrones and the castle rooms are nether brick, its
+fences and stairs, with soul sand and wart blocks in the rooms; their pillars reach down to
+the terrain. `gen_fortress_at` says whether a place is inside one, and `gen_fortress_find`
+the nearest (for tests and spawners).
+
+- **The fortress mobs.** Blazes, magma cubes and wither skeletons now spawn inside a
+  fortress (the 1.8.8 weights: blaze 10, zombified piglin 5, magma cube 3, wither skeleton
+  2); the ghast's model is in too, though it is not spawned yet. Their models and modern
+  skins are in `mob_end.h`/`tools/pack.py`, and they fight with the same chase and bite as
+  the other hostiles. Their drops: blaze rods, magma cream, coal and bones; their names
+  work with `/summon`.
+- **Iron doors and buttons.** The stronghold's iron doors open and close on use (the lower
+  half keeps the state), place as a two-block door facing the player, and stop a collision
+  box; the stone buttons place and face as their one state allows. The states were already
+  in the 1.5.55 tables; this wires them into `player.c`/`phys.c`.
+- **The Nether's fortresses are not the biome's ground.** The nether test that required no
+  bare netherrack in a biome now allows a fortress to bare its own face; the fortress and
+  its mobs have their own test in `make test`.
+
+`make test` passes; `make host`, `make build`, `make check` and
+`make -C games/numblocks-interest build check` pass, still inside CUSTOM_RAM (133652 B).
+The dragon's End credits, the ghast/blaze fireballs and the remaining Nether decoration are
+left for later; the structures themselves are in.
+
 ## 1.5.57
 **The End has its fight: the dragon, its crystals and endermen - and its state saves**
 

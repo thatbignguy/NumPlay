@@ -6306,6 +6306,8 @@ static void nether_growth(int cx, int cz, int y0, int h, uint8_t *out, const uin
         }
 }
 
+#include "gen_fortress.h"    /* the Nether's fortresses (1.8.8) */
+
 /* the nether's chunk (cx, cz), rows [y0, y0 + h) to the slab (9 bits a state) */
 static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
     TerrainScratch *T = &U->t;
@@ -6489,6 +6491,8 @@ static void nether_slab(int cx, int cz, int y0, int h, uint8_t *out) {
      * try finds the column's highest open ceiling and grows one there */
     for (int i = 0; i < 3; i++)
         glow_blob(&r, jr_int_i(&r, 16), jr_int_i(&r, 16));
+    /* the fortresses: after the growth, so their bricks and fences stand whole */
+    fort_build(cx, cz, y0, h, out);
     memset(sum_pin, 0, sizeof sum_pin);
     last_cx = cx;
     last_cz = cz;

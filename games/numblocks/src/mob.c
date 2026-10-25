@@ -24,7 +24,9 @@ static const MobInfo info[] = {
     /* the nether's two (1.16): the piglin (16 health) and the zombified piglin (20,
      * 1.8's PigZombie), both bipeds at the zombie's speed and size */
     [E_PIGLIN] = {0.6f, 1.95f, 0.23f, 16}, [E_ZPIGLIN] = {0.6f, 1.95f, 0.23f, 20},
-    /* the End's (1.8.8): the dragon and its crystals count as mobs; the dragon is a big one */
+    /* the End's and the fortresses' (1.8.8): the dragon and its crystals count as mobs */
+    [E_GHAST] = {4.0f, 4.0f, 0.0f, 10}, [E_BLAZE] = {0.6f, 1.8f, 0.23f, 20},
+    [E_MAGMA] = {0.51f, 0.51f, 0.2f, 1}, [E_WSKELETON] = {0.72f, 2.535f, 0.25f, 20},
     [E_ENDERMAN] = {0.6f, 2.9f, 0.3f, 40}, [E_CRYSTAL] = {2.0f, 2.0f, 0.0f, 5},
     [E_DRAGON] = {4.0f, 4.0f, 0.0f, 200},
 };
@@ -524,9 +526,17 @@ void mobs_spawn(void) {
           t = E_SKELETON;
           n = 1 + rnd(2);
         } else if (bio == BI_NETHER_WASTES || bio == BI_CRIMSON_FOREST) {
-          /* seven in ten a zombified piglin, the rest a piglin */
-          t = rnd(10) < 7 ? E_ZPIGLIN : E_PIGLIN;
-          n = 2 + rnd(2);
+          /* seven in ten a zombified piglin, the rest a piglin; in a fortress, its
+           * blaze, wither skeleton and magma cube (the 1.8.8 weights) */
+          int fort = gen_fortress_at(x, y, z);
+          if (fort == 2 || (fort == 1 && world_get(x, y - 1, z) == B_NETHER_BRICK)) {
+            int r = rnd(20);
+            t = r < 10 ? E_BLAZE : r < 15 ? E_ZPIGLIN : r < 18 ? E_MAGMA : E_WSKELETON;
+            n = 1 + rnd(2);
+          } else {
+            t = rnd(10) < 7 ? E_ZPIGLIN : E_PIGLIN;
+            n = 2 + rnd(2);
+          }
         } else {
           continue;   /* the warped forest has no implemented natural mob yet */
         }
@@ -1319,7 +1329,8 @@ void mob_tick(Entity *e) {
   /* attacks */
   if (chase && e->state != 255) {
     float reach = mi->w * 2 * mi->w * 2 + 0.6f;
-    if ((e->type == E_ZOMBIE || e->type == E_SPIDER || e->type == E_PIGLIN || e->type == E_ZPIGLIN) &&
+    if ((e->type == E_ZOMBIE || e->type == E_SPIDER || e->type == E_PIGLIN || e->type == E_ZPIGLIN ||
+         e->type == E_BLAZE || e->type == E_WSKELETON) &&
         dist * dist < reach + 0.5f && fabsf(dy) < 1.5f && !e->delay) {
       player_hurt(scaled(e->type == E_SPIDER ? 2 : 3), DMG_MOB);
       push_player(dx, dz, 0.4f);

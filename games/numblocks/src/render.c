@@ -2394,6 +2394,7 @@ static void send_strip(int py, bool still) {
 }
 static void strips_sent(bool still) { shown_ok = still; }
 
+static float eye_bri = 1, eye_sky = 1;   /* (fogColor1; the same without the night) */
 void render_frame(const Camera *c, uint32_t tod) {
   uint16_t buf[STRIP_N] __attribute__((aligned(4)));
   strip = buf;
@@ -2622,6 +2623,24 @@ nether_sky_done:;
   cam_x = (int)floorf(ox), cam_y = (int)floorf(oy), cam_z = (int)floorf(oz);
   cam_i = (unsigned)cam_x < VCX && (unsigned)cam_y < VCY && (unsigned)cam_z < VCZ ? VC_I(cam_x, cam_y, cam_z) : -1;
   cam_b = cam_i < 0 ? B_AIR : vc_get(cam_i);
+  if (world_dim == DIM_OVER) {
+    /* EntityRenderer.updateFogColor: the fog is as light as the spot the eyes are in (fogColor1, eased),
+     * so in a dark cave what is past the view fades to black, not to the sky; and under y 32 it darkens
+     * on to black (getVoidFogYFactor). The sky too where the sky's light does not reach. */
+    int lb = cam_i >= 0 ? vl[cam_i] : 15, bl = lb >> 4, sl = lb & 15;
+    float want[2];
+    for (int n = 0; n < 2; n++) {
+      int l = sl - (n ? 0 : sky_sub());
+      if (bl > l) l = bl;
+      float f = 1 - l / 15.0f;
+      want[n] = (1 - f) / (f * 3 + 1) * (1 - 2 / 32.0f) + 2 / 32.0f;
+    }
+    eye_bri += (want[0] - eye_bri) * 0.1f;
+    eye_sky += (want[1] - eye_sky) * 0.1f;
+    float v = (c->y - 1.62f) / 32, deep = v >= 1 ? 1 : v < 0 ? 0 : v * v, k = eye_bri * deep, ks = eye_sky * deep;
+    fog_r = (int)(fog_r * k), fog_g = (int)(fog_g * k), fog_b = (int)(fog_b * k);
+    sky_r = (int)(sky_r * ks), sky_g = (int)(sky_g * ks), sky_b = (int)(sky_b * ks);
+  }
   /* what is held decides what the barriers of this frame show (seen) */
   barrier_shown = held()->id == B_BARRIER;
   cam_mi = cam_i < 0 ? 0 : MC_I(cam_x, cam_y, cam_z);

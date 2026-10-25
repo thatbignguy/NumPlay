@@ -27,6 +27,58 @@ static void end_parts(const Entity *e, float pt, float f, float a, float pitch, 
 #undef CL
     break;
   }
+  case E_WSKELETON: {
+    /* the skeleton's model, its black bones: the wither skeleton */
+    box(-4, -8, -4, 8, 8, 8, 0, 0, 0, 0, 0, SKIN_WITHER_SKELETON)->rx = pitch;
+    box(-4, 0, -2, 8, 12, 4, 16, 16, 0, 0, 0, SKIN_WITHER_SKELETON);
+    Part *ra = box(-1, -2, -1, 2, 12, 2, 40, 16, -5, 2, 0, SKIN_WITHER_SKELETON);
+    Part *la = box(-1, -2, -1, 2, 12, 2, 40, 16, 5, 2, 0, SKIN_WITHER_SKELETON);
+    Part *rl = box(-1, 0, -1, 2, 12, 2, 0, 16, -2, 12, 0, SKIN_WITHER_SKELETON);
+    Part *ll = box(-1, 0, -1, 2, 12, 2, 0, 16, 2, 12, 0, SKIN_WITHER_SKELETON);
+    ra->rx = la->rx = -PI / 2 + sinf(age * 0.067f) * 0.05f;
+    ra->rz = cosf(age * 0.09f) * 0.05f + 0.05f;
+    la->rz = -ra->rz;
+    la->mirror = ll->mirror = 1;
+    rl->rx = sw * 1.4f * a, ll->rx = swo * 1.4f * a;
+    break;
+  }
+  case E_BLAZE: {
+    /* ModelBlaze: the head and twelve rods in three rings */
+    Part *h = box(-4, -4, -4, 8, 8, 8, 0, 0, 0, 0, 0, SKIN_BLAZE);
+    h->rx = pitch;
+    float g = age * PI * -0.1f;
+    for (int i = 0; i < 4; i++, g++)
+      box(0, 0, 0, 2, 8, 2, 0, 16, cosf(g) * 9, -2 + cosf(((float)(i * 2) + age) * 0.25f), sinf(g) * 9, SKIN_BLAZE);
+    g = PI / 4 + age * PI * 0.03f;
+    for (int j = 4; j < 8; j++, g++)
+      box(0, 0, 0, 2, 8, 2, 0, 16, cosf(g) * 7, 2 + cosf(((float)(j * 2) + age) * 0.25f), sinf(g) * 7, SKIN_BLAZE);
+    g = 0.47123894f + age * PI * -0.05f;
+    for (int k = 8; k < 12; k++, g++)
+      box(0, 0, 0, 2, 8, 2, 0, 16, cosf(g) * 5, 11 + cosf(((float)k * 1.5f + age) * 0.5f), sinf(g) * 5, SKIN_BLAZE);
+    break;
+  }
+  case E_MAGMA: {
+    /* ModelMagmaCube: eight slices pulled apart as it squishes, and its core */
+    float sq = e->on_ground ? 0 : 0.6f;
+    for (int i = 0; i < 8; i++) {
+      int u = 0, v = i;
+      if (i == 2) u = 24, v = 10;
+      else if (i == 3) u = 24, v = 19;
+      box(-4, (float)(16 + i), -4, 8, 1, 8, u, v, 0, (float)(-(4 - i)) * sq * 1.7f, 0, SKIN_MAGMACUBE);
+    }
+    box(-2, 18, -2, 4, 4, 4, 0, 16, 0, 0, 0, SKIN_MAGMACUBE);
+    break;
+  }
+  case E_GHAST: {
+    /* ModelGhast: a 16-pixel cube and nine tentacles */
+    box(-8, -8, -8, 16, 16, 16, 0, 0, 0, 8 + 9.6f, 0, SKIN_GHAST);
+    for (int i = 0; i < 9; i++) {
+      float fx = (((float)(i % 3) - (float)(i / 3 % 2) * 0.5f + 0.25f) / 2.0f * 2.0f - 1.0f) * 5.0f;
+      float fz = ((float)(i / 3) / 2.0f * 2.0f - 1.0f) * 5.0f;
+      box(-1, 0, -1, 2, 8, 2, 0, 0, fx, 15 + 9.6f, fz, SKIN_GHAST)->rx = 0.2f * sinf(age * 0.3f + (float)i) + 0.4f;
+    }
+    break;
+  }
   case E_DRAGON: {
     /* A compact ModelDragon: the long body, the head and jaw, two wings and a tail. */
     float flap = sinf(age * 0.35f) * 0.35f;

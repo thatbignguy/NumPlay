@@ -589,17 +589,21 @@ static bool place(int b) {
       else b = (b == B_OAK_STAIRS ? B_OAK_STAIRS_W : B_COBBLESTONE_STAIRS_W) + 2 * (off[way] - 1);
     }
   }
+  bool iron_door = b >= B_IRON_DOOR_LOWER_E && b <= B_IRON_DOOR_LOWER_N;
   if (b == B_DOOR_OAK_LOWER) {
     static const uint8_t door[4] = {B_DOOR_OAK_LOWER_S, B_DOOR_OAK_LOWER_W, B_DOOR_OAK_LOWER_N, B_DOOR_OAK_LOWER};
     b = door[way];
+  } else if (iron_door) {
+    static const uint16_t door[4] = {B_IRON_DOOR_LOWER_S, B_IRON_DOOR_LOWER_W, B_IRON_DOOR_LOWER_N, B_IRON_DOOR_LOWER_E};
+    b = door[way];
   }
-  bool door = is_door_lower(b);
+  bool door = is_door_lower(b) || iron_door;
   if (!can_stay(b, x, y, z) && !door && b != B_BED_FOOT) return false;
   if ((blk_flags[b] & BF_SOLID) && !box_free(x, y, z)) return false;
   if (door || (b >= B_SUNFLOWER_LOWER && b <= B_PEONY_UPPER)) {
     if (!replaceable(world_get(x, y + 1, z)) || !solid_top(world_get(x, y - 1, z))) return false;
     if (!box_free(x, y + 1, z) && door) return false;
-    world_set(x, y + 1, z, door ? B_DOOR_OAK_UPPER : b + 1);
+    world_set(x, y + 1, z, iron_door ? B_IRON_DOOR_UPPER : door ? B_DOOR_OAK_UPPER : b + 1);
   }
   if (b == B_BED_FOOT) {
     /* ItemBed: the head one block further, the way the player looks */
@@ -719,9 +723,15 @@ static void use(uint32_t pressed) {
       gui_open(GUI_CHEST, x, y, z);
       return;
     }
-    if (is_door_lower(b) || b == B_DOOR_OAK_UPPER) {
+    if (is_door_lower(b) || b == B_DOOR_OAK_UPPER || is_iron_door_lower(b) || is_iron_door_upper(b)) {
       /* BlockDoor.onBlockActivated: open or close (the lower half keeps it) */
-      int ly = b == B_DOOR_OAK_UPPER ? y - 1 : y, lb = world_get(x, ly, z);
+      int ly = (b == B_DOOR_OAK_UPPER || is_iron_door_upper(b)) ? y - 1 : y, lb = world_get(x, ly, z);
+      if (is_iron_door_lower(lb)) {
+        int open = (lb - B_IRON_DOOR_LOWER_E) >= 4;
+        set_block(x, ly, z, open ? lb - 4 : lb + 4);
+        player_swing();
+        return;
+      }
       if (!is_door_lower(lb)) return;
       int st = lb == B_DOOR_OAK_LOWER ? 0 : lb - B_DOOR_OAK_LOWER_S + 1;   /* 0-3 closed, 4-7 open */
       st ^= 4;

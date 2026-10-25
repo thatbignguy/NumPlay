@@ -1293,8 +1293,10 @@ static void shift_click(int i) {
   }
   int pmain = nslots - 36, phot = nslots - 9;   /* the player's rows, then the hotbar */
   if (sl->kind == SL_RESULT) {
-    /* craft as many as fit */
-    for (int n = 0; n < 64 && result.id; n++) {
+    /* craft as many as fit, while the grid still makes the same thing (Container.slotClick's shift-click goes on
+       only while the result is the item it took first) */
+    int first_id = result.id, first_aux = result.aux;
+    for (int n = 0; n < 64 && result.id == first_id && result.aux == first_aux; n++) {
       Stack r = result;
       if (!merge(&r, pmain, nslots, true)) {
         if (r.id != result.id || r.aux != result.aux) {
@@ -2314,8 +2316,9 @@ void keys_update(int seen) {
 static bool settable(int k) { return k == 4 || k == 5 || (k >= 12 && k <= 51 && k != 35 && k != 41 && k != 47); }
 uint32_t keys_of(uint64_t raw) {
   uint32_t r = 0;
-  static const uint32_t fixed[8] = {K_LEFT, K_UP, K_DOWN, K_RIGHT, K_OK, K_BACK, K_HOME, K_HOME};
-  for (int k = 0; k < 8; k++)
+  /* (On/Off is key 8: it saves and leaves, as Home does) */
+  static const uint32_t fixed[9] = {K_LEFT, K_UP, K_DOWN, K_RIGHT, K_OK, K_BACK, K_HOME, 0, K_HOME};
+  for (int k = 0; k < 9; k++)
     if (raw >> k & 1) r |= fixed[k];
   if (raw >> 12 & 1) r |= K_SHIFT;
   if (raw >> 52 & 1) r |= K_EXE, raw |= 1 << 4;   /* (EXE: what OK does) */
