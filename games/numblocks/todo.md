@@ -3,6 +3,17 @@
 Work list for `games/numblocks`. Each item: what it is, where the code lives,
 what "done" means. Order matters only where noted.
 
+## Done in the 1.17 merge
+
+- [x] **The End** — island, pillars, strongholds, the portal, the dragon, crystals,
+      endermen, the boss bar and the saved fight (`gen_end.h`, `gen_stronghold.h`,
+      `end.c`, `mob_end.h`; `1.5.56`–`1.5.57`).
+- [x] **Nether fortresses** — 1.8.8's pieces in the modern Nether, with blazes, magma
+      cubes and wither skeletons (`gen_fortress.h`, `1.5.58`).
+- [x] **Iron doors and buttons, the new blocks and their spawn eggs** (`1.5.55`, `1.5.58`,
+      `1.5.59`).
+
+
 - [x] **Make skeletons look at you when they are shooting at you**
 - [x] **Fix biome: unknown glitch**
 - [x] **[15] Nether mobs** — the nether has no life of its own: add the piglin
@@ -709,3 +720,16 @@ Test with `./build/play` (scriptable keys and shots), not `build/desktop`.
 Rules that apply to every item: no new `-Wall -Wextra` warnings, no BSS growth,
 keep `git status` clean, and ship both the calculator `.nwa` and the desktop
 binary.
+
+
+---
+
+## Still open from 1.17
+
+- [ ] **The End poem and credits** (GuiWinGame's texts and the roll) after the dragon.
+- [ ] **Ghast and blaze fireballs, the wither effect** — the models and mobs are in;
+      their projectiles and the wither skeleton's wither are not.
+- [ ] **Stronghold and fortress chest loot** — the rooms and chests are built; their
+      tables are not drawn yet.
+- [ ] **Fortress blaze spawners** — `gen_fortress_spawners` finds the thrones; the
+      spawner's own tick does not use it yet.

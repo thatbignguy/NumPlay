@@ -105,6 +105,8 @@
 
 #include "blocks.h"
 #include "states.h"   /* the 9-bit block states: the slab's and the columns' accessors */
+
+static int stronghold_prepare(int cx, int cz);   /* (gen_stronghold.h: a stronghold a call, ahead) */
 /* nb.h's E_ZOMBIE: the first of the game's ten mobs (E_ZOMBIE .. E_ZPIGLIN), which the
  * cages are filled in the order of. Declared here instead of including mob.h, which
  * brings nb.h, whose BF_OPAQUE is this file's own flag under another name. */
@@ -7331,6 +7333,7 @@ int gen_prepare(int cx, int cz) {
                 sum_get(cx + dx, cz + dz);
                 return 1;
             }
+    if (stronghold_prepare(cx, cz)) return 1;
     return 0;
 }
 

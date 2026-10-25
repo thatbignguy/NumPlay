@@ -25,7 +25,7 @@ Minecraft 1.8.8 on your NumWorks calculator, and this fork's own modern Nether o
 - **Spectator mode:** fly through the blocks and see through them, nothing to touch, and OK on a mob sees the world through its eyes.
 - **Commands:** /gamemode, /give, /time, /weather, /tp and more, with cheats on (Allow Cheats, or Open to LAN).
 - **Your worlds:** keep several, give them names, and they save as you play and when you quit. A copy also goes into `numblocks_saves.py`, so installing the game again doesn't erase them.
-- **Not in yet:** the End poem and credits, the ghast and blaze fireballs, redstone circuits and pistons, villages and other structures, enchanting and brewing.
+- **Not in yet:** the End poem and credits, the ghast and blaze fireballs, the strongholds' and fortresses' chest loot, redstone circuits and pistons, villages and other structures, enchanting and brewing.
 
 ## Controls
 

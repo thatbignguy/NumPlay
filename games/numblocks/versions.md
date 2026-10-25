@@ -1,3 +1,17 @@
+## 1.5.60
+**The strongholds are laid out ahead, and the remaining gaps are written down**
+
+- `gen_prepare` now takes a stronghold a call (`stronghold_prepare`), so the ring and a
+  layout are made while the player walks instead of all at once when a stronghold first
+  appears; the function is used rather than left as a warning.
+- The NumBlocks README and `todo.md` name the open 1.17 work: the End poem and credits,
+  the ghast/blaze fireballs and the wither, stronghold/fortress chest loot, and the
+  fortress blaze spawners. The rooms and mobs are in; these are the next pieces.
+
+`make test` passes; `make host`, `make build`, `make check`,
+`make -C games/numblocks-interest build check`, `test_games --game numblocks` and
+`test_numblocks_progress` pass; the app still fits CUSTOM_RAM (133652 B).
+
 ## 1.5.59
 **The End's and the fortresses' mobs get their eggs, and the docs catch up**
 
